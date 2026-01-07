@@ -1,0 +1,5 @@
+clang_library_path = 'C:\Users\Mojuko\miniforge3\envs\CStubAutoGen\Lib\site-packages\clang\native\libclang.dll'
+clang_parse_args = [
+    '-std=c11'
+]
+c_filename = 'example/simple_extension.c'
