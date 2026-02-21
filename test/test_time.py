@@ -4,7 +4,7 @@ import os
 # Add current directory to sys.path to find stubgen_api
 sys.path.insert(0, os.getcwd())
 
-from package_stubgen import build_package_tree
+from pcstubgen import build_package_tree
 
 def test_stubgen_api():
     packages = ["math", "time"]

@@ -1,0 +1,997 @@
+project_name,download_count,github_url,pypi_url,extensions
+boto3,1361970369,https://github.com/boto/boto3,https://pypi.org/project/boto3/,[]
+urllib3,1003548631,https://github.com/urllib3/urllib3,https://pypi.org/project/urllib3/,[]
+botocore,962447210,https://github.com/boto/botocore,https://pypi.org/project/botocore/,[]
+typing-extensions,953528735,https://github.com/python/typing_extensions,https://pypi.org/project/typing-extensions/,[]
+certifi,921186638,https://github.com/certifi/python-certifi,https://pypi.org/project/certifi/,[]
+requests,912658417,https://github.com/psf/requests,https://pypi.org/project/requests/,[]
+aiobotocore,894715478,https://github.com/aio-libs/aiobotocore,https://pypi.org/project/aiobotocore/,[]
+idna,871069871,https://github.com/kjd/idna,https://pypi.org/project/idna/,[]
+charset-normalizer,859237864,https://github.com/jawah/charset_normalizer,https://pypi.org/project/charset-normalizer/,[]
+setuptools,841703139,https://github.com/pypa/setuptools,https://pypi.org/project/setuptools/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+grpcio-status,760752759,,https://pypi.org/project/grpcio-status/,[]
+packaging,747202072,https://github.com/pypa/packaging,https://pypi.org/project/packaging/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+python-dateutil,646817170,https://github.com/dateutil/dateutil,https://pypi.org/project/python-dateutil/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+s3transfer,618578037,https://github.com/boto/s3transfer,https://pypi.org/project/s3transfer/,[]
+numpy,609871331,https://github.com/numpy/numpy,https://pypi.org/project/numpy/,"[{""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%module"", ""%include""]}, {""type"": ""CFFI"", ""keywords"": [""FFI("", ""ffi.dlopen("", ""ffi.cdef("", ""ffi.new(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cimport""]}, {""type"": ""Boost.Python"", ""keywords"": [""boost/python.hpp""]}]"
+six,604555996,https://github.com/benjaminp/six,https://pypi.org/project/six/,[]
+cryptography,582216808,https://github.com/pyca/cryptography,https://pypi.org/project/cryptography/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.cdef("", ""FFI(""]}]"
+s3fs,575508372,https://github.com/fsspec/s3fs,https://pypi.org/project/s3fs/,[]
+pyyaml,551378555,https://github.com/yaml/pyyaml,https://pypi.org/project/pyyaml/,"[{""type"": ""Cython"", ""keywords"": [""ctypedef""]}]"
+pydantic,550697674,https://github.com/pydantic/pydantic,https://pypi.org/project/pydantic/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]"", ""#[pyclass]""]}]"
+fsspec,539372534,https://github.com/fsspec/filesystem_spec,https://pypi.org/project/fsspec/,[]
+cffi,524188065,https://github.com/python-cffi/cffi,https://pypi.org/project/cffi/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+pandas,487578297,https://github.com/pandas-dev/pandas,https://pypi.org/project/pandas/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+click,474681848,https://github.com/pallets/click,https://pypi.org/project/click/,[]
+pycparser,464301268,https://github.com/eliben/pycparser,https://pypi.org/project/pycparser/,[]
+pip,461263331,https://github.com/pypa/pip,https://pypi.org/project/pip/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef""]}]"
+pydantic-core,451568463,https://github.com/pydantic/pydantic-core,https://pypi.org/project/pydantic-core/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]"", ""#[pyclass]""]}]"
+protobuf,442398230,,https://pypi.org/project/protobuf/,[]
+attrs,431367257,https://github.com/python-attrs/attrs,https://pypi.org/project/attrs/,[]
+markupsafe,397161994,https://github.com/pallets/markupsafe,https://pypi.org/project/markupsafe/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+h11,393937856,https://github.com/python-hyper/h11,https://pypi.org/project/h11/,[]
+anyio,390101348,https://github.com/agronholm/anyio,https://pypi.org/project/anyio/,[]
+pygments,388066850,https://github.com/pygments/pygments,https://pypi.org/project/pygments/,"[{""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%include"", ""%module""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cpdef""]}]"
+jmespath,383258406,https://github.com/jmespath/jmespath.py,https://pypi.org/project/jmespath/,[]
+awscli,380090640,https://github.com/aws/aws-cli,https://pypi.org/project/awscli/,[]
+rsa,375391791,https://github.com/sybrenstuvel/python-rsa,https://pypi.org/project/rsa/,[]
+pytz,373291543,,https://pypi.org/project/pytz/,[]
+platformdirs,372260101,https://github.com/tox-dev/platformdirs,https://pypi.org/project/platformdirs/,[]
+sniffio,371761016,https://github.com/python-trio/sniffio,https://pypi.org/project/sniffio/,[]
+annotated-types,367016809,https://github.com/annotated-types/annotated-types,https://pypi.org/project/annotated-types/,[]
+pluggy,361520729,,https://pypi.org/project/pluggy/,[]
+jinja2,360268519,https://github.com/pallets/jinja,https://pypi.org/project/jinja2/,[]
+importlib-metadata,353562452,https://github.com/python/importlib_metadata,https://pypi.org/project/importlib-metadata/,[]
+pyasn1,336140578,https://github.com/pyasn1/pyasn1,https://pypi.org/project/pyasn1/,[]
+cachetools,318560101,https://github.com/tkem/cachetools,https://pypi.org/project/cachetools/,[]
+wheel,316923667,https://github.com/pypa/wheel,https://pypi.org/project/wheel/,[]
+zipp,314296628,https://github.com/jaraco/zipp,https://pypi.org/project/zipp/,[]
+tzdata,312612935,https://github.com/python/tzdata,https://pypi.org/project/tzdata/,[]
+filelock,304859205,https://github.com/tox-dev/py-filelock,https://pypi.org/project/filelock/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+typing-inspection,301633532,https://github.com/pydantic/typing-inspection,https://pypi.org/project/typing-inspection/,[]
+google-auth,301467037,https://github.com/googleapis/google-auth-library-python,https://pypi.org/project/google-auth/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+httpx,297739906,https://github.com/encode/httpx,https://pypi.org/project/httpx/,[]
+google-api-core,293198403,https://github.com/googleapis/python-api-core,https://pypi.org/project/google-api-core/,[]
+httpcore,292102595,https://github.com/encode/httpcore,https://pypi.org/project/httpcore/,[]
+pytest,290263197,https://github.com/pytest-dev/pytest,https://pypi.org/project/pytest/,[]
+colorama,289727595,https://github.com/tartley/colorama,https://pypi.org/project/colorama/,[]
+pyjwt,283561179,https://github.com/jpadilla/pyjwt,https://pypi.org/project/pyjwt/,[]
+scipy,280925226,https://github.com/scipy/scipy,https://pypi.org/project/scipy/,"[{""type"": ""CFFI"", ""keywords"": [""FFI("", ""ffi.dlopen("", ""ffi.cdef("", ""ffi.new(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Boost.Python"", ""keywords"": [""boost/python.hpp""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+iniconfig,275665427,https://github.com/pytest-dev/iniconfig,https://pypi.org/project/iniconfig/,[]
+pyasn1-modules,271685179,https://github.com/pyasn1/pyasn1-modules,https://pypi.org/project/pyasn1-modules/,[]
+aiohttp,269510032,https://github.com/aio-libs/aiohttp,https://pypi.org/project/aiohttp/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+rich,265862713,https://github.com/Textualize/rich,https://pypi.org/project/rich/,[]
+jsonschema,265281149,https://github.com/python-jsonschema/jsonschema,https://pypi.org/project/jsonschema/,[]
+python-dotenv,258207120,https://github.com/theskumar/python-dotenv,https://pypi.org/project/python-dotenv/,[]
+googleapis-common-protos,258124233,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/googleapis-common-protos/,[]
+multidict,257517830,https://github.com/aio-libs/multidict,https://pypi.org/project/multidict/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+yarl,257277088,https://github.com/aio-libs/yarl,https://pypi.org/project/yarl/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+virtualenv,252120824,https://github.com/pypa/virtualenv,https://pypi.org/project/virtualenv/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+tqdm,250376809,https://github.com/tqdm/tqdm,https://pypi.org/project/tqdm/,[]
+markdown-it-py,248912857,https://github.com/executablebooks/markdown-it-py,https://pypi.org/project/markdown-it-py/,[]
+wrapt,248038045,https://github.com/GrahamDumpleton/wrapt,https://pypi.org/project/wrapt/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+tomli,247330031,https://github.com/hukkin/tomli,https://pypi.org/project/tomli/,[]
+pyarrow,245380333,https://github.com/apache/arrow,https://pypi.org/project/pyarrow/,"[{""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cpdef"", ""cimport""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}]"
+grpcio-tools,244420004,https://github.com/grpc/grpc,https://pypi.org/project/grpcio-tools/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+frozenlist,240686186,https://github.com/aio-libs/frozenlist,https://pypi.org/project/frozenlist/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+mdurl,240082345,https://github.com/executablebooks/mdurl,https://pypi.org/project/mdurl/,[]
+yandexcloud,239845914,https://github.com/yandex-cloud/python-sdk,https://pypi.org/project/yandexcloud/,[]
+psutil,237637494,https://github.com/giampaolo/psutil,https://pypi.org/project/psutil/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL("", ""WinDLL(""]}]"
+pathspec,235917691,https://github.com/cpburnz/python-pathspec,https://pypi.org/project/pathspec/,[]
+sqlalchemy,235169227,https://github.com/sqlalchemy/sqlalchemy,https://pypi.org/project/sqlalchemy/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC""]}]"
+pillow,234134662,https://github.com/python-pillow/Pillow,https://pypi.org/project/pillow/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+requests-oauthlib,233113952,https://github.com/requests/requests-oauthlib,https://pypi.org/project/requests-oauthlib/,[]
+aiosignal,232804188,https://github.com/aio-libs/aiosignal,https://pypi.org/project/aiosignal/,[]
+rpds-py,231327145,https://github.com/crate-py/rpds,https://pypi.org/project/rpds-py/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+starlette,231124154,https://github.com/Kludex/starlette,https://pypi.org/project/starlette/,[]
+greenlet,229802801,https://github.com/python-greenlet/greenlet,https://pypi.org/project/greenlet/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+propcache,227993570,https://github.com/aio-libs/propcache,https://pypi.org/project/propcache/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+referencing,227149906,https://github.com/python-jsonschema/referencing,https://pypi.org/project/referencing/,[]
+grpcio,224683940,https://github.com/grpc/grpc,https://pypi.org/project/grpcio/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+jsonschema-specifications,220069824,https://github.com/python-jsonschema/jsonschema-specifications,https://pypi.org/project/jsonschema-specifications/,[]
+uvicorn,219916511,https://github.com/Kludex/uvicorn,https://pypi.org/project/uvicorn/,[]
+pyparsing,214929250,https://github.com/pyparsing/pyparsing,https://pypi.org/project/pyparsing/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+opentelemetry-sdk,214147740,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-sdk/,[]
+fastapi,214110612,https://github.com/fastapi/fastapi,https://pypi.org/project/fastapi/,[]
+opentelemetry-proto,211112873,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-proto/,[]
+google-genai,205827111,https://github.com/googleapis/python-genai,https://pypi.org/project/google-genai/,[]
+lxml,204461476,https://github.com/lxml/lxml,https://pypi.org/project/lxml/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+aiohappyeyeballs,203471598,https://github.com/aio-libs/aiohappyeyeballs,https://pypi.org/project/aiohappyeyeballs/,[]
+oauthlib,202441612,https://github.com/oauthlib/oauthlib,https://pypi.org/project/oauthlib/,[]
+tomlkit,200824237,https://github.com/sdispater/tomlkit,https://pypi.org/project/tomlkit/,[]
+openpyxl,198672120,,https://pypi.org/project/openpyxl/,[]
+et-xmlfile,198085765,,https://pypi.org/project/et-xmlfile/,[]
+beautifulsoup4,195900543,,https://pypi.org/project/beautifulsoup4/,[]
+trove-classifiers,195301715,https://github.com/pypa/trove-classifiers,https://pypi.org/project/trove-classifiers/,[]
+soupsieve,193204790,https://github.com/facelessuser/soupsieve,https://pypi.org/project/soupsieve/,[]
+docutils,188145952,,https://pypi.org/project/docutils/,[]
+pyopenssl,185546648,https://github.com/pyca/pyopenssl,https://pypi.org/project/pyopenssl/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.new(""]}]"
+scikit-learn,184779617,https://github.com/scikit-learn/scikit-learn,https://pypi.org/project/scikit-learn/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}, {""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+opentelemetry-exporter-otlp-proto-http,183436934,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-exporter-otlp-proto-http/,[]
+distlib,182261860,https://github.com/pypa/distlib,https://pypi.org/project/distlib/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+requests-toolbelt,181303969,https://github.com/requests/toolbelt,https://pypi.org/project/requests-toolbelt/,[]
+exceptiongroup,176809209,https://github.com/agronholm/exceptiongroup,https://pypi.org/project/exceptiongroup/,[]
+opentelemetry-exporter-otlp-proto-grpc,176429311,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-exporter-otlp-proto-grpc/,[]
+flask,175517021,https://github.com/pallets/flask,https://pypi.org/project/flask/,[]
+more-itertools,174767042,https://github.com/more-itertools/more-itertools,https://pypi.org/project/more-itertools/,[]
+werkzeug,174392979,https://github.com/pallets/werkzeug,https://pypi.org/project/werkzeug/,[]
+isodate,172196652,https://github.com/gweis/isodate,https://pypi.org/project/isodate/,[]
+regex,169389273,https://github.com/mrabarnett/mrab-regex,https://pypi.org/project/regex/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+msgpack,168529175,https://github.com/msgpack/msgpack-python,https://pypi.org/project/msgpack/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+shellingham,165106958,https://github.com/sarugaku/shellingham,https://pypi.org/project/shellingham/,[]
+mypy-extensions,164837935,https://github.com/python/mypy_extensions,https://pypi.org/project/mypy-extensions/,[]
+snowflake-connector-python,163907087,https://github.com/snowflakedb/snowflake-connector-python,https://pypi.org/project/snowflake-connector-python/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+google-cloud-storage,163746565,https://github.com/googleapis/python-storage,https://pypi.org/project/google-cloud-storage/,[]
+proto-plus,163359301,https://github.com/googleapis/proto-plus-python,https://pypi.org/project/proto-plus/,[]
+threadpoolctl,163208618,https://github.com/joblib/threadpoolctl,https://pypi.org/project/threadpoolctl/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}, {""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+pynacl,162133693,https://github.com/pyca/pynacl,https://pypi.org/project/pynacl/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.new("", ""ffi.cdef("", ""FFI(""]}]"
+opentelemetry-api,161588934,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-api/,[]
+ptyprocess,161570791,https://github.com/pexpect/ptyprocess,https://pypi.org/project/ptyprocess/,[]
+pexpect,161400368,https://github.com/pexpect/pexpect,https://pypi.org/project/pexpect/,[]
+opentelemetry-exporter-otlp-proto-common,160959945,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-exporter-otlp-proto-common/,[]
+tenacity,157958262,https://github.com/jd/tenacity,https://pypi.org/project/tenacity/,[]
+psycopg2-binary,157452168,https://github.com/psycopg/psycopg2,https://pypi.org/project/psycopg2-binary/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+websocket-client,157349291,https://github.com/websocket-client/websocket-client,https://pypi.org/project/websocket-client/,[]
+opentelemetry-exporter-otlp,153740215,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-exporter-otlp/,[]
+decorator,151704150,,https://pypi.org/project/decorator/,[]
+opentelemetry-semantic-conventions,150909075,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-semantic-conventions/,[]
+coverage,148741554,https://github.com/coveragepy/coveragepy,https://pypi.org/project/coverage/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+sortedcontainers,144053708,,https://pypi.org/project/sortedcontainers/,[]
+azure-core,139946291,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-core/,[]
+azure-identity,138268711,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-identity/,[]
+python-multipart,138227928,https://github.com/Kludex/python-multipart,https://pypi.org/project/python-multipart/,[]
+networkx,137665950,https://github.com/networkx/networkx,https://pypi.org/project/networkx/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+wcwidth,137099990,https://github.com/jquast/wcwidth,https://pypi.org/project/wcwidth/,[]
+msal,136859125,https://github.com/AzureAD/microsoft-authentication-library-for-python,https://pypi.org/project/msal/,[]
+async-timeout,135972032,https://github.com/aio-libs/async-timeout,https://pypi.org/project/async-timeout/,[]
+websockets,134493413,https://github.com/python-websockets/websockets,https://pypi.org/project/websockets/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+bcrypt,133668767,https://github.com/pyca/bcrypt,https://pypi.org/project/bcrypt/,[]
+dnspython,132429900,https://github.com/rthalley/dnspython,https://pypi.org/project/dnspython/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+gitpython,132204281,https://github.com/gitpython-developers/GitPython,https://pypi.org/project/gitpython/,[]
+huggingface-hub,132103093,https://github.com/huggingface/huggingface_hub,https://pypi.org/project/huggingface-hub/,[]
+openai,130463656,https://github.com/openai/openai-python,https://pypi.org/project/openai/,[]
+asn1crypto,127390423,https://github.com/wbond/asn1crypto,https://pypi.org/project/asn1crypto/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+google-cloud-core,126815531,https://github.com/googleapis/python-cloud-core,https://pypi.org/project/google-cloud-core/,[]
+poetry-core,125715954,https://github.com/python-poetry/poetry-core,https://pypi.org/project/poetry-core/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+joblib,124891830,https://github.com/joblib/joblib,https://pypi.org/project/joblib/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+smmap,124208564,https://github.com/gitpython-developers/smmap,https://pypi.org/project/smmap/,[]
+annotated-doc,123818954,https://github.com/fastapi/annotated-doc,https://pypi.org/project/annotated-doc/,[]
+deprecated,121874960,https://github.com/laurent-laporte-pro/deprecated,https://pypi.org/project/deprecated/,[]
+matplotlib,121861492,https://github.com/matplotlib/matplotlib,https://pypi.org/project/matplotlib/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}]"
+gitdb,121834911,https://github.com/gitpython-developers/gitdb,https://pypi.org/project/gitdb/,[]
+hatchling,118621875,https://github.com/pypa/hatch,https://pypi.org/project/hatchling/,[]
+tabulate,118236053,https://github.com/astanin/python-tabulate,https://pypi.org/project/tabulate/,[]
+distro,115993488,https://github.com/python-distro/distro,https://pypi.org/project/distro/,[]
+itsdangerous,115861031,https://github.com/pallets/itsdangerous,https://pypi.org/project/itsdangerous/,[]
+fonttools,115803970,https://github.com/fonttools/fonttools,https://pypi.org/project/fonttools/,[]
+chardet,115584620,https://github.com/chardet/chardet,https://pypi.org/project/chardet/,[]
+keyring,115426883,https://github.com/jaraco/keyring,https://pypi.org/project/keyring/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+paramiko,114629014,https://github.com/paramiko/paramiko,https://pypi.org/project/paramiko/,[]
+google-resumable-media,113872165,https://github.com/googleapis/google-resumable-media-python,https://pypi.org/project/google-resumable-media/,[]
+prompt-toolkit,113273238,https://github.com/prompt-toolkit/python-prompt-toolkit,https://pypi.org/project/prompt-toolkit/,[]
+transformers,113114587,https://github.com/huggingface/transformers,https://pypi.org/project/transformers/,[]
+ruamel-yaml,111744249,,https://pypi.org/project/ruamel-yaml/,[]
+redis,111606124,https://github.com/redis/redis-py,https://pypi.org/project/redis/,[]
+google-api-python-client,111161275,https://github.com/googleapis/google-api-python-client,https://pypi.org/project/google-api-python-client/,[]
+google-crc32c,110834003,https://github.com/googleapis/python-crc32c,https://pypi.org/project/google-crc32c/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+zstandard,110579147,https://github.com/indygreg/python-zstandard,https://pypi.org/project/zstandard/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Rust"", ""keywords"": [""#[pyfunction]""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.cdef("", ""FFI("", ""ffi.new(""]}]"
+cloudpickle,110339765,https://github.com/cloudpipe/cloudpickle,https://pypi.org/project/cloudpickle/,[]
+langsmith,110135959,https://github.com/langchain-ai/langsmith-sdk,https://pypi.org/project/langsmith/,[]
+dill,109274090,https://github.com/uqfoundation/dill,https://pypi.org/project/dill/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+kiwisolver,109235718,https://github.com/nucleic/kiwi,https://pypi.org/project/kiwisolver/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+secretstorage,106939815,https://github.com/mitya57/secretstorage,https://pypi.org/project/secretstorage/,[]
+google-cloud-bigquery,106579273,https://github.com/googleapis/python-bigquery,https://pypi.org/project/google-cloud-bigquery/,[]
+blinker,106347249,https://github.com/pallets-eco/blinker,https://pypi.org/project/blinker/,[]
+jaraco-classes,106283117,https://github.com/jaraco/jaraco.classes,https://pypi.org/project/jaraco-classes/,[]
+google-auth-oauthlib,106236182,https://github.com/GoogleCloudPlatform/google-auth-library-python-oauthlib,https://pypi.org/project/google-auth-oauthlib/,[]
+setuptools-scm,105971369,https://github.com/pypa/setuptools-scm,https://pypi.org/project/setuptools-scm/,[]
+backoff,105902605,https://github.com/litl/backoff,https://pypi.org/project/backoff/,[]
+pyproject-hooks,105394526,https://github.com/pypa/pyproject-hooks,https://pypi.org/project/pyproject-hooks/,[]
+typer,105355422,https://github.com/fastapi/typer,https://pypi.org/project/typer/,[]
+alembic,105271662,https://github.com/sqlalchemy/alembic,https://pypi.org/project/alembic/,[]
+pydantic-settings,104304813,https://github.com/pydantic/pydantic-settings,https://pypi.org/project/pydantic-settings/,[]
+fastjsonschema,103772619,https://github.com/horejsek/python-fastjsonschema,https://pypi.org/project/fastjsonschema/,[]
+build,103291831,https://github.com/pypa/build,https://pypi.org/project/build/,[]
+jeepney,102807944,,https://pypi.org/project/jeepney/,[]
+rapidfuzz,102526197,https://github.com/rapidfuzz/RapidFuzz,https://pypi.org/project/rapidfuzz/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+cycler,100220498,https://github.com/matplotlib/cycler,https://pypi.org/project/cycler/,[]
+defusedxml,99941823,https://github.com/tiran/defusedxml,https://pypi.org/project/defusedxml/,[]
+ruff,99431745,https://github.com/astral-sh/ruff,https://pypi.org/project/ruff/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+jiter,99072263,https://github.com/pydantic/jiter,https://pypi.org/project/jiter/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]""]}]"
+google-cloud-secret-manager,98896753,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-secret-manager/,[]
+uritemplate,98583191,https://github.com/python-hyper/uritemplate,https://pypi.org/project/uritemplate/,[]
+google-cloud-batch,98256074,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-batch/,[]
+pytest-cov,98255139,https://github.com/pytest-dev/pytest-cov,https://pypi.org/project/pytest-cov/,[]
+pyzmq,97969002,https://github.com/zeromq/pyzmq,https://pypi.org/project/pyzmq/,"[{""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cpdef"", ""cimport""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.cdef("", ""FFI("", ""ffi.new(""]}]"
+msal-extensions,97930644,https://github.com/AzureAD/microsoft-authentication-extensions-for-python,https://pypi.org/project/msal-extensions/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+orjson,97660673,https://github.com/ijl/orjson,https://pypi.org/project/orjson/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyModuleDef""]}]"
+google-auth-httplib2,97235371,https://github.com/GoogleCloudPlatform/google-auth-library-python-httplib2,https://pypi.org/project/google-auth-httplib2/,[]
+tzlocal,96389810,https://github.com/regebro/tzlocal,https://pypi.org/project/tzlocal/,[]
+contourpy,96311536,https://github.com/contourpy/contourpy,https://pypi.org/project/contourpy/,"[{""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}]"
+httplib2,96262088,https://github.com/httplib2/httplib2,https://pypi.org/project/httplib2/,[]
+py4j,94363690,,https://pypi.org/project/py4j/,[]
+langchain,94084072,https://github.com/langchain-ai/langchain,https://pypi.org/project/langchain/,[]
+ruamel-yaml-clib,94083532,,https://pypi.org/project/ruamel-yaml-clib/,[]
+jaraco-functools,93622377,https://github.com/jaraco/jaraco.functools,https://pypi.org/project/jaraco-functools/,[]
+grpcio-health-checking,93577123,,https://pypi.org/project/grpcio-health-checking/,[]
+sqlparse,93441905,https://github.com/andialbrecht/sqlparse,https://pypi.org/project/sqlparse/,[]
+jsonpointer,92600492,https://github.com/stefankoegl/python-json-pointer,https://pypi.org/project/jsonpointer/,[]
+xmltodict,92588547,https://github.com/martinblech/xmltodict,https://pypi.org/project/xmltodict/,[]
+prometheus-client,92193040,https://github.com/prometheus/client_python,https://pypi.org/project/prometheus-client/,[]
+tokenizers,91790723,https://github.com/huggingface/tokenizers,https://pypi.org/project/tokenizers/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]""]}]"
+marshmallow,91509373,https://github.com/marshmallow-code/marshmallow,https://pypi.org/project/marshmallow/,[]
+azure-storage-blob,90831007,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-storage-blob/,[]
+google-analytics-admin,90820897,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-analytics-admin/,[]
+ipython,90071695,https://github.com/ipython/ipython,https://pypi.org/project/ipython/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}, {""type"": ""SWIG"", ""keywords"": [""%module""]}]"
+importlib-resources,89904973,https://github.com/python/importlib_resources,https://pypi.org/project/importlib-resources/,[]
+jaraco-context,89533224,https://github.com/jaraco/jaraco.context,https://pypi.org/project/jaraco-context/,[]
+docker,89129326,https://github.com/docker/docker-py,https://pypi.org/project/docker/,[]
+aliyun-python-sdk-core,88759855,https://github.com/aliyun/aliyun-openapi-python-sdk,https://pypi.org/project/aliyun-python-sdk-core/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+black,88166356,https://github.com/psf/black,https://pypi.org/project/black/,[]
+types-requests,85076249,https://github.com/python/typeshed,https://pypi.org/project/types-requests/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+mako,84974151,https://github.com/sqlalchemy/mako,https://pypi.org/project/mako/,"[{""type"": ""SWIG"", ""keywords"": [""%include""]}]"
+babel,84387053,https://github.com/python-babel/babel,https://pypi.org/project/babel/,[]
+email-validator,83878811,https://github.com/JoshData/python-email-validator,https://pypi.org/project/email-validator/,[]
+traitlets,83319243,https://github.com/ipython/traitlets,https://pypi.org/project/traitlets/,[]
+cython,83215870,https://github.com/cython/cython,https://pypi.org/project/cython/,[]
+jedi,81955940,https://github.com/davidhalter/jedi,https://pypi.org/project/jedi/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+parso,81683627,https://github.com/davidhalter/parso,https://pypi.org/project/parso/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+nest-asyncio,81230343,https://github.com/erdewit/nest_asyncio,https://pypi.org/project/nest-asyncio/,[]
+tornado,80742389,https://github.com/tornadoweb/tornado,https://pypi.org/project/tornado/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+sympy,80638897,https://github.com/sympy/sympy,https://pypi.org/project/sympy/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+toml,80017330,https://github.com/uiri/toml,https://pypi.org/project/toml/,[]
+mypy,79415875,https://github.com/python/mypy,https://pypi.org/project/mypy/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""Cython"", ""keywords"": [""cpdef""]}, {""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+awswrangler,79298921,https://github.com/aws/aws-sdk-pandas,https://pypi.org/project/awswrangler/,[]
+matplotlib-inline,79192219,https://github.com/ipython/matplotlib-inline,https://pypi.org/project/matplotlib-inline/,[]
+opentelemetry-instrumentation,79184875,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation/,[]
+kubernetes,79056576,https://github.com/kubernetes-client/python,https://pypi.org/project/kubernetes/,[]
+aiofiles,78924723,https://github.com/Tinche/aiofiles,https://pypi.org/project/aiofiles/,[]
+snowflake-sqlalchemy,78525520,https://github.com/snowflakedb/snowflake-sqlalchemy,https://pypi.org/project/snowflake-sqlalchemy/,[]
+executing,77990134,https://github.com/alexmojaki/executing,https://pypi.org/project/executing/,[]
+pytest-asyncio,77257589,https://github.com/pytest-dev/pytest-asyncio,https://pypi.org/project/pytest-asyncio/,[]
+hf-xet,77038912,https://github.com/huggingface/xet-core,https://pypi.org/project/hf-xet/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]"", ""#[pyclass]""]}]"
+sentry-sdk,76499148,https://github.com/getsentry/sentry-python,https://pypi.org/project/sentry-sdk/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]""]}]"
+argcomplete,76243529,https://github.com/kislyuk/argcomplete,https://pypi.org/project/argcomplete/,[]
+asttokens,76105686,https://github.com/gristlabs/asttokens,https://pypi.org/project/asttokens/,[]
+grpc-google-iam-v1,75751147,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/grpc-google-iam-v1/,[]
+sphinx,74787129,https://github.com/sphinx-doc/sphinx,https://pypi.org/project/sphinx/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+uv,74508027,https://github.com/astral-sh/uv,https://pypi.org/project/uv/,"[{""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+mpmath,74393538,https://github.com/fredrik-johansson/mpmath,https://pypi.org/project/mpmath/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+webencodings,73917687,https://github.com/SimonSapin/python-webencodings,https://pypi.org/project/webencodings/,[]
+langchain-core,73734821,https://github.com/langchain-ai/langchain,https://pypi.org/project/langchain-core/,[]
+typedload,73504263,,https://pypi.org/project/typedload/,[]
+ply,73189982,,https://pypi.org/project/ply/,[]
+nodeenv,72941597,https://github.com/ekalinin/nodeenv,https://pypi.org/project/nodeenv/,[]
+pymupdf,72879454,https://github.com/pymupdf/pymupdf,https://pypi.org/project/pymupdf/,"[{""type"": ""SWIG"", ""keywords"": [""%module"", ""%include""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+termcolor,72835246,https://github.com/termcolor/termcolor,https://pypi.org/project/termcolor/,[]
+markdown,72596935,https://github.com/Python-Markdown/markdown,https://pypi.org/project/markdown/,[]
+jsonpatch,72287508,https://github.com/stefankoegl/python-json-patch,https://pypi.org/project/jsonpatch/,[]
+torch,71715328,https://github.com/pytorch/pytorch,https://pypi.org/project/torch/,[]
+stack-data,71155590,https://github.com/alexmojaki/stack_data,https://pypi.org/project/stack-data/,[]
+pure-eval,70986176,https://github.com/alexmojaki/pure_eval,https://pypi.org/project/pure-eval/,[]
+cachecontrol,70944238,https://github.com/psf/cachecontrol,https://pypi.org/project/cachecontrol/,[]
+gunicorn,70904102,https://github.com/benoitc/gunicorn,https://pypi.org/project/gunicorn/,[]
+pymysql,70736873,https://github.com/PyMySQL/PyMySQL,https://pypi.org/project/pymysql/,[]
+uvloop,70436244,https://github.com/MagicStack/uvloop,https://pypi.org/project/uvloop/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+asgiref,70112698,https://github.com/django/asgiref,https://pypi.org/project/asgiref/,[]
+pymongo,69913127,https://github.com/mongodb/mongo-python-driver,https://pypi.org/project/pymongo/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+watchfiles,69254809,https://github.com/samuelcolvin/watchfiles,https://pypi.org/project/watchfiles/,"[{""type"": ""Rust"", ""keywords"": [""#[pyclass]""]}]"
+pkginfo,69175968,,https://pypi.org/project/pkginfo/,[]
+mccabe,68892240,https://github.com/pycqa/mccabe,https://pypi.org/project/mccabe/,[]
+dbt-core,67538461,https://github.com/dbt-labs/dbt-core,https://pypi.org/project/dbt-core/,[]
+isort,67474035,https://github.com/PyCQA/isort,https://pypi.org/project/isort/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+typing-inspect,67470373,https://github.com/ilevkivskyi/typing_inspect,https://pypi.org/project/typing-inspect/,[]
+docstring-parser,67091423,https://github.com/rr-/docstring_parser,https://pypi.org/project/docstring-parser/,[]
+dbt-common,66941819,https://github.com/dbt-labs/dbt-common,https://pypi.org/project/dbt-common/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+pytest-xdist,66600057,https://github.com/pytest-dev/pytest-xdist,https://pypi.org/project/pytest-xdist/,[]
+pycodestyle,65956745,,https://pypi.org/project/pycodestyle/,[]
+pre-commit,65827671,https://github.com/pre-commit/pre-commit,https://pypi.org/project/pre-commit/,[]
+python-json-logger,65809827,https://github.com/nhairs/python-json-logger,https://pypi.org/project/python-json-logger/,[]
+aioitertools,65559154,https://github.com/omnilib/aioitertools,https://pypi.org/project/aioitertools/,[]
+shapely,65283502,https://github.com/shapely/shapely,https://pypi.org/project/shapely/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+tiktoken,65215216,https://github.com/openai/tiktoken,https://pypi.org/project/tiktoken/,[]
+cfgv,65200153,https://github.com/asottile/cfgv,https://pypi.org/project/cfgv/,[]
+identify,65076907,https://github.com/pre-commit/identify,https://pypi.org/project/identify/,[]
+execnet,64716952,,https://pypi.org/project/execnet/,[]
+installer,64458734,https://github.com/pypa/installer,https://pypi.org/project/installer/,[]
+httptools,64458670,https://github.com/MagicStack/httptools,https://pypi.org/project/httptools/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+opentelemetry-util-http,63825182,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-util-http/,[]
+debugpy,63600632,https://github.com/microsoft/debugpy,https://pypi.org/project/debugpy/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+google-cloud-vision,63093373,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-vision/,[]
+google-cloud-kms,62337561,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-kms/,[]
+pycryptodome,61847481,https://github.com/Legrandin/pycryptodome,https://pypi.org/project/pycryptodome/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+google-cloud-compute,61566173,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-compute/,[]
+google-cloud-monitoring,61470016,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-monitoring/,[]
+pendulum,61288392,https://github.com/sdispater/pendulum,https://pypi.org/project/pendulum/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}]"
+future,61246860,https://github.com/PythonCharmers/python-future,https://pypi.org/project/future/,[]
+google-cloud-speech,61098931,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-speech/,[]
+google-cloud-tasks,60947209,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-tasks/,[]
+dulwich,60928025,https://github.com/dulwich/dulwich,https://pypi.org/project/dulwich/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}]"
+dbt-adapters,60903800,https://github.com/dbt-labs/dbt-adapters,https://pypi.org/project/dbt-adapters/,[]
+google-cloud-dlp,60828865,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dlp/,[]
+msrest,60806959,https://github.com/Azure/msrest-for-python,https://pypi.org/project/msrest/,[]
+databricks-sdk,60628446,,https://pypi.org/project/databricks-sdk/,[]
+watchdog,60461674,https://github.com/gorakhargosh/watchdog,https://pypi.org/project/watchdog/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL("", ""WinDLL(""]}]"
+multiprocess,60435156,https://github.com/uqfoundation/multiprocess,https://pypi.org/project/multiprocess/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+datadog,60255909,https://github.com/DataDog/datadogpy,https://pypi.org/project/datadog/,[]
+google-cloud-workflows,59574722,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-workflows/,[]
+google-cloud-language,59288668,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-language/,[]
+jsonpath-ng,58802729,https://github.com/h2non/jsonpath-ng,https://pypi.org/project/jsonpath-ng/,[]
+poetry,58738749,https://github.com/python-poetry/poetry,https://pypi.org/project/poetry/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+crashtest,58302575,https://github.com/sdispater/crashtest,https://pypi.org/project/crashtest/,[]
+notebook,58267424,https://github.com/jupyter/notebook,https://pypi.org/project/notebook/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+google-cloud-dataform,58015656,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dataform/,[]
+slack-sdk,57736342,https://github.com/slackapi/python-slack-sdk,https://pypi.org/project/slack-sdk/,[]
+rfc3339-validator,57537914,https://github.com/naimetti/rfc3339-validator,https://pypi.org/project/rfc3339-validator/,[]
+google-cloud-videointelligence,57330658,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-videointelligence/,[]
+smart-open,56920000,https://github.com/piskvorky/smart_open,https://pypi.org/project/smart-open/,[]
+mcp,56741083,https://github.com/modelcontextprotocol/python-sdk,https://pypi.org/project/mcp/,[]
+httpx-sse,56734963,https://github.com/florimondmanca/httpx-sse,https://pypi.org/project/httpx-sse/,[]
+azure-common,56553409,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-common/,[]
+jupyter-core,56493955,https://github.com/jupyter/jupyter_core,https://pypi.org/project/jupyter-core/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+google-cloud-os-login,56450398,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-os-login/,[]
+databricks-sql-connector,56263711,https://github.com/databricks/databricks-sql-python,https://pypi.org/project/databricks-sql-connector/,[]
+lz4,56227854,https://github.com/python-lz4/python-lz4,https://pypi.org/project/lz4/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+cattrs,55607714,https://github.com/python-attrs/cattrs,https://pypi.org/project/cattrs/,[]
+ipykernel,55516819,https://github.com/ipython/ipykernel,https://pypi.org/project/ipykernel/,[]
+cleo,55395832,https://github.com/python-poetry/cleo,https://pypi.org/project/cleo/,[]
+opentelemetry-instrumentation-requests,54831940,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-requests/,[]
+arrow,54803967,https://github.com/arrow-py/arrow,https://pypi.org/project/arrow/,[]
+backports-tarfile,54759435,https://github.com/jaraco/backports.tarfile,https://pypi.org/project/backports-tarfile/,[]
+google-cloud-redis,54573165,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-redis/,[]
+requests-file,54319008,,https://pypi.org/project/requests-file/,[]
+dataclasses-json,54314216,https://github.com/lidatong/dataclasses-json,https://pypi.org/project/dataclasses-json/,[]
+scramp,54261555,,https://pypi.org/project/scramp/,[]
+bashlex,54238008,https://github.com/idank/bashlex,https://pypi.org/project/bashlex/,[]
+tinycss2,54036272,https://github.com/Kozea/tinycss2,https://pypi.org/project/tinycss2/,[]
+google-cloud-logging,53485988,https://github.com/googleapis/python-logging,https://pypi.org/project/google-cloud-logging/,[]
+pygithub,53308778,https://github.com/pygithub/pygithub,https://pypi.org/project/pygithub/,[]
+semver,53036005,https://github.com/python-semver/python-semver,https://pypi.org/project/semver/,[]
+jupyter-client,52929208,https://github.com/jupyter/jupyter_client,https://pypi.org/project/jupyter-client/,[]
+pypandoc-binary,52820059,https://github.com/JessicaTegner/pypandoc,https://pypi.org/project/pypandoc-binary/,[]
+comm,52790379,https://github.com/ipython/comm,https://pypi.org/project/comm/,[]
+py,52598877,,https://pypi.org/project/py/,[]
+swe-rex,52563990,https://github.com/SWE-agent/SWE-rex,https://pypi.org/project/swe-rex/,[]
+google-cloud-memcache,52524122,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-memcache/,[]
+deepdiff,52319382,https://github.com/seperman/deepdiff,https://pypi.org/project/deepdiff/,[]
+opensearch-py,52101730,https://github.com/opensearch-project/opensearch-py,https://pypi.org/project/opensearch-py/,[]
+pyflakes,51776256,https://github.com/PyCQA/pyflakes,https://pypi.org/project/pyflakes/,[]
+nvidia-nccl-cu12,51572666,,https://pypi.org/project/nvidia-nccl-cu12/,[]
+invoke,51066220,https://github.com/pyinvoke/invoke,https://pypi.org/project/invoke/,[]
+mistune,51052074,https://github.com/lepture/mistune,https://pypi.org/project/mistune/,[]
+textual,50595571,https://github.com/Textualize/textual,https://pypi.org/project/textual/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+zope-interface,50422126,https://github.com/zopefoundation/zope.interface,https://pypi.org/project/zope-interface/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+safetensors,50225106,https://github.com/huggingface/safetensors,https://pypi.org/project/safetensors/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]"", ""#[pyclass]""]}]"
+google-cloud-aiplatform,49735354,https://github.com/googleapis/python-aiplatform,https://pypi.org/project/google-cloud-aiplatform/,[]
+redshift-connector,49490255,https://github.com/aws/amazon-redshift-python-driver,https://pypi.org/project/redshift-connector/,[]
+bleach,49061193,https://github.com/mozilla/bleach,https://pypi.org/project/bleach/,[]
+pyspark,48844145,https://github.com/apache/spark,https://pypi.org/project/pyspark/,[]
+typeguard,48763693,https://github.com/agronholm/typeguard,https://pypi.org/project/typeguard/,[]
+h2,48648921,https://github.com/python-hyper/h2,https://pypi.org/project/h2/,[]
+flake8,48621336,https://github.com/pycqa/flake8,https://pypi.org/project/flake8/,[]
+opentelemetry-exporter-prometheus,48580031,https://github.com/open-telemetry/opentelemetry-python,https://pypi.org/project/opentelemetry-exporter-prometheus/,[]
+xlsxwriter,48376698,https://github.com/jmcnamara/XlsxWriter,https://pypi.org/project/xlsxwriter/,[]
+hyperframe,48187945,https://github.com/python-hyper/hyperframe,https://pypi.org/project/hyperframe/,[]
+authlib,48184031,https://github.com/authlib/authlib,https://pypi.org/project/authlib/,[]
+nbformat,47998587,https://github.com/jupyter/nbformat,https://pypi.org/project/nbformat/,[]
+hpack,47967715,https://github.com/python-hyper/hpack,https://pypi.org/project/hpack/,[]
+durationpy,47780048,https://github.com/icholy/durationpy,https://pypi.org/project/durationpy/,[]
+text-unidecode,47628856,https://github.com/kmike/text-unidecode,https://pypi.org/project/text-unidecode/,[]
+botocore-stubs,47611852,https://github.com/youtype/botocore-stubs,https://pypi.org/project/botocore-stubs/,[]
+google-cloud-bigtable,47244763,https://github.com/googleapis/python-bigtable,https://pypi.org/project/google-cloud-bigtable/,[]
+snowflake-snowpark-python,47241254,https://github.com/snowflakedb/snowpark-python,https://pypi.org/project/snowflake-snowpark-python/,[]
+graphql-core,47111423,https://github.com/graphql-python/graphql-core,https://pypi.org/project/graphql-core/,[]
+types-awscrt,47060968,https://github.com/youtype/types-awscrt,https://pypi.org/project/types-awscrt/,[]
+pysocks,46927317,https://github.com/Anorov/PySocks,https://pypi.org/project/pysocks/,[]
+humanfriendly,46788942,,https://pypi.org/project/humanfriendly/,[]
+python-slugify,46211043,https://github.com/un33k/python-slugify,https://pypi.org/project/python-slugify/,[]
+boto3-stubs,46187055,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/boto3-stubs/,[]
+poetry-plugin-export,46132904,https://github.com/python-poetry/poetry-plugin-export,https://pypi.org/project/poetry-plugin-export/,[]
+wsproto,45953034,https://github.com/python-hyper/wsproto,https://pypi.org/project/wsproto/,[]
+types-s3transfer,45926615,https://github.com/youtype/types-s3transfer,https://pypi.org/project/types-s3transfer/,[]
+loguru,45754670,https://github.com/Delgan/loguru,https://pypi.org/project/loguru/,[]
+requests-aws4auth,45353088,https://github.com/tedder/requests-aws4auth,https://pypi.org/project/requests-aws4auth/,[]
+google-cloud-pubsub,45141928,https://github.com/googleapis/python-pubsub,https://pypi.org/project/google-cloud-pubsub/,[]
+narwhals,45039718,https://github.com/narwhals-dev/narwhals,https://pypi.org/project/narwhals/,[]
+nbconvert,44849483,,https://pypi.org/project/nbconvert/,[]
+mysql-connector-python,44550742,https://github.com/mysql/mysql-connector-python,https://pypi.org/project/mysql-connector-python/,[]
+aenum,44508612,https://github.com/ethanfurman/aenum,https://pypi.org/project/aenum/,[]
+elasticsearch,44418435,https://github.com/elastic/elasticsearch-py,https://pypi.org/project/elasticsearch/,[]
+lark,44410272,https://github.com/lark-parser/lark,https://pypi.org/project/lark/,[]
+pandas-stubs,44079543,https://github.com/pandas-dev/pandas-stubs,https://pypi.org/project/pandas-stubs/,[]
+xxhash,44045774,https://github.com/ifduyue/python-xxhash,https://pypi.org/project/xxhash/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+simplejson,43763993,https://github.com/simplejson/simplejson,https://pypi.org/project/simplejson/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+userpath,43549232,https://github.com/ofek/userpath,https://pypi.org/project/userpath/,[]
+gcsfs,43531688,https://github.com/fsspec/gcsfs,https://pypi.org/project/gcsfs/,[]
+nltk,43154279,https://github.com/nltk/nltk,https://pypi.org/project/nltk/,[]
+google-cloud-resource-manager,43105503,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-resource-manager/,[]
+pycryptodomex,43075548,https://github.com/Legrandin/pycryptodome,https://pypi.org/project/pycryptodomex/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+nvidia-cublas-cu12,42818660,,https://pypi.org/project/nvidia-cublas-cu12/,[]
+xlrd,42501806,,https://pypi.org/project/xlrd/,[]
+jupyter-server,42444303,https://github.com/jupyter-server/jupyter_server,https://pypi.org/project/jupyter-server/,[]
+nbclient,42114170,https://github.com/jupyter/nbclient,https://pypi.org/project/nbclient/,[]
+jupyterlab,42088036,https://github.com/jupyterlab/jupyterlab,https://pypi.org/project/jupyterlab/,[]
+sse-starlette,41985750,https://github.com/sysid/sse-starlette,https://pypi.org/project/sse-starlette/,[]
+triton,41913595,https://github.com/triton-lang/triton,https://pypi.org/project/triton/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+argon2-cffi,41866278,https://github.com/hynek/argon2-cffi,https://pypi.org/project/argon2-cffi/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.new(""]}]"
+nvidia-cusparse-cu12,41674464,,https://pypi.org/project/nvidia-cusparse-cu12/,[]
+deprecation,41574160,https://github.com/briancurtin/deprecation,https://pypi.org/project/deprecation/,[]
+faker,41570926,https://github.com/joke2k/faker,https://pypi.org/project/faker/,[]
+argon2-cffi-bindings,41559217,https://github.com/hynek/argon2-cffi-bindings,https://pypi.org/project/argon2-cffi-bindings/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.cdef("", ""FFI(""]}]"
+toolz,41508756,https://github.com/pytoolz/toolz,https://pypi.org/project/toolz/,[]
+confluent-kafka,41388356,https://github.com/confluentinc/confluent-kafka-python,https://pypi.org/project/confluent-kafka/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+pytokens,41242697,https://github.com/tusharsadhwani/pytokens,https://pypi.org/project/pytokens/,[]
+nvidia-cuda-nvrtc-cu12,40996439,,https://pypi.org/project/nvidia-cuda-nvrtc-cu12/,[]
+litellm,40959798,https://github.com/BerriAI/litellm,https://pypi.org/project/litellm/,"[{""type"": ""SWIG"", ""keywords"": [""%include""]}]"
+nvidia-cufft-cu12,40949287,,https://pypi.org/project/nvidia-cufft-cu12/,[]
+nvidia-cusolver-cu12,40923862,,https://pypi.org/project/nvidia-cusolver-cu12/,[]
+nvidia-cuda-cupti-cu12,40899350,,https://pypi.org/project/nvidia-cuda-cupti-cu12/,[]
+nvidia-nvjitlink-cu12,40830142,,https://pypi.org/project/nvidia-nvjitlink-cu12/,[]
+nvidia-curand-cu12,40805199,,https://pypi.org/project/nvidia-curand-cu12/,[]
+pyrsistent,40801012,https://github.com/tobgu/pyrsistent,https://pypi.org/project/pyrsistent/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+datasets,40650685,https://github.com/huggingface/datasets,https://pypi.org/project/datasets/,[]
+pbs-installer,40601936,https://github.com/frostming/pbs-installer,https://pypi.org/project/pbs-installer/,[]
+nvidia-cuda-runtime-cu12,40507747,,https://pypi.org/project/nvidia-cuda-runtime-cu12/,[]
+nvidia-cudnn-cu12,40435098,,https://pypi.org/project/nvidia-cudnn-cu12/,[]
+types-protobuf,40242620,https://github.com/python/typeshed,https://pypi.org/project/types-protobuf/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+selenium,40199639,,https://pypi.org/project/selenium/,[]
+pandocfilters,40001798,https://github.com/jgm/pandocfilters,https://pypi.org/project/pandocfilters/,[]
+findpython,39990124,https://github.com/frostming/findpython,https://pypi.org/project/findpython/,[]
+google-ads,39926410,https://github.com/googleads/google-ads-python,https://pypi.org/project/google-ads/,[]
+jupyterlab-pygments,39854368,https://github.com/jupyterlab/jupyterlab_pygments,https://pypi.org/project/jupyterlab-pygments/,[]
+croniter,39739139,https://github.com/kiorky/croniter,https://pypi.org/project/croniter/,[]
+pg8000,39491494,,https://pypi.org/project/pg8000/,[]
+types-pyyaml,39491186,https://github.com/python/typeshed,https://pypi.org/project/types-pyyaml/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+json5,39052312,https://github.com/dpranke/pyjson5,https://pypi.org/project/json5/,[]
+flatbuffers,38883319,https://github.com/google/flatbuffers,https://pypi.org/project/flatbuffers/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.new(""]}]"
+structlog,38763007,https://github.com/hynek/structlog,https://pypi.org/project/structlog/,[]
+sqlalchemy-bigquery,38656560,https://github.com/googleapis/python-bigquery-sqlalchemy,https://pypi.org/project/sqlalchemy-bigquery/,[]
+plotly,38652109,https://github.com/plotly/plotly.py,https://pypi.org/project/plotly/,[]
+mypy-boto3-s3,38565043,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/mypy-boto3-s3/,[]
+altair,38544688,https://github.com/vega/altair,https://pypi.org/project/altair/,[]
+colorlog,38256021,https://github.com/borntyping/python-colorlog,https://pypi.org/project/colorlog/,[]
+langchain-community,38251793,https://github.com/langchain-ai/langchain,https://pypi.org/project/langchain-community/,[]
+google-cloud-appengine-logging,38214730,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-appengine-logging/,[]
+types-python-dateutil,38191177,https://github.com/python/typeshed,https://pypi.org/project/types-python-dateutil/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+azure-keyvault-secrets,37975567,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-keyvault-secrets/,[]
+astroid,37838300,https://github.com/pylint-dev/astroid,https://pypi.org/project/astroid/,[]
+overrides,37785890,https://github.com/mkorpela/overrides,https://pypi.org/project/overrides/,[]
+brotli,37630839,https://github.com/google/brotli,https://pypi.org/project/brotli/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+xgboost,37514383,https://github.com/dmlc/xgboost,https://pypi.org/project/xgboost/,[]
+ipython-pygments-lexers,37422538,https://github.com/ipython/ipython-pygments-lexers,https://pypi.org/project/ipython-pygments-lexers/,[]
+google-cloud-bigquery-datatransfer,37376977,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-bigquery-datatransfer/,[]
+jsonschema-path,36985489,https://github.com/p1c2u/jsonschema-path,https://pypi.org/project/jsonschema-path/,[]
+google-cloud-texttospeech,36906336,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-texttospeech/,[]
+ray,36732945,https://github.com/ray-project/ray,https://pypi.org/project/ray/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL("", ""WinDLL(""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cimport""]}]"
+google-cloud-orchestration-airflow,36577720,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-orchestration-airflow/,[]
+absl-py,36479405,https://github.com/abseil/abseil-py,https://pypi.org/project/absl-py/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+responses,36440154,https://github.com/getsentry/responses,https://pypi.org/project/responses/,[]
+numba,36439466,,https://pypi.org/project/numba/,[]
+google-cloud-run,36354389,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-run/,[]
+google-cloud-dataproc-metastore,36252974,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dataproc-metastore/,[]
+imageio,36162246,https://github.com/imageio/imageio,https://pypi.org/project/imageio/,[]
+google-pasta,36161420,https://github.com/google/pasta,https://pypi.org/project/google-pasta/,[]
+jupyterlab-server,36050474,https://github.com/jupyterlab/jupyterlab_server,https://pypi.org/project/jupyterlab-server/,[]
+pylint,35996092,https://github.com/pylint-dev/pylint,https://pypi.org/project/pylint/,[]
+db-dtypes,35960878,https://github.com/googleapis/python-db-dtypes-pandas,https://pypi.org/project/db-dtypes/,[]
+portalocker,35881608,https://github.com/wolph/portalocker,https://pypi.org/project/portalocker/,[]
+webcolors,35878238,https://github.com/ubernostrum/webcolors,https://pypi.org/project/webcolors/,[]
+llvmlite,35818769,https://github.com/numba/llvmlite,https://pypi.org/project/llvmlite/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+lazy-object-proxy,35725405,https://github.com/ionelmc/python-lazy-object-proxy,https://pypi.org/project/lazy-object-proxy/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+nvidia-nvtx-cu12,35670981,,https://pypi.org/project/nvidia-nvtx-cu12/,[]
+langchain-openai,35607243,https://github.com/langchain-ai/langchain,https://pypi.org/project/langchain-openai/,[]
+inflection,35546592,https://github.com/jpvanhal/inflection,https://pypi.org/project/inflection/,[]
+coloredlogs,35482118,,https://pypi.org/project/coloredlogs/,[]
+psycopg2,35222388,https://github.com/psycopg/psycopg2,https://pypi.org/project/psycopg2/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+tree-sitter,35196356,https://github.com/tree-sitter/py-tree-sitter,https://pypi.org/project/tree-sitter/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+kombu,35188140,https://github.com/celery/kombu,https://pypi.org/project/kombu/,[]
+typer-slim,35156706,https://github.com/fastapi/typer,https://pypi.org/project/typer-slim/,[]
+setproctitle,35041785,https://github.com/dvarrazzo/py-setproctitle,https://pypi.org/project/setproctitle/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+google-cloud-automl,35035974,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-automl/,[]
+widgetsnbextension,35031437,,https://pypi.org/project/widgetsnbextension/,[]
+trio,34691073,https://github.com/python-trio/trio,https://pypi.org/project/trio/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+django,34682261,https://github.com/django/django,https://pypi.org/project/django/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+ipywidgets,34612675,,https://pypi.org/project/ipywidgets/,[]
+antlr4-python3-runtime,34600619,,https://pypi.org/project/antlr4-python3-runtime/,[]
+async-lru,34509500,https://github.com/aio-libs/async-lru,https://pypi.org/project/async-lru/,[]
+gevent,34423277,https://github.com/gevent/gevent,https://pypi.org/project/gevent/,"[{""type"": ""CFFI"", ""keywords"": [""FFI("", ""ffi.cdef("", ""ffi.new(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+jupyterlab-widgets,34313341,https://github.com/jupyter-widgets/ipywidgets,https://pypi.org/project/jupyterlab-widgets/,[]
+fqdn,34050058,https://github.com/ypcrts/fqdn,https://pypi.org/project/fqdn/,[]
+google-cloud-dataflow-client,33940908,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dataflow-client/,[]
+outcome,33771489,https://github.com/python-trio/outcome,https://pypi.org/project/outcome/,[]
+opencv-python,33705948,https://github.com/opencv/opencv-python,https://pypi.org/project/opencv-python/,[]
+gcloud-aio-storage,33694347,https://github.com/talkiq/gcloud-aio,https://pypi.org/project/gcloud-aio-storage/,[]
+isoduration,33683709,https://github.com/bolsote/isoduration,https://pypi.org/project/isoduration/,[]
+click-plugins,33628982,https://github.com/click-contrib/click-plugins,https://pypi.org/project/click-plugins/,[]
+uri-template,33548158,,https://pypi.org/project/uri-template/,[]
+google-cloud-audit-log,33394373,https://github.com/googleapis/python-audit-log,https://pypi.org/project/google-cloud-audit-log/,[]
+apache-beam,33344496,,https://pypi.org/project/apache-beam/,[]
+send2trash,33332510,https://github.com/arsenetar/send2trash,https://pypi.org/project/send2trash/,[]
+thrift,33139427,,https://pypi.org/project/thrift/,[]
+adal,33118539,https://github.com/AzureAD/azure-activedirectory-library-for-python,https://pypi.org/project/adal/,[]
+seaborn,32929708,https://github.com/mwaskom/seaborn,https://pypi.org/project/seaborn/,[]
+humanize,32880768,https://github.com/python-humanize/humanize,https://pypi.org/project/humanize/,[]
+pymssql,32678996,https://github.com/pymssql/pymssql,https://pypi.org/project/pymssql/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+oauth2client,32610766,https://github.com/google/oauth2client,https://pypi.org/project/oauth2client/,[]
+python-telegram-bot,32574972,https://github.com/python-telegram-bot/python-telegram-bot,https://pypi.org/project/python-telegram-bot/,[]
+rfc3986-validator,32403040,https://github.com/naimetti/rfc3986-validator,https://pypi.org/project/rfc3986-validator/,[]
+gym-notices,32380910,https://github.com/Farama-Foundation/gym-notices,https://pypi.org/project/gym-notices/,[]
+azure-mgmt-core,32280216,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-core/,[]
+pyodbc,32188873,https://github.com/mkleehammer/pyodbc,https://pypi.org/project/pyodbc/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+sentencepiece,32166375,https://github.com/google/sentencepiece,https://pypi.org/project/sentencepiece/,"[{""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%include"", ""%module""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_""]}]"
+aws-lambda-powertools,32034441,https://github.com/aws-powertools/powertools-lambda-python,https://pypi.org/project/aws-lambda-powertools/,[]
+flask-cors,31713030,https://github.com/corydolphin/flask-cors,https://pypi.org/project/flask-cors/,[]
+psycopg,31603819,https://github.com/psycopg/psycopg,https://pypi.org/project/psycopg/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+polars,31515813,https://github.com/pola-rs/polars,https://pypi.org/project/polars/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]"", ""#[pyclass]""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+zeep,31295218,https://github.com/mvantellingen/python-zeep,https://pypi.org/project/zeep/,[]
+terminado,31267444,https://github.com/jupyter/terminado,https://pypi.org/project/terminado/,[]
+anthropic,30940535,https://github.com/anthropics/anthropic-sdk-python,https://pypi.org/project/anthropic/,[]
+ecdsa,30916884,https://github.com/tlsfuzzer/python-ecdsa,https://pypi.org/project/ecdsa/,[]
+asyncpg,30896488,https://github.com/MagicStack/asyncpg,https://pypi.org/project/asyncpg/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+pipx,30755450,https://github.com/pypa/pipx,https://pypi.org/project/pipx/,[]
+google-cloud-bigquery-storage,30614977,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-bigquery-storage/,[]
+oss2,30590604,,https://pypi.org/project/oss2/,[]
+jupyter-events,30474903,https://github.com/jupyter/jupyter_events,https://pypi.org/project/jupyter-events/,[]
+sshtunnel,30403800,https://github.com/pahaz/sshtunnel,https://pypi.org/project/sshtunnel/,[]
+nvidia-cusparselt-cu12,30256698,,https://pypi.org/project/nvidia-cusparselt-cu12/,[]
+tritonclient,30226499,,https://pypi.org/project/tritonclient/,[]
+notebook-shim,30196937,,https://pypi.org/project/notebook-shim/,[]
+h5py,30093997,https://github.com/h5py/h5py,https://pypi.org/project/h5py/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+delta-spark,30034471,https://github.com/delta-io/delta,https://pypi.org/project/delta-spark/,[]
+billiard,30021947,https://github.com/celery/billiard,https://pypi.org/project/billiard/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC""]}]"
+torchvision,29942280,https://github.com/pytorch/vision,https://pypi.org/project/torchvision/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+orderly-set,29889879,https://github.com/seperman/orderly-set,https://pypi.org/project/orderly-set/,[]
+ordered-set,29802690,https://github.com/rspeer/ordered-set,https://pypi.org/project/ordered-set/,[]
+langchain-google-vertexai,29723320,https://github.com/langchain-ai/langchain-google,https://pypi.org/project/langchain-google-vertexai/,[]
+rfc3986,29694858,,https://pypi.org/project/rfc3986/,[]
+dbt-protos,29578695,https://github.com/dbt-labs/proto-python-public,https://pypi.org/project/dbt-protos/,[]
+mock,29552024,https://github.com/testing-cabal/mock,https://pypi.org/project/mock/,[]
+tensorboard,29463150,https://github.com/tensorflow/tensorboard,https://pypi.org/project/tensorboard/,[]
+rich-toolkit,29317656,,https://pypi.org/project/rich-toolkit/,[]
+jupyter-server-terminals,29261077,https://github.com/jupyter-server/jupyter_server_terminals,https://pypi.org/project/jupyter-server-terminals/,[]
+pandas-gbq,29222213,https://github.com/googleapis/python-bigquery-pandas,https://pypi.org/project/pandas-gbq/,[]
+celery,29196068,https://github.com/celery/celery,https://pypi.org/project/celery/,[]
+azure-storage-file-datalake,28933663,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-storage-file-datalake/,[]
+click-didyoumean,28797819,https://github.com/click-contrib/click-didyoumean,https://pypi.org/project/click-didyoumean/,[]
+nh3,28790353,https://github.com/messense/nh3,https://pypi.org/project/nh3/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]"", ""#[pyclass]""]}]"
+fastavro,28787816,https://github.com/fastavro/fastavro,https://pypi.org/project/fastavro/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+langchain-text-splitters,28746596,https://github.com/langchain-ai/langchain,https://pypi.org/project/langchain-text-splitters/,[]
+retry,28628440,https://github.com/invl/retry,https://pypi.org/project/retry/,[]
+tableauserverclient,28604796,https://github.com/tableau/server-client-python,https://pypi.org/project/tableauserverclient/,[]
+pytzdata,28555181,https://github.com/sdispater/pytzdata,https://pypi.org/project/pytzdata/,[]
+appdirs,28547646,https://github.com/ActiveState/appdirs,https://pypi.org/project/appdirs/,[]
+omegaconf,28083480,https://github.com/omry/omegaconf,https://pypi.org/project/omegaconf/,[]
+amqp,28074984,https://github.com/celery/py-amqp,https://pypi.org/project/amqp/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef""]}]"
+apache-airflow-providers-common-sql,28040014,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-common-sql/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+pypdf,28023715,https://github.com/py-pdf/pypdf,https://pypi.org/project/pypdf/,[]
+jupyter-lsp,27982378,https://github.com/jupyter-lsp/jupyterlab-lsp,https://pypi.org/project/jupyter-lsp/,[]
+vine,27975154,https://github.com/celery/vine,https://pypi.org/project/vine/,[]
+opentelemetry-instrumentation-asgi,27946390,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-asgi/,[]
+freezegun,27934923,https://github.com/spulec/freezegun,https://pypi.org/project/freezegun/,[]
+sendgrid,27896814,https://github.com/sendgrid/sendgrid-python,https://pypi.org/project/sendgrid/,[]
+libcst,27744610,https://github.com/Instagram/LibCST,https://pypi.org/project/libcst/,"[{""type"": ""Rust"", ""keywords"": [""#[pyfunction]""]}]"
+gspread,27720950,https://github.com/burnash/gspread,https://pypi.org/project/gspread/,[]
+mashumaro,27436689,https://github.com/Fatal1ty/mashumaro,https://pypi.org/project/mashumaro/,[]
+tb-nightly,27407038,https://github.com/tensorflow/tensorboard,https://pypi.org/project/tb-nightly/,[]
+opentelemetry-instrumentation-fastapi,27302133,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-fastapi/,[]
+statsmodels,27209638,https://github.com/statsmodels/statsmodels,https://pypi.org/project/statsmodels/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+click-repl,27142897,https://github.com/untitaker/click-repl,https://pypi.org/project/click-repl/,[]
+google-cloud-dataproc,27049355,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dataproc/,[]
+nvidia-cufile-cu12,26869096,,https://pypi.org/project/nvidia-cufile-cu12/,[]
+trio-websocket,26771098,https://github.com/python-trio/trio-websocket,https://pypi.org/project/trio-websocket/,[]
+types-pytz,26571956,https://github.com/python/typeshed,https://pypi.org/project/types-pytz/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+ijson,26571759,https://github.com/ICRAR/ijson,https://pypi.org/project/ijson/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}]"
+openapi-spec-validator,26550196,https://github.com/python-openapi/openapi-spec-validator,https://pypi.org/project/openapi-spec-validator/,[]
+psycopg-binary,26514545,https://github.com/psycopg/psycopg,https://pypi.org/project/psycopg-binary/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+pkgutil-resolve-name,26409386,https://github.com/graingert/pkgutil-resolve-name,https://pypi.org/project/pkgutil-resolve-name/,[]
+pbr,26318505,,https://pypi.org/project/pbr/,[]
+progressbar2,26307631,https://github.com/wolph/python-progressbar,https://pypi.org/project/progressbar2/,[]
+aws-requests-auth,25982593,https://github.com/davidmuller/aws-requests-auth,https://pypi.org/project/aws-requests-auth/,[]
+pyee,25787355,https://github.com/jfhbrook/pyee,https://pypi.org/project/pyee/,[]
+mlflow,25735293,https://github.com/mlflow/mlflow,https://pypi.org/project/mlflow/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+databricks-sqlalchemy,25726083,https://github.com/databricks/databricks-sqlalchemy,https://pypi.org/project/databricks-sqlalchemy/,[]
+graphviz,25721580,https://github.com/xflr6/graphviz,https://pypi.org/project/graphviz/,[]
+prettytable,25646117,https://github.com/prettytable/prettytable,https://pypi.org/project/prettytable/,[]
+sqlglot,25590800,https://github.com/tobymao/sqlglot,https://pypi.org/project/sqlglot/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyclass]""]}]"
+readme-renderer,25582281,https://github.com/pypa/readme_renderer,https://pypi.org/project/readme-renderer/,[]
+pytimeparse,25410144,https://github.com/wroberts/pytimeparse,https://pypi.org/project/pytimeparse/,[]
+pathable,25313068,https://github.com/p1c2u/pathable,https://pypi.org/project/pathable/,[]
+mlflow-skinny,25292292,https://github.com/mlflow/mlflow,https://pypi.org/project/mlflow-skinny/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+snowballstemmer,25267099,https://github.com/snowballstem/snowball,https://pypi.org/project/snowballstemmer/,[]
+graphql-relay,25236280,https://github.com/graphql-python/graphql-relay-py,https://pypi.org/project/graphql-relay/,[]
+pathos,25176322,https://github.com/uqfoundation/pathos,https://pypi.org/project/pathos/,[]
+onnxruntime,25059439,https://github.com/microsoft/onnxruntime,https://pypi.org/project/onnxruntime/,"[{""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}, {""type"": ""SWIG"", ""keywords"": [""%include""]}]"
+patsy,24959150,https://github.com/pydata/patsy,https://pypi.org/project/patsy/,[]
+reportlab,24890991,,https://pypi.org/project/reportlab/,[]
+graphene,24853787,https://github.com/graphql-python/graphene,https://pypi.org/project/graphene/,[]
+playwright,24844014,https://github.com/microsoft/playwright-python,https://pypi.org/project/playwright/,[]
+entrypoints,24811311,https://github.com/takluyver/entrypoints,https://pypi.org/project/entrypoints/,[]
+python-utils,24771471,https://github.com/WoLpH/python-utils,https://pypi.org/project/python-utils/,[]
+semantic-version,24744478,https://github.com/rbarrois/python-semanticversion,https://pypi.org/project/semantic-version/,[]
+simple-salesforce,24718006,https://github.com/simple-salesforce/simple-salesforce,https://pypi.org/project/simple-salesforce/,[]
+pydata-google-auth,24662272,https://github.com/pydata/pydata-google-auth,https://pypi.org/project/pydata-google-auth/,[]
+smdebug-rulesconfig,24620052,https://github.com/awslabs/sagemaker-debugger-rulesconfig,https://pypi.org/project/smdebug-rulesconfig/,[]
+gremlinpython,24595323,,https://pypi.org/project/gremlinpython/,[]
+tensorflow,24584038,https://github.com/tensorflow/tensorflow,https://pypi.org/project/tensorflow/,"[{""type"": ""SWIG"", ""keywords"": [""%module""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}, {""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}, {""type"": ""CFFI"", ""keywords"": [""FFI(""]}, {""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+tblib,24542581,https://github.com/ionelmc/python-tblib,https://pypi.org/project/tblib/,[]
+llama-parse,24487580,,https://pypi.org/project/llama-parse/,[]
+mdit-py-plugins,24485923,https://github.com/executablebooks/mdit-py-plugins,https://pypi.org/project/mdit-py-plugins/,[]
+mypy-boto3-sts,24456280,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/mypy-boto3-sts/,[]
+agate,24445412,https://github.com/wireservice/agate,https://pypi.org/project/agate/,[]
+sagemaker,24373467,https://github.com/aws/sagemaker-python-sdk,https://pypi.org/project/sagemaker/,[]
+html5lib,24352131,https://github.com/html5lib/html5lib-python,https://pypi.org/project/html5lib/,[]
+tf-keras-nightly,24284262,https://github.com/keras-team/tf-keras,https://pypi.org/project/tf-keras-nightly/,[]
+purecloudplatformclientv2,24283578,,https://pypi.org/project/purecloudplatformclientv2/,[]
+pox,24174548,https://github.com/uqfoundation/pox,https://pypi.org/project/pox/,[]
+ppft,24137811,https://github.com/uqfoundation/ppft,https://pypi.org/project/ppft/,[]
+fastmcp,24119785,https://github.com/jlowin/fastmcp,https://pypi.org/project/fastmcp/,[]
+moto,24088517,https://github.com/getmoto/moto,https://pypi.org/project/moto/,"[{""type"": ""Cython"", ""keywords"": [""cimport""]}]"
+ml-dtypes,23852093,https://github.com/jax-ml/ml_dtypes,https://pypi.org/project/ml-dtypes/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+rfc3987-syntax,23846031,https://github.com/willynilly/rfc3987-syntax,https://pypi.org/project/rfc3987-syntax/,[]
+dask,23837786,https://github.com/dask/dask,https://pypi.org/project/dask/,[]
+wandb,23833985,https://github.com/wandb/wandb,https://pypi.org/project/wandb/,"[{""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%include"", ""%module""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cimport""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+zope-event,23775566,https://github.com/zopefoundation/zope.event,https://pypi.org/project/zope-event/,[]
+hvac,23761759,https://github.com/hvac/hvac,https://pypi.org/project/hvac/,[]
+ibmcloudant,23650692,https://github.com/IBM/cloudant-python-sdk,https://pypi.org/project/ibmcloudant/,[]
+lockfile,23636143,,https://pypi.org/project/lockfile/,[]
+pytest-timeout,23615795,https://github.com/pytest-dev/pytest-timeout,https://pypi.org/project/pytest-timeout/,[]
+mergedeep,23360196,https://github.com/clarketm/mergedeep,https://pypi.org/project/mergedeep/,[]
+google-cloud-spanner,23342233,https://github.com/googleapis/python-spanner,https://pypi.org/project/google-cloud-spanner/,[]
+aiosqlite,23225663,https://github.com/omnilib/aiosqlite,https://pypi.org/project/aiosqlite/,[]
+pycountry,23194632,https://github.com/flyingcircusio/pycountry,https://pypi.org/project/pycountry/,[]
+twine,23157660,https://github.com/pypa/twine,https://pypi.org/project/twine/,[]
+streamlit,23125658,https://github.com/streamlit/streamlit,https://pypi.org/project/streamlit/,[]
+cfn-lint,23095717,https://github.com/aws-cloudformation/cfn-lint,https://pypi.org/project/cfn-lint/,[]
+azure-datalake-store,23073875,https://github.com/Azure/azure-data-lake-store-python,https://pypi.org/project/azure-datalake-store/,[]
+pybind11,22944867,https://github.com/pybind/pybind11,https://pypi.org/project/pybind11/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_""]}, {""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""Boost.Python"", ""keywords"": [""BOOST_PYTHON_MODULE"", ""boost/python.hpp""]}]"
+great-expectations,22943658,https://github.com/great-expectations/great_expectations,https://pypi.org/project/great-expectations/,[]
+llama-cloud-services,22924718,,https://pypi.org/project/llama-cloud-services/,[]
+aws-sam-translator,22892487,https://github.com/awslabs/serverless-application-model,https://pypi.org/project/aws-sam-translator/,[]
+retrying,22864627,https://github.com/groodt/retrying,https://pypi.org/project/retrying/,[]
+pywin32,22841829,https://github.com/mhammond/pywin32,https://pypi.org/project/pywin32/,"[{""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%include"", ""%module""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""cimport""]}, {""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+ujson,22818729,https://github.com/ultrajson/ultrajson,https://pypi.org/project/ujson/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+tree-sitter-languages,22726321,https://github.com/grantjenks/py-tree-sitter-languages,https://pypi.org/project/tree-sitter-languages/,[]
+sphinxcontrib-serializinghtml,22713011,https://github.com/sphinx-doc/sphinxcontrib-serializinghtml,https://pypi.org/project/sphinxcontrib-serializinghtml/,[]
+tox,22605849,https://github.com/tox-dev/tox,https://pypi.org/project/tox/,[]
+ninja,22594680,https://github.com/scikit-build/ninja-python-distributions,https://pypi.org/project/ninja/,[]
+pytest-runner,22457380,https://github.com/pytest-dev/pytest-runner,https://pypi.org/project/pytest-runner/,[]
+gcloud-aio-bigquery,22416973,https://github.com/talkiq/gcloud-aio,https://pypi.org/project/gcloud-aio-bigquery/,[]
+fastapi-cli,22360866,https://github.com/fastapi/fastapi-cli,https://pypi.org/project/fastapi-cli/,[]
+openapi-schema-validator,22308057,https://github.com/python-openapi/openapi-schema-validator,https://pypi.org/project/openapi-schema-validator/,[]
+duckdb,22297139,https://github.com/duckdb/duckdb-python,https://pypi.org/project/duckdb/,"[{""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+cramjam,22231008,https://github.com/milesgranger/pyrus-cramjam,https://pypi.org/project/cramjam/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]"", ""#[pyclass]""]}]"
+flask-sqlalchemy,22142534,https://github.com/pallets-eco/flask-sqlalchemy,https://pypi.org/project/flask-sqlalchemy/,[]
+mypy-boto3-iam,22141182,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/mypy-boto3-iam/,[]
+tldextract,22081834,https://github.com/john-kurkowski/tldextract,https://pypi.org/project/tldextract/,[]
+pyperclip,22017362,https://github.com/asweigart/pyperclip,https://pypi.org/project/pyperclip/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+events,21941513,https://github.com/pyeve/events,https://pypi.org/project/events/,[]
+parsedatetime,21787921,https://github.com/bear/parsedatetime,https://pypi.org/project/parsedatetime/,[]
+gcloud-aio-auth,21715543,https://github.com/talkiq/gcloud-aio,https://pypi.org/project/gcloud-aio-auth/,[]
+weaviate-client,21673607,https://github.com/weaviate/weaviate-python-client,https://pypi.org/project/weaviate-client/,[]
+imagesize,21623706,https://github.com/shibukawa/imagesize_py,https://pypi.org/project/imagesize/,[]
+pytest-rerunfailures,21528582,https://github.com/pytest-dev/pytest-rerunfailures,https://pypi.org/project/pytest-rerunfailures/,[]
+yamllint,21519413,https://github.com/adrienverge/yamllint,https://pypi.org/project/yamllint/,[]
+ddtrace,21502923,https://github.com/DataDog/dd-trace-py,https://pypi.org/project/ddtrace/,[]
+validators,21491815,https://github.com/python-validators/validators,https://pypi.org/project/validators/,[]
+diskcache,21465976,https://github.com/grantjenks/python-diskcache,https://pypi.org/project/diskcache/,[]
+python-jose,21446191,https://github.com/mpdavis/python-jose,https://pypi.org/project/python-jose/,[]
+alabaster,21435705,https://github.com/sphinx-doc/alabaster,https://pypi.org/project/alabaster/,[]
+unidecode,21423251,,https://pypi.org/project/unidecode/,[]
+hyperlink,21344086,https://github.com/python-hyper/hyperlink,https://pypi.org/project/hyperlink/,[]
+azure-cosmos,21305835,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-cosmos/,[]
+gast,21232949,https://github.com/serge-sans-paille/gast,https://pypi.org/project/gast/,[]
+tomli-w,21151214,https://github.com/hukkin/tomli-w,https://pypi.org/project/tomli-w/,[]
+python-http-client,21148708,https://github.com/sendgrid/python-http-client,https://pypi.org/project/python-http-client/,[]
+msrestazure,21134717,https://github.com/Azure/msrestazure-for-python,https://pypi.org/project/msrestazure/,[]
+dateparser,21103970,https://github.com/scrapinghub/dateparser,https://pypi.org/project/dateparser/,[]
+oscrypto,21081788,https://github.com/wbond/oscrypto,https://pypi.org/project/oscrypto/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.dlopen("", ""ffi.cdef("", ""FFI("", ""ffi.new(""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+mmh3,21073290,https://github.com/hajimes/mmh3,https://pypi.org/project/mmh3/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+mypy-boto3-batch,20983156,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/mypy-boto3-batch/,[]
+kafka-python,20955771,https://github.com/dpkp/kafka-python,https://pypi.org/project/kafka-python/,[]
+elastic-transport,20916411,https://github.com/elastic/elastic-transport-python,https://pypi.org/project/elastic-transport/,[]
+cron-descriptor,20788761,https://github.com/Salamek/cron-descriptor,https://pypi.org/project/cron-descriptor/,[]
+pytest-metadata,20602766,https://github.com/pytest-dev/pytest-metadata,https://pypi.org/project/pytest-metadata/,[]
+dbt-semantic-interfaces,20585018,,https://pypi.org/project/dbt-semantic-interfaces/,[]
+flit-core,20532719,https://github.com/pypa/flit,https://pypi.org/project/flit-core/,[]
+types-setuptools,20464754,https://github.com/python/typeshed,https://pypi.org/project/types-setuptools/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+pypdf2,20429345,https://github.com/py-pdf/PyPDF2,https://pypi.org/project/pypdf2/,[]
+sphinxcontrib-htmlhelp,20383297,https://github.com/sphinx-doc/sphinxcontrib-htmlhelp,https://pypi.org/project/sphinxcontrib-htmlhelp/,[]
+bs4,20369457,,https://pypi.org/project/bs4/,[]
+sphinxcontrib-qthelp,20309830,https://github.com/sphinx-doc/sphinxcontrib-qthelp,https://pypi.org/project/sphinxcontrib-qthelp/,[]
+sphinxcontrib-applehelp,20285039,https://github.com/sphinx-doc/sphinxcontrib-applehelp,https://pypi.org/project/sphinxcontrib-applehelp/,[]
+flask-limiter,20283235,https://github.com/alisaifee/flask-limiter,https://pypi.org/project/flask-limiter/,[]
+sphinxcontrib-devhelp,20257770,https://github.com/sphinx-doc/sphinxcontrib-devhelp,https://pypi.org/project/sphinxcontrib-devhelp/,[]
+linkify-it-py,20199197,https://github.com/tsutsu3/linkify-it-py,https://pypi.org/project/linkify-it-py/,[]
+semgrep,20195071,https://github.com/returntocorp/semgrep,https://pypi.org/project/semgrep/,[]
+looker-sdk,20159087,,https://pypi.org/project/looker-sdk/,[]
+parse,20043656,https://github.com/r1chardj0n3s/parse,https://pypi.org/project/parse/,[]
+azure-mgmt-resource,19960509,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-resource/,[]
+rich-click,19951428,https://github.com/ewels/rich-click,https://pypi.org/project/rich-click/,[]
+holidays,19902477,https://github.com/vacanza/holidays,https://pypi.org/project/holidays/,[]
+opt-einsum,19838218,,https://pypi.org/project/opt-einsum/,[]
+astronomer-cosmos,19826119,https://github.com/astronomer/astronomer-cosmos,https://pypi.org/project/astronomer-cosmos/,[]
+dacite,19697715,https://github.com/konradhalas/dacite,https://pypi.org/project/dacite/,[]
+texttable,19677020,https://github.com/foutaise/texttable,https://pypi.org/project/texttable/,[]
+azure-storage-queue,19618981,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-storage-queue/,[]
+uc-micro-py,19533908,https://github.com/tsutsu3/uc.micro-py,https://pypi.org/project/uc-micro-py/,[]
+mysqlclient,19457811,https://github.com/PyMySQL/mysqlclient,https://pypi.org/project/mysqlclient/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+spacy,19376227,https://github.com/explosion/spaCy,https://pypi.org/project/spacy/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+leather,19359876,,https://pypi.org/project/leather/,[]
+pip-tools,19300347,https://github.com/jazzband/pip-tools,https://pypi.org/project/pip-tools/,[]
+dbt-extractor,19297082,https://github.com/dbt-labs/dbt-parser-generator,https://pypi.org/project/dbt-extractor/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}]"
+google-cloud-firestore,19243256,https://github.com/googleapis/python-firestore,https://pypi.org/project/google-cloud-firestore/,[]
+sqlalchemy-utils,19168406,https://github.com/kvesteri/sqlalchemy-utils,https://pypi.org/project/sqlalchemy-utils/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+bytecode,19164074,https://github.com/MatthieuDartiailh/bytecode,https://pypi.org/project/bytecode/,[]
+sphinxcontrib-jsmath,19162055,,https://pypi.org/project/sphinxcontrib-jsmath/,[]
+tensorboard-data-server,19089316,https://github.com/tensorflow/tensorboard,https://pypi.org/project/tensorboard-data-server/,[]
+apache-airflow-providers-fab,19052979,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-fab/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+id,19004025,https://github.com/di/id,https://pypi.org/project/id/,[]
+hypothesis,18883013,https://github.com/HypothesisWorks/hypothesis,https://pypi.org/project/hypothesis/,[]
+apache-airflow-providers-snowflake,18842357,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-snowflake/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+bitarray,18806133,https://github.com/ilanschnell/bitarray,https://pypi.org/project/bitarray/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+envier,18729152,https://github.com/DataDog/envier,https://pypi.org/project/envier/,[]
+accelerate,18709280,https://github.com/huggingface/accelerate,https://pypi.org/project/accelerate/,[]
+azure-mgmt-storage,18646468,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-storage/,[]
+pydeequ,18630665,https://github.com/awslabs/python-deequ,https://pypi.org/project/pydeequ/,[]
+scikit-image,18567267,https://github.com/scikit-image/scikit-image,https://pypi.org/project/scikit-image/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}, {""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+thinc,18484864,https://github.com/explosion/thinc,https://pypi.org/project/thinc/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+google-cloud-datacatalog,18414259,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-datacatalog/,[]
+phonenumbers,18392079,https://github.com/daviddrysdale/python-phonenumbers,https://pypi.org/project/phonenumbers/,[]
+google-cloud-translate,18337593,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-translate/,[]
+azure-batch,18298933,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-batch/,[]
+jira,18296693,https://github.com/pycontribs/jira,https://pypi.org/project/jira/,[]
+inflect,18286873,https://github.com/jaraco/inflect,https://pypi.org/project/inflect/,[]
+apache-airflow-providers-cncf-kubernetes,18266213,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-cncf-kubernetes/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+opencv-python-headless,18260083,https://github.com/opencv/opencv-python,https://pypi.org/project/opencv-python-headless/,[]
+docker-pycreds,18203139,https://github.com/shin-/dockerpy-creds,https://pypi.org/project/docker-pycreds/,[]
+blis,18170658,https://github.com/explosion/cython-blis,https://pypi.org/project/blis/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+beartype,18162428,https://github.com/beartype/beartype,https://pypi.org/project/beartype/,[]
+python-magic,18101185,https://github.com/ahupp/python-magic,https://pypi.org/project/python-magic/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+sentence-transformers,18090404,https://github.com/huggingface/sentence-transformers,https://pypi.org/project/sentence-transformers/,[]
+grpc-interceptor,17869520,https://github.com/d5h-foss/grpc-interceptor,https://pypi.org/project/grpc-interceptor/,[]
+apache-airflow-providers-databricks,17840116,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-databricks/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+google-cloud-container,17811588,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-container/,[]
+jpype1,17785512,https://github.com/jpype-project/jpype,https://pypi.org/project/jpype1/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+requests-mock,17775431,https://github.com/jamielennox/requests-mock,https://pypi.org/project/requests-mock/,[]
+apscheduler,17754963,https://github.com/agronholm/apscheduler,https://pypi.org/project/apscheduler/,[]
+types-urllib3,17738612,https://github.com/python/typeshed,https://pypi.org/project/types-urllib3/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+imbalanced-learn,17698144,https://github.com/scikit-learn-contrib/imbalanced-learn,https://pypi.org/project/imbalanced-learn/,[]
+cached-property,17632221,https://github.com/pydanny/cached-property,https://pypi.org/project/cached-property/,[]
+srsly,17607401,https://github.com/explosion/srsly,https://pypi.org/project/srsly/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef"", ""cimport""]}]"
+murmurhash,17598173,https://github.com/explosion/murmurhash,https://pypi.org/project/murmurhash/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef""]}]"
+oracledb,17591317,https://github.com/oracle/python-oracledb,https://pypi.org/project/oracledb/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+keras,17587963,https://github.com/keras-team/keras,https://pypi.org/project/keras/,[]
+emoji,17569705,https://github.com/carpedm20/emoji,https://pypi.org/project/emoji/,[]
+pyroaring,17563867,https://github.com/Ezibenroc/PyRoaringBitMap,https://pypi.org/project/pyroaring/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+google-cloud-dataplex,17560560,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-dataplex/,[]
+jsonpickle,17547169,https://github.com/jsonpickle/jsonpickle,https://pypi.org/project/jsonpickle/,[]
+python-docx,17546125,https://github.com/python-openxml/python-docx,https://pypi.org/project/python-docx/,[]
+natsort,17512955,https://github.com/SethMMorton/natsort,https://pypi.org/project/natsort/,[]
+universal-pathlib,17492094,https://github.com/fsspec/universal_pathlib,https://pypi.org/project/universal-pathlib/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+opentelemetry-instrumentation-wsgi,17393595,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-wsgi/,[]
+pipenv,17367845,https://github.com/pypa/pipenv,https://pypi.org/project/pipenv/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}, {""type"": ""Cython"", ""keywords"": [""ctypedef""]}]"
+ormsgpack,17367131,https://github.com/ormsgpack/ormsgpack,https://pypi.org/project/ormsgpack/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_"", ""PyModuleDef""]}]"
+google-cloud-build,17329544,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-build/,[]
+argparse,17328888,https://github.com/ThomasWaldmann/argparse,https://pypi.org/project/argparse/,[]
+cymem,17283048,https://github.com/explosion/cymem,https://pypi.org/project/cymem/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+stevedore,17200865,,https://pypi.org/project/stevedore/,[]
+pyathena,17132914,https://github.com/laughingman7743/PyAthena,https://pypi.org/project/pyathena/,[]
+msgspec,17072193,https://github.com/jcrist/msgspec,https://pypi.org/project/msgspec/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+statsd,17037202,https://github.com/jsocol/pystatsd,https://pypi.org/project/statsd/,[]
+opencensus,17021216,https://github.com/census-instrumentation/opencensus-python,https://pypi.org/project/opencensus/,[]
+polars-runtime-32,16973368,https://github.com/pola-rs/polars,https://pypi.org/project/polars-runtime-32/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]"", ""#[pyclass]""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+limits,16848485,https://github.com/alisaifee/limits,https://pypi.org/project/limits/,[]
+markdownify,16796793,https://github.com/matthewwithanm/python-markdownify,https://pypi.org/project/markdownify/,[]
+gym,16793288,,https://pypi.org/project/gym/,[]
+pydeck,16772361,https://github.com/visgl/deck.gl,https://pypi.org/project/pydeck/,[]
+fasteners,16756001,https://github.com/harlowja/fasteners,https://pypi.org/project/fasteners/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+posthog,16737156,https://github.com/posthog/posthog-python,https://pypi.org/project/posthog/,[]
+catalogue,16726889,https://github.com/explosion/catalogue,https://pypi.org/project/catalogue/,[]
+preshed,16686782,https://github.com/explosion/preshed,https://pypi.org/project/preshed/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+cloudflare,16680854,https://github.com/cloudflare/cloudflare-python,https://pypi.org/project/cloudflare/,[]
+aws-xray-sdk,16553282,https://github.com/aws/aws-xray-sdk-python,https://pypi.org/project/aws-xray-sdk/,[]
+watchtower,16474872,https://github.com/kislyuk/watchtower,https://pypi.org/project/watchtower/,[]
+aioboto3,16440066,https://github.com/terricain/aioboto3,https://pypi.org/project/aioboto3/,[]
+langgraph-checkpoint,16438219,https://github.com/langchain-ai/langgraph,https://pypi.org/project/langgraph-checkpoint/,[]
+python-daemon,16367753,,https://pypi.org/project/python-daemon/,[]
+wasabi,16233140,https://github.com/explosion/wasabi,https://pypi.org/project/wasabi/,[]
+levenshtein,16222501,https://github.com/rapidfuzz/Levenshtein,https://pypi.org/project/levenshtein/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""ctypedef""]}]"
+nvidia-nvshmem-cu12,16215251,,https://pypi.org/project/nvidia-nvshmem-cu12/,[]
+pdfminer-six,16203232,https://github.com/pdfminer/pdfminer.six,https://pypi.org/project/pdfminer-six/,[]
+marisa-trie,16177260,https://github.com/pytries/marisa-trie,https://pypi.org/project/marisa-trie/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}]"
+pypdfium2,16146928,https://github.com/pypdfium2-team/pypdfium2,https://pypi.org/project/pypdfium2/,[]
+flask-login,16120211,https://github.com/maxcountryman/flask-login,https://pypi.org/project/flask-login/,[]
+cssselect2,16056816,https://github.com/Kozea/cssselect2,https://pypi.org/project/cssselect2/,[]
+grpcio-gcp,16007404,,https://pypi.org/project/grpcio-gcp/,[]
+opencensus-context,15907984,https://github.com/census-instrumentation/opencensus-python,https://pypi.org/project/opencensus-context/,[]
+fire,15849689,https://github.com/google/python-fire,https://pypi.org/project/fire/,[]
+pydot,15836696,https://github.com/pydot/pydot,https://pypi.org/project/pydot/,[]
+opentelemetry-instrumentation-urllib3,15820497,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-urllib3/,[]
+frozendict,15768173,https://github.com/Marco-Sulla/python-frozendict,https://pypi.org/project/frozendict/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+pyright,15764609,https://github.com/RobertCraigie/pyright-python,https://pypi.org/project/pyright/,[]
+filetype,15704418,https://github.com/h2non/filetype.py,https://pypi.org/project/filetype/,[]
+pickleshare,15688185,https://github.com/pickleshare/pickleshare,https://pypi.org/project/pickleshare/,[]
+makefun,15672802,https://github.com/smarie/python-makefun,https://pypi.org/project/makefun/,[]
+langgraph-prebuilt,15660281,https://github.com/langchain-ai/langgraph,https://pypi.org/project/langgraph-prebuilt/,[]
+opentelemetry-instrumentation-dbapi,15628996,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-dbapi/,[]
+spacy-legacy,15581048,,https://pypi.org/project/spacy-legacy/,[]
+apache-airflow-providers-mysql,15549199,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-mysql/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+astunparse,15548777,https://github.com/simonpercivall/astunparse,https://pypi.org/project/astunparse/,[]
+jsonref,15530720,https://github.com/gazpachoking/jsonref,https://pypi.org/project/jsonref/,[]
+daff,15493986,https://github.com/paulfitz/daff,https://pypi.org/project/daff/,"[{""type"": ""SWIG"", ""keywords"": [""%module"", ""%include""]}]"
+time-machine,15493732,https://github.com/adamchainz/time-machine,https://pypi.org/project/time-machine/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+passlib,15487904,,https://pypi.org/project/passlib/,[]
+djangorestframework,15475055,https://github.com/encode/django-rest-framework,https://pypi.org/project/djangorestframework/,"[{""type"": ""SWIG"", ""keywords"": [""%include""]}]"
+griffe,15445126,https://github.com/mkdocstrings/griffe,https://pypi.org/project/griffe/,[]
+spacy-loggers,15439179,https://github.com/explosion/spacy-loggers,https://pypi.org/project/spacy-loggers/,[]
+lazy-loader,15404628,https://github.com/scientific-python/lazy_loader,https://pypi.org/project/lazy-loader/,[]
+apache-airflow-providers-ssh,15339671,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-ssh/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+langgraph-sdk,15321115,https://github.com/langchain-ai/langgraph,https://pypi.org/project/langgraph-sdk/,[]
+azure-servicebus,15306936,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-servicebus/,[]
+backcall,15282784,https://github.com/takluyver/backcall,https://pypi.org/project/backcall/,[]
+onnx,15267117,https://github.com/onnx/onnx,https://pypi.org/project/onnx/,[]
+kubernetes-asyncio,15235600,https://github.com/tomplus/kubernetes_asyncio,https://pypi.org/project/kubernetes-asyncio/,[]
+fastparquet,15235338,https://github.com/dask/fastparquet,https://pypi.org/project/fastparquet/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef""]}]"
+certbot-dns-cloudflare,15219844,https://github.com/certbot/certbot,https://pypi.org/project/certbot-dns-cloudflare/,[]
+pinotdb,15206685,https://github.com/python-pinot-dbapi/pinot-dbapi,https://pypi.org/project/pinotdb/,[]
+acme,15203993,https://github.com/certbot/certbot,https://pypi.org/project/acme/,[]
+sqlalchemy-spanner,15189866,https://github.com/cloudspannerecosystem/python-spanner-sqlalchemy,https://pypi.org/project/sqlalchemy-spanner/,[]
+opentelemetry-instrumentation-logging,15110300,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-logging/,[]
+cssselect,15083834,https://github.com/scrapy/cssselect,https://pypi.org/project/cssselect/,[]
+keyrings-google-artifactregistry-auth,15066587,https://github.com/GoogleCloudPlatform/artifact-registry-python-tools,https://pypi.org/project/keyrings-google-artifactregistry-auth/,[]
+pyspnego,15029854,https://github.com/jborean93/pyspnego,https://pypi.org/project/pyspnego/,[]
+einops,15004675,https://github.com/arogozhnikov/einops,https://pypi.org/project/einops/,[]
+deltalake,14999479,https://github.com/delta-io/delta-rs,https://pypi.org/project/deltalake/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}]"
+langcodes,14991556,https://github.com/georgkrause/langcodes,https://pypi.org/project/langcodes/,[]
+google-cloud-storage-transfer,14982323,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-cloud-storage-transfer/,[]
+confection,14925275,https://github.com/explosion/confection,https://pypi.org/project/confection/,[]
+language-data,14899678,https://github.com/georgkrause/language_data,https://pypi.org/project/language-data/,[]
+docopt,14885120,,https://pypi.org/project/docopt/,[]
+tifffile,14880093,https://github.com/cgohlke/tifffile,https://pypi.org/project/tifffile/,[]
+jaydebeapi,14849028,https://github.com/baztian/jaydebeapi,https://pypi.org/project/jaydebeapi/,[]
+pyexasol,14688694,https://github.com/exasol/pyexasol,https://pypi.org/project/pyexasol/,[]
+databricks-cli,14687124,https://github.com/databricks/databricks-cli,https://pypi.org/project/databricks-cli/,[]
+pytest-html,14634663,https://github.com/pytest-dev/pytest-html,https://pypi.org/project/pytest-html/,[]
+apache-airflow-providers-google,14589635,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-google/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+opentelemetry-instrumentation-urllib,14553529,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-urllib/,[]
+cloudpathlib,14532557,https://github.com/drivendataorg/cloudpathlib,https://pypi.org/project/cloudpathlib/,[]
+datadog-api-client,14422445,https://github.com/DataDog/datadog-api-client-python,https://pypi.org/project/datadog-api-client/,[]
+google-ai-generativelanguage,14401517,https://github.com/googleapis/google-cloud-python,https://pypi.org/project/google-ai-generativelanguage/,[]
+snowplow-tracker,14289822,,https://pypi.org/project/snowplow-tracker/,[]
+stripe,14283734,https://github.com/stripe/stripe-python,https://pypi.org/project/stripe/,[]
+python-gitlab,14258722,https://github.com/python-gitlab/python-gitlab,https://pypi.org/project/python-gitlab/,[]
+py-cpuinfo,14236967,https://github.com/workhorsy/py-cpuinfo,https://pypi.org/project/py-cpuinfo/,[]
+rich-argparse,14191810,https://github.com/hamdanal/rich-argparse,https://pypi.org/project/rich-argparse/,[]
+aiohttp-retry,14187783,https://github.com/inyutin/aiohttp_retry,https://pypi.org/project/aiohttp-retry/,[]
+pyproj,14104348,https://github.com/pyproj4/pyproj,https://pypi.org/project/pyproj/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+cyclopts,14054406,https://github.com/BrianPugh/cyclopts,https://pypi.org/project/cyclopts/,[]
+torchaudio,14020899,https://github.com/pytorch/audio,https://pypi.org/project/torchaudio/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyInit_""]}]"
+wtforms,13992214,https://github.com/pallets-eco/wtforms,https://pypi.org/project/wtforms/,[]
+bracex,13990714,https://github.com/facelessuser/bracex,https://pypi.org/project/bracex/,[]
+opentelemetry-instrumentation-django,13986135,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-django/,[]
+sh,13984530,https://github.com/amoffat/sh,https://pypi.org/project/sh/,[]
+azure-keyvault-keys,13929418,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-keyvault-keys/,[]
+opentelemetry-instrumentation-flask,13924005,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-flask/,[]
+fuzzywuzzy,13917498,https://github.com/seatgeek/fuzzywuzzy,https://pypi.org/project/fuzzywuzzy/,[]
+apache-airflow,13847022,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+pinecone,13843564,,https://pypi.org/project/pinecone/,[]
+asynctest,13842722,https://github.com/Martiusweb/asynctest,https://pypi.org/project/asynctest/,[]
+parameterized,13837956,https://github.com/wolever/parameterized,https://pypi.org/project/parameterized/,[]
+pyproject-api,13819003,https://github.com/tox-dev/pyproject-api,https://pypi.org/project/pyproject-api/,[]
+pymdown-extensions,13794611,https://github.com/facelessuser/pymdown-extensions,https://pypi.org/project/pymdown-extensions/,[]
+azure-mgmt-containerservice,13782167,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-containerservice/,[]
+jwcrypto,13763735,https://github.com/latchset/jwcrypto,https://pypi.org/project/jwcrypto/,[]
+cmake,13714659,https://github.com/scikit-build/cmake-python-distributions,https://pypi.org/project/cmake/,[]
+opentelemetry-distro,13703248,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-distro/,[]
+prek,13697079,https://github.com/j178/prek,https://pypi.org/project/prek/,[]
+openapi-pydantic,13688029,https://github.com/mike-oakley/openapi-pydantic,https://pypi.org/project/openapi-pydantic/,[]
+python-gnupg,13650317,https://github.com/vsajip/python-gnupg,https://pypi.org/project/python-gnupg/,[]
+gql,13623936,https://github.com/graphql-python/gql,https://pypi.org/project/gql/,[]
+types-toml,13619944,https://github.com/python/typeshed,https://pypi.org/project/types-toml/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+google-generativeai,13611732,https://github.com/google/generative-ai-python,https://pypi.org/project/google-generativeai/,[]
+flask-wtf,13608484,https://github.com/pallets-eco/flask-wtf,https://pypi.org/project/flask-wtf/,[]
+avro,13557541,,https://pypi.org/project/avro/,[]
+hatch,13512614,https://github.com/pypa/hatch,https://pypi.org/project/hatch/,[]
+ua-parser,13495761,https://github.com/ua-parser/uap-python,https://pypi.org/project/ua-parser/,[]
+apispec,13449255,https://github.com/marshmallow-code/apispec,https://pypi.org/project/apispec/,[]
+jax,13435334,https://github.com/jax-ml/jax,https://pypi.org/project/jax/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+fastuuid,13427108,https://github.com/thedrow/fastuuid,https://pypi.org/project/fastuuid/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]""]}]"
+bidict,13424343,https://github.com/jab/bidict,https://pypi.org/project/bidict/,[]
+maxminddb,13324378,https://github.com/maxmind/MaxMind-DB-Reader-python,https://pypi.org/project/maxminddb/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+libclang,13323080,https://github.com/sighingnow/libclang,https://pypi.org/project/libclang/,[]
+thrift-sasl,13309099,https://github.com/cloudera/thrift_sasl,https://pypi.org/project/thrift-sasl/,[]
+azure-monitor-opentelemetry-exporter,13269035,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-monitor-opentelemetry-exporter/,[]
+immutabledict,13256614,https://github.com/corenting/immutabledict,https://pypi.org/project/immutabledict/,[]
+rich-rst,13157613,https://github.com/wasi-master/rich-rst,https://pypi.org/project/rich-rst/,[]
+opentelemetry-instrumentation-psycopg2,13075343,https://github.com/open-telemetry/opentelemetry-python-contrib,https://pypi.org/project/opentelemetry-instrumentation-psycopg2/,[]
+azure-mgmt-containerregistry,13067230,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-containerregistry/,[]
+gradio,13027416,https://github.com/gradio-app/gradio,https://pypi.org/project/gradio/,[]
+pydub,12925860,,https://pypi.org/project/pydub/,[]
+trino,12843787,https://github.com/trinodb/trino-python-client,https://pypi.org/project/trino/,[]
+xarray,12747694,https://github.com/pydata/xarray,https://pypi.org/project/xarray/,[]
+connexion,12689157,https://github.com/spec-first/connexion,https://pypi.org/project/connexion/,[]
+pytest-env,12678246,https://github.com/pytest-dev/pytest-env,https://pypi.org/project/pytest-env/,[]
+resolvelib,12666851,https://github.com/sarugaku/resolvelib,https://pypi.org/project/resolvelib/,[]
+junitparser,12621870,https://github.com/weiwei/junitparser,https://pypi.org/project/junitparser/,[]
+office365-rest-python-client,12592383,https://github.com/vgrem/Office365-REST-Python-Client,https://pypi.org/project/office365-rest-python-client/,[]
+azure-keyvault-certificates,12535139,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-keyvault-certificates/,[]
+hiredis,12525333,https://github.com/redis/hiredis-py,https://pypi.org/project/hiredis/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+azure-mgmt-cosmosdb,12427123,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-cosmosdb/,[]
+azure-kusto-data,12417311,https://github.com/Azure/azure-kusto-python,https://pypi.org/project/azure-kusto-data/,[]
+ibm-cloud-sdk-core,12403879,https://github.com/IBM/python-sdk-core,https://pypi.org/project/ibm-cloud-sdk-core/,[]
+segment-analytics-python,12397802,https://github.com/segmentio/analytics-python,https://pypi.org/project/segment-analytics-python/,[]
+py-spy,12358600,https://github.com/benfred/py-spy,https://pypi.org/project/py-spy/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""cimport""]}]"
+types-cachetools,12330519,https://github.com/python/typeshed,https://pypi.org/project/types-cachetools/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+sphinx-rtd-theme,12316812,https://github.com/readthedocs/sphinx_rtd_theme,https://pypi.org/project/sphinx-rtd-theme/,[]
+types-cffi,12303062,https://github.com/python/typeshed,https://pypi.org/project/types-cffi/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+partd,12286972,https://github.com/dask/partd,https://pypi.org/project/partd/,[]
+pyotp,12246161,https://github.com/pyotp/pyotp,https://pypi.org/project/pyotp/,[]
+wcmatch,12228049,https://github.com/facelessuser/wcmatch,https://pypi.org/project/wcmatch/,[]
+sagemaker-studio,12212935,,https://pypi.org/project/sagemaker-studio/,[]
+types-redis,12179595,https://github.com/python/typeshed,https://pypi.org/project/types-redis/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+ratelimit,12142174,https://github.com/tomasbasham/ratelimit,https://pypi.org/project/ratelimit/,[]
+django-cors-headers,12106646,https://github.com/adamchainz/django-cors-headers,https://pypi.org/project/django-cors-headers/,[]
+locket,12074926,https://github.com/mwilliamson/locket.py,https://pypi.org/project/locket/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL(""]}]"
+eval-type-backport,12061203,https://github.com/alexmojaki/eval_type_backport,https://pypi.org/project/eval-type-backport/,[]
+pydantic-extra-types,12049057,https://github.com/pydantic/pydantic-extra-types,https://pypi.org/project/pydantic-extra-types/,[]
+types-pyopenssl,12039119,https://github.com/python/typeshed,https://pypi.org/project/types-pyopenssl/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+jupyter,12024190,,https://pypi.org/project/jupyter/,[]
+datetime,12014989,https://github.com/zopefoundation/DateTime,https://pypi.org/project/datetime/,[]
+apache-airflow-providers-http,12000620,https://github.com/apache/airflow,https://pypi.org/project/apache-airflow-providers-http/,"[{""type"": ""CFFI"", ""keywords"": [""FFI(""]}]"
+cachelib,11986549,https://github.com/pallets-eco/cachelib,https://pypi.org/project/cachelib/,[]
+jupyter-console,11978480,,https://pypi.org/project/jupyter-console/,[]
+types-deprecated,11966512,https://github.com/python/typeshed,https://pypi.org/project/types-deprecated/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+python-socketio,11961605,https://github.com/miguelgrinberg/python-socketio,https://pypi.org/project/python-socketio/,[]
+mkdocs-material,11933299,https://github.com/squidfunk/mkdocs-material,https://pypi.org/project/mkdocs-material/,[]
+factory-boy,11922709,https://github.com/FactoryBoy/factory_boy,https://pypi.org/project/factory-boy/,[]
+clickhouse-connect,11857482,https://github.com/ClickHouse/clickhouse-connect,https://pypi.org/project/clickhouse-connect/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef""]}]"
+azure-mgmt-containerinstance,11855064,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-containerinstance/,[]
+temporalio,11829220,https://github.com/temporalio/sdk-python,https://pypi.org/project/temporalio/,"[{""type"": ""Rust"", ""keywords"": [""#[pymodule]"", ""#[pyfunction]"", ""#[pyclass]""]}]"
+pysftp,11808522,,https://pypi.org/project/pysftp/,[]
+geoip2,11795223,https://github.com/maxmind/GeoIP2-python,https://pypi.org/project/geoip2/,[]
+uuid6,11793266,https://github.com/oittaa/uuid6-python,https://pypi.org/project/uuid6/,[]
+azure-storage-file-share,11767431,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-storage-file-share/,[]
+tensorflow-estimator,11763124,https://github.com/tensorflow/estimator,https://pypi.org/project/tensorflow-estimator/,[]
+meson,11756445,https://github.com/mesonbuild/meson,https://pypi.org/project/meson/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyModuleDef"", ""PyInit_"", ""PyMODINIT_FUNC""]}, {""type"": ""Cython"", ""keywords"": [""cpdef"", ""ctypedef"", ""cimport""]}, {""type"": ""SWIG"", ""keywords"": [""%include""]}, {""type"": ""Boost.Python"", ""keywords"": [""BOOST_PYTHON_MODULE"", ""boost/python.hpp""]}]"
+types-paramiko,11746046,https://github.com/python/typeshed,https://pypi.org/project/types-paramiko/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+azure-mgmt-msi,11735966,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-msi/,[]
+atlassian-python-api,11719177,https://github.com/atlassian-api/atlassian-python-api,https://pypi.org/project/atlassian-python-api/,[]
+scp,11718945,https://github.com/jbardin/scp.py,https://pypi.org/project/scp/,[]
+pathlib-abc,11655397,https://github.com/barneygale/pathlib-abc,https://pypi.org/project/pathlib-abc/,[]
+ipdb,11616275,https://github.com/gotcha/ipdb,https://pypi.org/project/ipdb/,[]
+appnope,11593552,https://github.com/minrk/appnope,https://pypi.org/project/appnope/,[]
+strenum,11588073,https://github.com/irgeek/StrEnum,https://pypi.org/project/strenum/,[]
+python-engineio,11575647,https://github.com/miguelgrinberg/python-engineio,https://pypi.org/project/python-engineio/,[]
+azure-nspkg,11552272,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-nspkg/,[]
+pywavelets,11550903,https://github.com/PyWavelets/pywt,https://pypi.org/project/pywavelets/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+incremental,11506680,https://github.com/twisted/incremental,https://pypi.org/project/incremental/,[]
+astor,11483549,https://github.com/berkerpeksag/astor,https://pypi.org/project/astor/,[]
+jaxlib,11482949,https://github.com/jax-ml/jax,https://pypi.org/project/jaxlib/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}, {""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+timm,11464892,https://github.com/huggingface/pytorch-image-models,https://pypi.org/project/timm/,[]
+fastapi-cloud-cli,11443117,https://github.com/fastapilabs/fastapi-cloud-cli,https://pypi.org/project/fastapi-cloud-cli/,[]
+python-pptx,11430761,https://github.com/scanny/python-pptx,https://pypi.org/project/python-pptx/,[]
+webdriver-manager,11417858,https://github.com/SergeyPirogov/webdriver_manager,https://pypi.org/project/webdriver-manager/,[]
+databricks-labs-blueprint,11410216,https://github.com/databrickslabs/blueprint,https://pypi.org/project/databricks-labs-blueprint/,[]
+bandit,11403883,https://github.com/PyCQA/bandit,https://pypi.org/project/bandit/,[]
+av,11376882,https://github.com/PyAV-Org/PyAV,https://pypi.org/project/av/,"[{""type"": ""Cython"", ""keywords"": [""cimport"", ""cpdef"", ""ctypedef""]}]"
+flit,11367613,https://github.com/pypa/flit,https://pypi.org/project/flit/,[]
+rignore,11357912,,https://pypi.org/project/rignore/,[]
+simple-websocket,11324143,https://github.com/miguelgrinberg/simple-websocket,https://pypi.org/project/simple-websocket/,[]
+cohere,11257619,https://github.com/cohere-ai/cohere-python,https://pypi.org/project/cohere/,[]
+fakeredis,11241769,https://github.com/cunla/fakeredis-py,https://pypi.org/project/fakeredis/,[]
+configargparse,11222835,https://github.com/bw2/ConfigArgParse,https://pypi.org/project/configargparse/,[]
+cbor2,11218117,https://github.com/agronholm/cbor2,https://pypi.org/project/cbor2/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+lightgbm,11186259,https://github.com/microsoft/LightGBM,https://pypi.org/project/lightgbm/,"[{""type"": ""CFFI"", ""keywords"": [""ffi.new(""]}, {""type"": ""SWIG"", ""keywords"": [""%typemap"", ""%module"", ""%include""]}]"
+flask-appbuilder,11180234,https://github.com/dpgaspar/flask-appbuilder,https://pypi.org/project/flask-appbuilder/,[]
+monotonic,11134575,https://github.com/atdt/monotonic,https://pypi.org/project/monotonic/,"[{""type"": ""ctypes"", ""keywords"": [""CDLL(""]}]"
+types-aiofiles,11109815,https://github.com/python/typeshed,https://pypi.org/project/types-aiofiles/,"[{""type"": ""ctypes"", ""keywords"": [""WinDLL("", ""CDLL(""]}]"
+configparser,11071451,https://github.com/jaraco/configparser,https://pypi.org/project/configparser/,[]
+inputimeout,11059400,https://github.com/johejo/inutimeout,https://pypi.org/project/inputimeout/,[]
+ciso8601,11047278,https://github.com/closeio/ciso8601,https://pypi.org/project/ciso8601/,"[{""type"": ""C/C++ Extensions"", ""keywords"": [""PyMODINIT_FUNC"", ""PyInit_"", ""PyModuleDef""]}]"
+pathvalidate,11037709,https://github.com/thombashi/pathvalidate,https://pypi.org/project/pathvalidate/,[]
+azure-mgmt-datalake-store,11019696,https://github.com/Azure/azure-sdk-for-python,https://pypi.org/project/azure-mgmt-datalake-store/,[]
+optree,10963047,https://github.com/metaopt/optree,https://pypi.org/project/optree/,"[{""type"": ""PyBind11"", ""keywords"": [""PYBIND11_MODULE"", ""pybind11/pybind11.h""]}]"
+requests-ntlm,10926721,https://github.com/requests/requests-ntlm,https://pypi.org/project/requests-ntlm/,[]
+mypy-boto3-rds,10900298,https://github.com/youtype/mypy_boto3_builder,https://pypi.org/project/mypy-boto3-rds/,[]
+twilio,10855486,https://github.com/twilio/twilio-python,https://pypi.org/project/twilio/,[]
+openlineage-python,10847657,,https://pypi.org/project/openlineage-python/,[]
