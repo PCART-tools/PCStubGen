@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class IRFunction:
     name: str
     args: list[IRArgument] = field(default_factory=list)
-    returns: IRAnnotation | None = field(default=None)
+    return_annotation: IRAnnotation | None = field(default=None)
     doc: str | None = field(default=None)
     decorators: list[str] = field(default_factory=list)
 
@@ -31,5 +31,5 @@ class IRFunction:
 
     def __str__(self) -> str:
         return (
-            f"{self.name}({', '.join(str(arg) for arg in self.args)}) -> {self.returns}"
+            f"{self.name}({', '.join(str(arg) for arg in self.args)}) -> {self.return_annotation}"
         )

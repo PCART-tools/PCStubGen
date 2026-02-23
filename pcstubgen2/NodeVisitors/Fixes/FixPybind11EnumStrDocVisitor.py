@@ -24,7 +24,7 @@ class FixPybind11EnumStrDocVisitor(NodeVisitor):
                     method.function.args = [
                         IRArgument(name="self")
                     ]
-                    method.function.returns = ResolvedType(
+                    method.function.return_annotation = ResolvedType(
                         name=QualifiedName.from_str("str")
                     )
                     # 修复修饰符（由于泛型签名曾是 static）

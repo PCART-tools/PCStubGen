@@ -199,7 +199,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                     name=func_name,
                     args=self.parse_args_str(match.group("args")),
                     doc=self._strip_empty_lines(doc_lines[1:]),
-                    returns=returns,
+                    return_annotation=returns,
                 )
             ]
 
@@ -227,7 +227,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                     IRFunction(
                         name=func_name,
                         args=self.parse_args_str(match.group("args")),
-                        returns=self.parse_annotation_str(match.group("returns")),
+                        return_annotation=self.parse_annotation_str(match.group("returns")),
                         doc=None,
                         decorators=decorators,
                     )

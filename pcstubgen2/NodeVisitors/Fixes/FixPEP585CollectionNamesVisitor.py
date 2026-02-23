@@ -37,8 +37,8 @@ class FixPEP585CollectionNamesVisitor(NodeVisitor):
         super().visit_class(node)
 
     def visit_function(self, node: IRFunction) -> None:
-        if node.returns:
-            node.returns = self._fix_type(node.returns)
+        if node.return_annotation:
+            node.return_annotation = self._fix_type(node.return_annotation)
         for arg in node.args:
             if arg.annotation:
                 arg.annotation = self._fix_type(arg.annotation)

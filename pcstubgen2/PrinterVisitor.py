@@ -82,7 +82,7 @@ class PrinterVisitor:
             return False
 
         def function_uses_typing(func: IRFunction) -> bool:
-            if annotation_uses_typing(func.returns):
+            if annotation_uses_typing(func.return_annotation):
                 return True
             if any(annotation_uses_typing(arg.annotation) for arg in func.args):
                 return True
@@ -323,8 +323,8 @@ class PrinterVisitor:
             ")",
         ]
 
-        if func.returns is not None:
-            signature.append(f" -> {self.print_annotation(func.returns)}")
+        if func.return_annotation is not None:
+            signature.append(f" -> {self.print_annotation(func.return_annotation)}")
         signature.append(":")
 
         result: list[str] = [

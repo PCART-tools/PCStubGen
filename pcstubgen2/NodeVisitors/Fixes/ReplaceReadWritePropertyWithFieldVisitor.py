@@ -26,11 +26,11 @@ class ReplaceReadWritePropertyWithFieldVisitor(NodeVisitor):
             and len(prop.setter.args) == 2
             and prop.getter.doc is None
             and prop.setter.doc is None
-            and prop.getter.returns == prop.setter.args[1].annotation
+            and prop.getter.return_annotation == prop.setter.args[1].annotation
         ):
              return IRField(
                 variable=IRVariable(
-                    name=prop.name, annotation=prop.getter.returns, value=None
+                    name=prop.name, annotation=prop.getter.return_annotation, value=None
                 ),
                 modifier=None,
              )

@@ -159,9 +159,7 @@ class ModuleBuilder:
 
     def build_function(self, path: QualifiedName, func: Any) -> IRFunction:
         self.error_collector.set_current_path(path)
-        doc = get_doc(func)
-        func_name = path.name
-        irfunc = IRFunction(name=func_name, doc=doc)
+        irfunc = IRFunction(name=path.name, doc=get_doc(func))
         
         try:
             # classmethod 绑定方法对 __func__ 取签名，避免丢失首参 cls
@@ -195,14 +193,14 @@ class ModuleBuilder:
 
             # 构建返回值
             if sig.return_annotation is not inspect.Signature.empty:
-                irfunc.returns = self._build_annotation(sig.return_annotation)
+                irfunc.return_annotation = self._build_annotation(sig.return_annotation)
         except (TypeError, ValueError):
             # 当 inspect.signature 失败时，回退为泛型签名
             irfunc.args = [
                 IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
                 IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
             ]
-            irfunc.returns = None
+            irfunc.return_annotation = None
         return irfunc
 
     def build_method(self, path: QualifiedName, method: Any) -> IRMethod:

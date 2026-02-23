@@ -54,8 +54,8 @@ class ImportResolverVisitor(NodeVisitor):
         self._current_class = old_class
 
     def visit_function(self, node: IRFunction) -> None:
-        if node.returns:
-             self._check_annotation(node.returns)
+        if node.return_annotation:
+             self._check_annotation(node.return_annotation)
         for arg in node.args:
              if arg.annotation:
                  self._check_annotation(arg.annotation)

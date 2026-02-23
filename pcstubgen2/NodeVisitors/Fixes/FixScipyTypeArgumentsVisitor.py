@@ -11,8 +11,8 @@ class FixScipyTypeArgumentsVisitor(NodeVisitor):
     """从 scipy.sparse 数组/矩阵中移除类型参数（它们不是泛型的）。"""
     
     def visit_function(self, node: IRFunction) -> None:
-        if node.returns:
-            node.returns = self._fix_type(node.returns)
+        if node.return_annotation:
+            node.return_annotation = self._fix_type(node.return_annotation)
         for arg in node.args:
             if arg.annotation:
                 arg.annotation = self._fix_type(arg.annotation)
