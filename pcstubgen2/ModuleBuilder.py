@@ -161,6 +161,7 @@ class ModuleBuilder:
         self.error_collector.set_current_path(path)
         doc = get_doc(func)
         func_name = path.name
+        irfunc = IRFunction(name=func_name, doc=doc)
         
         try:
             # classmethod 绑定方法对 __func__ 取签名，避免丢失首参 cls
@@ -168,8 +169,10 @@ class ModuleBuilder:
             if inspect.ismethod(func) and inspect.isclass(getattr(func, "__self__", None)):
                 signature_target = func.__func__
 
+            # 获取签名
             sig = inspect.signature(signature_target)
 
+            # 映射参数类型
             kind_map = {
                 inspect.Parameter.POSITIONAL_ONLY: IRArgumentKind.POSITIONAL_ONLY,
                 inspect.Parameter.POSITIONAL_OR_KEYWORD: IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -178,37 +181,29 @@ class ModuleBuilder:
                 inspect.Parameter.VAR_KEYWORD: IRArgumentKind.VAR_KEYWORD,
             }
 
-            func_args: list[IRArgument] = []
+            # 构建参数列表
             for param in sig.parameters.values():
                 arg = IRArgument(
                     name=param.name,
-                    kind=kind_map.get(
-                        param.kind, IRArgumentKind.POSITIONAL_OR_KEYWORD
-                    ),
+                    kind=kind_map[param.kind],
                 )
                 if param.default is not inspect.Signature.empty:
                     arg.default = self._build_value(param.default)
                 if param.annotation is not inspect.Signature.empty:
                     arg.annotation = self._build_annotation(param.annotation)
-                func_args.append(arg)
+                irfunc.args.append(arg)
 
-            returns = None
+            # 构建返回值
             if sig.return_annotation is not inspect.Signature.empty:
-                returns = self._build_annotation(sig.return_annotation)
-            
-            return IRFunction(
-                name=func_name,
-                args=func_args,
-                returns=returns,
-                doc=doc,
-            )
+                irfunc.returns = self._build_annotation(sig.return_annotation)
         except (TypeError, ValueError):
             # 当 inspect.signature 失败时，回退为泛型签名
-            generic_args = [
+            irfunc.args = [
                 IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
                 IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
             ]
-            return IRFunction(name=func_name, args=generic_args, doc=doc)
+            irfunc.returns = None
+        return irfunc
 
     def build_method(self, path: QualifiedName, method: Any) -> IRMethod:
         func = self.build_function(path, method)
