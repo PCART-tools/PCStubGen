@@ -22,7 +22,7 @@ from pcstubgen2 import write_stubs
 from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
 DEFAULT_MODULE = "numpy.random"
-OUTPUT_DIR = SCRIPT_DIR / SCRIPT_PATH.stem
+OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
 
 def configure_output_encoding() -> None:

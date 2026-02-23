@@ -240,7 +240,7 @@ def main():
         stub_extension=args.stub_extension,
     )
 
-    output_root = SCRIPT_DIR / "test_compare_stubs"
+    output_root = SCRIPT_DIR / "output" / "test_compare_stubs"
     old_dir = prepare_output_dir(output_root / "old")
     new_dir = prepare_output_dir(output_root / "new")
 
