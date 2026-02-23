@@ -5,6 +5,9 @@ from ..NodeVisitor import NodeVisitor
 
 
 class FilterClassMembersVisitor(NodeVisitor):
+    '''
+    过滤掉类成员中的黑名单成员
+    '''
     __attribute_blacklist = {
         "__annotations__",
         "__builtins__",

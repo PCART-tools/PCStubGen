@@ -5,6 +5,9 @@ from ..NodeVisitor import NodeVisitor
 
 
 class FilterPybind11ViewClassesVisitor(NodeVisitor):
+    '''
+    过滤掉pybind11视图类
+    '''
     __view_classes = {
         "ItemsView",
         "KeysView",

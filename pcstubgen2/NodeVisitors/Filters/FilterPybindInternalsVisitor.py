@@ -5,6 +5,9 @@ from ..NodeVisitor import NodeVisitor
 
 
 class FilterPybindInternalsVisitor(NodeVisitor):
+    '''
+    过滤掉pybind11内部成员
+    '''
     __attribute_blacklist = {"__entries"}
     __class_blacklist = {"pybind11_type"}
 

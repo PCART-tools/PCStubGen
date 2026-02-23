@@ -174,7 +174,7 @@ class ModuleBuilder:
                     arg.annotation = self._build_annotation(param.annotation)
                 irfunc.args.append(arg)
 
-            # 构建返回值
+            # 构建返回注解
             if sig.return_annotation is not inspect.Signature.empty:
                 irfunc.return_annotation = self._build_annotation(sig.return_annotation)
         except (TypeError, ValueError):

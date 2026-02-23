@@ -7,6 +7,9 @@ from ..NodeVisitor import NodeVisitor
 
 
 class FilterTypingModuleAttributesVisitor(NodeVisitor):
+    '''
+    过滤掉typing模块的属性
+    '''
     __typing_sentinel = object()
     __typing_never_filter = {"__all__"}
 

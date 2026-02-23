@@ -12,6 +12,9 @@ T = TypeVar("T")
 
 
 class FilterInvalidIdentifierVisitor(NodeVisitor):
+    '''
+    过滤掉无效标识符的类成员和模块成员
+    '''
     def __init__(self, error_collector: ErrorCollector):
         self.error_collector = error_collector
         self._path_stack: list[QualifiedName] = []
