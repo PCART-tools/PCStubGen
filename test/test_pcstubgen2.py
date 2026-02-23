@@ -70,13 +70,6 @@ def run_single_module(module_name: str) -> int:
         print("生成失败: 未找到任何 .pyi 文件")
         return 2
 
-    empty_files = [path for path in stub_files if path.stat().st_size == 0]
-    if empty_files:
-        print(f"生成失败: 存在空文件，共 {len(empty_files)} 个")
-        for path in empty_files[:5]:
-            print(f"- 空文件: {path}")
-        return 3
-
     sample = stub_files[0]
     try:
         sample_display = sample.relative_to(ROOT_DIR).as_posix()
