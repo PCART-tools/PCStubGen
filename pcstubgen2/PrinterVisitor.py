@@ -18,8 +18,13 @@ from .IR import (
 
 
 class PrinterVisitor:
-    def __init__(self, invalid_expr_as_ellipses: bool = True):
+    def __init__(
+        self,
+        invalid_expr_as_ellipses: bool = True,
+        include_docstrings: bool = True,
+    ):
         self.invalid_expr_as_ellipses = invalid_expr_as_ellipses
+        self.include_docstrings = include_docstrings
 
     @staticmethod
     def indent_lines(lines: list[str], by: int = 4) -> list[str]:
@@ -28,7 +33,7 @@ class PrinterVisitor:
     def visit_module(self, node: IRModule) -> list[str]:
         result: list[str] = []
 
-        if node.doc is not None:
+        if self.include_docstrings and node.doc is not None:
             result.extend(self.print_docstring(node.doc))
 
         for sub_module in node.sub_modules:
@@ -53,7 +58,7 @@ class PrinterVisitor:
 
     def _print_class_body(self, irclass: IRClass) -> list[str]:
         result: list[str] = []
-        if irclass.doc is not None:
+        if self.include_docstrings and irclass.doc is not None:
             result.extend(self.print_docstring(irclass.doc))
 
         for sub_class in sorted(irclass.classes, key=lambda c: c.name):
@@ -167,7 +172,7 @@ class PrinterVisitor:
             "".join(signature),
         ]
 
-        if func.doc is not None:
+        if self.include_docstrings and func.doc is not None:
             body = self.print_docstring(func.doc)
         else:
             body = ["..."]

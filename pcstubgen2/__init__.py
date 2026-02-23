@@ -92,6 +92,7 @@ def write_stubs(
     else:
         writer.stub_extension = ext
     printer = PrinterVisitor(
-        invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is
+        invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
+        include_docstrings=options.include_docstrings,
     )
     writer.write(ir_module, printer, to=output_dir)

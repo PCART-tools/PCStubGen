@@ -6,8 +6,6 @@ import re
 
 @dataclasses.dataclass
 class StubGenerationOptions:
-    """精简后的存根生成配置项。"""
-
     # 错误过滤
     ignore_invalid_expressions: re.Pattern | None = None
     ignore_all_errors: bool = False
@@ -17,4 +15,5 @@ class StubGenerationOptions:
 
     # 输出选项
     print_invalid_expressions_as_is: bool = False
+    include_docstrings: bool = True
     stub_extension: str = "pyi"
