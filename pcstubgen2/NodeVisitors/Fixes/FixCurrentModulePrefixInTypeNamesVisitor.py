@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...IR import (
-    IRModule, IRClass, IRFunction, IRVariable, ResolvedType, QualifiedName, IRValue
+    IRModule, IRClass, IRFunction, ResolvedType, QualifiedName, IRValue
 )
 from ..NodeVisitor import NodeVisitor
 
@@ -16,8 +16,6 @@ class FixCurrentModulePrefixInTypeNamesVisitor(NodeVisitor):
     def visit_module(self, node: IRModule) -> None:
         old_name = self._current_module_name
         self._current_module_name = node.full_name
-        for alias in node.aliases:
-            alias.origin = self._strip_current_module(alias.origin)
         super().visit_module(node)
         self._current_module_name = old_name
     
@@ -38,13 +36,6 @@ class FixCurrentModulePrefixInTypeNamesVisitor(NodeVisitor):
             if isinstance(arg.default, IRValue):
                 self._strip_value_repr(arg.default)
         super().visit_function(node)
-    
-    def visit_variable(self, node: IRVariable) -> None:
-        if node.annotation:
-            node.annotation = self._fix_type(node.annotation)
-        if isinstance(node.value, IRValue):
-            self._strip_value_repr(node.value)
-        super().visit_variable(node)
     
     def _fix_type(self, annotation: Any) -> Any:
         if not isinstance(annotation, ResolvedType):

@@ -9,9 +9,6 @@ if TYPE_CHECKING:
         IRClass,
         IRFunction,
         IRMethod,
-        IRProperty,
-        IRField,
-        IRVariable,
     )
 
 
@@ -30,10 +27,6 @@ class NodeVisitor(abc.ABC):
             self.visit_class(cls)
         for func in node.functions:
             self.visit_function(func)
-        if node.all is not None:
-            self.visit_variable(node.all)
-        for variable in node.variables:
-            self.visit_variable(variable)
         return None
 
     def visit_class(self, node: IRClass) -> None:
@@ -42,10 +35,6 @@ class NodeVisitor(abc.ABC):
             self.visit_class(nested_cls)
         for method in node.methods:
             self.visit_method(method)
-        for prop in node.properties:
-            self.visit_property(prop)
-        for field in node.fields:
-            self.visit_field(field)
         return None
 
     def visit_function(self, node: IRFunction) -> None:
@@ -55,21 +44,4 @@ class NodeVisitor(abc.ABC):
     def visit_method(self, node: IRMethod) -> None:
         """访问方法节点。"""
         self.visit_function(node.function)
-        return None
-
-    def visit_property(self, node: IRProperty) -> None:
-        """访问属性节点。"""
-        if node.getter:
-            self.visit_function(node.getter)
-        if node.setter:
-            self.visit_function(node.setter)
-        return None
-
-    def visit_field(self, node: IRField) -> None:
-        """访问字段节点。"""
-        self.visit_variable(node.variable)
-        return None
-
-    def visit_variable(self, node: IRVariable) -> None:
-        """访问变量节点。"""
         return None

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ...IR import (
-    IRClass, IRFunction, IRVariable, ResolvedType, QualifiedName
+    IRClass, IRFunction, ResolvedType, QualifiedName
 )
 from ..NodeVisitor import NodeVisitor
 
@@ -37,11 +37,6 @@ class FixBuiltinTypesVisitor(NodeVisitor):
             if arg.annotation:
                 arg.annotation = self._fix_type(arg.annotation)
         super().visit_function(node)
-    
-    def visit_variable(self, node: IRVariable) -> None:
-        if node.annotation:
-            node.annotation = self._fix_type(node.annotation)
-        super().visit_variable(node)
     
     def _fix_type(self, annotation: Any) -> Any:
         if not isinstance(annotation, ResolvedType):

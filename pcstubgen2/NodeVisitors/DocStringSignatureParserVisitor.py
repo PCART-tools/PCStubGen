@@ -14,7 +14,6 @@ from ..IR import (
     QualifiedName,
     IRClass,
     IRModule,
-    IRProperty,
 )
 from .NodeVisitor import NodeVisitor
 from ..Errors import InvalidExpressionError
@@ -47,23 +46,20 @@ class DocStringSignatureParserVisitor(NodeVisitor):
     def visit_class(self, node: IRClass) -> None:
         new_methods = []
         for method in node.methods:
-             funcs = self._parse_function(method.function)
-             if len(funcs) == 1 and funcs[0] is method.function:
-                 new_methods.append(method)
-             else:
-                 # 它已扩展或更改
-                 for f in funcs:
-                     # 重新推导修饰符，避免 docstring 解析后残留错误的 @staticmethod/@classmethod。
-                     from ..IR import IRMethod
-                     new_methods.append(
-                         IRMethod(function=f, modifier=self._infer_method_modifier(f))
-                     )
+            funcs = self._parse_function(method.function)
+            if len(funcs) == 1 and funcs[0] is method.function:
+                new_methods.append(method)
+            else:
+                # 它已扩展或更改
+                for f in funcs:
+                    # 重新推导修饰符，避免 docstring 解析后残留错误的 @staticmethod/@classmethod。
+                    from ..IR import IRMethod
+
+                    new_methods.append(
+                        IRMethod(function=f, modifier=self._infer_method_modifier(f))
+                    )
         node.methods = new_methods
 
-        # 同时处理属性
-        for prop in node.properties:
-            self._process_property(prop)
-            
         # 递归
         super().visit_class(node)
 
@@ -81,55 +77,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         
         functions_list.clear()
         functions_list.extend(new_funcs)
-
-    def _process_property(self, prop: IRProperty) -> None:
-         # 如果可用，使用文档字符串修复 getter/setter
-         
-         # 逻辑：
-         # 1. prop.getter/setter 可能是泛型的。
-         # 2. 尝试解析 fget/fset 的文档字符串（如果存在）（我们在 IR 中很难在这里访问 fget/fset？）
-         # 等等，IR 节点不再持有原始 python 对象。
-         # 如果存在，Inspector 应该已将文档字符串放入 Function 节点中。
-         
-         # 如果 Inspector 放入了 func.doc，我们可以解析它。
-         
-         if prop.getter:
-             fixed_getter = self._fixup_property_function(prop.getter)
-             if fixed_getter:
-                 prop.getter = fixed_getter
-                 
-         if prop.setter:
-             fixed_setter = self._fixup_property_function(prop.setter)
-             if fixed_setter:
-                 prop.setter = fixed_setter
-
-    def _fixup_property_function(self, func: IRFunction) -> IRFunction | None:
-        # 解析函数文档字符串
-        parsed = self._parse_function(func)
-        if not parsed:
-            return None
-        # 属性 getter/setter 通常不应在存根中重载（或至少有一个主要的）
-        if len(parsed) > 1:
-            # 我们只取第一个还是警告？
-            # 我们只取第一个。
-            pass
-            
-        f = parsed[0]
-        
-        # 修复 'self' 参数
-        if (
-            len(f.args) > 0
-            and f.args[0].kind
-            in (
-                IRArgumentKind.POSITIONAL_ONLY,
-                IRArgumentKind.POSITIONAL_OR_KEYWORD,
-            )
-            and f.args[0].default is None
-        ):
-            f.args[0].name = "self"
-            f.args[0].annotation = None
-            
-        return f
 
     def _parse_function(self, func: IRFunction) -> list[IRFunction]:
         # 仅当我们具有泛型 (*args, **kwargs) 签名时才从文档字符串解析

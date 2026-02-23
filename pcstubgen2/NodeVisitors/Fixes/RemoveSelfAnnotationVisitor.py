@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ...IR import (
-    IRModule, IRClass, IRMethod, IRProperty, IRFunction, ResolvedType, QualifiedName
+    IRModule, IRClass, IRMethod, IRFunction, ResolvedType, QualifiedName
 )
 from ..NodeVisitor import NodeVisitor
 
@@ -43,13 +43,6 @@ class RemoveSelfAnnotationVisitor(NodeVisitor):
     def visit_method(self, node: IRMethod) -> None:
         self._remove_self_arg_annotation(node.function)
         super().visit_method(node)
-    
-    def visit_property(self, node: IRProperty) -> None:
-        if node.getter is not None:
-            self._remove_self_arg_annotation(node.getter)
-        if node.setter is not None:
-            self._remove_self_arg_annotation(node.setter)
-        super().visit_property(node)
     
     def _remove_self_arg_annotation(self, func: IRFunction) -> None:
         if len(func.args) == 0:

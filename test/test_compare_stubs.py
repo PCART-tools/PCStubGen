@@ -226,17 +226,10 @@ def main():
     # Setup Options to match MockArgs
     args = MockArgs()
     options = StubGenerationOptions(
-        root_suffix=args.root_suffix,
         ignore_invalid_expressions=args.ignore_invalid_expressions,
-        ignore_invalid_identifiers=args.ignore_invalid_identifiers,
-        ignore_unresolved_names=args.ignore_unresolved_names,
         ignore_all_errors=args.ignore_all_errors,
         enum_class_locations=args.enum_class_locations,
-        numpy_array_wrap_with_annotated=args.numpy_array_wrap_with_annotated,
-        numpy_array_use_type_var=args.numpy_array_use_type_var,
-        numpy_array_remove_parameters=args.numpy_array_remove_parameters,
         print_invalid_expressions_as_is=args.print_invalid_expressions_as_is,
-        print_safe_value_reprs=args.print_safe_value_reprs,
         stub_extension=args.stub_extension,
     )
 
