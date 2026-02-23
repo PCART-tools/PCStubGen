@@ -16,6 +16,9 @@ scipy.sparse
 scipy.ndimage
 
 pybind11:
+
 torch.linalg
 torch.fft
 torch.special
+
+matplotlib

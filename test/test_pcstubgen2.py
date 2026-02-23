@@ -58,7 +58,7 @@ def run_single_module(module_name: str) -> int:
         write_stubs(
             module_name,
             output_dir,
-            options=StubGenerationOptions(include_docstrings=False),
+            options=StubGenerationOptions(include_docstrings=True),
         )
     except Exception as exc:
         print(f"生成失败: {exc}")
