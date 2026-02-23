@@ -1,9 +1,15 @@
 from __future__ import annotations
 
-from .InvalidIdentifierFilterVisitor import InvalidIdentifierFilterVisitor
-from .StandardFilterVisitor import StandardFilterVisitor
+from .FilterClassMembersVisitor import FilterClassMembersVisitor
+from .FilterInvalidIdentifierVisitor import FilterInvalidIdentifierVisitor
+from .FilterPybind11ViewClassesVisitor import FilterPybind11ViewClassesVisitor
+from .FilterPybindInternalsVisitor import FilterPybindInternalsVisitor
+from .FilterTypingModuleAttributesVisitor import FilterTypingModuleAttributesVisitor
 
 __all__ = [
-    "InvalidIdentifierFilterVisitor",
-    "StandardFilterVisitor",
+    "FilterClassMembersVisitor",
+    "FilterInvalidIdentifierVisitor",
+    "FilterPybind11ViewClassesVisitor",
+    "FilterPybindInternalsVisitor",
+    "FilterTypingModuleAttributesVisitor",
 ]

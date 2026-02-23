@@ -4,11 +4,10 @@ import ast
 import inspect
 import re
 import types
-import typing
 from typing import Any
 
 from .ErrorCollector import ErrorCollector
-from .Errors import InvalidExpressionError, InvalidIdentifierError
+from .Errors import InvalidExpressionError
 from .ReflectionHelpers import (
     get_generic_alias_type,
     get_module_name,
@@ -37,9 +36,6 @@ from .IR import (
 
 
 class ModuleBuilder:
-    __typing_sentinel = object()
-    __typing_never_filter = {"__all__"}
-
     def __init__(self, error_collector: ErrorCollector):
         self.error_collector = error_collector
 
@@ -63,12 +59,6 @@ class ModuleBuilder:
         module: types.ModuleType,
         ilmodule: IRModule,
         ) -> None:
-        if not name.isidentifier():
-            self.error_collector.report_error(
-                InvalidIdentifierError(str(name), ilmodule.full_name)
-            )
-            return
-
         path = ilmodule.full_name.concat(name)
 
         # 检查是否是从其他模块导入的
@@ -102,10 +92,10 @@ class ModuleBuilder:
             if path.name == "__all__":
                 ilmodule.all = self.build_variable(path, member)
             elif path.name == "__doc__":
-            # 文档字符串通常在 _get_doc 中处理；若作为显式成员出现则忽略
+                # 文档字符串通常在 _get_doc 中处理；若作为显式成员出现则忽略
                 pass
             # 变量
-            elif not self._is_typing_module_attr(path.name, member):
+            else:
                 ilmodule.variables.append(self.build_variable(path, member))
 
     def build_class(self, path: QualifiedName, class_: type) -> IRClass:
@@ -129,13 +119,6 @@ class ModuleBuilder:
         class_: type,
         irclass: IRClass,
     ) -> None:
-
-        if not name.isidentifier():
-            self.error_collector.report_error(
-                InvalidIdentifierError(str(name), path.parent)
-            )
-            return
-        
         path = class_path.concat(name)
 
 
@@ -319,11 +302,13 @@ class ModuleBuilder:
                 name=path.name,
                 value=self._build_value(value),
                 annotation=None,
+                runtime_value=value,
             )
         return IRVariable(
             name=path.name,
             value=self._build_value(value),
             annotation=ResolvedType(name=self._get_type_fullname(type(value))),
+            runtime_value=value,
         )
 
     def build_field(self, path: QualifiedName, value: Any) -> IRField:
@@ -623,7 +608,3 @@ class ModuleBuilder:
     def _is_descriptor(self, member: Any) -> bool:
         return hasattr(member, "__get__") or hasattr(member, "__set__")
 
-    def _is_typing_module_attr(self, name: str, member: Any) -> bool:
-        if str(name) in self.__typing_never_filter:
-            return False
-        return getattr(typing, str(name), self.__typing_sentinel) is member

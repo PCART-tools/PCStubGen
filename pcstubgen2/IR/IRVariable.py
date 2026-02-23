@@ -13,3 +13,4 @@ class IRVariable:
     name: str
     value: IRValue | None
     annotation: IRAnnotation | None = field(default=None)
+    runtime_value: object | None = field(default=None, repr=False, compare=False)

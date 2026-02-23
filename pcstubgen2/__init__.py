@@ -12,8 +12,11 @@ from .Pipeline import Pipeline
 from .NodeVisitors.NodeVisitor import NodeVisitor
 from .NodeVisitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
 from .NodeVisitors.Filters import (
-    StandardFilterVisitor,
-    InvalidIdentifierFilterVisitor,
+    FilterClassMembersVisitor,
+    FilterInvalidIdentifierVisitor,
+    FilterPybind11ViewClassesVisitor,
+    FilterPybindInternalsVisitor,
+    FilterTypingModuleAttributesVisitor,
 )
 from .NodeVisitors.Fixes import (
     ImportResolverVisitor,
@@ -90,6 +93,7 @@ def write_stubs(
         FixMissingFutureAnnotationsVisitor(),
         FixMissingAllVisitor(),
         FixMissingNoneHashFieldAnnotationVisitor(),
+        FilterTypingModuleAttributesVisitor(),
         DocStringSignatureParserVisitor(
             error_collector=error_collector,
             enum_class_locations=dict(options.enum_class_locations),
@@ -119,11 +123,13 @@ def write_stubs(
         RewritePybind11EnumValueReprVisitor(
             enum_class_locations=dict(options.enum_class_locations)
         ),
-        StandardFilterVisitor(),
+        FilterClassMembersVisitor(),
         ReplaceReadWritePropertyWithFieldVisitor(),
-        InvalidIdentifierFilterVisitor(ignore_regex=options.ignore_invalid_identifiers),
+        FilterInvalidIdentifierVisitor(error_collector=error_collector),
         FixValueReprRandomAddressVisitor(),
         FixRedundantBuiltinsAnnotationVisitor(),
+        FilterPybindInternalsVisitor(),
+        FilterPybind11ViewClassesVisitor(),
         FixRedundantMethodsFromBuiltinObjectVisitor(),
         RemoveSelfAnnotationVisitor(),
         ImportResolverVisitor(error_collector=error_collector),
