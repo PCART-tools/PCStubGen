@@ -13,6 +13,7 @@ from ..IR import (
     IRValue,
     QualifiedName,
     IRClass,
+    IRMethod,
     IRModule,
 )
 from .NodeVisitor import NodeVisitor
@@ -25,6 +26,9 @@ _generic_args = [
 
 
 class DocStringSignatureParserVisitor(NodeVisitor):
+    '''
+    解析文档字符串中的签名
+    '''
     _arg_star_name_regex = re.compile(
         r"^\s*(?P<stars>\*{1,2})?" r"\s*(?P<name>\w+)\s*$"
     )
@@ -39,7 +43,14 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         self.enum_class_locations = enum_class_locations or {}
 
     def visit_module(self, node: IRModule) -> None:
-        self._process_functions(node.functions)
+
+        new_funcs = []
+        for func in node.functions:
+            parsed = self._parse_function(func)
+            new_funcs.extend(parsed)
+        node.functions.clear()
+        node.functions.extend(new_funcs)
+
         # 递归
         super().visit_module(node)
 
@@ -53,8 +64,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 # 它已扩展或更改
                 for f in funcs:
                     # 重新推导修饰符，避免 docstring 解析后残留错误的 @staticmethod/@classmethod。
-                    from ..IR import IRMethod
-
                     new_methods.append(
                         IRMethod(function=f, modifier=self._infer_method_modifier(f))
                     )
@@ -62,21 +71,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
 
         # 递归
         super().visit_class(node)
-
-    def _process_functions(self, functions_list: list[IRFunction]) -> None:
-        # 我们需要就地更改列表或替换它。
-        # 由于我们在节点内部（通过引用传递），如果我们通过节点访问它，我们可以修改列表内容，
-        # 但这里我们传递了列表对象。如果是同一个对象引用，修改列表对象是有效的。
-        
-        # 但是，清除并扩展或分配切片更安全。
-        
-        new_funcs = []
-        for func in functions_list:
-            parsed = self._parse_function(func)
-            new_funcs.extend(parsed)
-        
-        functions_list.clear()
-        functions_list.extend(new_funcs)
 
     def _parse_function(self, func: IRFunction) -> list[IRFunction]:
         # 仅当我们具有泛型 (*args, **kwargs) 签名时才从文档字符串解析
