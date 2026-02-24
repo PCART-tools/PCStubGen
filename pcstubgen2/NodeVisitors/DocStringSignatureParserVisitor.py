@@ -90,6 +90,19 @@ class DocStringSignatureParserVisitor(NodeVisitor):
     def parse_function_docstring(
         self, func_name: str, doc_lines: list[str]
     ) -> list[IRFunction]:
+        '''
+        解析函数文档字符串中的签名。
+
+        Example（单签名）:
+            add(a: int, b: int = 0) -> int
+            Return a + b.
+
+        Example（pybind11 重载）:
+            add(*args, **kwargs)
+            Overloaded function.
+            1. add(a: int, b: int) -> int
+            2. add(a: float, b: float) -> float
+        '''
         if len(doc_lines) == 0:
             return []
 
