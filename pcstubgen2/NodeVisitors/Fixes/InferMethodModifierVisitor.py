@@ -1,23 +1,23 @@
 from __future__ import annotations
 
-from ...IR import IRMethod
+from ...IR import IRMethod, IRMethodDecorator
 from ..NodeVisitor import NodeVisitor
 
 
 class InferMethodModifierVisitor(NodeVisitor):
-    """根据方法首参统一推导 method modifier。"""
+    """根据方法首参统一推导 method decorator。"""
 
     def visit_method(self, node: IRMethod) -> None:
-        node.modifier = self._infer_modifier(node)
+        node.decorator = self._infer_decorator(node)
         super().visit_method(node)
 
-    def _infer_modifier(self, node: IRMethod) -> str | None:
+    def _infer_decorator(self, node: IRMethod) -> IRMethodDecorator:
         args = node.function.args
         if len(args) == 0:
-            return "static"
+            return "staticmethod"
         first = args[0].name
         if first == "self":
             return None
         if first == "cls":
-            return "class"
-        return "static"
+            return "classmethod"
+        return "staticmethod"

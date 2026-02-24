@@ -140,7 +140,7 @@ class ModuleBuilder:
 
     def build_method(self, path: QualifiedName, method: Any) -> IRMethod:
         func = self.build_function(path, method)
-        return IRMethod(function=func, modifier=None)
+        return IRMethod(function=func, decorator=None)
 
     def build_bases(self, class_: type) -> list[QualifiedName]:
         bases = class_.__bases__

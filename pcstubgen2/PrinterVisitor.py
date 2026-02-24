@@ -10,7 +10,7 @@ from .IR import (
     IRFunction,
     InvalidExpression,
     IRMethod,
-    IRModifier,
+    IRMethodDecorator,
     IRModule,
     ResolvedType,
     IRValue,
@@ -64,13 +64,13 @@ class PrinterVisitor:
         for sub_class in sorted(irclass.classes, key=lambda c: c.name):
             result.extend(self.print_class(sub_class))
 
-        modifier_order: dict[IRModifier, int] = {
-            "static": 0,
-            "class": 1,
+        decorator_order: dict[IRMethodDecorator, int] = {
+            "staticmethod": 0,
+            "classmethod": 1,
             None: 2,
         }
         for method in sorted(
-            irclass.methods, key=lambda m: (modifier_order.get(m.modifier, 2), m.function.name)
+            irclass.methods, key=lambda m: (decorator_order.get(m.decorator, 2), m.function.name)
         ):
             result.extend(self.print_method(method))
 
@@ -81,9 +81,9 @@ class PrinterVisitor:
 
     def print_method(self, node: IRMethod) -> list[str]:
         result: list[str] = []
-        if node.modifier == "static":
+        if node.decorator == "staticmethod":
             result.append("@staticmethod")
-        elif node.modifier == "class":
+        elif node.decorator == "classmethod":
             result.append("@classmethod")
 
         result.extend(self.print_function(node.function))

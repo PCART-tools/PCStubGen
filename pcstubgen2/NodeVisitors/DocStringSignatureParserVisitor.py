@@ -63,7 +63,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             else:
                 # 它已扩展或更改
                 for f in funcs:
-                    new_methods.append(IRMethod(function=f, modifier=method.modifier))
+                    new_methods.append(IRMethod(function=f, decorator=method.decorator))
         node.methods = new_methods
 
         # 递归

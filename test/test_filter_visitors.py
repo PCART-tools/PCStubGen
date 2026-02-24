@@ -62,7 +62,7 @@ def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
                 args=_generic_signature(),
                 doc="build(cls: C, count: int) -> C",
             ),
-            modifier="static",
+            decorator="staticmethod",
         )
     ]
 
@@ -70,11 +70,11 @@ def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
 
     parsed = ir_class.methods[0]
     assert [arg.name for arg in parsed.function.args] == ["cls", "count"]
-    assert parsed.modifier == "static"
+    assert parsed.decorator == "staticmethod"
 
     infer_modifier_visitor.visit_class(ir_class)
 
-    assert parsed.modifier == "class"
+    assert parsed.decorator == "classmethod"
 
 
 def test_infer_method_modifier_visitor_covers_all_first_arg_cases() -> None:
@@ -84,31 +84,31 @@ def test_infer_method_modifier_visitor_covers_all_first_arg_cases() -> None:
         methods=[
             IRMethod(
                 function=IRFunction(name="instance_method", args=[IRArgument(name="self")]),
-                modifier="static",
+                decorator="staticmethod",
             ),
             IRMethod(
                 function=IRFunction(name="class_method", args=[IRArgument(name="cls")]),
-                modifier=None,
+                decorator=None,
             ),
             IRMethod(
                 function=IRFunction(name="static_no_args", args=[]),
-                modifier=None,
+                decorator=None,
             ),
             IRMethod(
                 function=IRFunction(name="static_other_first", args=[IRArgument(name="value")]),
-                modifier="class",
+                decorator="classmethod",
             ),
         ],
     )
 
     visitor.visit_class(ir_class)
 
-    modifiers = {method.function.name: method.modifier for method in ir_class.methods}
-    assert modifiers == {
+    decorators = {method.function.name: method.decorator for method in ir_class.methods}
+    assert decorators == {
         "instance_method": None,
-        "class_method": "class",
-        "static_no_args": "static",
-        "static_other_first": "static",
+        "class_method": "classmethod",
+        "static_no_args": "staticmethod",
+        "static_other_first": "staticmethod",
     }
 
 
@@ -124,7 +124,7 @@ def test_type_fix_visitors_update_annotations_and_bases() -> None:
             ],
             return_annotation=ResolvedType(name=QualifiedName.from_str("builtins.NoneType")),
         ),
-        modifier=None,
+        decorator=None,
     )
     ir_class = IRClass(
         name="C",
@@ -153,7 +153,7 @@ def test_remove_self_annotation_visitor_strips_class_self_type() -> None:
                 )
             ],
         ),
-        modifier=None,
+        decorator=None,
     )
     ir_class = IRClass(name="C", methods=[method])
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
@@ -175,7 +175,7 @@ def test_fix_current_module_prefix_visitor_strips_local_prefix() -> None:
             ],
             return_annotation=ResolvedType(name=QualifiedName.from_str("pkg.mod.ResultType")),
         ),
-        modifier=None,
+        decorator=None,
     )
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -194,9 +194,9 @@ def test_fix_redundant_object_init_visitor_removes_only_builtin_init() -> None:
         methods=[
             IRMethod(
                 function=IRFunction(name="__init__", doc=object.__init__.__doc__),
-                modifier=None,
+                decorator=None,
             ),
-            IRMethod(function=IRFunction(name="run"), modifier=None),
+            IRMethod(function=IRFunction(name="run"), decorator=None),
         ],
     )
 

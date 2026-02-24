@@ -5,10 +5,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .IRFunction import IRFunction
-    from .IRModifier import IRModifier
+    from .IRMethodDecorator import IRMethodDecorator
 
 
 @dataclass
 class IRMethod:
     function: IRFunction
-    modifier: IRModifier
+    decorator: IRMethodDecorator

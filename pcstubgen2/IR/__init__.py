@@ -6,7 +6,7 @@ from .IRClass import IRClass
 from .IRFunction import IRFunction
 from .InvalidExpression import InvalidExpression
 from .IRMethod import IRMethod
-from .IRModifier import IRModifier
+from .IRMethodDecorator import IRMethodDecorator
 from .IRModule import IRModule
 from .QualifiedName import QualifiedName
 from .ResolvedType import ResolvedType
@@ -20,7 +20,7 @@ __all__ = [
     "IRFunction",
     "InvalidExpression",
     "IRMethod",
-    "IRModifier",
+    "IRMethodDecorator",
     "IRModule",
     "QualifiedName",
     "ResolvedType",
