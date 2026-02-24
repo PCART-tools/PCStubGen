@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from .IRClass import IRClass
     from .IRFunction import IRFunction
     from .QualifiedName import QualifiedName
+
+IRModuleType = Literal["python", "builtin", "c"]
 
 
 @dataclass
@@ -15,6 +17,9 @@ class IRModule:
 
     # 文档
     doc: str | None = field(default=None)
+
+    # 模块实现类型
+    module_type: IRModuleType = field(default="python")
 
     # 类
     classes: list[IRClass] = field(default_factory=list)

@@ -64,10 +64,10 @@ def write_stubs(
 
     # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
     visitors.extend([
-        DocStringSignatureParserVisitor(
-            error_collector=error_collector,
-            enum_class_locations=dict(options.enum_class_locations),
-        ),
+        # DocStringSignatureParserVisitor(
+        #     error_collector=error_collector,
+        #     enum_class_locations=dict(options.enum_class_locations),
+        # ),
         InferMethodModifierVisitor(),
         FixTypingTypeNamesVisitor(),
         FixBuiltinTypesVisitor(),
@@ -96,5 +96,6 @@ def write_stubs(
     printer = PrinterVisitor(
         invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
         include_docstrings=options.include_docstrings,
+        include_module_type_comment=options.include_module_type_comment,
     )
     writer.write(ir_module, printer, to=output_dir)

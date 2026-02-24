@@ -22,9 +22,11 @@ class PrinterVisitor:
         self,
         invalid_expr_as_ellipses: bool = True,
         include_docstrings: bool = True,
+        include_module_type_comment: bool = False,
     ):
         self.invalid_expr_as_ellipses = invalid_expr_as_ellipses
         self.include_docstrings = include_docstrings
+        self.include_module_type_comment = include_module_type_comment
 
     @staticmethod
     def indent_lines(lines: list[str], by: int = 4) -> list[str]:
@@ -32,6 +34,9 @@ class PrinterVisitor:
 
     def visit_module(self, node: IRModule) -> list[str]:
         result: list[str] = []
+
+        if self.include_module_type_comment:
+            result.append(f"# module type: {node.module_type}")
 
         if self.include_docstrings and node.doc is not None:
             result.extend(self.print_docstring(node.doc))

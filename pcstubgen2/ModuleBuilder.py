@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ast
+import importlib.machinery
 import inspect
+import os
 import re
 import types
 from typing import Any
@@ -22,6 +24,7 @@ from .IR import (
     InvalidExpression,
     IRMethod,
     IRModule,
+    IRModuleType,
     QualifiedName,
     ResolvedType,
     IRValue,
@@ -38,12 +41,38 @@ class ModuleBuilder:
             full_name=path,
             doc=get_doc(module),
             is_package=is_package(module),
+            module_type=self._detect_module_type(module),
         )
-
         for name, member in inspect.getmembers(module):
             self._handle_module_member(name, member, module, irmodule)
 
         return irmodule
+
+    @staticmethod
+    def _detect_module_type(module: types.ModuleType) -> IRModuleType:
+        spec = getattr(module, "__spec__", None)
+        loader = getattr(spec, "loader", None) if spec is not None else None
+
+        if loader is importlib.machinery.BuiltinImporter:
+            return "builtin"
+        if isinstance(loader, importlib.machinery.ExtensionFileLoader):
+            return "c"
+        if isinstance(
+            loader,
+            (
+                importlib.machinery.SourcelessFileLoader,
+                importlib.machinery.SourceFileLoader,
+            ),
+        ):
+            return "python"
+
+        module_file = getattr(module, "__file__", None)
+        if isinstance(module_file, str):
+            ext = os.path.splitext(module_file)[-1].lower()
+            if ext in {".so", ".pyd", ".dll"}:
+                return "c"
+
+        return "python"
 
     def _handle_module_member(
         self,
@@ -129,8 +158,15 @@ class ModuleBuilder:
 
             if sig.return_annotation is not inspect.Signature.empty:
                 irfunc.return_annotation = self._build_annotation(sig.return_annotation)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as ex:
+            # try:
+            #     fullargspec = inspect.getfullargspec(signature_target)
+            #     print(f"fullargspec: {fullargspec}\n")
+            # except (TypeError, ValueError) as ex2:
+            #     print(f"getfullargspec 失败，回退为泛型签名: {path}\nEx: {ex2}\n")
+
             # inspect.signature 失败时，回退为泛型签名，后续可由 DocString 解析修复
+            # print(f"inspect.signature 失败，回退为泛型签名: {path}\nEx: {ex}\n")
             irfunc.args = [
                 IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
                 IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),

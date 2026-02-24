@@ -16,4 +16,5 @@ class StubGenerationOptions:
     # 输出选项
     print_invalid_expressions_as_is: bool = False
     include_docstrings: bool = True
+    include_module_type_comment: bool = False
     stub_extension: str = "pyi"
