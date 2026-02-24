@@ -63,10 +63,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             else:
                 # 它已扩展或更改
                 for f in funcs:
-                    # 重新推导修饰符，避免 docstring 解析后残留错误的 @staticmethod/@classmethod。
-                    new_methods.append(
-                        IRMethod(function=f, modifier=self._infer_method_modifier(f))
-                    )
+                    new_methods.append(IRMethod(function=f, modifier=method.modifier))
         node.methods = new_methods
 
         # 递归
@@ -89,16 +86,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             return parsed_funcs
         
         return [func]
-
-    def _infer_method_modifier(self, func: IRFunction) -> str | None:
-        if len(func.args) == 0:
-            return "static"
-        first = func.args[0].name
-        if first == "self":
-            return None
-        if first == "cls":
-            return "class"
-        return "static"
 
     def _is_generic_signature(self, func: IRFunction) -> bool:
         """检查函数是否具有泛型 (*args, **kwargs) 签名。"""

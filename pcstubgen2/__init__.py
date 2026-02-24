@@ -16,6 +16,7 @@ from .NodeVisitors.Fixes import (
     FixTypingTypeNamesVisitor,
     FixPEP585CollectionNamesVisitor,
     FixCurrentModulePrefixInTypeNamesVisitor,
+    InferMethodModifierVisitor,
     RemoveSelfAnnotationVisitor,
     FixRedundantMethodsFromBuiltinObjectVisitor,
 )
@@ -67,6 +68,7 @@ def write_stubs(
             error_collector=error_collector,
             enum_class_locations=dict(options.enum_class_locations),
         ),
+        InferMethodModifierVisitor(),
         FixTypingTypeNamesVisitor(),
         FixBuiltinTypesVisitor(),
         FixPEP585CollectionNamesVisitor(),

@@ -8,6 +8,7 @@ from .RemoveSelfAnnotationVisitor import RemoveSelfAnnotationVisitor
 from .FixRedundantMethodsFromBuiltinObjectVisitor import (
     FixRedundantMethodsFromBuiltinObjectVisitor,
 )
+from .InferMethodModifierVisitor import InferMethodModifierVisitor
 
 __all__ = [
     "FixBuiltinTypesVisitor",
@@ -16,4 +17,5 @@ __all__ = [
     "FixCurrentModulePrefixInTypeNamesVisitor",
     "RemoveSelfAnnotationVisitor",
     "FixRedundantMethodsFromBuiltinObjectVisitor",
+    "InferMethodModifierVisitor",
 ]

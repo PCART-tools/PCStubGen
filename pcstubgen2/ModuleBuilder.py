@@ -21,7 +21,6 @@ from .IR import (
     IRFunction,
     InvalidExpression,
     IRMethod,
-    IRModifier,
     IRModule,
     QualifiedName,
     ResolvedType,
@@ -141,17 +140,7 @@ class ModuleBuilder:
 
     def build_method(self, path: QualifiedName, method: Any) -> IRMethod:
         func = self.build_function(path, method)
-        return IRMethod(function=func, modifier=self._get_method_modifier(func.args))
-
-    def _get_method_modifier(self, args: list[IRArgument]) -> IRModifier:
-        if len(args) == 0:
-            return "static"
-        name = args[0].name
-        if name == "self":
-            return None
-        if name == "cls":
-            return "class"
-        return "static"
+        return IRMethod(function=func, modifier=None)
 
     def build_bases(self, class_: type) -> list[QualifiedName]:
         bases = class_.__bases__

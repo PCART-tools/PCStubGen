@@ -17,6 +17,7 @@ from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
 from pcstubgen2.NodeVisitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixCurrentModulePrefixInTypeNamesVisitor,
+    InferMethodModifierVisitor,
     FixPEP585CollectionNamesVisitor,
     FixRedundantMethodsFromBuiltinObjectVisitor,
     FixTypingTypeNamesVisitor,
@@ -50,8 +51,9 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
     assert parsed.doc == "parsed from docstring"
 
 
-def test_docstring_parser_reinfers_method_modifier_after_parse() -> None:
-    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
+    parser_visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    infer_modifier_visitor = InferMethodModifierVisitor()
     ir_class = IRClass(name="C")
     ir_class.methods = [
         IRMethod(
@@ -64,11 +66,50 @@ def test_docstring_parser_reinfers_method_modifier_after_parse() -> None:
         )
     ]
 
-    visitor.visit_class(ir_class)
+    parser_visitor.visit_class(ir_class)
 
     parsed = ir_class.methods[0]
     assert [arg.name for arg in parsed.function.args] == ["cls", "count"]
+    assert parsed.modifier == "static"
+
+    infer_modifier_visitor.visit_class(ir_class)
+
     assert parsed.modifier == "class"
+
+
+def test_infer_method_modifier_visitor_covers_all_first_arg_cases() -> None:
+    visitor = InferMethodModifierVisitor()
+    ir_class = IRClass(
+        name="C",
+        methods=[
+            IRMethod(
+                function=IRFunction(name="instance_method", args=[IRArgument(name="self")]),
+                modifier="static",
+            ),
+            IRMethod(
+                function=IRFunction(name="class_method", args=[IRArgument(name="cls")]),
+                modifier=None,
+            ),
+            IRMethod(
+                function=IRFunction(name="static_no_args", args=[]),
+                modifier=None,
+            ),
+            IRMethod(
+                function=IRFunction(name="static_other_first", args=[IRArgument(name="value")]),
+                modifier="class",
+            ),
+        ],
+    )
+
+    visitor.visit_class(ir_class)
+
+    modifiers = {method.function.name: method.modifier for method in ir_class.methods}
+    assert modifiers == {
+        "instance_method": None,
+        "class_method": "class",
+        "static_no_args": "static",
+        "static_other_first": "static",
+    }
 
 
 def test_type_fix_visitors_update_annotations_and_bases() -> None:
