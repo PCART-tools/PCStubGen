@@ -27,7 +27,7 @@ _generic_args = [
 
 class DocStringSignatureParserVisitor(NodeVisitor):
     '''
-    解析文档字符串中的签名
+    解析文档字符串中的函数和方法的签名
     '''
     _arg_star_name_regex = re.compile(
         r"^\s*(?P<stars>\*{1,2})?" r"\s*(?P<name>\w+)\s*$"
@@ -71,7 +71,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
 
     def _parse_function(self, func: IRFunction) -> list[IRFunction]:
         # 仅当我们具有泛型 (*args, **kwargs) 签名时才从文档字符串解析
-        is_generic = self._is_generic_signature(func)
+        is_generic = func.is_generic_signature()
         
         if not is_generic:
             return [func]
@@ -86,18 +86,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             return parsed_funcs
         
         return [func]
-
-    def _is_generic_signature(self, func: IRFunction) -> bool:
-        """检查函数是否具有泛型 (*args, **kwargs) 签名。"""
-        # 当 pybind11 无法解析签名时，会退化为 (*args, **kwargs)
-        if len(func.args) == 2:
-            return (
-                func.args[0].kind is IRArgumentKind.VAR_POSITIONAL
-                and func.args[0].name == "args"
-                and func.args[1].kind is IRArgumentKind.VAR_KEYWORD
-                and func.args[1].name == "kwargs"
-            )
-        return False
 
     def parse_function_docstring(
         self, func_name: str, doc_lines: list[str]
