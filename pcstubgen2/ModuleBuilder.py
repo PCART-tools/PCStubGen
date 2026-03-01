@@ -44,7 +44,19 @@ class ModuleBuilder:
             module_type=self._detect_module_type(module),
         )
         for name, member in inspect.getmembers(module):
-            self._handle_module_member(name, member, module, irmodule)
+            member_path = irmodule.full_name.concat(name)
+
+            if self._is_imported_member(member_path, member, module):
+                continue
+            if self._is_member_alias(member_path, member):
+                continue
+
+            if inspect.isroutine(member):
+                irmodule.functions.append(self.build_function(member_path, member))
+            elif inspect.isclass(member):
+                irmodule.classes.append(self.build_class(member_path, member))
+            elif inspect.ismodule(member):
+                irmodule.sub_modules.append(self.build_module(member_path, member))
 
         return irmodule
 
@@ -74,29 +86,6 @@ class ModuleBuilder:
 
         return IRModuleType.PYTHON
 
-    def _handle_module_member(
-        self,
-        name: str,
-        member: Any,
-        module: types.ModuleType,
-        ilmodule: IRModule,
-    ) -> None:
-        path = ilmodule.full_name.concat(name)
-
-        if self._is_imported_member(path, member, module):
-            return
-        if self._is_member_alias(path, member):
-            return
-
-        if inspect.isroutine(member):
-            ilmodule.functions.append(self.build_function(path, member))
-            return
-        if inspect.isclass(member):
-            ilmodule.classes.append(self.build_class(path, member))
-            return
-        if inspect.ismodule(member):
-            ilmodule.sub_modules.append(self.build_module(path, member))
-
     def build_class(self, path: QualifiedName, class_: type) -> IRClass:
         self.error_collector.set_current_path(path)
         irclass = IRClass(name=path.name)
@@ -104,31 +93,20 @@ class ModuleBuilder:
         irclass.bases = self.build_bases(class_)
 
         for name, member in inspect.getmembers(class_):
-            self._handle_class_member(name, member, path, class_, irclass)
+            member_path = path.concat(name)
+
+            # 跳过从基类继承的成员（不在类自己的 __dict__ 中）
+            if not hasattr(class_, "__dict__") or name not in class_.__dict__:
+                continue
+            if self._is_member_alias(member_path, member):
+                continue
+
+            if inspect.isroutine(member):
+                irclass.methods.append(self.build_method(member_path, member))
+            elif inspect.isclass(member):
+                irclass.classes.append(self.build_class(member_path, member))
 
         return irclass
-
-    def _handle_class_member(
-        self,
-        name: str,
-        member: Any,
-        class_path: QualifiedName,
-        class_: type,
-        irclass: IRClass,
-    ) -> None:
-        path = class_path.concat(name)
-
-        # 跳过从基类继承的成员（不在类自己的 __dict__ 中）
-        if not hasattr(class_, "__dict__") or name not in class_.__dict__:
-            return
-        if self._is_member_alias(path, member):
-            return
-
-        if inspect.isroutine(member):
-            irclass.methods.append(self.build_method(path, member))
-            return
-        if inspect.isclass(member):
-            irclass.classes.append(self.build_class(path, member))
 
     def build_function(self, path: QualifiedName, func: Any) -> IRFunction:
         self.error_collector.set_current_path(path)
