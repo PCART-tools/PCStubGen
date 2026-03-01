@@ -5,7 +5,7 @@ from ..NodeVisitor import NodeVisitor
 
 
 class InferMethodModifierVisitor(NodeVisitor):
-    """根据方法首参统一推导 method decorator。"""
+    """根据方法首参统一推导方法修饰器。"""
 
     def visit_method(self, node: IRMethod) -> None:
         node.decorator = self._infer_decorator(node)
