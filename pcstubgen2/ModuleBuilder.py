@@ -54,9 +54,9 @@ class ModuleBuilder:
         loader = getattr(spec, "loader", None) if spec is not None else None
 
         if loader is importlib.machinery.BuiltinImporter:
-            return "builtin"
+            return IRModuleType.BUILTIN
         if isinstance(loader, importlib.machinery.ExtensionFileLoader):
-            return "c"
+            return IRModuleType.C
         if isinstance(
             loader,
             (
@@ -64,15 +64,15 @@ class ModuleBuilder:
                 importlib.machinery.SourceFileLoader,
             ),
         ):
-            return "python"
+            return IRModuleType.PYTHON
 
         module_file = getattr(module, "__file__", None)
         if isinstance(module_file, str):
             ext = os.path.splitext(module_file)[-1].lower()
             if ext in {".so", ".pyd", ".dll"}:
-                return "c"
+                return IRModuleType.C
 
-        return "python"
+        return IRModuleType.PYTHON
 
     def _handle_module_member(
         self,

@@ -36,7 +36,7 @@ class PrinterVisitor:
         result: list[str] = []
 
         if self.include_module_type_comment:
-            result.append(f"# module type: {node.module_type}")
+            result.append(f"# module type: {node.module_type.value}")
 
         if self.include_docstrings and node.doc is not None:
             result.extend(self.print_docstring(node.doc))
