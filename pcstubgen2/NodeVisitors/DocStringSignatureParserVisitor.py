@@ -19,12 +19,6 @@ from ..IR import (
 from .NodeVisitor import NodeVisitor
 from ..Errors import InvalidExpressionError
 
-_generic_args = [
-    IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
-    IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
-]
-
-
 class DocStringSignatureParserVisitor(NodeVisitor):
     '''
     解析文档字符串中的函数和方法的签名
@@ -51,10 +45,9 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         node.functions.clear()
         node.functions.extend(new_funcs)
 
-        # 递归
         super().visit_module(node)
 
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass) -> IRClass | None:
         new_methods = []
         for method in node.methods:
             funcs = self._parse_function(method.function)
@@ -66,8 +59,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                     new_methods.append(IRMethod(function=f, decorator=method.decorator))
         node.methods = new_methods
 
-        # 递归
-        super().visit_class(node)
+        return super().visit_class(node)
 
     def _parse_function(self, func: IRFunction) -> list[IRFunction]:
         # 仅当我们具有泛型 (*args, **kwargs) 签名时才从文档字符串解析
@@ -169,7 +161,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
     def parse_args_str(self, args_str: str) -> list[IRArgument]:
         split_args = self._split_args_str(args_str)
         if split_args is None:
-            return _generic_args
+            return IRFunction.generic_args_template()
 
         result: list[IRArgument] = []
         kw_only_section = False
@@ -184,7 +176,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 continue
             match = self._arg_star_name_regex.match(arg_str)
             if match is None:
-                return _generic_args
+                return IRFunction.generic_args_template()
             name = match.group("name")
 
             stars = match.group("stars")

@@ -14,6 +14,7 @@ from pcstubgen2.IR import (
 from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
+from pcstubgen2.NodeVisitors.NodeVisitor import NodeVisitor
 from pcstubgen2.NodeVisitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixCurrentModulePrefixInTypeNamesVisitor,
@@ -203,3 +204,62 @@ def test_fix_redundant_object_init_visitor_removes_only_builtin_init() -> None:
     FixRedundantMethodsFromBuiltinObjectVisitor().visit_class(ir_class)
 
     assert [m.function.name for m in ir_class.methods] == ["run"]
+
+
+def test_node_visitor_none_return_removes_classes_functions_and_methods() -> None:
+    class DropByNameVisitor(NodeVisitor):
+        def visit_class(self, node: IRClass) -> IRClass | None:
+            if node.name.startswith("Drop"):
+                return None
+            return super().visit_class(node)
+
+        def visit_function(self, node: IRFunction) -> IRFunction | None:
+            if node.name.startswith("drop"):
+                return None
+            return super().visit_function(node)
+
+        def visit_method(self, node: IRMethod) -> IRMethod | None:
+            if node.function.name.startswith("drop"):
+                return None
+            return super().visit_method(node)
+
+    keep_class = IRClass(
+        name="KeepClass",
+        classes=[IRClass(name="DropNested"), IRClass(name="KeepNested")],
+        methods=[
+            IRMethod(function=IRFunction(name="keep_method"), decorator=None),
+            IRMethod(function=IRFunction(name="drop_method"), decorator=None),
+        ],
+    )
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[IRClass(name="DropClass"), keep_class],
+        functions=[IRFunction(name="drop_func"), IRFunction(name="keep_func")],
+    )
+
+    DropByNameVisitor().visit_module(ir_module)
+
+    assert [cls.name for cls in ir_module.classes] == ["KeepClass"]
+    assert [func.name for func in ir_module.functions] == ["keep_func"]
+    assert [cls.name for cls in keep_class.classes] == ["KeepNested"]
+    assert [method.function.name for method in keep_class.methods] == ["keep_method"]
+
+
+def test_node_visitor_keeps_nodes_when_returning_node() -> None:
+    class RenameVisitedFunctionsVisitor(NodeVisitor):
+        def visit_function(self, node: IRFunction) -> IRFunction | None:
+            node.name = f"visited_{node.name}"
+            return node
+
+    method = IRMethod(function=IRFunction(name="m"), decorator=None)
+    ir_class = IRClass(name="C", methods=[method])
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[ir_class],
+        functions=[IRFunction(name="f")],
+    )
+
+    RenameVisitedFunctionsVisitor().visit_module(ir_module)
+
+    assert [func.name for func in ir_module.functions] == ["visited_f"]
+    assert [m.function.name for m in ir_class.methods] == ["visited_m"]

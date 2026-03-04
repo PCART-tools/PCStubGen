@@ -18,7 +18,7 @@ class FixTypingTypeNamesVisitor(NodeVisitor):
         "buffer", "iterable", "iterator", "sequence",
     }
     
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass) -> IRClass | None:
         # 修复基类
         new_bases = []
         for base in node.bases:
@@ -36,15 +36,15 @@ class FixTypingTypeNamesVisitor(NodeVisitor):
             else:
                 new_bases.append(base)
         node.bases = new_bases
-        super().visit_class(node)
+        return super().visit_class(node)
 
-    def visit_function(self, node: IRFunction) -> None:
+    def visit_function(self, node: IRFunction) -> IRFunction | None:
         if node.return_annotation:
             node.return_annotation = self._fix_type(node.return_annotation)
         for arg in node.args:
             if arg.annotation:
                 arg.annotation = self._fix_type(arg.annotation)
-        super().visit_function(node)
+        return super().visit_function(node)
     
     def _fix_type(self, annotation: Any) -> Any:
         if not isinstance(annotation, ResolvedType):

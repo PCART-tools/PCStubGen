@@ -3,11 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .IRArgument import IRArgumentKind
+from .IRArgument import IRArgument, IRArgumentKind
 
 if TYPE_CHECKING:
     from .IRAnnotation import IRAnnotation
-    from .IRArgument import IRArgument
 
 
 @dataclass
@@ -17,6 +16,13 @@ class IRFunction:
     return_annotation: IRAnnotation | None = field(default=None)
     doc: str | None = field(default=None)
     decorators: list[str] = field(default_factory=list)
+
+    @staticmethod
+    def generic_args_template() -> list[IRArgument]:
+        return [
+            IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
+            IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
+        ]
 
     def is_generic_signature(self) -> bool:
         """检查函数是否具有泛型 (*args, **kwargs) 签名。"""

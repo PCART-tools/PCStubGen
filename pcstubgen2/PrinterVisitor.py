@@ -10,7 +10,6 @@ from .IR import (
     IRFunction,
     InvalidExpression,
     IRMethod,
-    IRMethodDecorator,
     IRModule,
     ResolvedType,
     IRValue,
@@ -69,7 +68,7 @@ class PrinterVisitor:
         for sub_class in sorted(irclass.classes, key=lambda c: c.name):
             result.extend(self.print_class(sub_class))
 
-        decorator_order: dict[IRMethodDecorator, int] = {
+        decorator_order: dict[str | None, int] = {
             "staticmethod": 0,
             "classmethod": 1,
             None: 2,
