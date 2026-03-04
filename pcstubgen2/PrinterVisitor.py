@@ -86,10 +86,8 @@ class PrinterVisitor:
 
     def print_method(self, node: IRMethod) -> list[str]:
         result: list[str] = []
-        if node.decorator == "staticmethod":
-            result.append("@staticmethod")
-        elif node.decorator == "classmethod":
-            result.append("@classmethod")
+        if node.decorator is not None:
+            result.append(f"@{node.decorator}")
 
         result.extend(self.print_function(node.function))
         return result

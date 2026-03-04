@@ -15,10 +15,6 @@ if TYPE_CHECKING:
 class NodeVisitor(abc.ABC):
     """所有访问者的抽象基类。"""
 
-    def finalize(self) -> None:
-        """访问完成后的收尾钩子。子类可按需覆盖。"""
-        return None
-
     def visit_module(self, node: IRModule) -> None:
         """访问模块节点。"""
         for sub_module in node.sub_modules:

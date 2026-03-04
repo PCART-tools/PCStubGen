@@ -13,11 +13,10 @@ class InferMethodModifierVisitor(NodeVisitor):
 
     def _infer_decorator(self, node: IRMethod) -> IRMethodDecorator:
         args = node.function.args
-        if len(args) == 0:
-            return "staticmethod"
-        first = args[0].name
-        if first == "self":
-            return None
-        if first == "cls":
-            return "classmethod"
+        if args:
+            first = args[0].name
+            if first == "self":
+                return None
+            if first == "cls":
+                return "classmethod"
         return "staticmethod"
