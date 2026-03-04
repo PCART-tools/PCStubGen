@@ -12,7 +12,9 @@ METH_TYPE_LITERAL_MAP: dict[str, str] = {
     "8": "METH_O",
     "16": "METH_CLASS",
     "32": "METH_STATIC",
+    "64": "METH_COEXIST",
     "128": "METH_FASTCALL",
+    "512": "METH_METHOD",
 }
 
 # PyArg_* 格式串 marker 到 Python 类型的近似映射。

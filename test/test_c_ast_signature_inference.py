@@ -538,3 +538,181 @@ def test_c_signature_engine_defaults_to_c11_parse_arg(tmp_path: Path) -> None:
     assert engine._clang_parse_args is not None
     assert "-std=c11" in engine._clang_parse_args
 
+
+def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+
+    assert (
+        engine._set_token_params(
+            func_cursor=object(),
+            meth_flags=["METH_VARARGS"],
+            token_list=["Py_BuildValue", '"i"', "value"],
+        )
+        is None
+    )
+    assert (
+        engine._set_token_params(
+            func_cursor=object(),
+            meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
+            token_list=["PyArg_NoKeywords", "kwargs"],
+        )
+        is None
+    )
+
+
+def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    preferred_file = str(tmp_path / "module_a.c")
+    other_file = str(tmp_path / "module_b.c")
+
+    class _FakeLocation:
+        def __init__(self, file: str) -> None:
+            self.file = file
+
+    class _FakeFunctionCursor:
+        def __init__(self, *, file: str, is_definition: bool) -> None:
+            self.location = _FakeLocation(file=file)
+            self._is_definition = is_definition
+
+        def is_definition(self) -> bool:
+            return self._is_definition
+
+    from_other_file = _FakeFunctionCursor(file=other_file, is_definition=True)
+    in_same_file_decl = _FakeFunctionCursor(file=preferred_file, is_definition=False)
+    in_same_file_def = _FakeFunctionCursor(file=preferred_file, is_definition=True)
+
+    selected = engine._select_function_cursor(
+        [from_other_file, in_same_file_decl, in_same_file_def],
+        preferred_file=preferred_file,
+    )
+
+    assert selected is in_same_file_def
+
+
+def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
+    method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.C,
+        classes=[IRClass(name="Builder", methods=[method])],
+    )
+    extractor = _FakeExtractor(
+        {
+            "build": [
+                ExtractedFunction(
+                    py_name="build",
+                    c_name="c_build",
+                    method_flags=["METH_STATIC"],
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[
+                                ExtractedArgument(name="self", type_name="object"),
+                                ExtractedArgument(name="count", type_name="int"),
+                            ]
+                        )
+                    ],
+                )
+            ]
+        }
+    )
+
+    Pipeline(
+        [
+            CAstSignatureInferenceVisitor(
+                error_collector=ErrorCollector(),
+                c_source_root=None,
+                signature_inference_scope="c_modules",
+                extractor=extractor,
+            ),
+            InferMethodModifierVisitor(),
+        ]
+    ).run(module)
+
+    rewritten = module.classes[0].methods[0]
+    assert [arg.name for arg in rewritten.function.args] == ["count"]
+    assert str(rewritten.function.args[0].annotation) == "int"
+    assert rewritten.decorator == "staticmethod"
+
+
+def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+
+    assert engine._decode_meth_literal_flags("3") == ["METH_VARARGS", "METH_KEYWORDS"]
+    assert engine._decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
+
+
+def test_c_signature_engine_recognizes_c_style_end_array_element(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+
+    class _FakeCursorKind:
+        CXX_NULL_PTR_LITERAL_EXPR = object()
+
+    class _FakeTokenKind:
+        IDENTIFIER = object()
+        LITERAL = object()
+
+    class _FakeClang:
+        CursorKind = _FakeCursorKind
+        TokenKind = _FakeTokenKind
+
+    class _FakeToken:
+        def __init__(self, kind: object, spelling: str) -> None:
+            self.kind = kind
+            self.spelling = spelling
+
+    class _FakeElement:
+        def __init__(self, tokens: list[_FakeToken], children: list[object]) -> None:
+            self._tokens = tokens
+            self._children = children
+
+        def get_tokens(self) -> list[_FakeToken]:
+            return self._tokens
+
+        def get_children(self) -> list[object]:
+            return self._children
+
+    engine._clang = _FakeClang
+
+    c_style_end = _FakeElement(
+        tokens=[
+            _FakeToken(_FakeTokenKind.LITERAL, "0"),
+            _FakeToken(_FakeTokenKind.LITERAL, "0"),
+            _FakeToken(_FakeTokenKind.LITERAL, "0"),
+            _FakeToken(_FakeTokenKind.LITERAL, "0"),
+        ],
+        children=[],
+    )
+    not_end = _FakeElement(
+        tokens=[
+            _FakeToken(_FakeTokenKind.LITERAL, '"add"'),
+            _FakeToken(_FakeTokenKind.IDENTIFIER, "add_impl"),
+        ],
+        children=[],
+    )
+
+    assert engine._is_end_array_element(c_style_end) is True
+    assert engine._is_end_array_element(not_end) is False
+
+
+def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+
+    args = engine._set_token_params(
+        func_cursor=object(),
+        meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
+        token_list=[
+            "PyArg_ParseTupleAndKeywords",
+            "args",
+            "kwargs",
+            '"iO!"',
+            "keywords",
+            "count",
+            "expected_type",
+            "value",
+        ],
+    )
+
+    assert args is not None
+    assert [arg.name for arg in args] == ["count", "expected_type", "value"]
+    assert [arg.type_name for arg in args] == ["int", "object", "object"]
+

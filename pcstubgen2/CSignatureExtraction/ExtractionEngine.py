@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import sysconfig
 from pathlib import Path
@@ -214,7 +215,22 @@ class CSignatureExtractionEngine:
     def _is_end_array_element(self, element: Any) -> bool:
         """判断当前数组元素是否为 `{..., nullptr}` 终止项。"""
         null_kind = self._clang.CursorKind.CXX_NULL_PTR_LITERAL_EXPR
-        return any(child.kind == null_kind for child in element.get_children())
+        if any(child.kind == null_kind for child in element.get_children()):
+            return True
+
+        token_kind = self._clang.TokenKind
+        fields = [
+            str(token.spelling)
+            for token in element.get_tokens()
+            if token.kind in {token_kind.IDENTIFIER, token_kind.LITERAL}
+        ]
+        if not fields:
+            return False
+        if fields[0] not in {"0", "NULL", "nullptr"}:
+            return False
+        if len(fields) == 1:
+            return True
+        return fields[1] in {"0", "NULL", "nullptr"}
 
     def _extract_struct_fields(
         self,
@@ -238,17 +254,16 @@ class CSignatureExtractionEngine:
         meth_flags: list[str] = []
         for token in tokens:
             spelling = str(token.spelling)
-            if token.kind == token_kind.LITERAL and py_name is None:
+            if token.kind == token_kind.LITERAL:
                 # 第一个字符串字面量通常是 Python 暴露名。
-                lit = self._strip_literal_quotes(spelling)
-                if lit and lit != "NULL":
-                    py_name = lit
+                if py_name is None and '"' in spelling:
+                    lit = self._strip_literal_quotes(spelling)
+                    if lit and lit != "NULL":
+                        py_name = lit
+                meth_flags.extend(self._decode_meth_literal_flags(spelling))
                 continue
             if token.kind == token_kind.IDENTIFIER and spelling.startswith("METH_"):
                 meth_flags.append(spelling)
-                continue
-            if token.kind == token_kind.LITERAL and spelling in METH_TYPE_LITERAL_MAP:
-                meth_flags.append(METH_TYPE_LITERAL_MAP[spelling])
 
         if not py_name:
             return None
@@ -258,7 +273,10 @@ class CSignatureExtractionEngine:
         if not c_name:
             return None
 
-        function_cursor = self._select_function_cursor(function_defs.get(c_name, []))
+        function_cursor = self._select_function_cursor(
+            function_defs.get(c_name, []),
+            preferred_file=source_file,
+        )
         signatures: list[ExtractedSignature] = []
         return_type_name: str | None = None
         if function_cursor is not None:
@@ -480,7 +498,7 @@ class CSignatureExtractionEngine:
 
     def _collect_pyarg_token_lists(self, node: Any) -> list[list[str]]:
         """
-        递归收集 `PyArg_*` / `Py_BuildValue` 调用的 token 序列。
+        递归收集参数解析调用（`PyArg_*`）的 token 序列。
 
         `IF_STMT` 与 `UNEXPOSED_EXPR` 在不同编译单元下结构可能不同，
         因此这里采用保守递归策略统一处理。
@@ -501,10 +519,7 @@ class CSignatureExtractionEngine:
                 else:
                     token_list = self._collect_call_tokens(child)
 
-            if token_list and token_list[0].startswith("PyArg_"):
-                result.append(token_list)
-                continue
-            if token_list and token_list[0] == "Py_BuildValue":
+            if token_list and self._is_parameter_parser_call(token_list[0]):
                 result.append(token_list)
                 continue
 
@@ -600,9 +615,13 @@ class CSignatureExtractionEngine:
         if not token_list:
             return None
 
-        format_idx, offset = self._resolve_format_index(call_name=token_list[0], meth_flags=meth_flags)
+        call_name = token_list[0]
+        if not self._is_parameter_parser_call(call_name):
+            return None
+
+        format_idx, offset = self._resolve_format_index(call_name=call_name, meth_flags=meth_flags)
         if format_idx < 0:
-            return []
+            return None
         if format_idx >= len(token_list):
             return None
 
@@ -617,7 +636,7 @@ class CSignatureExtractionEngine:
             break
 
         if format_markers is None:
-            return []
+            return None
 
         required, optional = self._split_required_optional(format_markers)
         param_cursor = format_token_index + offset
@@ -654,6 +673,35 @@ class CSignatureExtractionEngine:
             )
 
         return result
+
+    def _is_parameter_parser_call(self, call_name: str) -> bool:
+        """判断调用名是否属于可提取参数签名的 `PyArg_*` 解析 API。"""
+        if call_name.startswith("PyArg_Parse"):
+            return True
+        return call_name in {"PyArg_UnpackTuple"}
+
+    def _decode_meth_literal_flags(self, literal: str) -> list[str]:
+        """把数字字面量（含位掩码组合）解析为 `METH_*` 列表。"""
+        text = literal.strip()
+        if not text:
+            return []
+        text = re.sub(r"[uUlL]+$", "", text)
+        try:
+            mask = int(text, 0)
+        except ValueError:
+            return []
+        if mask <= 0:
+            return []
+
+        result: list[str] = []
+        for raw_bit, flag_name in METH_TYPE_LITERAL_MAP.items():
+            try:
+                bit = int(raw_bit, 0)
+            except ValueError:
+                continue
+            if bit and (mask & bit) == bit:
+                result.append(flag_name)
+        return self._unique_keep_order(result)
 
     def _resolve_format_index(self, call_name: str, meth_flags: list[str]) -> tuple[int, int]:
         """
@@ -795,6 +843,8 @@ class CSignatureExtractionEngine:
         args = list(signature.arguments)
         return_type_name = signature.return_type_name
         if "METH_STATIC" in meth_flags:
+            while args and args[0].name in {"self", "cls"}:
+                args.pop(0)
             if "METH_NOARGS" in meth_flags:
                 return ExtractedSignature(arguments=[], return_type_name=return_type_name)
             return ExtractedSignature(arguments=args, return_type_name=return_type_name)
@@ -859,17 +909,46 @@ class CSignatureExtractionEngine:
             return spelling
         return None
 
-    def _select_function_cursor(self, candidates: list[Any]) -> Any | None:
-        """优先返回函数定义节点；若无定义则退化到首个声明。"""
+    def _select_function_cursor(
+        self,
+        candidates: list[Any],
+        *,
+        preferred_file: str | None = None,
+    ) -> Any | None:
+        """优先返回同源文件中的函数定义；若无定义则退化到首个声明。"""
         if not candidates:
             return None
-        for candidate in candidates:
+
+        selected = list(candidates)
+        preferred_key = self._normalize_file_key(preferred_file)
+        if preferred_key is not None:
+            same_file_candidates: list[Any] = []
+            for candidate in candidates:
+                try:
+                    candidate_file = candidate.location.file
+                except Exception:
+                    candidate_file = None
+                if self._normalize_file_key(candidate_file) == preferred_key:
+                    same_file_candidates.append(candidate)
+            if same_file_candidates:
+                selected = same_file_candidates
+
+        for candidate in selected:
             try:
                 if candidate.is_definition():
                     return candidate
             except Exception:
                 continue
-        return candidates[0]
+        return selected[0]
+
+    def _normalize_file_key(self, value: Any) -> str | None:
+        """将 clang 文件位置标准化为可比较键值。"""
+        if value is None:
+            return None
+        raw = str(value).strip()
+        if not raw:
+            return None
+        return os.path.normcase(os.path.normpath(raw))
 
     def _is_pymethod_array(self, node: Any) -> bool:
         """判断变量是否为 `PyMethodDef[]`。"""

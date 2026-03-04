@@ -177,6 +177,9 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         normalized = list(arguments)
 
         if is_method:
+            if "METH_STATIC" in method_flags:
+                while normalized and normalized[0].name in {"self", "cls"}:
+                    normalized.pop(0)
             if not normalized:
                 if "METH_STATIC" in method_flags:
                     normalized = []
