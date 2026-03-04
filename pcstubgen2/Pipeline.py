@@ -13,6 +13,4 @@ class Pipeline:
     def run(self, module: IRModule) -> IRModule:
         for visitor in self.visitors:
             visitor.visit_module(module)
-        for visitor in self.visitors:
-            visitor.finalize()
         return module

@@ -206,22 +206,23 @@ def test_fix_redundant_object_init_visitor_removes_only_builtin_init() -> None:
     assert [m.function.name for m in ir_class.methods] == ["run"]
 
 
-def test_node_visitor_none_return_removes_classes_functions_and_methods() -> None:
+def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -> None:
     class DropByNameVisitor(NodeVisitor):
-        def visit_class(self, node: IRClass) -> IRClass | None:
-            if node.name.startswith("Drop"):
-                return None
-            return super().visit_class(node)
+        def visit_module(self, node: IRModule) -> None:
+            node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
+            node.functions = [
+                func for func in node.functions if not func.name.startswith("drop")
+            ]
+            super().visit_module(node)
 
-        def visit_function(self, node: IRFunction) -> IRFunction | None:
-            if node.name.startswith("drop"):
-                return None
-            return super().visit_function(node)
-
-        def visit_method(self, node: IRMethod) -> IRMethod | None:
-            if node.function.name.startswith("drop"):
-                return None
-            return super().visit_method(node)
+        def visit_class(self, node: IRClass) -> None:
+            node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
+            node.methods = [
+                method
+                for method in node.methods
+                if not method.function.name.startswith("drop")
+            ]
+            super().visit_class(node)
 
     keep_class = IRClass(
         name="KeepClass",
@@ -245,11 +246,11 @@ def test_node_visitor_none_return_removes_classes_functions_and_methods() -> Non
     assert [method.function.name for method in keep_class.methods] == ["keep_method"]
 
 
-def test_node_visitor_keeps_nodes_when_returning_node() -> None:
+def test_node_visitor_visits_functions_in_module_and_methods() -> None:
     class RenameVisitedFunctionsVisitor(NodeVisitor):
-        def visit_function(self, node: IRFunction) -> IRFunction | None:
+        def visit_function(self, node: IRFunction) -> None:
             node.name = f"visited_{node.name}"
-            return node
+            super().visit_function(node)
 
     method = IRMethod(function=IRFunction(name="m"), decorator=None)
     ir_class = IRClass(name="C", methods=[method])

@@ -19,15 +19,15 @@ class FixCurrentModulePrefixInTypeNamesVisitor(NodeVisitor):
         super().visit_module(node)
         self._current_module_name = old_name
     
-    def visit_class(self, node: IRClass) -> IRClass | None:
+    def visit_class(self, node: IRClass) -> None:
         # 修复基类
         new_bases = []
         for base in node.bases:
              new_bases.append(self._strip_current_module(base))
         node.bases = new_bases
-        return super().visit_class(node)
+        super().visit_class(node)
 
-    def visit_function(self, node: IRFunction) -> IRFunction | None:
+    def visit_function(self, node: IRFunction) -> None:
         if node.return_annotation:
             node.return_annotation = self._fix_type(node.return_annotation)
         for arg in node.args:
@@ -35,7 +35,7 @@ class FixCurrentModulePrefixInTypeNamesVisitor(NodeVisitor):
                 arg.annotation = self._fix_type(arg.annotation)
             if isinstance(arg.default, IRValue):
                 self._strip_value_repr(arg.default)
-        return super().visit_function(node)
+        super().visit_function(node)
     
     def _fix_type(self, annotation: Any) -> Any:
         if not isinstance(annotation, ResolvedType):
