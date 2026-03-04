@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pcstubgen2.CSignatureExtraction import CSignatureExtractionEngine
-from pcstubgen2.CSignatureExtraction.Models import (
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractionEngine
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedSignature,
@@ -22,7 +22,7 @@ from pcstubgen2.IR import (
     QualifiedName,
     ResolvedType,
 )
-from pcstubgen2.NodeVisitors.CAstSignatureInferenceVisitor import (
+from pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import (
     CAstSignatureInferenceVisitor,
 )
 from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
@@ -497,7 +497,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         def extract(self) -> dict[str, list[ExtractedFunction]]:
             return {}
 
-    import pcstubgen2.NodeVisitors.CAstSignatureInferenceVisitor as visitor_module
+    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "CSignatureExtractionEngine", _RecorderExtractor)
 

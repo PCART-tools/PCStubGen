@@ -11,7 +11,7 @@ from .IR import QualifiedName
 from .Pipeline import Pipeline
 from .NodeVisitors.NodeVisitor import NodeVisitor
 from .NodeVisitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
-from .NodeVisitors.CAstSignatureInferenceVisitor import CAstSignatureInferenceVisitor
+from .NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import CAstSignatureInferenceVisitor
 from .NodeVisitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixTypingTypeNamesVisitor,

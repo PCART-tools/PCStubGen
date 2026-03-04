@@ -6,10 +6,10 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..CSignatureExtraction import CSignatureExtractionEngine, ExtractedArgument, ExtractedFunction
-from ..ErrorCollector import ErrorCollector
-from ..Errors import InvalidExpressionError
-from ..IR import (
+from .CSignatureExtraction import CSignatureExtractionEngine, ExtractedArgument, ExtractedFunction
+from ...ErrorCollector import ErrorCollector
+from ...Errors import InvalidExpressionError
+from ...IR import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -22,10 +22,10 @@ from ..IR import (
     QualifiedName,
     ResolvedType,
 )
-from .NodeVisitor import NodeVisitor
+from ..NodeVisitor import NodeVisitor
 
 if TYPE_CHECKING:
-    from ..CSignatureExtraction import ExtractedSignature
+    from .CSignatureExtraction import ExtractedSignature
 
 logger = logging.getLogger("pybind11_stubgen")
 
