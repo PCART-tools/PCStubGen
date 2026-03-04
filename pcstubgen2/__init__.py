@@ -11,6 +11,7 @@ from .IR import QualifiedName
 from .Pipeline import Pipeline
 from .NodeVisitors.NodeVisitor import NodeVisitor
 from .NodeVisitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
+from .NodeVisitors.CAstSignatureInferenceVisitor import CAstSignatureInferenceVisitor
 from .NodeVisitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixTypingTypeNamesVisitor,
@@ -63,19 +64,35 @@ def write_stubs(
     visitors: list[NodeVisitor] = []
 
     # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
-    visitors.extend([
-        # DocStringSignatureParserVisitor(
-        #     error_collector=error_collector,
-        #     enum_class_locations=dict(options.enum_class_locations),
-        # ),
-        InferMethodModifierVisitor(),
-        FixTypingTypeNamesVisitor(),
-        FixBuiltinTypesVisitor(),
-        FixPEP585CollectionNamesVisitor(),
-        FixCurrentModulePrefixInTypeNamesVisitor(),
-        FixRedundantMethodsFromBuiltinObjectVisitor(),
-        RemoveSelfAnnotationVisitor(),
-    ])
+    if options.enable_docstring_signature_parser:
+        visitors.append(
+            DocStringSignatureParserVisitor(
+                error_collector=error_collector,
+                enum_class_locations=dict(options.enum_class_locations),
+            )
+        )
+
+    visitors.append(
+        CAstSignatureInferenceVisitor(
+            error_collector=error_collector,
+            c_source_root=options.c_source_root,
+            signature_inference_scope=options.signature_inference_scope,
+            clang_library_path=options.clang_library_path,
+            clang_parse_args=options.clang_parse_args,
+        )
+    )
+
+    visitors.extend(
+        [
+            InferMethodModifierVisitor(),
+            # FixTypingTypeNamesVisitor(),
+            # FixBuiltinTypesVisitor(),
+            # FixPEP585CollectionNamesVisitor(),
+            # FixCurrentModulePrefixInTypeNamesVisitor(),
+            # FixRedundantMethodsFromBuiltinObjectVisitor(),
+            # RemoveSelfAnnotationVisitor(),
+        ]
+    )
 
     pipeline = Pipeline(visitors)
 
