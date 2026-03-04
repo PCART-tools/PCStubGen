@@ -325,8 +325,7 @@ def test_infer_method_modifier_after_c_ast_visitor() -> None:
 
 def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
-    libclang_path = _get_packaged_libclang_path()
-    if libclang_path is None:
+    if _get_packaged_libclang_path() is None:
         pytest.skip("Packaged libclang library is not available")
 
     source = tmp_path / "mini_ext.c"
@@ -361,7 +360,6 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_library_path=libclang_path,
         clang_parse_args=["-std=c11"],
     )
     extracted = engine.extract()
@@ -379,8 +377,7 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
 
 def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
-    libclang_path = _get_packaged_libclang_path()
-    if libclang_path is None:
+    if _get_packaged_libclang_path() is None:
         pytest.skip("Packaged libclang library is not available")
 
     source = tmp_path / "mini_buildvalue_ext.c"
@@ -415,7 +412,6 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_library_path=libclang_path,
         clang_parse_args=["-std=c11"],
     )
     extracted = engine.extract()
@@ -428,8 +424,7 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
 
 def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
-    libclang_path = _get_packaged_libclang_path()
-    if libclang_path is None:
+    if _get_packaged_libclang_path() is None:
         pytest.skip("Packaged libclang library is not available")
 
     source = tmp_path / "mini_conflict_return_ext.c"
@@ -468,7 +463,6 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_library_path=libclang_path,
         clang_parse_args=["-std=c11"],
     )
     extracted = engine.extract()
@@ -487,11 +481,9 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             self,
             source_root: str | Path,
             *,
-            clang_library_path: str | None = None,
             clang_parse_args: list[str] | None = None,
         ) -> None:
             captured["source_root"] = source_root
-            captured["clang_library_path"] = clang_library_path
             captured["clang_parse_args"] = list(clang_parse_args) if clang_parse_args is not None else None
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
@@ -505,7 +497,6 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         error_collector=ErrorCollector(),
         c_source_root=tmp_path,
         signature_inference_scope="c_modules",
-        clang_library_path="C:/fake/libclang.dll",
         clang_parse_args=["-std=c11", "-DMY_FLAG=1"],
     )
     module = IRModule(
@@ -515,7 +506,6 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor.visit_module(module)
 
     assert captured["source_root"] == tmp_path
-    assert captured["clang_library_path"] == "C:/fake/libclang.dll"
     assert captured["clang_parse_args"] == ["-std=c11", "-DMY_FLAG=1"]
 
 
@@ -537,6 +527,54 @@ def test_c_signature_engine_defaults_to_c11_parse_arg(tmp_path: Path) -> None:
     assert engine._ensure_clang_ready() is True
     assert engine._clang_parse_args is not None
     assert "-std=c11" in engine._clang_parse_args
+
+
+def test_c_signature_engine_configures_packaged_libclang_when_available(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class _FakeConfig:
+        loaded = False
+        configured_path: str | None = None
+
+        @classmethod
+        def set_library_file(cls, path: str) -> None:
+            cls.configured_path = path
+
+    class _FakeClang:
+        Config = _FakeConfig
+
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine._clang = _FakeClang
+    monkeypatch.setattr(
+        engine,
+        "_get_packaged_libclang_path",
+        lambda: "C:/fake/libclang.dll",
+    )
+
+    assert engine._ensure_clang_ready() is True
+    assert _FakeConfig.configured_path == "C:/fake/libclang.dll"
+
+
+def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class _FakeConfig:
+        loaded = False
+        configured_path: str | None = None
+
+        @classmethod
+        def set_library_file(cls, path: str) -> None:
+            cls.configured_path = path
+
+    class _FakeClang:
+        Config = _FakeConfig
+
+    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine._clang = _FakeClang
+    monkeypatch.setattr(engine, "_get_packaged_libclang_path", lambda: None)
+
+    assert engine._ensure_clang_ready() is True
+    assert _FakeConfig.configured_path is None
 
 
 def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:

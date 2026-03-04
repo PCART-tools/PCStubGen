@@ -19,7 +19,6 @@ class StubGenerationOptions:
     enable_docstring_signature_parser: bool = True
     signature_inference_scope: Literal["off", "c_modules", "all_modules"] = "c_modules"
     c_source_root: str | Path | None = None
-    clang_library_path: str | None = None
     clang_parse_args: list[str] | None = None
 
     # 输出选项

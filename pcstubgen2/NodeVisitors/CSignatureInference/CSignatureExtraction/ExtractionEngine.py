@@ -35,12 +35,10 @@ class CSignatureExtractionEngine:
         self,
         source_root: str | Path,
         *,
-        clang_library_path: str | None = None,
         clang_parse_args: Iterable[str] | None = None,
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = Path(source_root)
-        self._clang_library_path = clang_library_path
         self._clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self._clang: Any | None = None
         self._result_cache: dict[str, list[ExtractedFunction]] | None = None
@@ -103,14 +101,33 @@ class CSignatureExtractionEngine:
             self._clang_parse_args = ["-std=c11"]
         self._clang_parse_args = self._inject_python_include_args(self._clang_parse_args)
 
-        if self._clang_library_path:
-            try:
-                loaded = bool(getattr(self._clang.Config, "loaded", False))
-                if not loaded:
-                    self._clang.Config.set_library_file(self._clang_library_path)
-            except Exception as ex:  # pragma: no cover
-                logger.warning("Failed to configure libclang '%s': %s", self._clang_library_path, ex)
+        try:
+            loaded = bool(getattr(self._clang.Config, "loaded", False))
+            if not loaded:
+                packaged_libclang_path = self._get_packaged_libclang_path()
+                if packaged_libclang_path:
+                    self._clang.Config.set_library_file(packaged_libclang_path)
+        except Exception as ex:  # pragma: no cover
+            logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
+
+    def _get_packaged_libclang_path(self) -> str | None:
+        """从 `clang` 包的 `native` 目录探测可用的 `libclang` 动态库。"""
+        try:
+            import clang
+        except Exception:
+            return None
+
+        clang_file = getattr(clang, "__file__", None)
+        if not clang_file:
+            return None
+
+        native_dir = Path(clang_file).resolve().parent / "native"
+        for filename in ("libclang.dll", "libclang.so", "libclang.dylib"):
+            candidate = native_dir / filename
+            if candidate.exists():
+                return str(candidate)
+        return None
 
     def _inject_python_include_args(self, parse_args: list[str]) -> list[str]:
         """向 clang 参数注入当前 Python 头文件目录。"""

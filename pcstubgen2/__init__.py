@@ -77,7 +77,6 @@ def write_stubs(
             error_collector=error_collector,
             c_source_root=options.c_source_root,
             signature_inference_scope=options.signature_inference_scope,
-            clang_library_path=options.clang_library_path,
             clang_parse_args=options.clang_parse_args,
         )
     )

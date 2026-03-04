@@ -46,7 +46,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         error_collector: ErrorCollector,
         c_source_root: str | Path | None,
         signature_inference_scope: str = "c_modules",
-        clang_library_path: str | None = None,
         clang_parse_args: list[str] | None = None,
         extractor: CSignatureExtractionEngine | None = None,
     ) -> None:
@@ -54,7 +53,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self.error_collector = error_collector
         self.c_source_root = Path(c_source_root) if c_source_root is not None else None
         self.signature_inference_scope = signature_inference_scope
-        self.clang_library_path = clang_library_path
         self.clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self.extractor = extractor
         self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
@@ -313,7 +311,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 return self._cached_signatures
             self.extractor = CSignatureExtractionEngine(
                 source_root=self.c_source_root,
-                clang_library_path=self.clang_library_path,
                 clang_parse_args=self.clang_parse_args,
             )
 
