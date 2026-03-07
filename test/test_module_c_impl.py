@@ -113,6 +113,7 @@ def write_report(module_names: list[str], report_path: Path) -> int:
     with report_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["module_name", "is_c_implemented"])
+        rows.sort(key=lambda item: not item[1])
         writer.writerows(rows)
     return c_module_count
 
