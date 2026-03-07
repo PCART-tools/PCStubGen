@@ -64,22 +64,22 @@ def write_stubs(
     visitors: list[NodeVisitor] = []
 
     # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
-    if options.enable_docstring_signature_parser:
+    # if options.enable_docstring_signature_parser:
+    #     visitors.append(
+    #         DocStringSignatureParserVisitor(
+    #             error_collector=error_collector,
+    #             enum_class_locations=dict(options.enum_class_locations),
+    #         )
+    #     )
+
+    if options.enable_c_signature_inference:
         visitors.append(
-            DocStringSignatureParserVisitor(
+            CAstSignatureInferenceVisitor(
                 error_collector=error_collector,
-                enum_class_locations=dict(options.enum_class_locations),
+                c_source_root=options.c_source_root,
+                clang_parse_args=options.clang_parse_args,
             )
         )
-
-    visitors.append(
-        CAstSignatureInferenceVisitor(
-            error_collector=error_collector,
-            c_source_root=options.c_source_root,
-            signature_inference_scope=options.signature_inference_scope,
-            clang_parse_args=options.clang_parse_args,
-        )
-    )
 
     visitors.extend(
         [

@@ -45,14 +45,12 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         error_collector: ErrorCollector,
         c_source_root: str | Path | None,
-        signature_inference_scope: str = "c_modules",
         clang_parse_args: list[str] | None = None,
         extractor: CSignatureExtractionEngine | None = None,
     ) -> None:
         """初始化 Visitor 运行配置与提取缓存状态。"""
         self.error_collector = error_collector
         self.c_source_root = Path(c_source_root) if c_source_root is not None else None
-        self.signature_inference_scope = signature_inference_scope
         self.clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self.extractor = extractor
         self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
@@ -280,13 +278,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         return max(candidates, key=candidate_score)
 
     def _is_module_enabled(self, node: IRModule) -> bool:
-        """根据 scope 配置判断当前模块是否启用签名推断。"""
-        if self.signature_inference_scope == "off":
-            return False
-        if self.signature_inference_scope == "all_modules":
-            return True
-        if self.signature_inference_scope != "c_modules":
-            return False
+        """仅在 C 模块启用签名推断。"""
         return node.module_type is IRModuleType.C
 
     def _get_signatures(self) -> dict[str, list[ExtractedFunction]]:
@@ -303,7 +295,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 if not self._warned_missing_source:
                     # 仅告警一次，避免遍历模块树时重复刷屏。
                     logger.warning(
-                        "signature_inference_scope is enabled, but c_source_root is not set; "
+                        "C signature inference is enabled, but c_source_root is not set; "
                         "skip C AST signature inference"
                     )
                     self._warned_missing_source = True

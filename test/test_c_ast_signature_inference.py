@@ -92,7 +92,6 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self() -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=None,
-        signature_inference_scope="c_modules",
         extractor=extractor,
     )
     visitor.visit_module(module)
@@ -139,7 +138,6 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> N
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=None,
-        signature_inference_scope="c_modules",
         extractor=extractor,
     )
     visitor.visit_module(module)
@@ -187,7 +185,6 @@ def test_c_ast_visitor_generates_overloads_for_methods() -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=None,
-        signature_inference_scope="c_modules",
         extractor=extractor,
     )
     visitor.visit_module(module)
@@ -204,7 +201,7 @@ def test_c_ast_visitor_generates_overloads_for_methods() -> None:
     assert methods[1].function.args[2].default.repr == "1.0"
 
 
-def test_scope_c_modules_only_skips_python_modules() -> None:
+def test_c_ast_visitor_skips_python_modules() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -224,13 +221,33 @@ def test_scope_c_modules_only_skips_python_modules() -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=None,
-        signature_inference_scope="c_modules",
         extractor=extractor,
     )
     visitor.visit_module(module)
 
     assert module.functions[0].is_generic_signature()
     assert extractor.called == 0
+
+
+def test_write_stubs_skips_c_ast_visitor_when_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
+        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when disabled")
+
+    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=False,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    assert list(tmp_path.rglob("*.pyi"))
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
@@ -262,7 +279,6 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
                 c_source_root=None,
-                signature_inference_scope="c_modules",
                 extractor=extractor,
             ),
         ]
@@ -310,7 +326,6 @@ def test_infer_method_modifier_after_c_ast_visitor() -> None:
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
                 c_source_root=None,
-                signature_inference_scope="c_modules",
                 extractor=extractor,
             ),
             InferMethodModifierVisitor(),
@@ -496,7 +511,6 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=tmp_path,
-        signature_inference_scope="c_modules",
         clang_parse_args=["-std=c11", "-DMY_FLAG=1"],
     )
     module = IRModule(
@@ -659,7 +673,6 @@ def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
                 c_source_root=None,
-                signature_inference_scope="c_modules",
                 extractor=extractor,
             ),
             InferMethodModifierVisitor(),

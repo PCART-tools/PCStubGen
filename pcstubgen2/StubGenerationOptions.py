@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import re
 from pathlib import Path
-from typing import Literal
 
 
 @dataclasses.dataclass
@@ -17,7 +16,7 @@ class StubGenerationOptions:
 
     # 签名补全管道控制
     enable_docstring_signature_parser: bool = True
-    signature_inference_scope: Literal["off", "c_modules", "all_modules"] = "c_modules"
+    enable_c_signature_inference: bool = True
     c_source_root: str | Path | None = None
     clang_parse_args: list[str] | None = None
 

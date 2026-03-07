@@ -21,9 +21,12 @@ if str(ROOT_DIR) not in sys.path:
 from pcstubgen2 import write_stubs
 from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
-DEFAULT_MODULE = "numpy.random"
+DEFAULT_MODULE = "numpy"
 OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
+
+DEFAULT_C_SOURCE_ROOT = Path(r"C:/Things/third_package_source/numpy_numpy/numpy")
+DEFAULT_CLANG_PARSE_ARGS = ["-std=c11"]
 
 def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):
@@ -58,7 +61,11 @@ def run_single_module(module_name: str) -> int:
         write_stubs(
             module_name,
             output_dir,
-            options=StubGenerationOptions(include_docstrings=True, include_module_type_comment=True),
+            options=StubGenerationOptions(include_docstrings=False,
+            include_module_type_comment=True,
+            c_source_root=DEFAULT_C_SOURCE_ROOT,
+            clang_parse_args=DEFAULT_CLANG_PARSE_ARGS,
+            ),
         )
     except Exception as exc:
         print(f"生成失败: {exc}")

@@ -1,9 +1,6 @@
 import sys
 import os
 
-
-
-
 # Add current directory to sys.path to find stubgen_api
 
 sys.path.insert(0, os.getcwd())
