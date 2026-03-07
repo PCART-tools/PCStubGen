@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from .QualifiedName import QualifiedName
 
 class IRModuleType(Enum):
+    UNKNOWN = "unknown"
     PYTHON = "python"
     BUILTIN = "builtin"
     C = "c"
@@ -23,7 +24,7 @@ class IRModule:
     doc: str | None = field(default=None)
 
     # 模块实现类型
-    module_type: IRModuleType = field(default=IRModuleType.PYTHON)
+    module_type: IRModuleType = field(default=IRModuleType.UNKNOWN)
 
     # 类
     classes: list[IRClass] = field(default_factory=list)

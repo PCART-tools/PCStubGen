@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import importlib.machinery
 import inspect
-import os
 import re
 import types
 from typing import Any
@@ -67,8 +66,10 @@ class ModuleBuilder:
 
         if loader is importlib.machinery.BuiltinImporter:
             return IRModuleType.BUILTIN
+
         if isinstance(loader, importlib.machinery.ExtensionFileLoader):
             return IRModuleType.C
+
         if isinstance(
             loader,
             (
@@ -78,13 +79,7 @@ class ModuleBuilder:
         ):
             return IRModuleType.PYTHON
 
-        module_file = getattr(module, "__file__", None)
-        if isinstance(module_file, str):
-            ext = os.path.splitext(module_file)[-1].lower()
-            if ext in {".so", ".pyd", ".dll"}:
-                return IRModuleType.C
-
-        return IRModuleType.PYTHON
+        return IRModuleType.UNKNOWN
 
     def build_class(self, path: QualifiedName, class_: type) -> IRClass:
         self.error_collector.set_current_path(path)
