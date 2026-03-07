@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -60,6 +61,66 @@ def _get_packaged_libclang_path() -> str | None:
     return None
 
 
+class _FakeDiagnosticType:
+    Ignored = 0
+    Note = 1
+    Warning = 2
+    Error = 3
+    Fatal = 4
+
+
+class _FakeClangWithDiagnostics:
+    Diagnostic = _FakeDiagnosticType
+
+
+class _FakeDiagnosticFile:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeDiagnosticLocation:
+    def __init__(self, *, file_name: str | None, line: int, column: int) -> None:
+        self.file = _FakeDiagnosticFile(file_name) if file_name is not None else None
+        self.line = line
+        self.column = column
+
+
+class _FakeDiagnostic:
+    def __init__(
+        self,
+        *,
+        severity: int,
+        message: str,
+        file_name: str | None,
+        line: int,
+        column: int,
+    ) -> None:
+        self.severity = severity
+        self.spelling = message
+        self.location = _FakeDiagnosticLocation(file_name=file_name, line=line, column=column)
+
+
+class _FakeTranslationUnit:
+    def __init__(self, diagnostics: list[_FakeDiagnostic]) -> None:
+        self.diagnostics = diagnostics
+
+
+class _FakeIndex:
+    def __init__(self, translation_unit: _FakeTranslationUnit) -> None:
+        self.translation_unit = translation_unit
+
+    def parse(self, filename: str, args: list[str]) -> _FakeTranslationUnit:
+        return self.translation_unit
+
+
+class _RaisingIndex:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def parse(self, filename: str, args: list[str]) -> None:
+        raise self.error
+
+
 def test_c_ast_visitor_rewrites_module_function_and_drops_self() -> None:
     func = IRFunction(name="foo", args=_generic_signature())
     module = IRModule(
@@ -104,6 +165,115 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self() -> None:
     assert rewritten.args[1].default.repr == "False"
     assert rewritten.return_annotation is not None
     assert str(rewritten.return_annotation) == "int"
+
+
+def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(
+        source_root=tmp_path,
+        clang_parse_args=["-DMY_FLAG=1"],
+    )
+    source = tmp_path / "broken_module.cxx"
+
+    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+        result = engine._parse_translation_unit(
+            index=_RaisingIndex(RuntimeError("boom")),
+            file_path=source,
+        )
+
+    assert result is None
+    assert len(caplog.records) == 1
+    message = caplog.records[0].message
+    assert str(source) in message
+    assert "suffix: .cxx" in message
+    assert "parse_args: ['-std=c++17', '-DMY_FLAG=1']" in message
+    assert "exception_type: RuntimeError" in message
+    assert "exception: boom" in message
+
+
+def test_c_signature_engine_logs_all_diagnostics_when_error_present(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path, clang_c_std="c11")
+    engine._clang = _FakeClangWithDiagnostics
+    source = tmp_path / "module.c"
+    translation_unit = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Warning,
+                message="warning detail",
+                file_name=str(source),
+                line=3,
+                column=1,
+            ),
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Error,
+                message="error detail",
+                file_name=str(source),
+                line=7,
+                column=9,
+            ),
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Fatal,
+                message="fatal detail",
+                file_name=str(source),
+                line=11,
+                column=4,
+            ),
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+        result = engine._parse_translation_unit(
+            index=_FakeIndex(translation_unit),
+            file_path=source,
+        )
+
+    assert result is translation_unit
+    assert len(caplog.records) == 1
+    message = caplog.records[0].message
+    assert str(source) in message
+    assert "suffix: .c" in message
+    assert "parse_args: ['-std=c11']" in message
+    assert f"[WARNING] {source}:3:1: warning detail" in message
+    assert f"[ERROR] {source}:7:9: error detail" in message
+    assert f"[FATAL] {source}:11:4: fatal detail" in message
+
+
+def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractionEngine(source_root=tmp_path, clang_c_std="c11")
+    engine._clang = _FakeClangWithDiagnostics
+    source = tmp_path / "module.c"
+    translation_unit = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Note,
+                message="note detail",
+                file_name=str(source),
+                line=2,
+                column=5,
+            ),
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Warning,
+                message="warning detail",
+                file_name=str(source),
+                line=4,
+                column=6,
+            ),
+        ]
+    )
+
+    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+        result = engine._parse_translation_unit(
+            index=_FakeIndex(translation_unit),
+            file_path=source,
+        )
+
+    assert result is translation_unit
+    assert caplog.records == []
 
 
 def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> None:
@@ -375,7 +545,7 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_parse_args=["-std=c11"],
+        clang_c_std="c11",
     )
     extracted = engine.extract()
 
@@ -427,7 +597,7 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_parse_args=["-std=c11"],
+        clang_c_std="c11",
     )
     extracted = engine.extract()
 
@@ -478,7 +648,7 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
 
     engine = CSignatureExtractionEngine(
         source_root=tmp_path,
-        clang_parse_args=["-std=c11"],
+        clang_c_std="c11",
     )
     extracted = engine.extract()
 
@@ -497,9 +667,13 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             source_root: str | Path,
             *,
             clang_parse_args: list[str] | None = None,
+            clang_c_std: str | None = None,
+            clang_cpp_std: str | None = None,
         ) -> None:
             captured["source_root"] = source_root
             captured["clang_parse_args"] = list(clang_parse_args) if clang_parse_args is not None else None
+            captured["clang_c_std"] = clang_c_std
+            captured["clang_cpp_std"] = clang_cpp_std
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
             return {}
@@ -511,7 +685,9 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=tmp_path,
-        clang_parse_args=["-std=c11", "-DMY_FLAG=1"],
+        clang_parse_args=["-DMY_FLAG=1"],
+        clang_c_std="c99",
+        clang_cpp_std="c++20",
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -520,10 +696,12 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor.visit_module(module)
 
     assert captured["source_root"] == tmp_path
-    assert captured["clang_parse_args"] == ["-std=c11", "-DMY_FLAG=1"]
+    assert captured["clang_parse_args"] == ["-DMY_FLAG=1"]
+    assert captured["clang_c_std"] == "c99"
+    assert captured["clang_cpp_std"] == "c++20"
 
 
-def test_c_signature_engine_defaults_to_c11_parse_arg(tmp_path: Path) -> None:
+def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
     class _FakeConfig:
         loaded = False
         configured_path: str | None = None
@@ -540,7 +718,21 @@ def test_c_signature_engine_defaults_to_c11_parse_arg(tmp_path: Path) -> None:
 
     assert engine._ensure_clang_ready() is True
     assert engine._clang_parse_args is not None
-    assert "-std=c11" in engine._clang_parse_args
+    assert "-std=c11" not in engine._clang_parse_args
+    assert engine._build_parse_args(tmp_path / "module.c")[0] == "-std=c11"
+    assert engine._build_parse_args(tmp_path / "module.cxx")[0] == "-std=c++17"
+
+
+def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
+    engine = CSignatureExtractionEngine(
+        source_root=tmp_path,
+        clang_parse_args=["-DMY_FLAG=1"],
+        clang_c_std="c99",
+        clang_cpp_std="c++20",
+    )
+
+    assert engine._build_parse_args(tmp_path / "module.c") == ["-std=c99", "-DMY_FLAG=1"]
+    assert engine._build_parse_args(tmp_path / "module.hpp") == ["-std=c++20", "-DMY_FLAG=1"]
 
 
 def test_c_signature_engine_configures_packaged_libclang_when_available(

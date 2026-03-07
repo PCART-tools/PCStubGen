@@ -83,8 +83,7 @@ class ModuleBuilder:
 
     def build_class(self, path: QualifiedName, class_: type) -> IRClass:
         self.error_collector.set_current_path(path)
-        irclass = IRClass(name=path.name)
-        irclass.doc = get_doc(class_)
+        irclass = IRClass(name=path.name, doc=get_doc(class_))
         irclass.bases = self.build_bases(class_)
 
         for name, member in inspect.getmembers(class_):

@@ -19,6 +19,8 @@ class StubGenerationOptions:
     enable_c_signature_inference: bool = True
     c_source_root: str | Path | None = None
     clang_parse_args: list[str] | None = None
+    clang_c_std: str | None = None
+    clang_cpp_std: str | None = None
 
     # 输出选项
     print_invalid_expressions_as_is: bool = False

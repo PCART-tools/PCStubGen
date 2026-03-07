@@ -8,9 +8,10 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from .Constants import (
-    C_SOURCE_SUFFIXES,
+    CPP_SOURCE_SUFFIXES,
     FORMAT_TYPE_MAP,
     METH_TYPE_LITERAL_MAP,
+    NATIVE_SOURCE_SUFFIXES,
     POINTER_CAST_IDENTIFIER_SKIP,
     PY_BUILDVALUE_SINGLE_MARKER_TYPE_MAP,
     RETURN_CALL_PREFIX_TYPE_MAP,
@@ -21,6 +22,9 @@ from .Constants import (
 from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
 logger = logging.getLogger("pybind11_stubgen")
+
+DEFAULT_CLANG_C_STD = "c11"
+DEFAULT_CLANG_CPP_STD = "c++17"
 
 
 class CSignatureExtractionEngine:
@@ -36,10 +40,14 @@ class CSignatureExtractionEngine:
         source_root: str | Path,
         *,
         clang_parse_args: Iterable[str] | None = None,
+        clang_c_std: str | None = None,
+        clang_cpp_std: str | None = None,
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = Path(source_root)
         self._clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
+        self._clang_c_std = clang_c_std
+        self._clang_cpp_std = clang_cpp_std
         self._clang: Any | None = None
         self._result_cache: dict[str, list[ExtractedFunction]] | None = None
 
@@ -97,9 +105,8 @@ class CSignatureExtractionEngine:
                 return False
             self._clang = clang_cindex
 
-        if self._clang_parse_args is None:
-            self._clang_parse_args = ["-std=c11"]
-        self._clang_parse_args = self._inject_python_include_args(self._clang_parse_args)
+        parse_args = list(self._clang_parse_args) if self._clang_parse_args is not None else []
+        self._clang_parse_args = self._inject_python_include_args(parse_args)
 
         try:
             loaded = bool(getattr(self._clang.Config, "loaded", False))
@@ -150,7 +157,7 @@ class CSignatureExtractionEngine:
         for path in self.source_root.rglob("*"):
             if not path.is_file():
                 continue
-            if path.suffix.lower() not in C_SOURCE_SUFFIXES:
+            if path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
                 continue
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
@@ -163,11 +170,127 @@ class CSignatureExtractionEngine:
 
     def _parse_translation_unit(self, index: Any, file_path: Path) -> Any | None:
         """解析单个源码文件为 clang translation unit。"""
+        parse_args = self._build_parse_args(file_path)
         try:
-            return index.parse(str(file_path), args=self._clang_parse_args or [])
+            translation_unit = index.parse(str(file_path), args=parse_args)
         except Exception as ex:  # pragma: no cover
-            logger.warning("Failed to parse '%s': %s", file_path, ex)
+            logger.warning(self._format_parse_exception_message(file_path=file_path, parse_args=parse_args, error=ex))
             return None
+        diagnostics = list(getattr(translation_unit, "diagnostics", ()))
+        if self._has_error_diagnostics(diagnostics):
+            logger.warning(
+                self._format_diagnostics_message(
+                    file_path=file_path,
+                    parse_args=parse_args,
+                    diagnostics=diagnostics,
+                )
+            )
+        return translation_unit
+
+    def _format_parse_exception_message(
+        self,
+        *,
+        file_path: Path,
+        parse_args: list[str],
+        error: Exception,
+    ) -> str:
+        """格式化 translation unit 解析异常日志。"""
+        return "\n".join(
+            [
+                f"Failed to parse translation unit",
+                f"  file_path: {file_path}",
+                f"  suffix: {file_path.suffix.lower() or '<none>'}",
+                f"  parse_args: {parse_args!r}",
+                f"  exception_type: {type(error).__name__}",
+                f"  exception: {error}",
+            ]
+        )
+
+    def _format_diagnostics_message(
+        self,
+        *,
+        file_path: Path,
+        parse_args: list[str],
+        diagnostics: list[Any],
+    ) -> str:
+        """格式化包含 error/fatal diagnostics 的日志块。"""
+        lines = [
+            f"Translation unit diagnostics",
+            f"  file_path: {file_path}",
+            f"  suffix: {file_path.suffix.lower() or '<none>'}",
+            f"  parse_args: {parse_args!r}",
+            "  diagnostics:",
+        ]
+        lines.extend(f"    {self._format_single_diagnostic(diag)}" for diag in diagnostics)
+        return "\n".join(lines)
+
+    def _format_single_diagnostic(self, diagnostic: Any) -> str:
+        """将单条 clang diagnostic 格式化为稳定的一行文本。"""
+        severity = self._get_diagnostic_severity_name(getattr(diagnostic, "severity", None))
+        location = getattr(diagnostic, "location", None)
+        diag_file = getattr(getattr(location, "file", None), "name", None) or "<unknown>"
+        line = getattr(location, "line", 0) or 0
+        column = getattr(location, "column", 0) or 0
+        message = getattr(diagnostic, "spelling", "") or ""
+        return f"[{severity}] {diag_file}:{line}:{column}: {message}"
+
+    def _has_error_diagnostics(self, diagnostics: list[Any]) -> bool:
+        """判断 diagnostics 中是否包含 error/fatal 级别。"""
+        error_threshold = self._get_error_severity_threshold()
+        for diagnostic in diagnostics:
+            severity = getattr(diagnostic, "severity", None)
+            if isinstance(severity, int) and severity >= error_threshold:
+                return True
+        return False
+
+    def _get_error_severity_threshold(self) -> int:
+        """返回 clang error 级别阈值；缺失时退回 libclang 默认值。"""
+        diagnostic_type = getattr(self._clang, "Diagnostic", None)
+        error_severity = getattr(diagnostic_type, "Error", None)
+        if isinstance(error_severity, int):
+            return error_severity
+        return 3
+
+    def _get_diagnostic_severity_name(self, severity: Any) -> str:
+        """把 libclang severity 数值转换成可读名称。"""
+        diagnostic_type = getattr(self._clang, "Diagnostic", None)
+        severity_map: dict[int, str] = {}
+        if diagnostic_type is not None:
+            for attr_name in ("Ignored", "Note", "Warning", "Error", "Fatal"):
+                attr_value = getattr(diagnostic_type, attr_name, None)
+                if isinstance(attr_value, int):
+                    severity_map[attr_value] = attr_name.upper()
+        if isinstance(severity, int) and severity in severity_map:
+            return severity_map[severity]
+        if isinstance(severity, int):
+            return f"SEVERITY_{severity}"
+        return "UNKNOWN"
+
+    def _build_parse_args(self, file_path: Path) -> list[str]:
+        """为单个源码文件拼装 clang 参数。"""
+        parse_args = list(self._clang_parse_args or [])
+        std_arg = self._build_std_arg_for_file(file_path)
+        if std_arg is not None:
+            parse_args.insert(0, std_arg)
+        return parse_args
+
+    def _build_std_arg_for_file(self, file_path: Path) -> str | None:
+        """按后缀为源码文件选择 C 或 C++ 标准参数。"""
+        suffix = file_path.suffix.lower()
+        if suffix in CPP_SOURCE_SUFFIXES:
+            return self._normalize_std_arg(self._clang_cpp_std or DEFAULT_CLANG_CPP_STD)
+        return self._normalize_std_arg(self._clang_c_std or DEFAULT_CLANG_C_STD)
+
+    def _normalize_std_arg(self, std_value: str | None) -> str | None:
+        """将标准配置统一为 `-std=` 参数。"""
+        if std_value is None:
+            return None
+        normalized = std_value.strip()
+        if not normalized:
+            return None
+        if normalized.startswith("-std="):
+            return normalized
+        return f"-std={normalized}"
 
     def _collect_function_definitions(self, cursor: Any, output: dict[str, list[Any]]) -> None:
         """遍历 AST，按函数名收集 `FUNCTION_DECL` 节点。"""
