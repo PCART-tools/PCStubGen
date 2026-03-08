@@ -21,7 +21,7 @@ from .Constants import (
 )
 from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
-logger = logging.getLogger("pybind11_stubgen")
+logger = logging.getLogger("pcstubgen2")
 
 DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"

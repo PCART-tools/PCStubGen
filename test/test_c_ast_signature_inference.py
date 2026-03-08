@@ -174,7 +174,7 @@ def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptu
     )
     source = tmp_path / "broken_module.cxx"
 
-    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
         result = engine._parse_translation_unit(
             index=_RaisingIndex(RuntimeError("boom")),
             file_path=source,
@@ -223,7 +223,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
         result = engine._parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
@@ -266,7 +266,7 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="pybind11_stubgen"):
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
         result = engine._parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,

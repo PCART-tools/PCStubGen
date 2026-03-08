@@ -15,7 +15,7 @@ from .Errors import (
 if TYPE_CHECKING:
     from .IR import QualifiedName
 
-logger = logging.getLogger("pybind11_stubgen")
+logger = logging.getLogger("pcstubgen2")
 
 
 @dataclass
