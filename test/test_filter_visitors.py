@@ -56,6 +56,7 @@ def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
     parser_visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
     infer_modifier_visitor = InferMethodModifierVisitor()
     ir_class = IRClass(name="C")
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
     ir_class.methods = [
         IRMethod(
             function=IRFunction(
@@ -67,13 +68,13 @@ def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
         )
     ]
 
-    parser_visitor.visit_class(ir_class)
+    parser_visitor.visit_class(ir_class, ir_module)
 
     parsed = ir_class.methods[0]
     assert [arg.name for arg in parsed.function.args] == ["cls", "count"]
     assert parsed.decorator == "staticmethod"
 
-    infer_modifier_visitor.visit_class(ir_class)
+    infer_modifier_visitor.visit_class(ir_class, ir_module)
 
     assert parsed.decorator == "classmethod"
 
@@ -101,8 +102,9 @@ def test_infer_method_modifier_visitor_covers_all_first_arg_cases() -> None:
             ),
         ],
     )
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
 
-    visitor.visit_class(ir_class)
+    visitor.visit_class(ir_class, ir_module)
 
     decorators = {method.function.name: method.decorator for method in ir_class.methods}
     assert decorators == {
@@ -200,8 +202,9 @@ def test_fix_redundant_object_init_visitor_removes_only_builtin_init() -> None:
             IRMethod(function=IRFunction(name="run"), decorator=None),
         ],
     )
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
 
-    FixRedundantMethodsFromBuiltinObjectVisitor().visit_class(ir_class)
+    FixRedundantMethodsFromBuiltinObjectVisitor().visit_class(ir_class, ir_module)
 
     assert [m.function.name for m in ir_class.methods] == ["run"]
 
@@ -215,14 +218,14 @@ def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -
             ]
             super().visit_module(node)
 
-        def visit_class(self, node: IRClass) -> None:
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
             node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
             node.methods = [
                 method
                 for method in node.methods
                 if not method.function.name.startswith("drop")
             ]
-            super().visit_class(node)
+            super().visit_class(node, module)
 
     keep_class = IRClass(
         name="KeepClass",

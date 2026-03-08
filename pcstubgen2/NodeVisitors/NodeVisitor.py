@@ -20,15 +20,15 @@ class NodeVisitor(abc.ABC):
         for sub_module in node.sub_modules:
             self.visit_module(sub_module)
         for cls in node.classes:
-            self.visit_class(cls)
+            self.visit_class(cls, node)
 
         for func in node.functions:
             self.visit_function(func)
 
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass, module: IRModule) -> None:
         """访问类节点。"""
         for nested_cls in node.classes:
-            self.visit_class(nested_cls)
+            self.visit_class(nested_cls, module)
 
         for method in node.methods:
             self.visit_method(method)

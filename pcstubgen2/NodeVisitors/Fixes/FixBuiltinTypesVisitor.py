@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from ...IR import (
-    IRClass, IRFunction, ResolvedType, QualifiedName
+    IRClass, IRFunction, IRModule, ResolvedType, QualifiedName
 )
 from ..NodeVisitor import NodeVisitor
 
 class FixBuiltinTypesVisitor(NodeVisitor):
     """修复内置类型名称（例如，builtins.NoneType -> None）。"""
     
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass, module: IRModule) -> None:
         # 修复基类
         new_bases = []
         for base in node.bases:
@@ -28,7 +28,7 @@ class FixBuiltinTypesVisitor(NodeVisitor):
             else:
                 new_bases.append(base)
         node.bases = new_bases
-        super().visit_class(node)
+        super().visit_class(node, module)
     
     def visit_function(self, node: IRFunction) -> None:
         if node.return_annotation:

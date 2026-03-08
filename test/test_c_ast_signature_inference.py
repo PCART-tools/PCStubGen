@@ -909,6 +909,61 @@ def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
     assert rewritten.decorator == "staticmethod"
 
 
+@pytest.mark.parametrize(
+    ("module_type", "expected_args", "expected_calls"),
+    [
+        (IRModuleType.C, ["count"], 1),
+        (IRModuleType.PYTHON, ["args", "kwargs"], 0),
+    ],
+)
+def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_classes(
+    module_type: IRModuleType,
+    expected_args: list[str],
+    expected_calls: int,
+) -> None:
+    nested_method = IRMethod(
+        function=IRFunction(name="build", args=_generic_signature()),
+        decorator=None,
+    )
+    nested_class = IRClass(name="Inner", methods=[nested_method])
+    outer_class = IRClass(name="Outer", classes=[nested_class])
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=module_type,
+        classes=[outer_class],
+    )
+    extractor = _FakeExtractor(
+        {
+            "build": [
+                ExtractedFunction(
+                    py_name="build",
+                    c_name="c_build",
+                    method_flags=["METH_STATIC"],
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[
+                                ExtractedArgument(name="self", type_name="object"),
+                                ExtractedArgument(name="count", type_name="int"),
+                            ]
+                        )
+                    ],
+                )
+            ]
+        }
+    )
+
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=None,
+        extractor=extractor,
+    )
+    visitor.visit_class(outer_class, module)
+
+    rewritten_method = nested_class.methods[0]
+    assert [arg.name for arg in rewritten_method.function.args] == expected_args
+    assert extractor.called == expected_calls
+
+
 def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path) -> None:
     engine = CSignatureExtractionEngine(source_root=tmp_path)
 

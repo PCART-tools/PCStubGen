@@ -23,7 +23,7 @@ class RemoveSelfAnnotationVisitor(NodeVisitor):
         super().visit_module(node)
         self._class_name_stack = []
     
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass, module: IRModule) -> None:
         # 通过附加到当前路径来构建完整的类名
         if self._class_name_stack:
             parent_path = self._class_name_stack[-1]
@@ -32,7 +32,7 @@ class RemoveSelfAnnotationVisitor(NodeVisitor):
             self._current_class_name = QualifiedName((node.name,))
         
         self._class_name_stack.append(self._current_class_name)
-        super().visit_class(node)
+        super().visit_class(node, module)
         self._class_name_stack.pop()
         
         if self._class_name_stack:

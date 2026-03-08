@@ -47,7 +47,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
 
         super().visit_module(node)
 
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass, module: IRModule) -> None:
         new_methods = []
         for method in node.methods:
             funcs = self._parse_function(method.function)
@@ -59,7 +59,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                     new_methods.append(IRMethod(function=f, decorator=method.decorator))
         node.methods = new_methods
 
-        super().visit_class(node)
+        super().visit_class(node, module)
 
     def _parse_function(self, func: IRFunction) -> list[IRFunction]:
         # 仅当我们具有泛型 (*args, **kwargs) 签名时才从文档字符串解析

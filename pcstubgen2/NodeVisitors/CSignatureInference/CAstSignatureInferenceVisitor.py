@@ -25,7 +25,7 @@ from ...IR import (
 from ..NodeVisitor import NodeVisitor
 
 if TYPE_CHECKING:
-    from .CSignatureExtraction import ExtractedSignature
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -59,31 +59,26 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self.extractor = extractor
         self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
         self._warned_missing_source = False
-        self._module_enabled_stack: list[bool] = []
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
-        module_enabled = self._is_module_enabled(node)
-        # 使用栈保存上下文，保证 visit_class 可感知当前模块是否启用。
-        self._module_enabled_stack.append(module_enabled)
 
-        if module_enabled:
+        if node.module_type is IRModuleType.C:
             signatures = self._get_signatures()
             if signatures:
                 node.functions = self._rewrite_module_functions(node.functions, signatures)
 
         super().visit_module(node)
-        self._module_enabled_stack.pop()
 
-    def visit_class(self, node: IRClass) -> None:
+    def visit_class(self, node: IRClass, module: IRModule) -> None:
         """在模块启用时重写类方法签名。"""
-        module_enabled = bool(self._module_enabled_stack and self._module_enabled_stack[-1])
-        if module_enabled:
+
+        if module.module_type is IRModuleType.C:
             signatures = self._get_signatures()
             if signatures:
                 node.methods = self._rewrite_class_methods(node.methods, signatures)
 
-        super().visit_class(node)
+        super().visit_class(node, module)
 
     def _rewrite_module_functions(
         self,
@@ -280,10 +275,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             return score
 
         return max(candidates, key=candidate_score)
-
-    def _is_module_enabled(self, node: IRModule) -> bool:
-        """仅在 C 模块启用签名推断。"""
-        return node.module_type is IRModuleType.C
 
     def _get_signatures(self) -> dict[str, list[ExtractedFunction]]:
         """
