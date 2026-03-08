@@ -47,7 +47,7 @@ except ImportError as e:
     sys.exit(1)
 
 
-class MockArgs(CLIArgs):
+class ReferenceCLIArgs(CLIArgs):
     def __init__(self):
         self.output_dir = "."
         self.root_suffix = None
@@ -67,6 +67,17 @@ class MockArgs(CLIArgs):
         self.module_name = "dummy"  # Overwritten later
 
 
+def build_new_options() -> StubGenerationOptions:
+    """构造新版生成器支持的参数，避免与旧版参考 CLI 参数耦合。"""
+    return StubGenerationOptions(
+        ignore_invalid_expressions=None,
+        ignore_all_errors=False,
+        enum_class_locations=[],
+        print_invalid_expressions_as_is=False,
+        stub_extension="pyi",
+    )
+
+
 def prepare_output_dir(base_dir: Path) -> Path:
     if base_dir.exists():
         shutil.rmtree(base_dir)
@@ -75,7 +86,7 @@ def prepare_output_dir(base_dir: Path) -> Path:
 
 
 def generate_old(module_name, output_dir: Path):
-    args = MockArgs()
+    args = ReferenceCLIArgs()
     args.module_name = module_name
 
     parser = stub_parser_from_args(args)
@@ -95,7 +106,7 @@ def generate_old(module_name, output_dir: Path):
     )
 
 
-def generate_new(module_name, options, output_dir: Path):
+def generate_new(module_name, options: StubGenerationOptions, output_dir: Path):
     writer = NewWriter(stub_extension=options.stub_extension)
     write_stubs(module_name, output_dir, options=options, writer=writer)
 
@@ -223,15 +234,8 @@ def compare_outputs(
 def main():
     print(f"正在生成存根：{TARGET_MODULE}...")
 
-    # Setup Options to match MockArgs
-    args = MockArgs()
-    options = StubGenerationOptions(
-        ignore_invalid_expressions=args.ignore_invalid_expressions,
-        ignore_all_errors=args.ignore_all_errors,
-        enum_class_locations=args.enum_class_locations,
-        print_invalid_expressions_as_is=args.print_invalid_expressions_as_is,
-        stub_extension=args.stub_extension,
-    )
+    # 新版参数独立维护；旧版参考实现仍通过 ReferenceCLIArgs 走其原有接口。
+    options = build_new_options()
 
     output_root = SCRIPT_DIR / "output" / "test_compare_stubs"
     old_dir = prepare_output_dir(output_root / "old")

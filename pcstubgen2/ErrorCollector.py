@@ -25,12 +25,9 @@ class ErrorCollector:
     errors: list[ParserError] = field(default_factory=list)
     _reported: set[str] = field(default_factory=set)
     _current_path: QualifiedName | None = field(default=None)
-    _suggest_cxx_fix: bool = field(default=False)
 
     # 错误过滤选项
     ignore_invalid_expressions: re.Pattern | None = field(default=None)
-    ignore_invalid_identifiers: re.Pattern | None = field(default=None)
-    ignore_unresolved_names: re.Pattern | None = field(default=None)
     ignore_all_errors: bool = field(default=False)
 
     def set_current_path(self, path: QualifiedName) -> None:
@@ -68,18 +65,6 @@ class ErrorCollector:
                 and self.ignore_invalid_expressions.match(error.expression)
             ):
                 return
-        if isinstance(error, InvalidIdentifierError):
-            if (
-                self.ignore_invalid_identifiers
-                and self.ignore_invalid_identifiers.match(error.name)
-            ):
-                return
-        if isinstance(error, NameResolutionError):
-            if (
-                self.ignore_unresolved_names
-                and self.ignore_unresolved_names.match(str(error.name))
-            ):
-                return
 
         if self._current_path:
             error_str = f"In {self._current_path} : {error}"
@@ -91,26 +76,6 @@ class ErrorCollector:
             self._reported.add(error_str)
             logger.error(error_str)
 
-            # 检查是否存在 C++ 类型泄漏
-            if isinstance(error, InvalidExpressionError):
-                expression = error.expression
-                if "::" in expression or expression.endswith(">"):
-                    self._suggest_cxx_fix = True
-
-    def finalize(self) -> None:
-        """在处理结束时发出最终警告。"""
-        if self._suggest_cxx_fix:
-            logger.warning(
-                "Raw C++ types/values were found in signatures extracted "
-                "from docstrings.\n"
-                "Please check the corresponding sections of pybind11 documentation "
-                "to avoid common mistakes in binding code:\n"
-                " - https://pybind11.readthedocs.io/en/latest/advanced/misc.html"
-                "#avoiding-cpp-types-in-docstrings\n"
-                " - https://pybind11.readthedocs.io/en/latest/advanced/functions.html"
-                "#default-arguments-revisited"
-            )
-
     def has_errors(self) -> bool:
         """检查是否存在已上报错误。"""
         return len(self.errors) > 0
@@ -119,4 +84,3 @@ class ErrorCollector:
         """清空所有已收集错误。"""
         self.errors.clear()
         self._reported.clear()
-        self._suggest_cxx_fix = False

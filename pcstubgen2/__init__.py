@@ -101,9 +101,6 @@ def write_stubs(
     # 4. 运行管道
     pipeline.run(ir_module)
 
-    # 5. 完成错误处理（发出警告等）
-    error_collector.finalize()
-
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
