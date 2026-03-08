@@ -42,7 +42,8 @@ def write_stubs(
     # 设置日志
     logging.basicConfig(
         level=logging.WARNING,
-        format="%(name)s - [%(levelname)7s] %(message)s",
+        format="[{levelname}] - {name}\n{message}\n",
+        style="{",
     )
 
     # 为本次运行创建错误收集器

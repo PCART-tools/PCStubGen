@@ -15,7 +15,7 @@ from .Errors import (
 if TYPE_CHECKING:
     from .IR import QualifiedName
 
-logger = logging.getLogger("pcstubgen2")
+logger = logging.getLogger(__name__)
 
 
 @dataclass

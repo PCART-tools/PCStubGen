@@ -21,7 +21,7 @@ from .Constants import (
 )
 from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
-logger = logging.getLogger("pcstubgen2")
+logger = logging.getLogger(__name__)
 
 DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"

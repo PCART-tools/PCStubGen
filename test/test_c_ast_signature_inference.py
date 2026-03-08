@@ -420,6 +420,38 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     assert list(tmp_path.rglob("*.pyi"))
 
 
+def test_write_stubs_uses_multiline_logging_format(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    basic_config_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+
+    def _record_basic_config(*args: object, **kwargs: object) -> None:
+        basic_config_calls.append((args, kwargs))
+
+    monkeypatch.setattr(stubgen_module.logging, "basicConfig", _record_basic_config)
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=False,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    assert basic_config_calls == [
+        (
+            (),
+            {
+                "level": logging.WARNING,
+                "format": "[{levelname}] - {name}\n{message}\n",
+                "style": "{",
+            },
+        )
+    ]
+
+
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),

@@ -27,7 +27,7 @@ from ..NodeVisitor import NodeVisitor
 if TYPE_CHECKING:
     from .CSignatureExtraction import ExtractedSignature
 
-logger = logging.getLogger("pcstubgen2")
+logger = logging.getLogger(__name__)
 
 
 class CAstSignatureInferenceVisitor(NodeVisitor):
