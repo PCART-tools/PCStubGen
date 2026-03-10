@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import Iterable
 
 import pytest
 
@@ -31,6 +32,7 @@ from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
 )
 from pcstubgen2.NodeVisitors.Fixes import InferMethodModifierVisitor
 from pcstubgen2.Pipeline import Pipeline
+from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
 
 def _generic_signature() -> list[IRArgument]:
@@ -61,7 +63,7 @@ def _patch_c_signature_extractor(
             self,
             source_root: Path,
             *,
-            clang_parse_args: list[str] | None = None,
+            clang_parse_args: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
@@ -486,6 +488,32 @@ def test_write_stubs_defaults_do_not_require_c_source_root(
     assert list(tmp_path.rglob("*.pyi"))
 
 
+def test_stub_generation_options_defaults_to_empty_clang_parse_args() -> None:
+    first = StubGenerationOptions()
+    second = StubGenerationOptions()
+
+    assert first.clang_parse_args == []
+    assert second.clang_parse_args == []
+    assert first.clang_parse_args is not second.clang_parse_args
+
+
+def test_c_ast_visitor_rejects_none_clang_parse_args(tmp_path: Path) -> None:
+    with pytest.raises(TypeError):
+        CAstSignatureInferenceVisitor(
+            error_collector=ErrorCollector(),
+            c_source_root=tmp_path,
+            clang_parse_args=None,  # type: ignore[arg-type]
+        )
+
+
+def test_c_signature_engine_rejects_none_clang_parse_args(tmp_path: Path) -> None:
+    with pytest.raises(TypeError):
+        CSignatureExtractionEngine(
+            source_root=tmp_path,
+            clang_parse_args=None,  # type: ignore[arg-type]
+        )
+
+
 def test_write_stubs_uses_multiline_logging_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -769,13 +797,13 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             self,
             source_root: Path,
             *,
-            clang_parse_args: list[str] | None = None,
+            clang_parse_args: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
             captured["init_calls"] = int(captured["init_calls"]) + 1
             captured["source_root"] = source_root
-            captured["clang_parse_args"] = list(clang_parse_args) if clang_parse_args is not None else None
+            captured["clang_parse_args"] = list(clang_parse_args)
             captured["clang_c_std"] = clang_c_std
             captured["clang_cpp_std"] = clang_cpp_std
 

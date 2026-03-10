@@ -39,13 +39,13 @@ class CSignatureExtractionEngine:
         self,
         source_root: Path,
         *,
-        clang_parse_args: Iterable[str] | None = None,
+        clang_parse_args: Iterable[str] = (),
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = source_root
-        self._clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
+        self._clang_parse_args = list(clang_parse_args)
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._clang: Any | None = None
@@ -105,7 +105,7 @@ class CSignatureExtractionEngine:
                 return False
             self._clang = clang_cindex
 
-        parse_args = list(self._clang_parse_args) if self._clang_parse_args is not None else []
+        parse_args = list(self._clang_parse_args)
         self._clang_parse_args = self._inject_python_include_args(parse_args)
 
         try:
@@ -268,7 +268,7 @@ class CSignatureExtractionEngine:
 
     def _build_parse_args(self, file_path: Path) -> list[str]:
         """为单个源码文件拼装 clang 参数。"""
-        parse_args = list(self._clang_parse_args or [])
+        parse_args = list(self._clang_parse_args)
         std_arg = self._build_std_arg_for_file(file_path)
         if std_arg is not None:
             parse_args.insert(0, std_arg)

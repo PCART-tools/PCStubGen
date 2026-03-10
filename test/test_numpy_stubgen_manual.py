@@ -130,7 +130,7 @@ def run_single_generation(
         options = StubGenerationOptions(
             enable_c_signature_inference=c_inference_enabled,
             c_source_root=c_source_root if c_inference_enabled else None,
-            clang_parse_args=clang_parse_args or None,
+            clang_parse_args=clang_parse_args,
             include_docstrings=False,
             include_module_type_comment=True,
         )

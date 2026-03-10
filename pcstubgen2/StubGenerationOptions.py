@@ -18,7 +18,7 @@ class StubGenerationOptions:
     enable_docstring_signature_parser: bool = True
     enable_c_signature_inference: bool = False
     c_source_root: Path | None = None
-    clang_parse_args: list[str] | None = None
+    clang_parse_args: list[str] = dataclasses.field(default_factory=list)
     clang_c_std: str | None = None
     clang_cpp_std: str | None = None
 

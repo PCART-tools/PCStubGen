@@ -4,7 +4,7 @@ import ast
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from .CSignatureExtraction import CSignatureExtractionEngine, ExtractedArgument, ExtractedFunction
 from ...ErrorCollector import ErrorCollector
@@ -45,14 +45,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         error_collector: ErrorCollector,
         c_source_root: Path,
-        clang_parse_args: list[str] | None = None,
+        clang_parse_args: Iterable[str] = (),
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
         """初始化 Visitor 运行配置与提取缓存状态。"""
         self.error_collector = error_collector
         self.c_source_root = c_source_root
-        self.clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
+        self.clang_parse_args = list(clang_parse_args)
         self.clang_c_std = clang_c_std
         self.clang_cpp_std = clang_cpp_std
         self._extractor = CSignatureExtractionEngine(
