@@ -59,7 +59,7 @@ def _patch_c_signature_extractor(
     class _PatchedExtractor:
         def __init__(
             self,
-            source_root: str | Path,
+            source_root: Path,
             *,
             clang_parse_args: list[str] | None = None,
             clang_c_std: str | None = None,
@@ -450,6 +450,42 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     assert list(tmp_path.rglob("*.pyi"))
 
 
+def test_write_stubs_raises_when_c_inference_enabled_without_source_root(tmp_path: Path) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=True,
+        c_source_root=None,
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="enable_c_signature_inference=True requires c_source_root",
+    ):
+        stubgen_module.write_stubs("math", tmp_path, options=options)
+
+
+def test_write_stubs_defaults_do_not_require_c_source_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
+        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated by default")
+
+    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+
+    options = StubGenerationOptions()
+    assert options.enable_c_signature_inference is False
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    assert list(tmp_path.rglob("*.pyi"))
+
+
 def test_write_stubs_uses_multiline_logging_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -731,7 +767,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     class _RecorderExtractor:
         def __init__(
             self,
-            source_root: str | Path,
+            source_root: Path,
             *,
             clang_parse_args: list[str] | None = None,
             clang_c_std: str | None = None,

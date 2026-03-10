@@ -74,6 +74,10 @@ def write_stubs(
     #     )
 
     if options.enable_c_signature_inference:
+        if options.c_source_root is None:
+            raise ValueError(
+                "enable_c_signature_inference=True requires c_source_root to be set to a pathlib.Path"
+            )
         visitors.append(
             CAstSignatureInferenceVisitor(
                 error_collector=error_collector,

@@ -44,27 +44,24 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self,
         *,
         error_collector: ErrorCollector,
-        c_source_root: str | Path | None,
+        c_source_root: Path,
         clang_parse_args: list[str] | None = None,
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
         """初始化 Visitor 运行配置与提取缓存状态。"""
         self.error_collector = error_collector
-        self.c_source_root = Path(c_source_root) if c_source_root is not None else None
+        self.c_source_root = c_source_root
         self.clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self.clang_c_std = clang_c_std
         self.clang_cpp_std = clang_cpp_std
-        self._extractor: CSignatureExtractionEngine | None = None
-        if self.c_source_root is not None:
-            self._extractor = CSignatureExtractionEngine(
-                source_root=self.c_source_root,
-                clang_parse_args=self.clang_parse_args,
-                clang_c_std=self.clang_c_std,
-                clang_cpp_std=self.clang_cpp_std,
-            )
+        self._extractor = CSignatureExtractionEngine(
+            source_root=self.c_source_root,
+            clang_parse_args=self.clang_parse_args,
+            clang_c_std=self.clang_c_std,
+            clang_cpp_std=self.clang_cpp_std,
+        )
         self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
-        self._warned_missing_source = False
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
@@ -290,18 +287,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """
         if self._cached_signatures is not None:
             return self._cached_signatures
-
-        if self._extractor is None:
-            if self.c_source_root is None:
-                if not self._warned_missing_source:
-                    # 仅告警一次，避免遍历模块树时重复刷屏。
-                    logger.warning(
-                        "C signature inference is enabled, but c_source_root is not set; "
-                        "skip C AST signature inference"
-                    )
-                    self._warned_missing_source = True
-                self._cached_signatures = {}
-                return self._cached_signatures
 
         try:
             self._cached_signatures = self._extractor.extract()

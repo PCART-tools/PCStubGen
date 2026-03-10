@@ -37,14 +37,14 @@ class CSignatureExtractionEngine:
 
     def __init__(
         self,
-        source_root: str | Path,
+        source_root: Path,
         *,
         clang_parse_args: Iterable[str] | None = None,
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
-        self.source_root = Path(source_root)
+        self.source_root = source_root
         self._clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
