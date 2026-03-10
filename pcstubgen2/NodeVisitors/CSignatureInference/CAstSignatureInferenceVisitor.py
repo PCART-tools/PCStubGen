@@ -48,7 +48,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         clang_parse_args: list[str] | None = None,
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
-        extractor: CSignatureExtractionEngine | None = None,
     ) -> None:
         """初始化 Visitor 运行配置与提取缓存状态。"""
         self.error_collector = error_collector
@@ -56,7 +55,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self.clang_parse_args = list(clang_parse_args) if clang_parse_args is not None else None
         self.clang_c_std = clang_c_std
         self.clang_cpp_std = clang_cpp_std
-        self.extractor = extractor
+        self._extractor: CSignatureExtractionEngine | None = None
+        if self.c_source_root is not None:
+            self._extractor = CSignatureExtractionEngine(
+                source_root=self.c_source_root,
+                clang_parse_args=self.clang_parse_args,
+                clang_c_std=self.clang_c_std,
+                clang_cpp_std=self.clang_cpp_std,
+            )
         self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
         self._warned_missing_source = False
 
@@ -278,14 +284,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
     def _get_signatures(self) -> dict[str, list[ExtractedFunction]]:
         """
-        懒加载并缓存 C AST 提取结果。
+        按需提取并缓存 C AST 提取结果。
 
         任何提取失败都降级为空结果，保证 stub 生成主流程可持续执行。
         """
         if self._cached_signatures is not None:
             return self._cached_signatures
 
-        if self.extractor is None:
+        if self._extractor is None:
             if self.c_source_root is None:
                 if not self._warned_missing_source:
                     # 仅告警一次，避免遍历模块树时重复刷屏。
@@ -296,15 +302,9 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                     self._warned_missing_source = True
                 self._cached_signatures = {}
                 return self._cached_signatures
-            self.extractor = CSignatureExtractionEngine(
-                source_root=self.c_source_root,
-                clang_parse_args=self.clang_parse_args,
-                clang_c_std=self.clang_c_std,
-                clang_cpp_std=self.clang_cpp_std,
-            )
 
         try:
-            self._cached_signatures = self.extractor.extract()
+            self._cached_signatures = self._extractor.extract()
         except Exception as ex:  # pragma: no cover - 防御性分支
             # 提取阶段异常不应阻断整体生成流程。
             logger.warning("Failed to extract C signatures: %s", ex)

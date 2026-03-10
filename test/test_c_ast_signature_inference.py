@@ -50,6 +50,32 @@ class _FakeExtractor:
         return self.data
 
 
+def _patch_c_signature_extractor(
+    monkeypatch: pytest.MonkeyPatch,
+    data: dict[str, list[ExtractedFunction]],
+) -> _FakeExtractor:
+    extractor = _FakeExtractor(data)
+
+    class _PatchedExtractor:
+        def __init__(
+            self,
+            source_root: str | Path,
+            *,
+            clang_parse_args: list[str] | None = None,
+            clang_c_std: str | None = None,
+            clang_cpp_std: str | None = None,
+        ) -> None:
+            _ = (source_root, clang_parse_args, clang_c_std, clang_cpp_std)
+
+        def extract(self) -> dict[str, list[ExtractedFunction]]:
+            return extractor.extract()
+
+    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+
+    monkeypatch.setattr(visitor_module, "CSignatureExtractionEngine", _PatchedExtractor)
+    return extractor
+
+
 def _get_packaged_libclang_path() -> str | None:
     import clang
 
@@ -121,14 +147,17 @@ class _RaisingIndex:
         raise self.error
 
 
-def test_c_ast_visitor_rewrites_module_function_and_drops_self() -> None:
+def test_c_ast_visitor_rewrites_module_function_and_drops_self(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     func = IRFunction(name="foo", args=_generic_signature())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.C,
         functions=[func],
     )
-    extractor = _FakeExtractor(
+    _patch_c_signature_extractor(
+        monkeypatch,
         {
             "foo": [
                 ExtractedFunction(
@@ -152,8 +181,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self() -> None:
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=None,
-        extractor=extractor,
+        c_source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -276,7 +304,9 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
     assert caplog.records == []
 
 
-def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> None:
+def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     func = IRFunction(
         name="foo",
         args=_generic_signature(),
@@ -287,7 +317,8 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> N
         module_type=IRModuleType.C,
         functions=[func],
     )
-    extractor = _FakeExtractor(
+    _patch_c_signature_extractor(
+        monkeypatch,
         {
             "foo": [
                 ExtractedFunction(
@@ -302,13 +333,12 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> N
                     ],
                 )
             ]
-        }
+        },
     )
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=None,
-        extractor=extractor,
+        c_source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -317,7 +347,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid() -> N
     assert str(rewritten.return_annotation) == "bytes"
 
 
-def test_c_ast_visitor_generates_overloads_for_methods() -> None:
+def test_c_ast_visitor_generates_overloads_for_methods(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -325,7 +355,8 @@ def test_c_ast_visitor_generates_overloads_for_methods() -> None:
         classes=[IRClass(name="C", methods=[method])],
     )
 
-    extractor = _FakeExtractor(
+    _patch_c_signature_extractor(
+        monkeypatch,
         {
             "build": [
                 ExtractedFunction(
@@ -349,13 +380,12 @@ def test_c_ast_visitor_generates_overloads_for_methods() -> None:
                     ],
                 )
             ]
-        }
+        },
     )
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=None,
-        extractor=extractor,
+        c_source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -371,13 +401,14 @@ def test_c_ast_visitor_generates_overloads_for_methods() -> None:
     assert methods[1].function.args[2].default.repr == "1.0"
 
 
-def test_c_ast_visitor_skips_python_modules() -> None:
+def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
-    extractor = _FakeExtractor(
+    extractor = _patch_c_signature_extractor(
+        monkeypatch,
         {
             "foo": [
                 ExtractedFunction(
@@ -386,12 +417,11 @@ def test_c_ast_visitor_skips_python_modules() -> None:
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             ]
-        }
+        },
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=None,
-        extractor=extractor,
+        c_source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -452,7 +482,9 @@ def test_write_stubs_uses_multiline_logging_format(
     ]
 
 
-def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
+def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.C,
@@ -464,7 +496,8 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
             )
         ],
     )
-    extractor = _FakeExtractor(
+    extractor = _patch_c_signature_extractor(
+        monkeypatch,
         {
             "foo": [
                 ExtractedFunction(
@@ -473,15 +506,14 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             ]
-        }
+        },
     )
     pipeline = Pipeline(
         [
             DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=None,
-                extractor=extractor,
+                c_source_root=tmp_path,
             ),
         ]
     )
@@ -493,7 +525,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline() -> None:
     assert extractor.called == 1
 
 
-def test_infer_method_modifier_after_c_ast_visitor() -> None:
+def test_infer_method_modifier_after_c_ast_visitor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     method = IRMethod(
         function=IRFunction(name="make", args=_generic_signature()),
         decorator="staticmethod",
@@ -503,7 +535,8 @@ def test_infer_method_modifier_after_c_ast_visitor() -> None:
         module_type=IRModuleType.C,
         classes=[IRClass(name="Builder", methods=[method])],
     )
-    extractor = _FakeExtractor(
+    _patch_c_signature_extractor(
+        monkeypatch,
         {
             "make": [
                 ExtractedFunction(
@@ -520,15 +553,14 @@ def test_infer_method_modifier_after_c_ast_visitor() -> None:
                     ],
                 )
             ]
-        }
+        },
     )
 
     Pipeline(
         [
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=None,
-                extractor=extractor,
+                c_source_root=tmp_path,
             ),
             InferMethodModifierVisitor(),
         ]
@@ -691,7 +723,10 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
 
 
 def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    captured: dict[str, object] = {}
+    captured: dict[str, object] = {
+        "init_calls": 0,
+        "extract_calls": 0,
+    }
 
     class _RecorderExtractor:
         def __init__(
@@ -702,12 +737,14 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
+            captured["init_calls"] = int(captured["init_calls"]) + 1
             captured["source_root"] = source_root
             captured["clang_parse_args"] = list(clang_parse_args) if clang_parse_args is not None else None
             captured["clang_c_std"] = clang_c_std
             captured["clang_cpp_std"] = clang_cpp_std
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
+            captured["extract_calls"] = int(captured["extract_calls"]) + 1
             return {}
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
@@ -721,16 +758,22 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         clang_c_std="c99",
         clang_cpp_std="c++20",
     )
+
+    assert captured["init_calls"] == 1
+    assert captured["extract_calls"] == 0
+    assert captured["source_root"] == tmp_path
+    assert captured["clang_parse_args"] == ["-DMY_FLAG=1"]
+    assert captured["clang_c_std"] == "c99"
+    assert captured["clang_cpp_std"] == "c++20"
+
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.C,
     )
     visitor.visit_module(module)
+    visitor.visit_module(module)
 
-    assert captured["source_root"] == tmp_path
-    assert captured["clang_parse_args"] == ["-DMY_FLAG=1"]
-    assert captured["clang_c_std"] == "c99"
-    assert captured["clang_cpp_std"] == "c++20"
+    assert captured["extract_calls"] == 1
 
 
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
@@ -865,14 +908,15 @@ def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path
     assert selected is in_same_file_def
 
 
-def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
+def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.C,
         classes=[IRClass(name="Builder", methods=[method])],
     )
-    extractor = _FakeExtractor(
+    _patch_c_signature_extractor(
+        monkeypatch,
         {
             "build": [
                 ExtractedFunction(
@@ -889,15 +933,14 @@ def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
                     ],
                 )
             ]
-        }
+        },
     )
 
     Pipeline(
         [
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=None,
-                extractor=extractor,
+                c_source_root=tmp_path,
             ),
             InferMethodModifierVisitor(),
         ]
@@ -917,6 +960,8 @@ def test_c_ast_visitor_drops_leading_self_for_static_method() -> None:
     ],
 )
 def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_classes(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
     module_type: IRModuleType,
     expected_args: list[str],
     expected_calls: int,
@@ -932,7 +977,8 @@ def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_class
         module_type=module_type,
         classes=[outer_class],
     )
-    extractor = _FakeExtractor(
+    extractor = _patch_c_signature_extractor(
+        monkeypatch,
         {
             "build": [
                 ExtractedFunction(
@@ -949,13 +995,12 @@ def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_class
                     ],
                 )
             ]
-        }
+        },
     )
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=None,
-        extractor=extractor,
+        c_source_root=tmp_path,
     )
     visitor.visit_class(outer_class, module)
 
