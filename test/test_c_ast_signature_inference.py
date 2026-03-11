@@ -15,6 +15,8 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSi
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
     _format_single_diagnostic,
     _get_diagnostic_severity_name,
+    _is_initializer_list_PyMethodDef,
+    _is_PyMethodDef_array,
     _is_PyMethodDef_sentinel,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
@@ -738,6 +740,65 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
     assert first.signatures[0].return_type_name is None
 
 
+def test_c_signature_extraction_engine_parses_initializer_list_method_table(tmp_path: Path) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "mini_ext.cpp"
+    source.write_text(
+        "\n".join(
+            [
+                "namespace std {",
+                "template<class E> class initializer_list {",
+                "public:",
+                "    const E* begin() const;",
+                "    const E* end() const;",
+                "    unsigned long size() const;",
+                "};",
+                "}",
+                "typedef struct _object PyObject;",
+                "typedef PyObject* (*PyCFunction)(PyObject*, PyObject*);",
+                "typedef struct {",
+                "    const char* ml_name;",
+                "    PyCFunction ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "static PyObject* add_impl(PyObject* self, PyObject* args) {",
+                "    int a = 0;",
+                "    int b = 0;",
+                "    if (!PyArg_ParseTuple(args, \"ii\", &a, &b)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static std::initializer_list<PyMethodDef> Methods = {",
+                "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
+                "    {nullptr, nullptr, 0, nullptr}",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_cpp_std="c++17",
+    )
+    extracted = engine.extract()
+
+    assert "add" in extracted
+    first = extracted["add"][0]
+    assert first.py_name == "add"
+    assert first.signatures
+    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
+    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
+
+
 def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
     if _get_packaged_libclang_path() is None:
@@ -1003,9 +1064,7 @@ def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path
     assert selected is in_same_file_def
 
 
-def test_c_signature_engine_skips_non_array_types_before_reading_array_element(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
+def test_c_signature_engine_skips_non_array_types_before_reading_array_element() -> None:
     class _FakeType:
         kind = object()
 
@@ -1016,6 +1075,22 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element(t
         type = _FakeType()
 
     assert _is_PyMethodDef_array(_FakeNode()) is False
+
+
+def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_children() -> None:
+    class _FakeType:
+        spelling = "std::initializer_list<PyMethodDef>"
+
+        def get_canonical(self) -> "_FakeType":
+            return self
+
+    class _FakeNode:
+        type = _FakeType()
+
+        def get_children(self) -> list[object]:
+            raise AssertionError("initializer_list type match should not need AST child scan")
+
+    assert _is_initializer_list_PyMethodDef(_FakeNode()) is True
 
 
 def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

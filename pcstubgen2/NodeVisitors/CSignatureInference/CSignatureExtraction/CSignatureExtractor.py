@@ -211,14 +211,22 @@ def _is_PyMethodDef_array(node: Cursor) -> bool:
 
 def _is_initializer_list_PyMethodDef(node: Cursor) -> bool:
     """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
-    has_init = False
-    has_pmd = False
-    for child in node.get_children():
-        if child.kind == CursorKind.TEMPLATE_REF and child.spelling == "initializer_list":
-            has_init = True
-        if child.spelling == "PyMethodDef":
-            has_pmd = True
-    return has_init and has_pmd
+    try:
+        type_obj = getattr(node, "type", None)
+        if type_obj is not None:
+            candidate_types = [type_obj]
+            get_canonical = getattr(type_obj, "get_canonical", None)
+            if callable(get_canonical):
+                canonical_type = get_canonical()
+                if canonical_type is not None:
+                    candidate_types.append(canonical_type)
+            for candidate_type in candidate_types:
+                spelling = getattr(candidate_type, "spelling", "") or ""
+                if "initializer_list" in spelling and "PyMethodDef" in spelling:
+                    return True
+    except Exception:
+        return False
+    return False
 
 
 class CSignatureExtractor:
