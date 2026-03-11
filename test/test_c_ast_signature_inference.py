@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 from pathlib import Path
 from typing import Iterable
@@ -7,9 +8,14 @@ from typing import Iterable
 import clang.cindex
 import pytest
 
+c_signature_extractor_module = importlib.import_module(
+    "pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
+)
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
-    _is_PyMethodDef_array_end,
+    _format_single_diagnostic,
+    _get_diagnostic_severity_name,
+    _is_PyMethodDef_sentinel,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
@@ -318,8 +324,6 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
 
 
 def test_c_signature_engine_raises_when_diagnostic_missing_required_field(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-
     class _MissingSeverityDiagnostic:
         def __init__(self) -> None:
             self.spelling = "broken detail"
@@ -345,8 +349,6 @@ def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp
 
 
 def test_c_signature_engine_maps_all_builtin_severity_names(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
     assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Ignored) == "IGNORED"
     assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Note) == "NOTE"
     assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Warning) == "WARNING"
@@ -928,49 +930,27 @@ def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path:
 def test_c_signature_engine_configures_packaged_libclang_when_available(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    class _FakeConfig:
-        loaded = False
-        configured_path: str | None = None
-
-        @classmethod
-        def set_library_file(cls, path: str) -> None:
-            cls.configured_path = path
-
-    class _FakeClang:
-        Config = _FakeConfig
-
     engine = CSignatureExtractor(source_root=tmp_path)
-    engine._clang = _FakeClang
-    monkeypatch.setattr(
-        engine,
-        "_get_packaged_libclang_path",
-        lambda: "C:/fake/libclang.dll",
-    )
+    configured_path: list[str] = []
+    monkeypatch.setattr(clang.cindex.Config, "loaded", False, raising=False)
+    monkeypatch.setattr(clang.cindex.Config, "set_library_file", lambda path: configured_path.append(path))
+    monkeypatch.setattr(c_signature_extractor_module, "_get_packaged_libclang_path", lambda: "C:/fake/libclang.dll")
 
     assert engine._ensure_clang_ready() is True
-    assert _FakeConfig.configured_path == "C:/fake/libclang.dll"
+    assert configured_path == ["C:/fake/libclang.dll"]
 
 
 def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    class _FakeConfig:
-        loaded = False
-        configured_path: str | None = None
-
-        @classmethod
-        def set_library_file(cls, path: str) -> None:
-            cls.configured_path = path
-
-    class _FakeClang:
-        Config = _FakeConfig
-
     engine = CSignatureExtractor(source_root=tmp_path)
-    engine._clang = _FakeClang
-    monkeypatch.setattr(engine, "_get_packaged_libclang_path", lambda: None)
+    configured_path: list[str] = []
+    monkeypatch.setattr(clang.cindex.Config, "loaded", False, raising=False)
+    monkeypatch.setattr(clang.cindex.Config, "set_library_file", lambda path: configured_path.append(path))
+    monkeypatch.setattr(c_signature_extractor_module, "_get_packaged_libclang_path", lambda: None)
 
     assert engine._ensure_clang_ready() is True
-    assert _FakeConfig.configured_path is None
+    assert configured_path == []
 
 
 def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
@@ -1182,6 +1162,17 @@ def _null_ptr_literal() -> _FakeNode:
     return _FakeNode(kind=clang.cindex.CursorKind.CXX_NULL_PTR_LITERAL_EXPR)
 
 
+def _gnu_null_literal() -> _FakeNode:
+    return _FakeNode(kind=clang.cindex.CursorKind.GNU_NULL_EXPR)
+
+
+def _identifier_node(name: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
+    )
+
+
 def _wrap(kind: object, child: _FakeNode) -> _FakeNode:
     return _FakeNode(kind=kind, children=[child])
 
@@ -1190,26 +1181,33 @@ def _init_list(*children: _FakeNode) -> _FakeNode:
     return _FakeNode(kind=clang.cindex.CursorKind.INIT_LIST_EXPR, children=list(children))
 
 
-def test_c_signature_engine_array_end_accepts_five_supported_sentinel_forms() -> None:
+@pytest.mark.parametrize(
+    "sentinel",
+    [
+        lambda c_null: _init_list(c_null, c_null, _int_literal("0"), c_null),
+        lambda c_null: _init_list(_null_ptr_literal(), _null_ptr_literal(), _int_literal("0"), _null_ptr_literal()),
+        lambda c_null: _init_list(_gnu_null_literal(), _gnu_null_literal(), _int_literal("0"), _gnu_null_literal()),
+        lambda c_null: _init_list(),
+        lambda c_null: _init_list(_int_literal("0")),
+        lambda c_null: _init_list(_null_ptr_literal()),
+        lambda c_null: _init_list(_gnu_null_literal()),
+        lambda c_null: _init_list(_identifier_node("NULL")),
+        lambda c_null: _init_list(_int_literal("0"), _int_literal("0"), _int_literal("1"), _int_literal("0")),
+        lambda c_null: _init_list(_int_literal("0"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
+    ],
+)
+def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(sentinel) -> None:
     c_null = _wrap(
         clang.cindex.CursorKind.UNEXPOSED_EXPR,
         _wrap(clang.cindex.CursorKind.PAREN_EXPR, _wrap(clang.cindex.CursorKind.CSTYLE_CAST_EXPR, _int_literal("0"))),
     )
-    sentinels = [
-        _init_list(c_null, c_null, _int_literal("0"), c_null),
-        _init_list(_null_ptr_literal(), _null_ptr_literal(), _int_literal("0"), _null_ptr_literal()),
-        _init_list(),
-        _init_list(_int_literal("0")),
-        _init_list(_int_literal("0"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
-    ]
-
-    for sentinel in sentinels:
-        assert _is_PyMethodDef_array_end(sentinel) is True
+    assert _is_PyMethodDef_sentinel(sentinel(c_null)) is True
 
 
 @pytest.mark.parametrize(
     "non_sentinel",
     [
+        _identifier_node("NULL"),
         _init_list(
             _FakeNode(
                 kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
@@ -1219,8 +1217,9 @@ def test_c_signature_engine_array_end_accepts_five_supported_sentinel_forms() ->
                 ],
             )
         ),
-        _init_list(_null_ptr_literal()),
-        _init_list(_int_literal("0"), _int_literal("0"), _int_literal("1"), _int_literal("0")),
+        _init_list(_identifier_node("nullptr")),
+        _init_list(_identifier_node("__null")),
+        _init_list(_int_literal("1"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
         _init_list(
             _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"add"')]),
             _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
@@ -1230,11 +1229,16 @@ def test_c_signature_engine_array_end_accepts_five_supported_sentinel_forms() ->
     ],
 )
 def test_c_signature_engine_array_end_rejects_non_sentinel_forms(non_sentinel: _FakeNode) -> None:
-    assert _is_PyMethodDef_array_end(non_sentinel) is False
+    assert _is_PyMethodDef_sentinel(non_sentinel) is False
 
 
-def test_c_signature_engine_does_not_treat_single_nullptr_field_as_end() -> None:
-    assert _is_PyMethodDef_array_end(_init_list(_null_ptr_literal())) is False
+def test_c_signature_engine_accepts_single_NULL_token_via_fallback() -> None:
+    assert _is_PyMethodDef_sentinel(_init_list(_identifier_node("NULL"))) is True
+
+
+@pytest.mark.parametrize("name", ["nullptr", "__null"])
+def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> None:
+    assert _is_PyMethodDef_sentinel(_init_list(_identifier_node(name))) is False
 
 
 def test_c_signature_engine_iter_array_elements_breaks_only_on_supported_sentinel(tmp_path: Path) -> None:
@@ -1252,8 +1256,8 @@ def test_c_signature_engine_iter_array_elements_breaks_only_on_supported_sentine
         _int_literal("1"),
         _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"doc"')]),
     )
-    supported_sentinel = _init_list(_int_literal("0"))
-    non_sentinel = _init_list(_null_ptr_literal())
+    supported_sentinel = _init_list(_null_ptr_literal())
+    non_sentinel = _init_list(_identifier_node("nullptr"))
 
     should_break_array = _init_list(method_1, supported_sentinel, method_2)
     assert list(engine._iter_array_elements(should_break_array)) == [method_1]

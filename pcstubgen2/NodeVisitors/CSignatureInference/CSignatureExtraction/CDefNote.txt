@@ -5,9 +5,14 @@ typedef struct PyMethodDef {
     const char  *ml_doc;    /* 文档字符串 */
 } PyMethodDef;
 
+typedef PyObject* (*PyCFunction)(PyObject* self, PyObject* args);
+
 哨兵
 {NULL, NULL, 0, NULL}
+{NULL}
+{0}
+{NULL, NULL}
+
 {nullptr, nullptr, 0, nullptr}
 {0, 0, 0, 0}
 {}
-{0}
