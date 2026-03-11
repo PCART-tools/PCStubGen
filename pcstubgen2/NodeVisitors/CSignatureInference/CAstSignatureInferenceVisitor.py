@@ -49,7 +49,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
-        """初始化 Visitor 运行配置与提取缓存状态。"""
+        """初始化 Visitor 运行配置与 C 签名提取器。"""
         self.error_collector = error_collector
         self.c_source_root = c_source_root
         self.clang_parse_args = list(clang_parse_args)
@@ -61,7 +61,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             clang_c_std=self.clang_c_std,
             clang_cpp_std=self.clang_cpp_std,
         )
-        self._cached_signatures: dict[str, list[ExtractedFunction]] | None = None
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
@@ -281,18 +280,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
     def _get_signatures(self) -> dict[str, list[ExtractedFunction]]:
         """
-        按需提取并缓存 C AST 提取结果。
+        按需提取 C AST 结果；缓存由 extraction engine 负责。
 
         任何提取失败都降级为空结果，保证 stub 生成主流程可持续执行。
         """
-        if self._cached_signatures is not None:
-            return self._cached_signatures
-
         try:
-            self._cached_signatures = self._extractor.extract()
+            return self._extractor.extract()
         except Exception as ex:  # pragma: no cover - 防御性分支
             # 提取阶段异常不应阻断整体生成流程。
             logger.warning("Failed to extract C signatures: %s", ex)
-            self._cached_signatures = {}
-        return self._cached_signatures
+            return {}
 

@@ -46,10 +46,13 @@ class _FakeExtractor:
     def __init__(self, data: dict[str, list[ExtractedFunction]]) -> None:
         self.data = data
         self.called = 0
+        self._cached_result: dict[str, list[ExtractedFunction]] | None = None
 
     def extract(self) -> dict[str, list[ExtractedFunction]]:
-        self.called += 1
-        return self.data
+        if self._cached_result is None:
+            self.called += 1
+            self._cached_result = self.data
+        return self._cached_result
 
 
 def _patch_c_signature_extractor(
@@ -806,10 +809,13 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             captured["clang_parse_args"] = list(clang_parse_args)
             captured["clang_c_std"] = clang_c_std
             captured["clang_cpp_std"] = clang_cpp_std
+            self._cached_result: dict[str, list[ExtractedFunction]] | None = None
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
-            captured["extract_calls"] = int(captured["extract_calls"]) + 1
-            return {}
+            if self._cached_result is None:
+                captured["extract_calls"] = int(captured["extract_calls"]) + 1
+                self._cached_result = {}
+            return self._cached_result
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
