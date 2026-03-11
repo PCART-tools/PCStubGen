@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """C 签名提取子包对外导出入口。"""
 
-from .ExtractionEngine import CSignatureExtractionEngine
+from .CSignatureExtractor import CSignatureExtractor
 from .Models import (
     ExtractedArgument,
     ExtractedArgumentKind,
@@ -11,7 +11,7 @@ from .Models import (
 )
 
 __all__ = [
-    "CSignatureExtractionEngine",
+    "CSignatureExtractor",
     "ExtractedArgument",
     "ExtractedArgumentKind",
     "ExtractedFunction",

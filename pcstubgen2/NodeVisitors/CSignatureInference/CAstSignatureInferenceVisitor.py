@@ -4,9 +4,10 @@ import ast
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable
+from typing import Iterable
 
-from .CSignatureExtraction import CSignatureExtractionEngine, ExtractedArgument, ExtractedFunction
+from .CSignatureExtraction import CSignatureExtractor, ExtractedArgument, ExtractedFunction
+from ..NodeVisitor import NodeVisitor
 from ...ErrorCollector import ErrorCollector
 from ...Errors import InvalidExpressionError
 from ...IR import (
@@ -22,10 +23,6 @@ from ...IR import (
     QualifiedName,
     ResolvedType,
 )
-from ..NodeVisitor import NodeVisitor
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +48,11 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     ) -> None:
         """初始化 Visitor 运行配置与 C 签名提取器。"""
         self.error_collector = error_collector
-        self.c_source_root = c_source_root
-        self.clang_parse_args = list(clang_parse_args)
-        self.clang_c_std = clang_c_std
-        self.clang_cpp_std = clang_cpp_std
-        self._extractor = CSignatureExtractionEngine(
-            source_root=self.c_source_root,
-            clang_parse_args=self.clang_parse_args,
-            clang_c_std=self.clang_c_std,
-            clang_cpp_std=self.clang_cpp_std,
+        self._extractor = CSignatureExtractor(
+            source_root=c_source_root,
+            clang_parse_args=clang_parse_args,
+            clang_c_std=clang_c_std,
+            clang_cpp_std=clang_cpp_std,
         )
 
     def visit_module(self, node: IRModule) -> None:

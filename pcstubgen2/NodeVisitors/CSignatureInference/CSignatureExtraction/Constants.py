@@ -2,7 +2,7 @@ from __future__ import annotations
 
 # 说明：
 # - 本文件集中维护 C 签名提取所依赖的映射与过滤规则。
-# - 常量尽量按“用途分组”维护，方便和解析逻辑（ExtractionEngine）对照更新。
+# - 常量尽量按“用途分组”维护，方便和解析逻辑（CSignatureExtractor）对照更新。
 
 # PyMethodDef.flags 中常见数字字面量到 METH_* 的映射。
 METH_TYPE_LITERAL_MAP: dict[str, str] = {

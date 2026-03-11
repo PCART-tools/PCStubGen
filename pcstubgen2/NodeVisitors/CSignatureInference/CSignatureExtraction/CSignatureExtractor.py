@@ -27,7 +27,7 @@ DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"
 
 
-class CSignatureExtractionEngine:
+class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
 
@@ -49,7 +49,7 @@ class CSignatureExtractionEngine:
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._clang: Any | None = None
-        self._result_cache: dict[str, list[ExtractedFunction]] | None = None
+        self._cache_result: dict[str, list[ExtractedFunction]] | None = None
 
     def extract(self) -> dict[str, list[ExtractedFunction]]:
         """
@@ -58,22 +58,22 @@ class CSignatureExtractionEngine:
         返回值按 Python 函数名聚合候选提取结果；失败时降级为 `{}`，
         并缓存结果避免重复解析同一源码树。
         """
-        if self._result_cache is not None:
-            return self._result_cache
+        if self._cache_result is not None:
+            return self._cache_result
 
         if not self.source_root.exists():
             logger.warning("c_source_root does not exist: %s", self.source_root)
-            self._result_cache = {}
-            return self._result_cache
+            self._cache_result = {}
+            return self._cache_result
 
         if not self._ensure_clang_ready():
-            self._result_cache = {}
-            return self._result_cache
+            self._cache_result = {}
+            return self._cache_result
 
         source_files = self._find_candidate_files()
         if not source_files:
-            self._result_cache = {}
-            return self._result_cache
+            self._cache_result = {}
+            return self._cache_result
 
         index = self._clang.Index.create()
         translation_units: list[Any] = []
@@ -92,8 +92,8 @@ class CSignatureExtractionEngine:
             # 第二阶段处理 PyMethodDef，拼装提取结果。
             self._collect_pymethod_defs(tu.cursor, function_defs, result)
 
-        self._result_cache = self._deduplicate_result(result)
-        return self._result_cache
+        self._cache_result = self._deduplicate_result(result)
+        return self._cache_result
 
     def _ensure_clang_ready(self) -> bool:
         """确保 clang 运行环境可用，并补齐解析配置。"""

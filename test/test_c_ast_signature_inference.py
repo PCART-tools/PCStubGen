@@ -6,7 +6,7 @@ from typing import Iterable
 
 import pytest
 
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractionEngine
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
     ExtractedFunction,
@@ -77,7 +77,7 @@ def _patch_c_signature_extractor(
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
-    monkeypatch.setattr(visitor_module, "CSignatureExtractionEngine", _PatchedExtractor)
+    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
     return extractor
 
 
@@ -201,7 +201,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
 
 
 def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(
+    engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_parse_args=["-DMY_FLAG=1"],
     )
@@ -227,7 +227,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path, clang_c_std="c11")
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     engine._clang = _FakeClangWithDiagnostics
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
@@ -277,7 +277,7 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path, clang_c_std="c11")
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     engine._clang = _FakeClangWithDiagnostics
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
@@ -511,7 +511,7 @@ def test_c_ast_visitor_rejects_none_clang_parse_args(tmp_path: Path) -> None:
 
 def test_c_signature_engine_rejects_none_clang_parse_args(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
-        CSignatureExtractionEngine(
+        CSignatureExtractor(
             source_root=tmp_path,
             clang_parse_args=None,  # type: ignore[arg-type]
         )
@@ -674,7 +674,7 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
         encoding="utf-8",
     )
 
-    engine = CSignatureExtractionEngine(
+    engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_c_std="c11",
     )
@@ -726,7 +726,7 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
         encoding="utf-8",
     )
 
-    engine = CSignatureExtractionEngine(
+    engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_c_std="c11",
     )
@@ -777,7 +777,7 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
         encoding="utf-8",
     )
 
-    engine = CSignatureExtractionEngine(
+    engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_c_std="c11",
     )
@@ -819,7 +819,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
-    monkeypatch.setattr(visitor_module, "CSignatureExtractionEngine", _RecorderExtractor)
+    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _RecorderExtractor)
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
@@ -858,7 +858,7 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
     class _FakeClang:
         Config = _FakeConfig
 
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
     engine._clang = _FakeClang
 
     assert engine._ensure_clang_ready() is True
@@ -869,7 +869,7 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
 
 
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(
+    engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_parse_args=["-DMY_FLAG=1"],
         clang_c_std="c99",
@@ -894,7 +894,7 @@ def test_c_signature_engine_configures_packaged_libclang_when_available(
     class _FakeClang:
         Config = _FakeConfig
 
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
     engine._clang = _FakeClang
     monkeypatch.setattr(
         engine,
@@ -920,7 +920,7 @@ def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
     class _FakeClang:
         Config = _FakeConfig
 
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
     engine._clang = _FakeClang
     monkeypatch.setattr(engine, "_get_packaged_libclang_path", lambda: None)
 
@@ -929,7 +929,7 @@ def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
 
 
 def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
 
     assert (
         engine._set_token_params(
@@ -950,7 +950,7 @@ def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Pat
 
 
 def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
     preferred_file = str(tmp_path / "module_a.c")
     other_file = str(tmp_path / "module_b.c")
 
@@ -1080,14 +1080,14 @@ def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_class
 
 
 def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
 
     assert engine._decode_meth_literal_flags("3") == ["METH_VARARGS", "METH_KEYWORDS"]
     assert engine._decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
 
 
 def test_c_signature_engine_recognizes_c_style_end_array_element(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
 
     class _FakeCursorKind:
         CXX_NULL_PTR_LITERAL_EXPR = object()
@@ -1140,7 +1140,7 @@ def test_c_signature_engine_recognizes_c_style_end_array_element(tmp_path: Path)
 
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
-    engine = CSignatureExtractionEngine(source_root=tmp_path)
+    engine = CSignatureExtractor(source_root=tmp_path)
 
     args = engine._set_token_params(
         func_cursor=object(),
@@ -1160,4 +1160,5 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
     assert args is not None
     assert [arg.name for arg in args] == ["count", "expected_type", "value"]
     assert [arg.type_name for arg in args] == ["int", "object", "object"]
+
 
