@@ -1,0 +1,13 @@
+typedef struct PyMethodDef {
+    const char  *ml_name;   /* Python 中的方法名 */
+    PyCFunction  ml_meth;   /* 对应的 C 函数指针 */
+    int          ml_flags;  /* 调用约定 */
+    const char  *ml_doc;    /* 文档字符串 */
+} PyMethodDef;
+
+哨兵
+{NULL, NULL, 0, NULL}
+{nullptr, nullptr, 0, nullptr}
+{0, 0, 0, 0}
+{}
+{0}

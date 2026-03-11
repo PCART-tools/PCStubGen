@@ -4,9 +4,13 @@ import logging
 from pathlib import Path
 from typing import Iterable
 
+import clang.cindex
 import pytest
 
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
+    _is_PyMethodDef_array_end,
+)
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
     ExtractedFunction,
@@ -1101,57 +1105,120 @@ def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path
     assert engine._decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
 
 
-def test_c_signature_engine_recognizes_c_style_end_array_element(tmp_path: Path) -> None:
+class _FakeToken:
+    def __init__(self, kind: object, spelling: str) -> None:
+        self.kind = kind
+        self.spelling = spelling
+
+
+class _FakeNode:
+    def __init__(
+        self,
+        *,
+        kind: object,
+        tokens: list[_FakeToken] | None = None,
+        children: list[object] | None = None,
+    ) -> None:
+        self.kind = kind
+        self._tokens = tokens or []
+        self._children = children or []
+
+    def get_tokens(self) -> list[_FakeToken]:
+        return self._tokens
+
+    def get_children(self) -> list[object]:
+        return self._children
+
+
+def _int_literal(value: str = "0") -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.INTEGER_LITERAL,
+        tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, value)],
+    )
+
+
+def _null_ptr_literal() -> _FakeNode:
+    return _FakeNode(kind=clang.cindex.CursorKind.CXX_NULL_PTR_LITERAL_EXPR)
+
+
+def _wrap(kind: object, child: _FakeNode) -> _FakeNode:
+    return _FakeNode(kind=kind, children=[child])
+
+
+def _init_list(*children: _FakeNode) -> _FakeNode:
+    return _FakeNode(kind=clang.cindex.CursorKind.INIT_LIST_EXPR, children=list(children))
+
+
+def test_c_signature_engine_array_end_accepts_five_supported_sentinel_forms() -> None:
+    c_null = _wrap(
+        clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        _wrap(clang.cindex.CursorKind.PAREN_EXPR, _wrap(clang.cindex.CursorKind.CSTYLE_CAST_EXPR, _int_literal("0"))),
+    )
+    sentinels = [
+        _init_list(c_null, c_null, _int_literal("0"), c_null),
+        _init_list(_null_ptr_literal(), _null_ptr_literal(), _int_literal("0"), _null_ptr_literal()),
+        _init_list(),
+        _init_list(_int_literal("0")),
+        _init_list(_int_literal("0"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
+    ]
+
+    for sentinel in sentinels:
+        assert _is_PyMethodDef_array_end(sentinel) is True
+
+
+@pytest.mark.parametrize(
+    "non_sentinel",
+    [
+        _init_list(
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+                children=[
+                    _FakeNode(kind=clang.cindex.CursorKind.MEMBER_REF),
+                    _int_literal("0"),
+                ],
+            )
+        ),
+        _init_list(_null_ptr_literal()),
+        _init_list(_int_literal("0"), _int_literal("0"), _int_literal("1"), _int_literal("0")),
+        _init_list(
+            _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"add"')]),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
+            _int_literal("1"),
+            _null_ptr_literal(),
+        ),
+    ],
+)
+def test_c_signature_engine_array_end_rejects_non_sentinel_forms(non_sentinel: _FakeNode) -> None:
+    assert _is_PyMethodDef_array_end(non_sentinel) is False
+
+
+def test_c_signature_engine_does_not_treat_single_nullptr_field_as_end() -> None:
+    assert _is_PyMethodDef_array_end(_init_list(_null_ptr_literal())) is False
+
+
+def test_c_signature_engine_iter_array_elements_breaks_only_on_supported_sentinel(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    class _FakeCursorKind:
-        CXX_NULL_PTR_LITERAL_EXPR = object()
-
-    class _FakeTokenKind:
-        IDENTIFIER = object()
-        LITERAL = object()
-
-    class _FakeClang:
-        CursorKind = _FakeCursorKind
-        TokenKind = _FakeTokenKind
-
-    class _FakeToken:
-        def __init__(self, kind: object, spelling: str) -> None:
-            self.kind = kind
-            self.spelling = spelling
-
-    class _FakeElement:
-        def __init__(self, tokens: list[_FakeToken], children: list[object]) -> None:
-            self._tokens = tokens
-            self._children = children
-
-        def get_tokens(self) -> list[_FakeToken]:
-            return self._tokens
-
-        def get_children(self) -> list[object]:
-            return self._children
-
-    engine._clang = _FakeClang
-
-    c_style_end = _FakeElement(
-        tokens=[
-            _FakeToken(_FakeTokenKind.LITERAL, "0"),
-            _FakeToken(_FakeTokenKind.LITERAL, "0"),
-            _FakeToken(_FakeTokenKind.LITERAL, "0"),
-            _FakeToken(_FakeTokenKind.LITERAL, "0"),
-        ],
-        children=[],
+    method_1 = _init_list(
+        _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"a"')]),
+        _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
+        _int_literal("1"),
+        _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"doc"')]),
     )
-    not_end = _FakeElement(
-        tokens=[
-            _FakeToken(_FakeTokenKind.LITERAL, '"add"'),
-            _FakeToken(_FakeTokenKind.IDENTIFIER, "add_impl"),
-        ],
-        children=[],
+    method_2 = _init_list(
+        _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"b"')]),
+        _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
+        _int_literal("1"),
+        _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"doc"')]),
     )
+    supported_sentinel = _init_list(_int_literal("0"))
+    non_sentinel = _init_list(_null_ptr_literal())
 
-    assert engine._is_end_array_element(c_style_end) is True
-    assert engine._is_end_array_element(not_end) is False
+    should_break_array = _init_list(method_1, supported_sentinel, method_2)
+    assert list(engine._iter_array_elements(should_break_array)) == [method_1]
+
+    should_not_break_array = _init_list(method_1, non_sentinel, method_2)
+    assert list(engine._iter_array_elements(should_not_break_array)) == [method_1, non_sentinel, method_2]
 
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
@@ -1175,5 +1242,3 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
     assert args is not None
     assert [arg.name for arg in args] == ["count", "expected_type", "value"]
     assert [arg.type_name for arg in args] == ["int", "object", "object"]
-
-

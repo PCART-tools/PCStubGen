@@ -30,6 +30,117 @@ DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"
 
 
+def _is_PyMethodDef_array_end(element: Any) -> bool:
+    """
+    判断当前数组元素是否为方法表终止哨兵。
+
+    该判断用于 `PyMethodDef` 数组遍历时在终止项处停止，避免把哨兵误当作方法条目解析。
+    判定遵循 AST 结构，仅接受以下终止项：
+    - `{NULL, NULL, 0, NULL}`
+    - `{nullptr, nullptr, 0, nullptr}`
+    - `{0, 0, 0, 0}`
+    - `{}`
+    - `{0}`
+    """
+    cursor_kind = clang.cindex.CursorKind
+    token_kind = clang.cindex.TokenKind
+    member_ref_kind = cursor_kind.MEMBER_REF
+    init_list_kind = cursor_kind.INIT_LIST_EXPR
+    null_ptr_kind = cursor_kind.CXX_NULL_PTR_LITERAL_EXPR
+    integer_literal_kind = cursor_kind.INTEGER_LITERAL
+    wrap_kinds = {
+        cursor_kind.UNEXPOSED_EXPR,
+        cursor_kind.PAREN_EXPR,
+        cursor_kind.CSTYLE_CAST_EXPR,
+        cursor_kind.CXX_STATIC_CAST_EXPR,
+        cursor_kind.CXX_REINTERPRET_CAST_EXPR,
+        cursor_kind.CXX_CONST_CAST_EXPR,
+        cursor_kind.CXX_FUNCTIONAL_CAST_EXPR,
+    }
+
+    def _children(node: Any) -> list[Any]:
+        return list(node.get_children())
+
+    def _unwrap_single_child(node: Any) -> Any:
+        current = node
+        while True:
+            child_nodes = _children(current)
+            if current.kind in wrap_kinds and len(child_nodes) == 1:
+                current = child_nodes[0]
+                continue
+            return current
+
+    def _contains_member_ref(node: Any) -> bool:
+        if node.kind == member_ref_kind:
+            return True
+        return any(_contains_member_ref(child) for child in _children(node))
+
+    def _is_numeric_zero_literal_token(spelling: str) -> bool:
+        normalized = spelling.strip().replace("'", "")
+        if not normalized:
+            return False
+        normalized = re.sub(r"[uUlLzZ]+$", "", normalized)
+        if not normalized:
+            return False
+        try:
+            return int(normalized, 0) == 0
+        except ValueError:
+            return False
+
+    def _is_zero_int_expr(node: Any) -> bool:
+        target = _unwrap_single_child(node)
+        if target.kind != integer_literal_kind:
+            return False
+        literal_tokens = [str(token.spelling) for token in target.get_tokens() if token.kind == token_kind.LITERAL]
+        if not literal_tokens:
+            return False
+        # libclang 在部分宏展开场景会把额外 token 计入 `INTEGER_LITERAL`；
+        # 此处取首个字面量 token 作为当前节点值，避免把无关上下文误判为非零。
+        return _is_numeric_zero_literal_token(literal_tokens[0])
+
+    def _is_null_like_expr(node: Any) -> bool:
+        if _contains_member_ref(node):
+            return False
+        target = _unwrap_single_child(node)
+        if target.kind == null_ptr_kind:
+            return True
+        return _is_zero_int_expr(target)
+
+    def _unwrap_to_init_list(node: Any) -> Any | None:
+        current = node
+        while True:
+            target = _unwrap_single_child(current)
+            if target.kind == init_list_kind:
+                return target
+            child_nodes = _children(target)
+            if len(child_nodes) == 1:
+                current = child_nodes[0]
+                continue
+            return None
+
+    init_node = _unwrap_to_init_list(element)
+    if init_node is None:
+        return False
+
+    fields = _children(init_node)
+    if len(fields) == 0:
+        return True
+    if len(fields) == 1:
+        return _is_zero_int_expr(fields[0]) and not _contains_member_ref(fields[0])
+    if len(fields) != 4:
+        return False
+
+    if all(_is_zero_int_expr(field) for field in fields):
+        return True
+
+    return (
+        _is_null_like_expr(fields[0])
+        and _is_null_like_expr(fields[1])
+        and _is_zero_int_expr(fields[2])
+        and _is_null_like_expr(fields[3])
+    )
+
+
 class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
@@ -339,29 +450,9 @@ class CSignatureExtractor:
         ]
         for init_node in init_nodes:
             for element in init_node.get_children():
-                if self._is_end_array_element(element):
+                if _is_PyMethodDef_array_end(element):
                     break
                 yield element
-
-    def _is_end_array_element(self, element: Any) -> bool:
-        """判断当前数组元素是否为 `{..., nullptr}` 终止项。"""
-        null_kind = clang.cindex.CursorKind.CXX_NULL_PTR_LITERAL_EXPR
-        if any(child.kind == null_kind for child in element.get_children()):
-            return True
-
-        token_kind = clang.cindex.TokenKind
-        fields = [
-            str(token.spelling)
-            for token in element.get_tokens()
-            if token.kind in {token_kind.IDENTIFIER, token_kind.LITERAL}
-        ]
-        if not fields:
-            return False
-        if fields[0] not in {"0", "NULL", "nullptr"}:
-            return False
-        if len(fields) == 1:
-            return True
-        return fields[1] in {"0", "NULL", "nullptr"}
 
     def _extract_struct_fields(
         self,
