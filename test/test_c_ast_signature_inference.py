@@ -978,6 +978,21 @@ def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path
     assert selected is in_same_file_def
 
 
+def test_c_signature_engine_skips_non_array_types_before_reading_array_element(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    class _FakeType:
+        kind = object()
+
+        def get_array_element_type(self) -> object:
+            raise AssertionError("non-array type should not read array element type")
+
+    class _FakeNode:
+        type = _FakeType()
+
+    assert engine._is_pymethod_array(_FakeNode()) is False
+
+
 def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
     module = IRModule(

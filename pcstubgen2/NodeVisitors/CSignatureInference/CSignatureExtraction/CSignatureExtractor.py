@@ -78,20 +78,22 @@ class CSignatureExtractor:
             return self._cache_result
 
         index = clang.cindex.Index.create()
-        translation_units: list[Any] = []
-        function_defs: dict[str, list[Any]] = {}
 
+        translation_units: list[Any] = []
         for file_path in source_files:
             tu = self._parse_translation_unit(index=index, file_path=file_path)
             if tu is None:
                 continue
             translation_units.append(tu)
-            # 第一阶段先收集函数定义，供方法表条目回查 C 函数体。
+
+        # 第一阶段先收集函数定义，供方法表条目回查 C 函数体。
+        function_defs: dict[str, list[Any]] = {}
+        for tu in translation_units:
             self._collect_function_definitions(tu.cursor, function_defs)
 
+        # 第二阶段处理 PyMethodDef，拼装提取结果。
         result: dict[str, list[ExtractedFunction]] = {}
         for tu in translation_units:
-            # 第二阶段处理 PyMethodDef，拼装提取结果。
             self._collect_pymethod_defs(tu.cursor, function_defs, result)
 
         self._cache_result = self._deduplicate_result(result)
@@ -1082,11 +1084,25 @@ class CSignatureExtractor:
     def _is_pymethod_array(self, node: Any) -> bool:
         """判断变量是否为 `PyMethodDef[]`。"""
         try:
-            elem_type = node.type.get_array_element_type()
+            node_type: clang.cindex.Type = node.type
+            if not self._is_array_type(node_type):
+                return False
+            elem_type = node_type.get_array_element_type()
             decl = elem_type.get_declaration()
-            return decl.spelling == "PyMethodDef"
+            return decl is not None and decl.spelling == "PyMethodDef"
         except Exception:
             return False
+
+    def _is_array_type(self, node_type: clang.cindex.Type) -> bool:
+        """判断 clang 类型是否为 C/C++ 数组类型。"""
+        kind = node_type.kind
+        array_kinds = {
+            clang.cindex.TypeKind.CONSTANTARRAY,
+            clang.cindex.TypeKind.INCOMPLETEARRAY,
+            clang.cindex.TypeKind.VARIABLEARRAY,
+            clang.cindex.TypeKind.DEPENDENTSIZEDARRAY,
+        }
+        return kind in array_kinds
 
     def _is_initializer_list(self, node: Any) -> bool:
         """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
@@ -1112,7 +1128,7 @@ class CSignatureExtractor:
         return None
 
     def _walk(self, node: Any) -> Iterable[Any]:
-        """深度优先遍历 cursor 子树。"""
+        """生成器，深度优先遍历 cursor 子树。"""
         yield node
         for child in node.get_children():
             yield from self._walk(child)
