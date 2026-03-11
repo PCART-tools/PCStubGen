@@ -1015,7 +1015,7 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element(t
     class _FakeNode:
         type = _FakeType()
 
-    assert engine._is_pymethod_array(_FakeNode()) is False
+    assert _is_PyMethodDef_array(_FakeNode()) is False
 
 
 def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -111,26 +111,27 @@ def _is_PyMethodDef_sentinel(element: Cursor) -> bool:
 
 
 
-def _get_diagnostic_severity_name(severity: int | None) -> str:
+def _get_diagnostic_severity_name(severity: int) -> str:
     """把 libclang severity 严重程度数值转换成可读名称。"""
-    severity_map: dict[int, str] = {
-        clang.cindex.Diagnostic.Ignored: "IGNORED",
-        clang.cindex.Diagnostic.Note: "NOTE",
-        clang.cindex.Diagnostic.Warning: "WARNING",
-        clang.cindex.Diagnostic.Error: "ERROR",
-        clang.cindex.Diagnostic.Fatal: "FATAL",
-    }
-    if isinstance(severity, int) and severity in severity_map:
-        return severity_map[severity]
-    if isinstance(severity, int):
-        return f"SEVERITY_{severity}"
-    return "UNKNOWN"
+    match severity:
+        case clang.cindex.Diagnostic.Ignored:
+            return "IGNORED"
+        case clang.cindex.Diagnostic.Note:
+            return "NOTE"
+        case clang.cindex.Diagnostic.Warning:
+            return "WARNING"
+        case clang.cindex.Diagnostic.Error:
+            return "ERROR"
+        case clang.cindex.Diagnostic.Fatal:
+            return "FATAL"
+        case _:
+            return f"SEVERITY_{severity}"
 
 
 def _format_single_diagnostic(diagnostic: Diagnostic) -> str:
     """将单条 clang diagnostic 格式化为稳定的一行文本。"""
     severity = _get_diagnostic_severity_name(diagnostic.severity)
-    location = diagnostic.location
+    location: clang.cindex.SourceLocation = diagnostic.location
     diag_file = location.file.name
     line = location.line
     column = location.column
@@ -183,6 +184,41 @@ def _get_packaged_libclang_path() -> str | None:
         if candidate.exists():
             return str(candidate)
     return None
+
+
+def _is_array_kind(kind: TypeKind) -> bool:
+    """判断 clang 类型是否为 C/C++ 数组类型。"""
+    array_kinds = {
+        TypeKind.CONSTANTARRAY,
+        TypeKind.INCOMPLETEARRAY,
+        TypeKind.VARIABLEARRAY,
+        TypeKind.DEPENDENTSIZEDARRAY,
+    }
+    return kind in array_kinds
+
+
+def _is_PyMethodDef_array(node: Cursor) -> bool:
+    """判断变量是否为 `PyMethodDef[]`。"""
+    try:
+        if not _is_array_kind(node.type.kind):
+            return False
+        elem_type = node.type.get_array_element_type()
+        decl = elem_type.get_declaration()
+        return decl is not None and decl.spelling == "PyMethodDef"
+    except Exception:
+        return False
+
+
+def _is_initializer_list_PyMethodDef(node: Cursor) -> bool:
+    """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
+    has_init = False
+    has_pmd = False
+    for child in node.get_children():
+        if child.kind == CursorKind.TEMPLATE_REF and child.spelling == "initializer_list":
+            has_init = True
+        if child.spelling == "PyMethodDef":
+            has_pmd = True
+    return has_init and has_pmd
 
 
 class CSignatureExtractor:
@@ -361,9 +397,8 @@ class CSignatureExtractor:
 
     def _collect_function_definitions(self, cursor: Cursor, output: dict[str, list[Cursor]]) -> None:
         """遍历 AST，按函数名收集 `FUNCTION_DECL` 节点。"""
-        func_kind = CursorKind.FUNCTION_DECL
         for node in self._walk(cursor):
-            if node.kind != func_kind or not node.spelling:
+            if node.kind != CursorKind.FUNCTION_DECL or not node.spelling:
                 continue
             output.setdefault(node.spelling, []).append(node)
 
@@ -374,19 +409,18 @@ class CSignatureExtractor:
         output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
-        var_decl = CursorKind.VAR_DECL
         for node in self._walk(cursor):
-            if node.kind != var_decl:
+            if node.kind != CursorKind.VAR_DECL:
                 continue
-            if self._is_pymethod_array(node):
-                self._process_array(node, node, function_defs, output)
+            if _is_PyMethodDef_array(node):
+                self._process_PyMethodDef_array(node, node, function_defs, output)
                 continue
-            if self._is_initializer_list(node):
+            if _is_initializer_list_PyMethodDef(node):
                 init_node = self._find_initializer_list_node(node)
                 if init_node is not None:
-                    self._process_array(init_node, node, function_defs, output)
+                    self._process_PyMethodDef_array(init_node, node, function_defs, output)
 
-    def _process_array(
+    def _process_PyMethodDef_array(
         self,
         array_node: Cursor,
         owner_node: Cursor,
@@ -397,7 +431,7 @@ class CSignatureExtractor:
         table_name = owner_node.spelling if owner_node.spelling else "<anonymous>"
         source_file = str(owner_node.location.file) if owner_node.location.file else None
         for element in self._iter_array_elements(array_node):
-            extracted = self._extract_struct_fields(
+            extracted = self._extract_PyMethodDef_struct_fields(
                 struct_init=element,
                 method_table=table_name,
                 source_file=source_file,
@@ -409,9 +443,8 @@ class CSignatureExtractor:
 
     def _iter_array_elements(self, array_node: Cursor) -> Iterable[Cursor]:
         """迭代方法表数组元素，遇到终止哨兵即停止。"""
-        init_kind = CursorKind.INIT_LIST_EXPR
-        init_nodes = [array_node] if array_node.kind == init_kind else [
-            child for child in array_node.get_children() if child.kind == init_kind
+        init_nodes = [array_node] if array_node.kind == CursorKind.INIT_LIST_EXPR else [
+            child for child in array_node.get_children() if child.kind == CursorKind.INIT_LIST_EXPR
         ]
         for init_node in init_nodes:
             for element in init_node.get_children():
@@ -419,7 +452,7 @@ class CSignatureExtractor:
                     break
                 yield element
 
-    def _extract_struct_fields(
+    def _extract_PyMethodDef_struct_fields(
         self,
         struct_init: Cursor,
         method_table: str,
@@ -531,9 +564,8 @@ class CSignatureExtractor:
             if macro_name in all_tokens:
                 inferred_types.add(type_name)
 
-        return_stmt_kind = CursorKind.RETURN_STMT
         for node in self._walk(func_cursor):
-            if node.kind != return_stmt_kind:
+            if node.kind != CursorKind.RETURN_STMT:
                 continue
             inferred = self._infer_return_type_from_return_stmt(return_stmt=node, func_cursor=func_cursor)
             if inferred is not None:
@@ -667,9 +699,8 @@ class CSignatureExtractor:
 
     def _find_first_call_name(self, node: Cursor) -> str | None:
         """在子树中查找首个 `CALL_EXPR` 的函数名。"""
-        call_kind = CursorKind.CALL_EXPR
         for child in self._walk(node):
-            if child.kind == call_kind and child.spelling:
+            if child.kind == CursorKind.CALL_EXPR and child.spelling:
                 return str(child.spelling)
         return None
 
@@ -689,17 +720,14 @@ class CSignatureExtractor:
         因此这里采用保守递归策略统一处理。
         """
         result: list[list[str]] = []
-        call_kind = CursorKind.CALL_EXPR
-        if_kind = CursorKind.IF_STMT
-        unexposed_kind = CursorKind.UNEXPOSED_EXPR
 
         for child in node.get_children():
             token_list: list[str] | None = None
-            if child.kind == call_kind:
+            if child.kind == CursorKind.CALL_EXPR:
                 token_list = self._collect_call_tokens(child)
-            elif child.kind == if_kind:
+            elif child.kind == CursorKind.IF_STMT:
                 first_child = next(child.get_children(), None)
-                if first_child is not None and first_child.kind == unexposed_kind:
+                if first_child is not None and first_child.kind == CursorKind.UNEXPOSED_EXPR:
                     token_list = self._collect_call_tokens(first_child)
                 else:
                     token_list = self._collect_call_tokens(child)
@@ -1003,10 +1031,9 @@ class CSignatureExtractor:
 
     def _signature_from_param_decls(self, func_cursor: Cursor) -> ExtractedSignature:
         """回退方案：直接从 C 形参声明推断签名。"""
-        parm_decl = CursorKind.PARM_DECL
         args: list[ExtractedArgument] = []
         for node in func_cursor.get_children():
-            if node.kind != parm_decl or not node.spelling:
+            if node.kind != CursorKind.PARM_DECL or not node.spelling:
                 continue
             args.append(
                 ExtractedArgument(
@@ -1047,9 +1074,8 @@ class CSignatureExtractor:
 
     def _get_init_value(self, name: str, func_cursor: Cursor) -> str | None:
         """从局部变量定义中提取默认值字面表达式。"""
-        var_decl = CursorKind.VAR_DECL
         for node in self._walk(func_cursor):
-            if node.kind != var_decl or node.spelling != name:
+            if node.kind != CursorKind.VAR_DECL or node.spelling != name:
                 continue
             tokens = [str(token.spelling) for token in node.get_tokens()]
             if "=" not in tokens:
@@ -1062,9 +1088,8 @@ class CSignatureExtractor:
 
     def _find_format_string(self, func_cursor: Cursor, format_var_name: str) -> str | None:
         """回溯查找格式串变量对应的字符串字面量。"""
-        var_decl = CursorKind.VAR_DECL
         for node in self._walk(func_cursor):
-            if node.kind != var_decl or node.spelling != format_var_name:
+            if node.kind != CursorKind.VAR_DECL or node.spelling != format_var_name:
                 continue
             for child in self._walk(node):
                 if child.kind == CursorKind.STRING_LITERAL:
@@ -1131,41 +1156,6 @@ class CSignatureExtractor:
         if not raw:
             return None
         return os.path.normcase(os.path.normpath(raw))
-
-    def _is_pymethod_array(self, node: Cursor) -> bool:
-        """判断变量是否为 `PyMethodDef[]`。"""
-        try:
-            node_type: Type = node.type
-            if not self._is_array_type(node_type):
-                return False
-            elem_type = node_type.get_array_element_type()
-            decl = elem_type.get_declaration()
-            return decl is not None and decl.spelling == "PyMethodDef"
-        except Exception:
-            return False
-
-    def _is_array_type(self, node_type: Type) -> bool:
-        """判断 clang 类型是否为 C/C++ 数组类型。"""
-        kind = node_type.kind
-        array_kinds = {
-            TypeKind.CONSTANTARRAY,
-            TypeKind.INCOMPLETEARRAY,
-            TypeKind.VARIABLEARRAY,
-            TypeKind.DEPENDENTSIZEDARRAY,
-        }
-        return kind in array_kinds
-
-    def _is_initializer_list(self, node: Cursor) -> bool:
-        """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
-        template_ref = CursorKind.TEMPLATE_REF
-        has_init = False
-        has_pmd = False
-        for child in node.get_children():
-            if child.kind == template_ref and child.spelling == "initializer_list":
-                has_init = True
-            if child.spelling == "PyMethodDef":
-                has_pmd = True
-        return has_init and has_pmd
 
     def _find_initializer_list_node(self, node: Cursor) -> Cursor | None:
         """递归定位包含 `INIT_LIST_EXPR` 的实际初始化节点。"""
