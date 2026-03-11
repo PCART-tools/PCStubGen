@@ -140,6 +140,10 @@ class _FakeTranslationUnit:
         self.diagnostics = diagnostics
 
 
+class _DiagnosticlessTranslationUnit:
+    pass
+
+
 class _FakeIndex:
     def __init__(self, translation_unit: _FakeTranslationUnit) -> None:
         self.translation_unit = translation_unit
@@ -311,6 +315,43 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
 
     assert result is translation_unit
     assert caplog.records == []
+
+
+def test_c_signature_engine_raises_when_diagnostic_missing_required_field(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+
+    class _MissingSeverityDiagnostic:
+        def __init__(self) -> None:
+            self.spelling = "broken detail"
+            self.location = _FakeDiagnosticLocation(
+                file_name=str(tmp_path / "module.c"),
+                line=1,
+                column=2,
+            )
+
+    with pytest.raises(AttributeError):
+        _format_single_diagnostic(_MissingSeverityDiagnostic())  # type: ignore[arg-type]
+
+
+def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "module.c"
+
+    with pytest.raises(AttributeError):
+        engine._parse_translation_unit(
+            index=_FakeIndex(_DiagnosticlessTranslationUnit()),  # type: ignore[arg-type]
+            file_path=source,
+        )
+
+
+def test_c_signature_engine_maps_all_builtin_severity_names(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Ignored) == "IGNORED"
+    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Note) == "NOTE"
+    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Warning) == "WARNING"
+    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Error) == "ERROR"
+    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Fatal) == "FATAL"
 
 
 def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(

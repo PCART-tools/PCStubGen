@@ -154,6 +154,80 @@ def _is_PyMethodDef_array_end(element: Cursor) -> bool:
     )
 
 
+def _get_diagnostic_severity_name(severity: int | None) -> str:
+    """把 libclang severity 数值转换成可读名称。"""
+    severity_map: dict[int, str] = {
+        clang.cindex.Diagnostic.Ignored: "IGNORED",
+        clang.cindex.Diagnostic.Note: "NOTE",
+        clang.cindex.Diagnostic.Warning: "WARNING",
+        clang.cindex.Diagnostic.Error: "ERROR",
+        clang.cindex.Diagnostic.Fatal: "FATAL",
+    }
+    if isinstance(severity, int) and severity in severity_map:
+        return severity_map[severity]
+    if isinstance(severity, int):
+        return f"SEVERITY_{severity}"
+    return "UNKNOWN"
+
+
+def _format_single_diagnostic(diagnostic: Diagnostic) -> str:
+    """将单条 clang diagnostic 格式化为稳定的一行文本。"""
+    severity = _get_diagnostic_severity_name(diagnostic.severity)
+    location = diagnostic.location
+    diag_file = location.file.name
+    line = location.line
+    column = location.column
+    message = diagnostic.spelling
+    return f"[{severity}] {diag_file}:{line}:{column}: {message}"
+
+
+def _format_diagnostics_message(
+        *,
+    file_path: Path,
+    parse_args: list[str],
+    diagnostics: list[Diagnostic],
+) -> str:
+    """格式化包含 error/fatal diagnostics 的日志块。"""
+    lines = [
+        f"Translation unit diagnostics",
+        f"  file_path: {file_path}",
+        f"  suffix: {file_path.suffix.lower() or '<none>'}",
+        f"  parse_args: {parse_args!r}",
+        "  diagnostics:",
+    ]
+    lines.extend(f"    {_format_single_diagnostic(diag)}" for diag in diagnostics)
+    return "\n".join(lines)
+
+
+def _format_parse_exception_message(
+        *,
+    file_path: Path,
+    parse_args: list[str],
+    error: Exception,
+) -> str:
+    """格式化 translation unit 解析异常日志。"""
+    return "\n".join(
+        [
+            f"Failed to parse translation unit",
+            f"  file_path: {file_path}",
+            f"  suffix: {file_path.suffix.lower() or '<none>'}",
+            f"  parse_args: {parse_args!r}",
+            f"  exception_type: {type(error).__name__}",
+            f"  exception: {error}",
+        ]
+    )
+
+
+def _get_packaged_libclang_path() -> str | None:
+    """从 `clang` 包的 `native` 目录探测可用的 `libclang` 动态库。"""
+    native_dir = Path(clang.__file__).resolve().parent / "native"
+    for filename in ("libclang.dll", "libclang.so", "libclang.dylib"):
+        candidate = native_dir / filename
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
 class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
@@ -229,27 +303,14 @@ class CSignatureExtractor:
         self._clang_parse_args = self._inject_python_include_args(parse_args)
 
         try:
-            loaded = bool(getattr(clang.cindex.Config, "loaded", False))
+            loaded = bool(clang.cindex.Config.loaded)
             if not loaded:
-                packaged_libclang_path = self._get_packaged_libclang_path()
+                packaged_libclang_path = _get_packaged_libclang_path()
                 if packaged_libclang_path:
                     clang.cindex.Config.set_library_file(packaged_libclang_path)
         except Exception as ex:  # pragma: no cover
             logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
-
-    def _get_packaged_libclang_path(self) -> str | None:
-        """从 `clang` 包的 `native` 目录探测可用的 `libclang` 动态库。"""
-        clang_file = getattr(clang, "__file__", None)
-        if not clang_file:
-            return None
-
-        native_dir = Path(clang_file).resolve().parent / "native"
-        for filename in ("libclang.dll", "libclang.so", "libclang.dylib"):
-            candidate = native_dir / filename
-            if candidate.exists():
-                return str(candidate)
-        return None
 
     def _inject_python_include_args(self, parse_args: list[str]) -> list[str]:
         """向 clang 参数注入当前 Python 头文件目录。"""
@@ -289,12 +350,12 @@ class CSignatureExtractor:
         try:
             translation_unit = index.parse(str(file_path), args=parse_args)
         except Exception as ex:  # pragma: no cover
-            logger.warning(self._format_parse_exception_message(file_path=file_path, parse_args=parse_args, error=ex))
+            logger.warning(_format_parse_exception_message(file_path=file_path, parse_args=parse_args, error=ex))
             return None
-        diagnostics: list[Diagnostic] = list(getattr(translation_unit, "diagnostics", ()))
+        diagnostics: list[Diagnostic] = list(translation_unit.diagnostics)
         if self._has_error_diagnostics(diagnostics):
             logger.warning(
-                self._format_diagnostics_message(
+                _format_diagnostics_message(
                     file_path=file_path,
                     parse_args=parse_args,
                     diagnostics=diagnostics,
@@ -302,84 +363,18 @@ class CSignatureExtractor:
             )
         return translation_unit
 
-    def _format_parse_exception_message(
-        self,
-        *,
-        file_path: Path,
-        parse_args: list[str],
-        error: Exception,
-    ) -> str:
-        """格式化 translation unit 解析异常日志。"""
-        return "\n".join(
-            [
-                f"Failed to parse translation unit",
-                f"  file_path: {file_path}",
-                f"  suffix: {file_path.suffix.lower() or '<none>'}",
-                f"  parse_args: {parse_args!r}",
-                f"  exception_type: {type(error).__name__}",
-                f"  exception: {error}",
-            ]
-        )
-
-    def _format_diagnostics_message(
-        self,
-        *,
-        file_path: Path,
-        parse_args: list[str],
-        diagnostics: list[Diagnostic],
-    ) -> str:
-        """格式化包含 error/fatal diagnostics 的日志块。"""
-        lines = [
-            f"Translation unit diagnostics",
-            f"  file_path: {file_path}",
-            f"  suffix: {file_path.suffix.lower() or '<none>'}",
-            f"  parse_args: {parse_args!r}",
-            "  diagnostics:",
-        ]
-        lines.extend(f"    {self._format_single_diagnostic(diag)}" for diag in diagnostics)
-        return "\n".join(lines)
-
-    def _format_single_diagnostic(self, diagnostic: Diagnostic) -> str:
-        """将单条 clang diagnostic 格式化为稳定的一行文本。"""
-        severity = self._get_diagnostic_severity_name(getattr(diagnostic, "severity", None))
-        location = getattr(diagnostic, "location", None)
-        diag_file = getattr(getattr(location, "file", None), "name", None) or "<unknown>"
-        line = getattr(location, "line", 0) or 0
-        column = getattr(location, "column", 0) or 0
-        message = getattr(diagnostic, "spelling", "") or ""
-        return f"[{severity}] {diag_file}:{line}:{column}: {message}"
-
     def _has_error_diagnostics(self, diagnostics: list[Diagnostic]) -> bool:
         """判断 diagnostics 中是否包含 error/fatal 级别。"""
         error_threshold = self._get_error_severity_threshold()
         for diagnostic in diagnostics:
-            severity = getattr(diagnostic, "severity", None)
+            severity = diagnostic.severity
             if isinstance(severity, int) and severity >= error_threshold:
                 return True
         return False
 
     def _get_error_severity_threshold(self) -> int:
         """返回 clang error 级别阈值；缺失时退回 libclang 默认值。"""
-        diagnostic_type = getattr(clang.cindex, "Diagnostic", None)
-        error_severity = getattr(diagnostic_type, "Error", None)
-        if isinstance(error_severity, int):
-            return error_severity
-        return 3
-
-    def _get_diagnostic_severity_name(self, severity: int | None) -> str:
-        """把 libclang severity 数值转换成可读名称。"""
-        diagnostic_type = getattr(clang.cindex, "Diagnostic", None)
-        severity_map: dict[int, str] = {}
-        if diagnostic_type is not None:
-            for attr_name in ("Ignored", "Note", "Warning", "Error", "Fatal"):
-                attr_value = getattr(diagnostic_type, attr_name, None)
-                if isinstance(attr_value, int):
-                    severity_map[attr_value] = attr_name.upper()
-        if isinstance(severity, int) and severity in severity_map:
-            return severity_map[severity]
-        if isinstance(severity, int):
-            return f"SEVERITY_{severity}"
-        return "UNKNOWN"
+        return clang.cindex.Diagnostic.Error
 
     def _build_parse_args(self, file_path: Path) -> list[str]:
         """为单个源码文件拼装 clang 参数。"""
