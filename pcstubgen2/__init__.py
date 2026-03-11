@@ -39,83 +39,91 @@ def write_stubs(
     if options is None:
         options = StubGenerationOptions()
 
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # 设置日志
     logging.basicConfig(
-        level=logging.WARNING,
+        level=logging.INFO,
         format="[{levelname}] - {name}\n{message}\n",
         style="{",
     )
 
-    # 为本次运行创建错误收集器
-    error_collector = ErrorCollector()
-    error_collector.ignore_invalid_expressions = options.ignore_invalid_expressions
-    error_collector.ignore_all_errors = options.ignore_all_errors
+    file_handler = logging.FileHandler(output_dir / "pcstubgen2.log", mode="w", encoding="utf-8")
+    file_handler.setFormatter(logging.Formatter("[{levelname}] - {name}\n{message}\n", style="{"))
+    package_logger = logging.getLogger(__name__)
+    package_logger.addHandler(file_handler)
+    try:
+        # 为本次运行创建错误收集器
+        error_collector = ErrorCollector()
+        error_collector.ignore_invalid_expressions = options.ignore_invalid_expressions
+        error_collector.ignore_all_errors = options.ignore_all_errors
 
-    # 1. 导入模块
-    module = importlib.import_module(module_name)
+        # 1. 导入模块
+        module = importlib.import_module(module_name)
 
-    # 2. 构建原始 IR
-    builder = ModuleBuilder(error_collector=error_collector)
-    ir_module = builder.build_module(
-        QualifiedName.from_str(module_name),
-        module,
-    )
-
-    # 3. 设置管道
-    visitors: list[NodeVisitor] = []
-
-    # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
-    # if options.enable_docstring_signature_parser:
-    #     visitors.append(
-    #         DocStringSignatureParserVisitor(
-    #             error_collector=error_collector,
-    #             enum_class_locations=dict(options.enum_class_locations),
-    #         )
-    #     )
-
-    if options.enable_c_signature_inference:
-        if options.c_source_root is None:
-            raise ValueError(
-                "enable_c_signature_inference=True requires c_source_root to be set to a pathlib.Path"
-            )
-        visitors.append(
-            CAstSignatureInferenceVisitor(
-                error_collector=error_collector,
-                c_source_root=options.c_source_root,
-                clang_parse_args=options.clang_parse_args,
-                clang_c_std=options.clang_c_std,
-                clang_cpp_std=options.clang_cpp_std,
-            )
+        # 2. 构建原始 IR
+        builder = ModuleBuilder(error_collector=error_collector)
+        ir_module = builder.build_module(
+            QualifiedName.from_str(module_name),
+            module,
         )
 
-    visitors.extend(
-        [
-            InferMethodModifierVisitor(),
-            # FixTypingTypeNamesVisitor(),
-            # FixBuiltinTypesVisitor(),
-            # FixPEP585CollectionNamesVisitor(),
-            # FixCurrentModulePrefixInTypeNamesVisitor(),
-            # FixRedundantMethodsFromBuiltinObjectVisitor(),
-            # RemoveSelfAnnotationVisitor(),
-        ]
-    )
+        # 3. 设置管道
+        visitors: list[NodeVisitor] = []
 
-    pipeline = Pipeline(visitors)
+        # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
+        if options.enable_docstring_signature_parser:
+            visitors.append(
+                DocStringSignatureParserVisitor(
+                    error_collector=error_collector,
+                    enum_class_locations=dict(options.enum_class_locations),
+                )
+            )
 
-    # 4. 运行管道
-    pipeline.run(ir_module)
+        if options.enable_c_signature_inference:
+            if options.c_source_root is None:
+                raise ValueError(
+                    "enable_c_signature_inference=True requires c_source_root to be set to a pathlib.Path"
+                )
+            visitors.append(
+                CAstSignatureInferenceVisitor(
+                    error_collector=error_collector,
+                    c_source_root=options.c_source_root,
+                    clang_parse_args=options.clang_parse_args,
+                    clang_c_std=options.clang_c_std,
+                    clang_cpp_std=options.clang_cpp_std,
+                )
+            )
 
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+        visitors.extend(
+            [
+                InferMethodModifierVisitor(),
+                # FixTypingTypeNamesVisitor(),
+                # FixBuiltinTypesVisitor(),
+                # FixPEP585CollectionNamesVisitor(),
+                # FixCurrentModulePrefixInTypeNamesVisitor(),
+                # FixRedundantMethodsFromBuiltinObjectVisitor(),
+                # RemoveSelfAnnotationVisitor(),
+            ]
+        )
 
-    ext = options.stub_extension if options.stub_extension else "pyi"
-    if writer is None:
-        writer = Writer(stub_extension=ext)
-    else:
-        writer.stub_extension = ext
-    printer = PrinterVisitor(
-        invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
-        include_docstrings=options.include_docstrings,
-        include_module_type_comment=options.include_module_type_comment,
-    )
-    writer.write(ir_module, printer, to=output_dir)
+        pipeline = Pipeline(visitors)
+
+        # 4. 运行管道
+        pipeline.run(ir_module)
+
+        ext = options.stub_extension if options.stub_extension else "pyi"
+        if writer is None:
+            writer = Writer(stub_extension=ext)
+        else:
+            writer.stub_extension = ext
+        printer = PrinterVisitor(
+            invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
+            include_docstrings=options.include_docstrings,
+            include_module_type_comment=options.include_module_type_comment,
+        )
+        writer.write(ir_module, printer, to=output_dir)
+    finally:
+        package_logger.removeHandler(file_handler)
+        file_handler.close()

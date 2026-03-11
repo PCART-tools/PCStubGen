@@ -124,10 +124,20 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
         candidates = signatures.get(func.name)
         if not candidates:
+            logger.warning(
+                "Failed to rewrite generic signature for %s (is_method=%s): no C signature candidates found",
+                func.name,
+                is_method,
+            )
             return [func]
 
         selected = self._select_candidate(candidates, is_method=is_method)
         if selected is None:
+            logger.warning(
+                "Failed to rewrite generic signature for %s (is_method=%s): candidate selection failed",
+                func.name,
+                is_method,
+            )
             return [func]
 
         overload = len(selected.signatures) > 1
@@ -149,6 +159,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                     doc=func.doc if not overload else None,
                     decorators=["typing.overload"] if overload else list(func.decorators),
                 )
+            )
+        if rewritten:
+            logger.info(
+                "Rewrote generic signature for %s (is_method=%s): selected_candidates=%d, generated_signatures=%d",
+                func.name,
+                is_method,
+                len(candidates),
+                len(rewritten),
             )
         return rewritten if rewritten else [func]
 

@@ -52,6 +52,41 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
     assert parsed.doc == "parsed from docstring"
 
 
+def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
+    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    ir_module.functions = [
+        IRFunction(
+            name="cdist_minkowski",
+            args=_generic_signature(),
+            doc=(
+                "cdist_minkowski(x: object, y: object, w: object = None, "
+                "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
+            ),
+        )
+    ]
+
+    visitor.visit_module(ir_module)
+
+    parsed = ir_module.functions[0]
+    assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
+    assert [str(arg.annotation) for arg in parsed.args] == [
+        "object",
+        "object",
+        "object",
+        "object",
+        "typing.SupportsFloat",
+    ]
+    assert [arg.default.repr if arg.default is not None else None for arg in parsed.args] == [
+        None,
+        None,
+        "None",
+        "None",
+        "2.0",
+    ]
+    assert str(parsed.return_annotation) == "numpy.ndarray"
+
+
 def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
     parser_visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
     infer_modifier_visitor = InferMethodModifierVisitor()

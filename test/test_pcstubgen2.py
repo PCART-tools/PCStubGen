@@ -65,6 +65,7 @@ def run_single_module(module_name: str) -> int:
             output_dir,
             options=StubGenerationOptions(include_docstrings=False,
             include_module_type_comment=True,
+            enable_c_signature_inference=True,
             c_source_root=DEFAULT_C_SOURCE_ROOT,
             clang_parse_args=DEFAULT_CLANG_PARSE_ARGS,
             clang_c_std=DEFAULT_CLANG_C_STD,

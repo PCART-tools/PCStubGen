@@ -216,6 +216,134 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert str(rewritten.return_annotation) == "int"
 
 
+def test_c_ast_visitor_logs_successful_generic_rewrite(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    func = IRFunction(name="foo", args=_generic_signature())
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.C,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        {
+            "foo": [
+                ExtractedFunction(
+                    py_name="foo",
+                    c_name="c_foo",
+                    method_flags=["METH_VARARGS"],
+                    signatures=[
+                        ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")]),
+                    ],
+                )
+            ]
+        },
+    )
+
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+        visitor.visit_module(module)
+
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.levelno == logging.INFO
+    assert record.message == (
+        "Rewrote generic signature for foo (is_method=False): "
+        "selected_candidates=1, generated_signatures=1"
+    )
+
+
+def test_c_ast_visitor_logs_when_generic_function_has_no_candidates(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+    func = IRFunction(name="foo", args=_generic_signature())
+
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+        rewritten = visitor._rewrite_function(func=func, signatures={}, is_method=False)
+
+    assert rewritten == [func]
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.levelno == logging.WARNING
+    assert record.message == (
+        "Failed to rewrite generic signature for foo (is_method=False): "
+        "no C signature candidates found"
+    )
+
+
+def test_c_ast_visitor_logs_when_candidate_selection_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+    func = IRFunction(name="foo", args=_generic_signature())
+    signatures = {
+        "foo": [
+            ExtractedFunction(
+                py_name="foo",
+                c_name="c_foo",
+                method_flags=["METH_VARARGS"],
+                signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+            )
+        ]
+    }
+    monkeypatch.setattr(visitor, "_select_candidate", lambda candidates, *, is_method: None)
+
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+        rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
+
+    assert rewritten == [func]
+    assert len(caplog.records) == 1
+    record = caplog.records[0]
+    assert record.levelno == logging.WARNING
+    assert record.message == (
+        "Failed to rewrite generic signature for foo (is_method=False): "
+        "candidate selection failed"
+    )
+
+
+def test_c_ast_visitor_does_not_log_for_non_generic_function(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+    func = IRFunction(name="foo", args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])
+    signatures = {
+        "foo": [
+            ExtractedFunction(
+                py_name="foo",
+                c_name="c_foo",
+                method_flags=["METH_VARARGS"],
+                signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+            )
+        ]
+    }
+
+    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+        rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
+
+    assert rewritten == [func]
+    assert caplog.records == []
+
+
 def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
@@ -540,6 +668,38 @@ def test_write_stubs_defaults_do_not_require_c_source_root(
     assert list(tmp_path.rglob("*.pyi"))
 
 
+def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    captured_visitors: list[object] = []
+
+    class _RecordingPipeline:
+        def __init__(self, visitors):
+            captured_visitors.extend(visitors)
+
+        def run(self, module: IRModule) -> IRModule:
+            return module
+
+    monkeypatch.setattr(stubgen_module, "Pipeline", _RecordingPipeline)
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=True,
+        enable_c_signature_inference=True,
+        c_source_root=tmp_path,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    assert [type(visitor).__name__ for visitor in captured_visitors] == [
+        "DocStringSignatureParserVisitor",
+        "CAstSignatureInferenceVisitor",
+        "InferMethodModifierVisitor",
+    ]
+
+
 def test_stub_generation_options_defaults_to_empty_clang_parse_args() -> None:
     first = StubGenerationOptions()
     second = StubGenerationOptions()
@@ -590,12 +750,47 @@ def test_write_stubs_uses_multiline_logging_format(
         (
             (),
             {
-                "level": logging.WARNING,
+                "level": logging.INFO,
                 "format": "[{levelname}] - {name}\n{message}\n",
                 "style": "{",
             },
         )
     ]
+
+
+def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    def _emit_warning(self: Pipeline, module: IRModule) -> None:
+        _ = (self, module)
+        logging.getLogger("pcstubgen2.tests").warning("file log works")
+
+    monkeypatch.setattr(stubgen_module.Pipeline, "run", _emit_warning)
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=False,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    log_file = tmp_path / "pcstubgen2.log"
+    assert log_file.exists()
+    assert log_file.read_text(encoding="utf-8") == (
+        "[WARNING] - pcstubgen2.tests\n"
+        "file log works\n"
+        "\n"
+    )
+
+    package_logger = logging.getLogger("pcstubgen2")
+    assert all(
+        not isinstance(handler, logging.FileHandler)
+        or Path(handler.baseFilename) != log_file
+        for handler in package_logger.handlers
+    )
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
@@ -638,6 +833,48 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.args] == ["a", "b"]
     assert [str(arg.annotation) for arg in parsed.args] == ["int", "int"]
+    assert extractor.called == 1
+
+
+def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.C,
+        functions=[
+            IRFunction(
+                name="cdist_minkowski",
+                args=_generic_signature(),
+                doc=(
+                    "cdist_minkowski(x: object, y: object, w: object = None, "
+                    "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
+                ),
+            )
+        ],
+    )
+    extractor = _patch_c_signature_extractor(monkeypatch, {})
+
+    with caplog.at_level(
+        logging.WARNING,
+        logger="pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor",
+    ):
+        Pipeline(
+            [
+                DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
+                CAstSignatureInferenceVisitor(
+                    error_collector=ErrorCollector(),
+                    c_source_root=tmp_path,
+                ),
+            ]
+        ).run(module)
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
+    assert str(parsed.return_annotation) == "numpy.ndarray"
+    assert "Failed to rewrite generic signature for cdist_minkowski" not in caplog.text
     assert extractor.called == 1
 
 
@@ -738,6 +975,48 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
     assert first.signatures[0].return_type_name is None
+
+
+def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("scipy.spatial._distance_pybind")
+
+    spatial_src_root = Path(r"C:\Things\third_package_source\scipy_scipy\scipy\spatial\src")
+    if not spatial_src_root.exists():
+        pytest.skip("SciPy spatial source tree is not available")
+
+    import pcstubgen2 as stubgen_module
+
+    pybind_output_dir = tmp_path / "pybind_stubs"
+    wrap_output_dir = tmp_path / "wrap_stubs"
+    options = StubGenerationOptions(
+        include_docstrings=False,
+        enable_docstring_signature_parser=True,
+        enable_c_signature_inference=True,
+        c_source_root=spatial_src_root,
+    )
+
+    stubgen_module.write_stubs("scipy.spatial._distance_pybind", pybind_output_dir, options=options)
+    stubgen_module.write_stubs("scipy.spatial._distance_wrap", wrap_output_dir, options=options)
+
+    pybind_stub = (pybind_output_dir / "_distance_pybind.pyi").read_text(encoding="utf-8")
+    wrap_stub = (wrap_output_dir / "_distance_wrap.pyi").read_text(encoding="utf-8")
+    pybind_log_text = (pybind_output_dir / "pcstubgen2.log").read_text(encoding="utf-8")
+
+    assert (
+        "def cdist_minkowski(x: object, y: object, w: object = None, "
+        "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray:"
+    ) in pybind_stub
+    assert (
+        "def pdist_minkowski(x: object, w: object = None, out: object = None, "
+        "p: typing.SupportsFloat = 2.0) -> numpy.ndarray:"
+    ) in pybind_stub
+    assert (
+        "def cdist_minkowski_double_wrap(XA_: object, XB_: object, dm_: object, p: object) -> float:"
+    ) in wrap_stub
+    assert "Failed to rewrite generic signature for cdist_minkowski" not in pybind_log_text
+    assert "Failed to rewrite generic signature for pdist_minkowski" not in pybind_log_text
 
 
 def test_c_signature_extraction_engine_parses_initializer_list_method_table(tmp_path: Path) -> None:
