@@ -1357,11 +1357,14 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element()
 
 
 def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_children() -> None:
-    class _FakeType:
+    class _FakeCanonicalType:
         spelling = "std::initializer_list<PyMethodDef>"
 
-        def get_canonical(self) -> "_FakeType":
-            return self
+    class _FakeType:
+        spelling = "using Methods = std::initializer_list<PyMethodDef>"
+
+        def get_canonical(self) -> _FakeCanonicalType:
+            return _FakeCanonicalType()
 
     class _FakeNode:
         type = _FakeType()
@@ -1370,6 +1373,19 @@ def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_c
             raise AssertionError("initializer_list type match should not need AST child scan")
 
     assert _is_initializer_list_PyMethodDef(_FakeNode()) is True
+
+
+def test_c_signature_engine_returns_false_when_initializer_list_canonical_lookup_raises() -> None:
+    class _FakeType:
+        spelling = "std::initializer_list<PyMethodDef>"
+
+        def get_canonical(self) -> "_FakeType":
+            raise RuntimeError("clang canonical lookup failed")
+
+    class _FakeNode:
+        type = _FakeType()
+
+    assert _is_initializer_list_PyMethodDef(_FakeNode()) is False
 
 
 def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

@@ -188,42 +188,35 @@ def _get_packaged_libclang_path() -> str | None:
 
 def _is_array_kind(kind: TypeKind) -> bool:
     """判断 clang 类型是否为 C/C++ 数组类型。"""
-    array_kinds = {
-        TypeKind.CONSTANTARRAY,
-        TypeKind.INCOMPLETEARRAY,
-        TypeKind.VARIABLEARRAY,
-        TypeKind.DEPENDENTSIZEDARRAY,
-    }
-    return kind in array_kinds
+    return (
+        kind == TypeKind.CONSTANTARRAY  # 固定长度数组，如 `int values[8]`
+        or kind == TypeKind.INCOMPLETEARRAY  # 不完整数组，如 `extern int values[]`
+        or kind == TypeKind.VARIABLEARRAY  # 变长数组，如 `int values[n]`
+        or kind == TypeKind.DEPENDENTSIZEDARRAY  # 依赖表达式推导长度的数组，多见于模板/泛型上下文
+    )
 
 
-def _is_PyMethodDef_array(node: Cursor) -> bool:
-    """判断变量是否为 `PyMethodDef[]`。"""
-    try:
-        if not _is_array_kind(node.type.kind):
-            return False
-        elem_type = node.type.get_array_element_type()
-        decl = elem_type.get_declaration()
-        return decl is not None and decl.spelling == "PyMethodDef"
-    except Exception:
-        return False
+def _is_PyMethodDef_array(cursor: Cursor) -> bool:
+    """判断节点是否为 `PyMethodDef[]`。"""
+    if _is_array_kind(cursor.type.kind):
+        elem_type = cursor.type.get_array_element_type()
+        if elem_type.get_canonical().spelling == "PyMethodDef":
+            return True
+    return False
 
 
-def _is_initializer_list_PyMethodDef(node: Cursor) -> bool:
+def _is_initializer_list_PyMethodDef(cursor: Cursor) -> bool:
     """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
     try:
-        type_obj = getattr(node, "type", None)
-        if type_obj is not None:
-            candidate_types = [type_obj]
-            get_canonical = getattr(type_obj, "get_canonical", None)
-            if callable(get_canonical):
-                canonical_type = get_canonical()
-                if canonical_type is not None:
-                    candidate_types.append(canonical_type)
-            for candidate_type in candidate_types:
-                spelling = getattr(candidate_type, "spelling", "") or ""
-                if "initializer_list" in spelling and "PyMethodDef" in spelling:
-                    return True
+        type_obj = cursor.type
+        candidate_types = [type_obj]
+        canonical_type = type_obj.get_canonical()
+        if canonical_type is not None:
+            candidate_types.append(canonical_type)
+        for candidate_type in candidate_types:
+            spelling = candidate_type.spelling or ""
+            if "initializer_list" in spelling and "PyMethodDef" in spelling:
+                return True
     except Exception:
         return False
     return False
@@ -365,17 +358,11 @@ class CSignatureExtractor:
         return translation_unit
 
     def _has_error_diagnostics(self, diagnostics: list[Diagnostic]) -> bool:
-        """判断 diagnostics 中是否包含 error/fatal 级别。"""
-        error_threshold = self._get_error_severity_threshold()
+        """判断 diagnostics 中是否包含 Error/Fatal 级别。"""
         for diagnostic in diagnostics:
-            severity = diagnostic.severity
-            if isinstance(severity, int) and severity >= error_threshold:
+            if diagnostic.severity >= clang.cindex.Diagnostic.Error:
                 return True
         return False
-
-    def _get_error_severity_threshold(self) -> int:
-        """返回 clang error 级别阈值；缺失时退回 libclang 默认值。"""
-        return clang.cindex.Diagnostic.Error
 
     def _build_parse_args(self, file_path: Path) -> list[str]:
         """为单个源码文件拼装 clang 参数。"""
