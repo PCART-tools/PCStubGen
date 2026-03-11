@@ -7,6 +7,9 @@ import sysconfig
 from pathlib import Path
 from typing import Any, Iterable
 
+import clang
+import clang.cindex
+
 from .Constants import (
     CPP_SOURCE_SUFFIXES,
     FORMAT_TYPE_MAP,
@@ -48,7 +51,6 @@ class CSignatureExtractor:
         self._clang_parse_args = list(clang_parse_args)
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
-        self._clang: Any | None = None
         self._cache_result: dict[str, list[ExtractedFunction]] | None = None
 
     def extract(self) -> dict[str, list[ExtractedFunction]]:
@@ -75,7 +77,7 @@ class CSignatureExtractor:
             self._cache_result = {}
             return self._cache_result
 
-        index = self._clang.Index.create()
+        index = clang.cindex.Index.create()
         translation_units: list[Any] = []
         function_defs: dict[str, list[Any]] = {}
 
@@ -97,34 +99,21 @@ class CSignatureExtractor:
 
     def _ensure_clang_ready(self) -> bool:
         """确保 clang 运行环境可用，并补齐解析配置。"""
-        if self._clang is None:
-            try:
-                import clang.cindex as clang_cindex
-            except Exception as ex:  # pragma: no cover
-                logger.warning("clang.cindex is unavailable, skip C extraction: %s", ex)
-                return False
-            self._clang = clang_cindex
-
         parse_args = list(self._clang_parse_args)
         self._clang_parse_args = self._inject_python_include_args(parse_args)
 
         try:
-            loaded = bool(getattr(self._clang.Config, "loaded", False))
+            loaded = bool(getattr(clang.cindex.Config, "loaded", False))
             if not loaded:
                 packaged_libclang_path = self._get_packaged_libclang_path()
                 if packaged_libclang_path:
-                    self._clang.Config.set_library_file(packaged_libclang_path)
+                    clang.cindex.Config.set_library_file(packaged_libclang_path)
         except Exception as ex:  # pragma: no cover
             logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
 
     def _get_packaged_libclang_path(self) -> str | None:
         """从 `clang` 包的 `native` 目录探测可用的 `libclang` 动态库。"""
-        try:
-            import clang
-        except Exception:
-            return None
-
         clang_file = getattr(clang, "__file__", None)
         if not clang_file:
             return None
@@ -245,7 +234,7 @@ class CSignatureExtractor:
 
     def _get_error_severity_threshold(self) -> int:
         """返回 clang error 级别阈值；缺失时退回 libclang 默认值。"""
-        diagnostic_type = getattr(self._clang, "Diagnostic", None)
+        diagnostic_type = getattr(clang.cindex, "Diagnostic", None)
         error_severity = getattr(diagnostic_type, "Error", None)
         if isinstance(error_severity, int):
             return error_severity
@@ -253,7 +242,7 @@ class CSignatureExtractor:
 
     def _get_diagnostic_severity_name(self, severity: Any) -> str:
         """把 libclang severity 数值转换成可读名称。"""
-        diagnostic_type = getattr(self._clang, "Diagnostic", None)
+        diagnostic_type = getattr(clang.cindex, "Diagnostic", None)
         severity_map: dict[int, str] = {}
         if diagnostic_type is not None:
             for attr_name in ("Ignored", "Note", "Warning", "Error", "Fatal"):
@@ -294,7 +283,7 @@ class CSignatureExtractor:
 
     def _collect_function_definitions(self, cursor: Any, output: dict[str, list[Any]]) -> None:
         """遍历 AST，按函数名收集 `FUNCTION_DECL` 节点。"""
-        func_kind = self._clang.CursorKind.FUNCTION_DECL
+        func_kind = clang.cindex.CursorKind.FUNCTION_DECL
         for node in self._walk(cursor):
             if node.kind != func_kind or not node.spelling:
                 continue
@@ -307,7 +296,7 @@ class CSignatureExtractor:
         output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
-        var_decl = self._clang.CursorKind.VAR_DECL
+        var_decl = clang.cindex.CursorKind.VAR_DECL
         for node in self._walk(cursor):
             if node.kind != var_decl:
                 continue
@@ -342,7 +331,7 @@ class CSignatureExtractor:
 
     def _iter_array_elements(self, array_node: Any) -> Iterable[Any]:
         """迭代方法表数组元素，遇到终止哨兵即停止。"""
-        init_kind = self._clang.CursorKind.INIT_LIST_EXPR
+        init_kind = clang.cindex.CursorKind.INIT_LIST_EXPR
         init_nodes = [array_node] if array_node.kind == init_kind else [
             child for child in array_node.get_children() if child.kind == init_kind
         ]
@@ -354,11 +343,11 @@ class CSignatureExtractor:
 
     def _is_end_array_element(self, element: Any) -> bool:
         """判断当前数组元素是否为 `{..., nullptr}` 终止项。"""
-        null_kind = self._clang.CursorKind.CXX_NULL_PTR_LITERAL_EXPR
+        null_kind = clang.cindex.CursorKind.CXX_NULL_PTR_LITERAL_EXPR
         if any(child.kind == null_kind for child in element.get_children()):
             return True
 
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         fields = [
             str(token.spelling)
             for token in element.get_tokens()
@@ -385,7 +374,7 @@ class CSignatureExtractor:
         若关键字段（Python 名、C 函数名）缺失则返回 `None`，
         保持提取过程对异常样本的容错性。
         """
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         tokens = list(struct_init.get_tokens())
         if not tokens:
             return None
@@ -451,7 +440,7 @@ class CSignatureExtractor:
             if args is not None:
                 signatures.append(ExtractedSignature(arguments=args))
 
-        decl_stmt = self._clang.CursorKind.DECL_STMT
+        decl_stmt = clang.cindex.CursorKind.DECL_STMT
         for node in self._walk(func_cursor):
             if node.kind == decl_stmt:
                 signatures.extend(self._extract_parser_signatures(node))
@@ -485,7 +474,7 @@ class CSignatureExtractor:
             if macro_name in all_tokens:
                 inferred_types.add(type_name)
 
-        return_stmt_kind = self._clang.CursorKind.RETURN_STMT
+        return_stmt_kind = clang.cindex.CursorKind.RETURN_STMT
         for node in self._walk(func_cursor):
             if node.kind != return_stmt_kind:
                 continue
@@ -621,7 +610,7 @@ class CSignatureExtractor:
 
     def _find_first_call_name(self, node: Any) -> str | None:
         """在子树中查找首个 `CALL_EXPR` 的函数名。"""
-        call_kind = self._clang.CursorKind.CALL_EXPR
+        call_kind = clang.cindex.CursorKind.CALL_EXPR
         for child in self._walk(node):
             if child.kind == call_kind and child.spelling:
                 return str(child.spelling)
@@ -629,7 +618,7 @@ class CSignatureExtractor:
 
     def _collect_identifier_literal_tokens(self, node: Any) -> list[str]:
         """收集 cursor 子树中的 `IDENTIFIER` / `LITERAL` token。"""
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         return [
             str(token.spelling)
             for token in node.get_tokens()
@@ -644,9 +633,9 @@ class CSignatureExtractor:
         因此这里采用保守递归策略统一处理。
         """
         result: list[list[str]] = []
-        call_kind = self._clang.CursorKind.CALL_EXPR
-        if_kind = self._clang.CursorKind.IF_STMT
-        unexposed_kind = self._clang.CursorKind.UNEXPOSED_EXPR
+        call_kind = clang.cindex.CursorKind.CALL_EXPR
+        if_kind = clang.cindex.CursorKind.IF_STMT
+        unexposed_kind = clang.cindex.CursorKind.UNEXPOSED_EXPR
 
         for child in node.get_children():
             token_list: list[str] | None = None
@@ -668,7 +657,7 @@ class CSignatureExtractor:
 
     def _extract_parser_signatures(self, node: Any) -> list[ExtractedSignature]:
         """从声明语句中的 `\"func(type name, ...)\"` 文本签名提取参数。"""
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         signatures: list[ExtractedSignature] = []
         literals: list[str] = []
         for token in node.get_tokens():
@@ -937,7 +926,7 @@ class CSignatureExtractor:
 
         该步骤会过滤大量无关转换器/宏标识，降低误判概率。
         """
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         result: list[str] = []
         started = False
         for token in call_node.get_tokens():
@@ -960,7 +949,7 @@ class CSignatureExtractor:
 
     def _signature_from_param_decls(self, func_cursor: Any) -> ExtractedSignature:
         """回退方案：直接从 C 形参声明推断签名。"""
-        parm_decl = self._clang.CursorKind.PARM_DECL
+        parm_decl = clang.cindex.CursorKind.PARM_DECL
         args: list[ExtractedArgument] = []
         for node in func_cursor.get_children():
             if node.kind != parm_decl or not node.spelling:
@@ -1004,7 +993,7 @@ class CSignatureExtractor:
 
     def _get_init_value(self, name: str, func_cursor: Any) -> str | None:
         """从局部变量定义中提取默认值字面表达式。"""
-        var_decl = self._clang.CursorKind.VAR_DECL
+        var_decl = clang.cindex.CursorKind.VAR_DECL
         for node in self._walk(func_cursor):
             if node.kind != var_decl or node.spelling != name:
                 continue
@@ -1019,18 +1008,18 @@ class CSignatureExtractor:
 
     def _find_format_string(self, func_cursor: Any, format_var_name: str) -> str | None:
         """回溯查找格式串变量对应的字符串字面量。"""
-        var_decl = self._clang.CursorKind.VAR_DECL
+        var_decl = clang.cindex.CursorKind.VAR_DECL
         for node in self._walk(func_cursor):
             if node.kind != var_decl or node.spelling != format_var_name:
                 continue
             for child in self._walk(node):
-                if child.kind == self._clang.CursorKind.STRING_LITERAL:
+                if child.kind == clang.cindex.CursorKind.STRING_LITERAL:
                     return self._strip_literal_quotes(str(child.spelling))
         return None
 
     def _find_c_function_name(self, tokens: list[Any]) -> str | None:
         """从方法表初始化 token 中提取 C 函数符号名。"""
-        token_kind = self._clang.TokenKind
+        token_kind = clang.cindex.TokenKind
         literal_found = False
         for token in tokens:
             spelling = str(token.spelling)
@@ -1101,7 +1090,7 @@ class CSignatureExtractor:
 
     def _is_initializer_list(self, node: Any) -> bool:
         """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
-        template_ref = self._clang.CursorKind.TEMPLATE_REF
+        template_ref = clang.cindex.CursorKind.TEMPLATE_REF
         has_init = False
         has_pmd = False
         for child in node.get_children():
@@ -1115,7 +1104,7 @@ class CSignatureExtractor:
         """递归定位包含 `INIT_LIST_EXPR` 的实际初始化节点。"""
         for child in node.get_children():
             grand_children = list(child.get_children())
-            if grand_children and grand_children[0].kind == self._clang.CursorKind.INIT_LIST_EXPR:
+            if grand_children and grand_children[0].kind == clang.cindex.CursorKind.INIT_LIST_EXPR:
                 return child
             nested = self._find_initializer_list_node(child)
             if nested is not None:
@@ -1268,4 +1257,5 @@ class CSignatureExtractor:
                 deduped.append(item)
             result[py_name] = deduped
         return result
+
 
