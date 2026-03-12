@@ -751,10 +751,18 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     import pcstubgen2 as stubgen_module
     from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
+    captured_output_dirs: list[Path] = []
+
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
         raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when disabled")
 
+    def _record_writer_output_dir(self: object, module: IRModule, printer: object, to: Path) -> None:
+        _ = (self, module, printer)
+        captured_output_dirs.append(to)
+        (to / "math.pyi").write_text("", encoding="utf-8")
+
     monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+    monkeypatch.setattr(stubgen_module.Writer, "write", _record_writer_output_dir)
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
@@ -762,6 +770,8 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
+    assert captured_output_dirs == [tmp_path]
+    assert captured_output_dirs[0] is tmp_path
     assert list(tmp_path.rglob("*.pyi"))
 
 

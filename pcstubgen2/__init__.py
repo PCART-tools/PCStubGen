@@ -29,7 +29,7 @@ __all__ = ["write_stubs"]
 
 def write_stubs(
     module_name: str,
-    output_dir: str | Path,
+    output_dir: Path,
     options: StubGenerationOptions | None = None,
     writer: Writer | None = None,
 ) -> None:
@@ -39,7 +39,6 @@ def write_stubs(
     if options is None:
         options = StubGenerationOptions()
 
-    output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # 设置日志
