@@ -17,7 +17,7 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignature
     _format_single_diagnostic,
     _get_diagnostic_severity_name,
     _is_initializer_list_PyMethodDef,
-    _is_PyMethodDef_array,
+    _is_PyMethodDef_array_definition,
     _is_PyMethodDef_sentinel,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
@@ -1636,6 +1636,30 @@ def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
     assert configured_path == []
 
 
+def test_c_signature_engine_ensure_clang_ready_does_not_mutate_parse_args(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_parse_args=["-DMY_FLAG=1"])
+
+    assert engine._ensure_clang_ready() is True
+    assert engine._clang_parse_args == ["-DMY_FLAG=1"]
+
+
+def test_c_signature_engine_extract_runs_python_include_injection_as_separate_step(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_parse_args=["-DMY_FLAG=1"])
+    captured: list[list[str]] = []
+
+    def fake_inject(parse_args: list[str]) -> list[str]:
+        captured.append(list(parse_args))
+        return [*parse_args, "-IC:/Python/include"]
+
+    engine._ensure_clang_ready = lambda: True
+    engine._inject_python_include_args = fake_inject
+    engine._find_candidate_files = lambda: []
+
+    assert engine.extract() == {}
+    assert captured == [["-DMY_FLAG=1"]]
+    assert engine._clang_parse_args == ["-DMY_FLAG=1", "-IC:/Python/include"]
+
+
 def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
@@ -1696,7 +1720,10 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element()
     class _FakeNode:
         type = _FakeType()
 
-    assert _is_PyMethodDef_array(_FakeNode()) is False
+        def is_definition(self) -> bool:
+            return False
+
+    assert _is_PyMethodDef_array_definition(_FakeNode()) is False
 
 
 def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name() -> None:
@@ -1718,7 +1745,10 @@ def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name(
     class _FakeNode:
         type = _FakeArrayType()
 
-    assert _is_PyMethodDef_array(_FakeNode()) is True
+        def is_definition(self) -> bool:
+            return True
+
+    assert _is_PyMethodDef_array_definition(_FakeNode()) is True
 
 
 def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_children() -> None:
@@ -2033,7 +2063,7 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
         location=_FakeCursorLocation(file=init_expr_file),
     )
     output: dict[str, list[SimpleNamespace]] = {}
-    engine._process_PyMethodDef_INIT_LIST_EXPR(var_decl_node, should_break_array, function_defs, output)
+    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_break_array, function_defs, output)
     assert calls == [(method_1, "Methods", owner_file, function_defs)]
     assert list(output) == ["entry_1"]
 
@@ -2045,7 +2075,7 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
         children=[method_1, non_sentinel, method_2],
         location=_FakeCursorLocation(file=init_expr_file),
     )
-    engine._process_PyMethodDef_INIT_LIST_EXPR(var_decl_node, should_not_break_array, function_defs, output)
+    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_not_break_array, function_defs, output)
     assert [call[0] for call in calls] == [method_1, non_sentinel, method_2]
     assert {call[1] for call in calls} == {"Methods"}
     assert {call[2] for call in calls} == {owner_file}
@@ -2070,7 +2100,7 @@ def test_c_signature_engine_finds_actual_initializer_list_expr(tmp_path: Path) -
         ],
     )
 
-    assert engine._find_initializer_list_node(wrapped) is target_init_expr
+    assert engine._find_INIT_LIST_EXPR_node(wrapped) is target_init_expr
 
 
 def test_c_signature_engine_collects_array_method_table_from_init_list_child(

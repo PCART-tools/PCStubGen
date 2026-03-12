@@ -196,9 +196,9 @@ def _is_array_kind(kind: TypeKind) -> bool:
     )
 
 
-def _is_PyMethodDef_array(cursor: Cursor) -> bool:
+def _is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
-    if _is_array_kind(cursor.type.kind):
+    if _is_array_kind(cursor.type.kind) and cursor.is_definition():
         elem_type = cursor.type.get_array_element_type()
         if elem_type.get_canonical().spelling == "struct PyMethodDef":
             return True
@@ -264,6 +264,8 @@ class CSignatureExtractor:
             self._cache_result = {}
             return self._cache_result
 
+        self._prepare_extract_parse_args()
+
         source_files = self._find_candidate_files()
         if not source_files:
             self._cache_result = {}
@@ -292,19 +294,19 @@ class CSignatureExtractor:
         return self._cache_result
 
     def _ensure_clang_ready(self) -> bool:
-        """确保 clang 运行环境可用，并补齐解析配置。"""
-        parse_args = list(self._clang_parse_args)
-        self._clang_parse_args = self._inject_python_include_args(parse_args)
-
+        """确保 clang 运行环境可用。"""
         try:
-            loaded = bool(clang.cindex.Config.loaded)
-            if not loaded:
+            if not clang.cindex.Config.loaded:
                 packaged_libclang_path = _get_packaged_libclang_path()
                 if packaged_libclang_path:
                     clang.cindex.Config.set_library_file(packaged_libclang_path)
         except Exception as ex:  # pragma: no cover
             logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
+
+    def _prepare_extract_parse_args(self) -> None:
+        """在提取阶段补齐解析所需的额外参数。"""
+        self._clang_parse_args = self._inject_python_include_args(self._clang_parse_args)
 
     def _inject_python_include_args(self, parse_args: list[str]) -> list[str]:
         """向 clang 参数注入当前 Python 头文件目录。"""
@@ -387,9 +389,8 @@ class CSignatureExtractor:
     def _collect_function_definitions(self, cursor: Cursor, output: dict[str, list[Cursor]]) -> None:
         """遍历 AST，按函数名收集 `FUNCTION_DECL` 节点。"""
         for node in self._walk(cursor):
-            if node.kind != CursorKind.FUNCTION_DECL or not node.spelling:
-                continue
-            output.setdefault(node.spelling, []).append(node)
+            if node.kind == CursorKind.FUNCTION_DECL and node.spelling:
+                output.setdefault(node.spelling, []).append(node)
 
     def _collect_pymethod_defs(
         self,
@@ -400,27 +401,25 @@ class CSignatureExtractor:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
         for node in self._walk(cursor):
             if node.kind == CursorKind.VAR_DECL:
-                if _is_PyMethodDef_array(node):
-                    init_expr_node = self._find_initializer_list_node(node)
-                    if init_expr_node is not None:
-                        self._process_PyMethodDef_INIT_LIST_EXPR(
-                            node,
-                            init_expr_node,
-                            function_defs,
-                            output,
-                        )
+                if _is_PyMethodDef_array_definition(node):
+                    init_expr_node = self._find_INIT_LIST_EXPR_node(node)
+                    self._process_PyMethodDef_array_INIT_LIST_EXPR(
+                        node,
+                        init_expr_node,
+                        function_defs,
+                        output,
+                    )
                 elif _is_initializer_list_PyMethodDef(node):
-                    init_expr_node = self._find_initializer_list_node(node)
-                    if init_expr_node is not None:
-                        self._process_PyMethodDef_INIT_LIST_EXPR(
-                            node,
-                            init_expr_node,
-                            function_defs,
-                            output,
-                        )
+                    init_expr_node = self._find_INIT_LIST_EXPR_node(node)
+                    self._process_PyMethodDef_array_INIT_LIST_EXPR(
+                        node,
+                        init_expr_node,
+                        function_defs,
+                        output,
+                    )
 
 
-    def _process_PyMethodDef_INIT_LIST_EXPR(
+    def _process_PyMethodDef_array_INIT_LIST_EXPR(
         self,
         var_decl_node: Cursor,
         init_expr_node: Cursor,
@@ -461,24 +460,24 @@ class CSignatureExtractor:
         if not tokens:
             return None
 
-        py_name: str | None = None
-        meth_flags: list[str] = []
+        ml_name: str | None = None
+        ml_flags: list[str] = []
         for token in tokens:
             spelling = str(token.spelling)
             if token.kind == TokenKind.LITERAL:
                 # 第一个字符串字面量通常是 Python 暴露名。
-                if py_name is None and '"' in spelling:
+                if ml_name is None and '"' in spelling:
                     lit = self._strip_literal_quotes(spelling)
                     if lit and lit != "NULL":
-                        py_name = lit
-                meth_flags.extend(self._decode_meth_literal_flags(spelling))
+                        ml_name = lit
+                ml_flags.extend(self._decode_meth_literal_flags(spelling))
                 continue
             if token.kind == TokenKind.IDENTIFIER and spelling.startswith("METH_"):
-                meth_flags.append(spelling)
+                ml_flags.append(spelling)
 
-        if not py_name:
+        if not ml_name:
             return None
-        meth_flags = self._unique_keep_order(meth_flags)
+        ml_flags = self._unique_keep_order(ml_flags)
 
         c_name = self._find_c_function_name(tokens)
         if not c_name:
@@ -491,7 +490,7 @@ class CSignatureExtractor:
         signatures: list[ExtractedSignature] = []
         return_type_name: str | None = None
         if function_cursor is not None:
-            signatures = self._extract_signatures_from_function(function_cursor, meth_flags)
+            signatures = self._extract_signatures_from_function(function_cursor, ml_flags)
             return_type_name = self._infer_return_type_from_function(function_cursor)
             if not signatures:
                 # 解析不到 PyArg_* 调用时，回退到 C 形参声明推断。
@@ -503,12 +502,12 @@ class CSignatureExtractor:
             signatures = [ExtractedSignature(arguments=[], return_type_name=return_type_name)]
 
         signatures = [self._merge_signature_return_type(sig, return_type_name) for sig in signatures]
-        signatures = [self._apply_method_flags(sig, meth_flags) for sig in signatures]
+        signatures = [self._apply_method_flags(sig, ml_flags) for sig in signatures]
         signatures = self._deduplicate_signatures(signatures)
         return ExtractedFunction(
-            py_name=py_name,
+            py_name=ml_name,
             c_name=c_name,
-            method_flags=meth_flags,
+            method_flags=ml_flags,
             signatures=signatures,
             source_file=source_file,
             method_table=method_table,
@@ -1123,10 +1122,7 @@ class CSignatureExtractor:
         if preferred_key is not None:
             same_file_candidates: list[Cursor] = []
             for candidate in candidates:
-                try:
-                    candidate_file = candidate.location.file
-                except Exception:
-                    candidate_file = None
+                candidate_file = candidate.location.file
                 if self._normalize_file_key(candidate_file) == preferred_key:
                     same_file_candidates.append(candidate)
             if same_file_candidates:
@@ -1149,12 +1145,12 @@ class CSignatureExtractor:
             return None
         return os.path.normcase(os.path.normpath(raw))
 
-    def _find_initializer_list_node(self, node: Cursor) -> Cursor | None:
+    def _find_INIT_LIST_EXPR_node(self, cursor: Cursor) -> Cursor | None:
         """递归定位包含 `INIT_LIST_EXPR` 的实际初始化节点。"""
-        if node.kind == CursorKind.INIT_LIST_EXPR:
-            return node
-        for child in node.get_children():
-            nested = self._find_initializer_list_node(child)
+        if cursor.kind == CursorKind.INIT_LIST_EXPR:
+            return cursor
+        for child in cursor.get_children():
+            nested = self._find_INIT_LIST_EXPR_node(child)
             if nested is not None:
                 return nested
         return None

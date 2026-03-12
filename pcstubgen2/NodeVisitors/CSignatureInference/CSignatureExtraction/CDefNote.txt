@@ -5,6 +5,8 @@ typedef struct PyMethodDef {
     const char  *ml_doc;    /* 文档字符串 */
 } PyMethodDef;
 
+ml = method list
+
 typedef PyObject* (*PyCFunction)(PyObject* self, PyObject* args);
 
 哨兵
