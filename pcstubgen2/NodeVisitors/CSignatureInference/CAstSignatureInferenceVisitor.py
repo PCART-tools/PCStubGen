@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import logging
 import re
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Literal
 
 from .CSignatureExtraction import CSignatureExtractor, ExtractedArgument, ExtractedFunction
 from ..NodeVisitor import NodeVisitor
@@ -25,6 +26,26 @@ from ...IR import (
 )
 
 logger = logging.getLogger(__name__)
+
+SignatureLoadStatus = Literal["nonempty", "empty", "extract_failed"]
+RewriteOutcome = Literal[
+    "success",
+    "no_candidates",
+    "candidate_selection_failed",
+    "empty_selected_signatures",
+]
+
+
+@dataclasses.dataclass
+class _InferenceStats:
+    total_generic: int = 0
+    success: int = 0
+    failed: int = 0
+    no_candidates: int = 0
+    candidate_selection_failed: int = 0
+    empty_selected_signatures: int = 0
+    empty_extract: int = 0
+    extract_failed: int = 0
 
 
 class CAstSignatureInferenceVisitor(NodeVisitor):
@@ -54,14 +75,20 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
         )
+        self._stats = _InferenceStats()
+        self._signatures: dict[str, list[ExtractedFunction]] | None = None
+        self._signature_load_status: SignatureLoadStatus | None = None
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
 
         if node.module_type is IRModuleType.C:
-            signatures = self._get_signatures()
-            if signatures:
-                node.functions = self._rewrite_module_functions(node.functions, signatures)
+            signatures, load_status = self._get_signatures()
+            node.functions = self._rewrite_module_functions(
+                node.functions,
+                signatures,
+                load_status=load_status,
+            )
 
         super().visit_module(node)
 
@@ -69,36 +96,86 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """在模块启用时重写类方法签名。"""
 
         if module.module_type is IRModuleType.C:
-            signatures = self._get_signatures()
-            if signatures:
-                node.methods = self._rewrite_class_methods(node.methods, signatures)
+            signatures, load_status = self._get_signatures()
+            node.methods = self._rewrite_class_methods(
+                node.methods,
+                signatures,
+                load_status=load_status,
+            )
 
         super().visit_class(node, module)
+
+    def log_summary(self, project_name: str) -> None:
+        if self._stats.total_generic <= 0:
+            self._reset_stats()
+            return
+
+        logger.info(
+            "C AST signature inference summary for %s: "
+            "total_generic=%d, success=%d, failed=%d, no_candidates=%d, "
+            "candidate_selection_failed=%d, empty_selected_signatures=%d, "
+            "empty_extract=%d, extract_failed=%d",
+            project_name,
+            self._stats.total_generic,
+            self._stats.success,
+            self._stats.failed,
+            self._stats.no_candidates,
+            self._stats.candidate_selection_failed,
+            self._stats.empty_selected_signatures,
+            self._stats.empty_extract,
+            self._stats.extract_failed,
+        )
+        self._reset_stats()
 
     def _rewrite_module_functions(
         self,
         funcs: list[IRFunction],
         signatures: dict[str, list[ExtractedFunction]],
+        *,
+        load_status: SignatureLoadStatus,
     ) -> list[IRFunction]:
         """批量重写模块级函数。"""
+        if load_status != "nonempty":
+            self._record_unavailable_extract(
+                funcs=funcs,
+                failure_key="empty_extract" if load_status == "empty" else "extract_failed",
+            )
+            return funcs
+
         new_funcs: list[IRFunction] = []
         for func in funcs:
-            new_funcs.extend(self._rewrite_function(func=func, signatures=signatures, is_method=False))
+            rewritten, outcome = self._rewrite_function_with_outcome(
+                func=func,
+                signatures=signatures,
+                is_method=False,
+            )
+            self._record_outcome(func=func, outcome=outcome)
+            new_funcs.extend(rewritten)
         return new_funcs
 
     def _rewrite_class_methods(
         self,
         methods: list[IRMethod],
         signatures: dict[str, list[ExtractedFunction]],
+        *,
+        load_status: SignatureLoadStatus,
     ) -> list[IRMethod]:
         """批量重写类方法，并保留原有 decorator 封装。"""
+        if load_status != "nonempty":
+            self._record_unavailable_extract(
+                funcs=[method.function for method in methods],
+                failure_key="empty_extract" if load_status == "empty" else "extract_failed",
+            )
+            return methods
+
         new_methods: list[IRMethod] = []
         for method in methods:
-            rewritten = self._rewrite_function(
+            rewritten, outcome = self._rewrite_function_with_outcome(
                 func=method.function,
                 signatures=signatures,
                 is_method=True,
             )
+            self._record_outcome(func=method.function, outcome=outcome)
             if len(rewritten) == 1 and rewritten[0] is method.function:
                 # 未发生替换时直接复用原对象，减少不必要重建。
                 new_methods.append(method)
@@ -114,13 +191,27 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         signatures: dict[str, list[ExtractedFunction]],
         is_method: bool,
     ) -> list[IRFunction]:
+        rewritten, _ = self._rewrite_function_with_outcome(
+            func=func,
+            signatures=signatures,
+            is_method=is_method,
+        )
+        return rewritten
+
+    def _rewrite_function_with_outcome(
+        self,
+        *,
+        func: IRFunction,
+        signatures: dict[str, list[ExtractedFunction]],
+        is_method: bool,
+    ) -> tuple[list[IRFunction], RewriteOutcome | None]:
         """
         用提取结果重写单个函数签名。
 
         仅处理仍为 generic 占位签名的函数，避免覆盖前序 visitor 已解析出的精确信息。
         """
         if not func.is_generic_signature():
-            return [func]
+            return [func], None
 
         candidates = signatures.get(func.name)
         if not candidates:
@@ -129,7 +220,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 func.name,
                 is_method,
             )
-            return [func]
+            return [func], "no_candidates"
 
         selected = self._select_candidate(candidates, is_method=is_method)
         if selected is None:
@@ -138,7 +229,15 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 func.name,
                 is_method,
             )
-            return [func]
+            return [func], "candidate_selection_failed"
+
+        if not selected.signatures:
+            logger.warning(
+                "Failed to rewrite generic signature for %s (is_method=%s): selected candidate has no signatures",
+                func.name,
+                is_method,
+            )
+            return [func], "empty_selected_signatures"
 
         overload = len(selected.signatures) > 1
         rewritten: list[IRFunction] = []
@@ -168,7 +267,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 len(candidates),
                 len(rewritten),
             )
-        return rewritten if rewritten else [func]
+        return (rewritten if rewritten else [func]), "success"
 
     def _build_ir_arguments(
         self,
@@ -289,16 +388,51 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
         return max(candidates, key=candidate_score)
 
-    def _get_signatures(self) -> dict[str, list[ExtractedFunction]]:
+    def _get_signatures(self) -> tuple[dict[str, list[ExtractedFunction]], SignatureLoadStatus]:
         """
         按需提取 C AST 结果；缓存由 extraction engine 负责。
 
         任何提取失败都降级为空结果，保证 stub 生成主流程可持续执行。
         """
+        if self._signatures is not None and self._signature_load_status is not None:
+            return self._signatures, self._signature_load_status
+
         try:
-            return self._extractor.extract()
+            self._signatures = self._extractor.extract()
+            self._signature_load_status = "nonempty" if self._signatures else "empty"
         except Exception as ex:  # pragma: no cover - 防御性分支
             # 提取阶段异常不应阻断整体生成流程。
             logger.warning("Failed to extract C signatures: %s", ex)
-            return {}
+            self._signatures = {}
+            self._signature_load_status = "extract_failed"
+        return self._signatures, self._signature_load_status
+
+    def _record_outcome(self, *, func: IRFunction, outcome: RewriteOutcome | None) -> None:
+        if not func.is_generic_signature() or outcome is None:
+            return
+
+        self._stats.total_generic += 1
+        if outcome == "success":
+            self._stats.success += 1
+            return
+
+        self._stats.failed += 1
+        setattr(self._stats, outcome, getattr(self._stats, outcome) + 1)
+
+    def _record_unavailable_extract(
+        self,
+        *,
+        funcs: list[IRFunction],
+        failure_key: Literal["empty_extract", "extract_failed"],
+    ) -> None:
+        generic_count = sum(1 for func in funcs if func.is_generic_signature())
+        if generic_count <= 0:
+            return
+
+        self._stats.total_generic += generic_count
+        self._stats.failed += generic_count
+        setattr(self._stats, failure_key, getattr(self._stats, failure_key) + generic_count)
+
+    def _reset_stats(self) -> None:
+        self._stats = _InferenceStats()
 

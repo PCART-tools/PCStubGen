@@ -52,6 +52,8 @@ def write_stubs(
     file_handler = logging.FileHandler(output_dir / "pcstubgen2.log", mode="w", encoding="utf-8")
     file_handler.setFormatter(logging.Formatter("[{levelname}] - {name}\n{message}\n", style="{"))
     package_logger = logging.getLogger(__name__)
+    previous_package_logger_level = package_logger.level
+    package_logger.setLevel(logging.INFO)
     package_logger.addHandler(file_handler)
     try:
         # 为本次运行创建错误收集器
@@ -81,20 +83,21 @@ def write_stubs(
                 )
             )
 
+        c_ast_visitor: CAstSignatureInferenceVisitor | None = None
+
         if options.enable_c_signature_inference:
             if options.c_source_root is None:
                 raise ValueError(
                     "enable_c_signature_inference=True requires c_source_root to be set to a pathlib.Path"
                 )
-            visitors.append(
-                CAstSignatureInferenceVisitor(
-                    error_collector=error_collector,
-                    c_source_root=options.c_source_root,
-                    clang_parse_args=options.clang_parse_args,
-                    clang_c_std=options.clang_c_std,
-                    clang_cpp_std=options.clang_cpp_std,
-                )
+            c_ast_visitor = CAstSignatureInferenceVisitor(
+                error_collector=error_collector,
+                c_source_root=options.c_source_root,
+                clang_parse_args=options.clang_parse_args,
+                clang_c_std=options.clang_c_std,
+                clang_cpp_std=options.clang_cpp_std,
             )
+            visitors.append(c_ast_visitor)
 
         visitors.extend(
             [
@@ -112,6 +115,8 @@ def write_stubs(
 
         # 4. 运行管道
         pipeline.run(ir_module)
+        if c_ast_visitor is not None:
+            c_ast_visitor.log_summary(str(ir_module.full_name))
 
         ext = options.stub_extension if options.stub_extension else "pyi"
         if writer is None:
@@ -126,4 +131,5 @@ def write_stubs(
         writer.write(ir_module, printer, to=output_dir)
     finally:
         package_logger.removeHandler(file_handler)
+        package_logger.setLevel(previous_package_logger_level)
         file_handler.close()

@@ -94,6 +94,29 @@ def _patch_c_signature_extractor(
     return extractor
 
 
+def _patch_raising_c_signature_extractor(
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+) -> None:
+    class _PatchedExtractor:
+        def __init__(
+            self,
+            source_root: Path,
+            *,
+            clang_parse_args: Iterable[str] = (),
+            clang_c_std: str | None = None,
+            clang_cpp_std: str | None = None,
+        ) -> None:
+            _ = (source_root, clang_parse_args, clang_c_std, clang_cpp_std)
+
+        def extract(self) -> dict[str, list[ExtractedFunction]]:
+            raise error
+
+    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+
+    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
+
+
 def _get_packaged_libclang_path() -> str | None:
     import clang
 
@@ -318,6 +341,52 @@ def test_c_ast_visitor_logs_when_candidate_selection_fails(
     )
 
 
+def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        {
+            "foo": [
+                ExtractedFunction(
+                    py_name="foo",
+                    c_name="c_foo",
+                    method_flags=["METH_VARARGS"],
+                    signatures=[],
+                )
+            ]
+        },
+    )
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+
+    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+        visitor.visit_module(module)
+        visitor.log_summary("pkg.mod")
+
+    assert module.functions[0].is_generic_signature()
+    assert [record.levelno for record in caplog.records] == [logging.WARNING, logging.INFO]
+    assert caplog.records[0].message == (
+        "Failed to rewrite generic signature for foo (is_method=False): "
+        "selected candidate has no signatures"
+    )
+    assert caplog.records[1].message == (
+        "C AST signature inference summary for pkg.mod: "
+        "total_generic=1, success=0, failed=1, no_candidates=0, "
+        "candidate_selection_failed=0, empty_selected_signatures=1, "
+        "empty_extract=0, extract_failed=0"
+    )
+
+
 def test_c_ast_visitor_does_not_log_for_non_generic_function(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
@@ -343,6 +412,69 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
 
     assert rewritten == [func]
     assert caplog.records == []
+
+
+def test_c_ast_visitor_log_summary_resets_after_logging(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        {
+            "foo": [
+                ExtractedFunction(
+                    py_name="foo",
+                    c_name="c_foo",
+                    method_flags=["METH_VARARGS"],
+                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                )
+            ],
+            "bar": [
+                ExtractedFunction(
+                    py_name="bar",
+                    c_name="c_bar",
+                    method_flags=["METH_VARARGS"],
+                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
+                )
+            ],
+        },
+    )
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+    first_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.first"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+    second_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.second"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="bar", args=_generic_signature())],
+    )
+
+    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+        visitor.visit_module(first_module)
+        visitor.visit_module(second_module)
+        visitor.log_summary("pkg")
+        after_first_summary = len(caplog.records)
+        visitor.log_summary("pkg")
+
+    assert len(caplog.records) == after_first_summary
+    summary_records = [
+        record
+        for record in caplog.records
+        if record.message.startswith("C AST signature inference summary for pkg:")
+    ]
+    assert len(summary_records) == 1
+    assert summary_records[0].message == (
+        "C AST signature inference summary for pkg: "
+        "total_generic=2, success=2, failed=0, no_candidates=0, "
+        "candidate_selection_failed=0, empty_selected_signatures=0, "
+        "empty_extract=0, extract_failed=0"
+    )
 
 
 def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
@@ -792,6 +924,145 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
         or Path(handler.baseFilename) != log_file
         for handler in package_logger.handlers
     )
+
+
+def test_write_stubs_logs_project_level_c_ast_summary(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+        classes=[
+            IRClass(
+                name="Builder",
+                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+            )
+        ],
+        sub_modules=[
+            IRModule(
+                full_name=QualifiedName.from_str("pkg.child"),
+                module_type=IRModuleType.C,
+                functions=[IRFunction(name="bar", args=_generic_signature())],
+            )
+        ],
+    )
+    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    _patch_c_signature_extractor(
+        monkeypatch,
+        {
+            "foo": [
+                ExtractedFunction(
+                    py_name="foo",
+                    c_name="c_foo",
+                    method_flags=["METH_VARARGS"],
+                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                )
+            ]
+        },
+    )
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=True,
+        c_source_root=tmp_path,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    assert (
+        "C AST signature inference summary for pkg: "
+        "total_generic=3, success=1, failed=2, no_candidates=2, "
+        "candidate_selection_failed=0, empty_selected_signatures=0, "
+        "empty_extract=0, extract_failed=0"
+    ) in log_text
+
+
+def test_write_stubs_logs_empty_extract_summary_without_per_item_noise(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+        classes=[
+            IRClass(
+                name="Builder",
+                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+            )
+        ],
+    )
+    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    _patch_c_signature_extractor(monkeypatch, {})
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=True,
+        c_source_root=tmp_path,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    assert "Failed to rewrite generic signature" not in log_text
+    assert (
+        "C AST signature inference summary for pkg: "
+        "total_generic=2, success=0, failed=2, no_candidates=0, "
+        "candidate_selection_failed=0, empty_selected_signatures=0, "
+        "empty_extract=2, extract_failed=0"
+    ) in log_text
+
+
+def test_write_stubs_logs_extract_failed_summary_once(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import pcstubgen2 as stubgen_module
+    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+        classes=[
+            IRClass(
+                name="Builder",
+                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+            )
+        ],
+        sub_modules=[
+            IRModule(
+                full_name=QualifiedName.from_str("pkg.child"),
+                module_type=IRModuleType.C,
+                functions=[IRFunction(name="bar", args=_generic_signature())],
+            )
+        ],
+    )
+    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+        enable_c_signature_inference=True,
+        c_source_root=tmp_path,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    assert log_text.count("Failed to extract C signatures: boom") == 1
+    assert (
+        "C AST signature inference summary for pkg: "
+        "total_generic=3, success=0, failed=3, no_candidates=0, "
+        "candidate_selection_failed=0, empty_selected_signatures=0, "
+        "empty_extract=0, extract_failed=3"
+    ) in log_text
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
