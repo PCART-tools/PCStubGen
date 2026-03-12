@@ -18,7 +18,7 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignature
     _get_diagnostic_severity_name,
     _is_initializer_list_PyMethodDef,
     _is_PyMethodDef_array_definition,
-    _is_PyMethodDef_sentinel,
+    _is_PyMethodDef_array_sentinel,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
@@ -1985,7 +1985,7 @@ def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(sentinel)
         clang.cindex.CursorKind.UNEXPOSED_EXPR,
         _wrap(clang.cindex.CursorKind.PAREN_EXPR, _wrap(clang.cindex.CursorKind.CSTYLE_CAST_EXPR, _int_literal("0"))),
     )
-    assert _is_PyMethodDef_sentinel(sentinel(c_null)) is True
+    assert _is_PyMethodDef_array_sentinel(sentinel(c_null)) is True
 
 
 @pytest.mark.parametrize(
@@ -2013,16 +2013,16 @@ def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(sentinel)
     ],
 )
 def test_c_signature_engine_array_end_rejects_non_sentinel_forms(non_sentinel: _FakeNode) -> None:
-    assert _is_PyMethodDef_sentinel(non_sentinel) is False
+    assert _is_PyMethodDef_array_sentinel(non_sentinel) is False
 
 
 def test_c_signature_engine_accepts_single_NULL_token_via_fallback() -> None:
-    assert _is_PyMethodDef_sentinel(_init_list(_identifier_node("NULL"))) is True
+    assert _is_PyMethodDef_array_sentinel(_init_list(_identifier_node("NULL"))) is True
 
 
 @pytest.mark.parametrize("name", ["nullptr", "__null"])
 def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> None:
-    assert _is_PyMethodDef_sentinel(_init_list(_identifier_node(name))) is False
+    assert _is_PyMethodDef_array_sentinel(_init_list(_identifier_node(name))) is False
 
 
 def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_sentinel(
@@ -2092,27 +2092,6 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
 
 
-def test_c_signature_engine_finds_actual_initializer_list_expr(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-    target_init_expr = _init_list(_init_list(_identifier_node("entry")))
-    wrapped = _FakeNode(
-        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        children=[
-            _FakeNode(
-                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-                children=[
-                    _FakeNode(
-                        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-                        children=[target_init_expr],
-                    )
-                ],
-            )
-        ],
-    )
-
-    assert engine._find_INIT_LIST_EXPR_node(wrapped) is target_init_expr
-
-
 def test_c_signature_engine_collects_array_method_table_from_init_list_child(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -2144,6 +2123,7 @@ def test_c_signature_engine_collects_array_method_table_from_init_list_child(
         ],
     )
     var_decl_node.type = _FakeArrayType()
+    var_decl_node.is_definition = lambda: True
     root = _FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT, children=[var_decl_node])
     captured: list[_FakeNode] = []
 
@@ -2156,7 +2136,7 @@ def test_c_signature_engine_collects_array_method_table_from_init_list_child(
         _ = (var_decl_node, function_defs, output)
         captured.append(init_expr_node)
 
-    monkeypatch.setattr(engine, "_process_PyMethodDef_INIT_LIST_EXPR", fake_process)
+    monkeypatch.setattr(engine, "_process_PyMethodDef_array_INIT_LIST_EXPR", fake_process)
 
     engine._collect_pymethod_defs(root, {}, {})
 

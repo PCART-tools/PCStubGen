@@ -45,7 +45,7 @@ SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
 FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[SignatureKey, ...]]
 
 
-def _is_PyMethodDef_sentinel(element: Cursor) -> bool:
+def _is_PyMethodDef_array_sentinel(element: Cursor) -> bool:
     """判断 `PyMethodDef` 条目是否为数组结束哨兵。只要ml_name语义上为0就判定为哨兵"""
     transparent_kinds = {
         CursorKind.UNEXPOSED_EXPR,  # clang 额外包裹层，常见于宏展开或隐式转换外壳
@@ -402,15 +402,7 @@ class CSignatureExtractor:
         for node in self._walk(cursor):
             if node.kind == CursorKind.VAR_DECL:
                 if _is_PyMethodDef_array_definition(node):
-                    init_expr_node = self._find_INIT_LIST_EXPR_node(node)
-                    self._process_PyMethodDef_array_INIT_LIST_EXPR(
-                        node,
-                        init_expr_node,
-                        function_defs,
-                        output,
-                    )
-                elif _is_initializer_list_PyMethodDef(node):
-                    init_expr_node = self._find_INIT_LIST_EXPR_node(node)
+                    init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(node)
                     self._process_PyMethodDef_array_INIT_LIST_EXPR(
                         node,
                         init_expr_node,
@@ -418,6 +410,15 @@ class CSignatureExtractor:
                         output,
                     )
 
+    @staticmethod
+    def _array_VAR_DECL_to_INIT_LIST_EXPR(cursor: Cursor) -> Cursor:
+        # VAR_DECL
+        #   TYPE_REF
+        #   INIT_LIST_EXPR
+        it = iter(cursor.get_children())
+        _ = next(it)
+        init_list_expr = next(it)
+        return init_list_expr
 
     def _process_PyMethodDef_array_INIT_LIST_EXPR(
         self,
@@ -427,11 +428,11 @@ class CSignatureExtractor:
         output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
-        table_name = var_decl_node.spelling if var_decl_node.spelling else "<anonymous>"
+        table_name = var_decl_node.spelling
         location = var_decl_node.location
         source_file = str(location.file)
         for element in init_expr_node.get_children():
-            if _is_PyMethodDef_sentinel(element):
+            if _is_PyMethodDef_array_sentinel(element):
                 break
             extracted = self._extract_PyMethodDef_struct_fields(
                 struct_init=element,
@@ -1144,16 +1145,6 @@ class CSignatureExtractor:
         if not raw:
             return None
         return os.path.normcase(os.path.normpath(raw))
-
-    def _find_INIT_LIST_EXPR_node(self, cursor: Cursor) -> Cursor | None:
-        """递归定位包含 `INIT_LIST_EXPR` 的实际初始化节点。"""
-        if cursor.kind == CursorKind.INIT_LIST_EXPR:
-            return cursor
-        for child in cursor.get_children():
-            nested = self._find_INIT_LIST_EXPR_node(child)
-            if nested is not None:
-                return nested
-        return None
 
     def _walk(self, node: Cursor) -> Iterable[Cursor]:
         """生成器，深度优先遍历 cursor 子树。"""
