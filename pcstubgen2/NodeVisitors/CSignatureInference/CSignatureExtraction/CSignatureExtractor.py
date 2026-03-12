@@ -200,7 +200,7 @@ def _is_PyMethodDef_array(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
     if _is_array_kind(cursor.type.kind):
         elem_type = cursor.type.get_array_element_type()
-        if elem_type.get_canonical().spelling == "PyMethodDef":
+        if elem_type.get_canonical().spelling == "struct PyMethodDef":
             return True
     return False
 
@@ -325,16 +325,10 @@ class CSignatureExtractor:
         """查找可能包含 `PyMethodDef` 的 C/C++ 源文件。"""
         result: list[Path] = []
         for path in self.source_root.rglob("*"):
-            if not path.is_file():
-                continue
-            if path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
-                continue
-            try:
+            if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
                 text = path.read_text(encoding="utf-8", errors="ignore")
-            except OSError:
-                continue
-            if "PyMethodDef" in text:
-                result.append(path)
+                if "PyMethodDef" in text:
+                    result.append(path)
         result.sort()
         return result
 
@@ -407,19 +401,6 @@ class CSignatureExtractor:
         for node in self._walk(cursor):
             if node.kind == CursorKind.VAR_DECL:
                 if _is_PyMethodDef_array(node):
-                    init_expr_node = next(
-                        (child for child in node.get_children() if child.kind == CursorKind.INIT_LIST_EXPR),
-                        None,
-                    )
-                    if init_expr_node is not None:
-                        self._process_PyMethodDef_INIT_LIST_EXPR(
-                            node,
-                            init_expr_node,
-                            function_defs,
-                            output,
-                        )
-                    continue
-                if _is_initializer_list_PyMethodDef(node):
                     init_expr_node = self._find_initializer_list_node(node)
                     if init_expr_node is not None:
                         self._process_PyMethodDef_INIT_LIST_EXPR(
@@ -428,6 +409,16 @@ class CSignatureExtractor:
                             function_defs,
                             output,
                         )
+                elif _is_initializer_list_PyMethodDef(node):
+                    init_expr_node = self._find_initializer_list_node(node)
+                    if init_expr_node is not None:
+                        self._process_PyMethodDef_INIT_LIST_EXPR(
+                            node,
+                            init_expr_node,
+                            function_defs,
+                            output,
+                        )
+
 
     def _process_PyMethodDef_INIT_LIST_EXPR(
         self,

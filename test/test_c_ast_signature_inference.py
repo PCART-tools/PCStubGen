@@ -982,7 +982,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     ) in log_text
 
 
-def test_write_stubs_logs_empty_extract_summary_without_per_item_noise(
+def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1011,7 +1011,14 @@ def test_write_stubs_logs_empty_extract_summary_without_per_item_noise(
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
     log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
-    assert "Failed to rewrite generic signature" not in log_text
+    assert (
+        "Failed to rewrite generic signature for foo (is_method=False): "
+        "C signature extraction returned no results"
+    ) in log_text
+    assert (
+        "Failed to rewrite generic signature for build (is_method=True): "
+        "C signature extraction returned no results"
+    ) in log_text
     assert (
         "C AST signature inference summary for pkg: "
         "total_generic=2, success=0, failed=2, no_candidates=0, "
@@ -1057,6 +1064,18 @@ def test_write_stubs_logs_extract_failed_summary_once(
 
     log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
     assert log_text.count("Failed to extract C signatures: boom") == 1
+    assert (
+        "Failed to rewrite generic signature for foo (is_method=False): "
+        "C signature extraction failed"
+    ) in log_text
+    assert (
+        "Failed to rewrite generic signature for build (is_method=True): "
+        "C signature extraction failed"
+    ) in log_text
+    assert (
+        "Failed to rewrite generic signature for bar (is_method=False): "
+        "C signature extraction failed"
+    ) in log_text
     assert (
         "C AST signature inference summary for pkg: "
         "total_generic=3, success=0, failed=3, no_candidates=0, "
@@ -1207,7 +1226,7 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
         "\n".join(
             [
                 "typedef struct _object PyObject;",
-                "typedef struct {",
+                "typedef struct PyMethodDef {",
                 "    const char* ml_name;",
                 "    void* ml_meth;",
                 "    int ml_flags;",
@@ -1247,6 +1266,58 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
     assert first.signatures[0].return_type_name is None
+
+
+def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(tmp_path: Path) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "mini_struct_typedef_ext.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef PyMethodDef;",
+                "struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "};",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "static PyObject* add_impl(PyObject* self, PyObject* args) {",
+                "    int a = 0;",
+                "    int b = 0;",
+                "    if (!PyArg_ParseTuple(args, \"ii\", &a, &b)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract()
+
+    assert "add" in extracted
+    add_candidates = extracted["add"]
+    assert add_candidates
+    first = add_candidates[0]
+    assert first.py_name == "add"
+    assert first.signatures
+    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
+    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
 
 
 def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
@@ -1310,7 +1381,7 @@ def test_c_signature_extraction_engine_parses_initializer_list_method_table(tmp_
                 "}",
                 "typedef struct _object PyObject;",
                 "typedef PyObject* (*PyCFunction)(PyObject*, PyObject*);",
-                "typedef struct {",
+                "typedef struct PyMethodDef {",
                 "    const char* ml_name;",
                 "    PyCFunction ml_meth;",
                 "    int ml_flags;",
@@ -1360,7 +1431,7 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
         "\n".join(
             [
                 "typedef struct _object PyObject;",
-                "typedef struct {",
+                "typedef struct PyMethodDef {",
                 "    const char* ml_name;",
                 "    void* ml_meth;",
                 "    int ml_flags;",
@@ -1407,7 +1478,7 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
         "\n".join(
             [
                 "typedef struct _object PyObject;",
-                "typedef struct {",
+                "typedef struct PyMethodDef {",
                 "    const char* ml_name;",
                 "    void* ml_meth;",
                 "    int ml_flags;",
@@ -1626,6 +1697,28 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element()
         type = _FakeType()
 
     assert _is_PyMethodDef_array(_FakeNode()) is False
+
+
+def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name() -> None:
+    class _FakeCanonicalElementType:
+        spelling = "struct PyMethodDef"
+
+    class _FakeElementType:
+        spelling = "PyMethodDef"
+
+        def get_canonical(self) -> _FakeCanonicalElementType:
+            return _FakeCanonicalElementType()
+
+    class _FakeArrayType:
+        kind = clang.cindex.TypeKind.CONSTANTARRAY
+
+        def get_array_element_type(self) -> _FakeElementType:
+            return _FakeElementType()
+
+    class _FakeNode:
+        type = _FakeArrayType()
+
+    assert _is_PyMethodDef_array(_FakeNode()) is True
 
 
 def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_children() -> None:
@@ -1978,6 +2071,56 @@ def test_c_signature_engine_finds_actual_initializer_list_expr(tmp_path: Path) -
     )
 
     assert engine._find_initializer_list_node(wrapped) is target_init_expr
+
+
+def test_c_signature_engine_collects_array_method_table_from_init_list_child(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    class _FakeCanonicalElementType:
+        spelling = "struct PyMethodDef"
+
+    class _FakeElementType:
+        spelling = "PyMethodDef"
+
+        def get_canonical(self) -> _FakeCanonicalElementType:
+            return _FakeCanonicalElementType()
+
+    class _FakeArrayType:
+        kind = clang.cindex.TypeKind.CONSTANTARRAY
+
+        def get_array_element_type(self) -> _FakeElementType:
+            return _FakeElementType()
+
+    target_init_expr = _init_list(_identifier_node("entry"))
+    var_decl_node = _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        spelling="Methods",
+        children=[
+            _FakeNode(kind=clang.cindex.CursorKind.TYPE_REF, spelling="PyMethodDef"),
+            target_init_expr,
+        ],
+    )
+    var_decl_node.type = _FakeArrayType()
+    root = _FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT, children=[var_decl_node])
+    captured: list[_FakeNode] = []
+
+    def fake_process(
+        var_decl_node: _FakeNode,
+        init_expr_node: _FakeNode,
+        function_defs: dict[str, list[object]],
+        output: dict[str, list[object]],
+    ) -> None:
+        _ = (var_decl_node, function_defs, output)
+        captured.append(init_expr_node)
+
+    monkeypatch.setattr(engine, "_process_PyMethodDef_INIT_LIST_EXPR", fake_process)
+
+    engine._collect_pymethod_defs(root, {}, {})
+
+    assert captured == [target_init_expr]
 
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:

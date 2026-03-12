@@ -137,7 +137,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """批量重写模块级函数。"""
         if load_status != "nonempty":
             self._record_unavailable_extract(
-                funcs=funcs,
+                funcs=[(func, False) for func in funcs],
                 failure_key="empty_extract" if load_status == "empty" else "extract_failed",
             )
             return funcs
@@ -163,7 +163,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """批量重写类方法，并保留原有 decorator 封装。"""
         if load_status != "nonempty":
             self._record_unavailable_extract(
-                funcs=[method.function for method in methods],
+                funcs=[(method.function, True) for method in methods],
                 failure_key="empty_extract" if load_status == "empty" else "extract_failed",
             )
             return methods
@@ -422,16 +422,29 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     def _record_unavailable_extract(
         self,
         *,
-        funcs: list[IRFunction],
+        funcs: list[tuple[IRFunction, bool]],
         failure_key: Literal["empty_extract", "extract_failed"],
     ) -> None:
-        generic_count = sum(1 for func in funcs if func.is_generic_signature())
-        if generic_count <= 0:
-            return
+        generic_count = 0
+        reason = {
+            "empty_extract": "C signature extraction returned no results",
+            "extract_failed": "C signature extraction failed",
+        }[failure_key]
+        for func, is_method in funcs:
+            if not func.is_generic_signature():
+                continue
+            generic_count += 1
+            logger.warning(
+                "Failed to rewrite generic signature for %s (is_method=%s): %s",
+                func.name,
+                is_method,
+                reason,
+            )
 
-        self._stats.total_generic += generic_count
-        self._stats.failed += generic_count
-        setattr(self._stats, failure_key, getattr(self._stats, failure_key) + generic_count)
+        if generic_count > 0:
+            self._stats.total_generic += generic_count
+            self._stats.failed += generic_count
+            setattr(self._stats, failure_key, getattr(self._stats, failure_key) + generic_count)
 
     def _reset_stats(self) -> None:
         self._stats = _InferenceStats()
