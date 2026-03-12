@@ -405,27 +405,44 @@ class CSignatureExtractor:
     ) -> None:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
         for node in self._walk(cursor):
-            if node.kind != CursorKind.VAR_DECL:
-                continue
-            if _is_PyMethodDef_array(node):
-                self._process_PyMethodDef_array(node, node, function_defs, output)
-                continue
-            if _is_initializer_list_PyMethodDef(node):
-                init_node = self._find_initializer_list_node(node)
-                if init_node is not None:
-                    self._process_PyMethodDef_array(init_node, node, function_defs, output)
+            if node.kind == CursorKind.VAR_DECL:
+                if _is_PyMethodDef_array(node):
+                    init_expr_node = next(
+                        (child for child in node.get_children() if child.kind == CursorKind.INIT_LIST_EXPR),
+                        None,
+                    )
+                    if init_expr_node is not None:
+                        self._process_PyMethodDef_INIT_LIST_EXPR(
+                            node,
+                            init_expr_node,
+                            function_defs,
+                            output,
+                        )
+                    continue
+                if _is_initializer_list_PyMethodDef(node):
+                    init_expr_node = self._find_initializer_list_node(node)
+                    if init_expr_node is not None:
+                        self._process_PyMethodDef_INIT_LIST_EXPR(
+                            node,
+                            init_expr_node,
+                            function_defs,
+                            output,
+                        )
 
-    def _process_PyMethodDef_array(
+    def _process_PyMethodDef_INIT_LIST_EXPR(
         self,
-        array_node: Cursor,
-        owner_node: Cursor,
+        var_decl_node: Cursor,
+        init_expr_node: Cursor,
         function_defs: dict[str, list[Cursor]],
         output: dict[str, list[ExtractedFunction]],
     ) -> None:
-        """处理单个方法表数组节点并写入输出。"""
-        table_name = owner_node.spelling if owner_node.spelling else "<anonymous>"
-        source_file = str(owner_node.location.file) if owner_node.location.file else None
-        for element in self._iter_array_elements(array_node):
+        """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
+        table_name = var_decl_node.spelling if var_decl_node.spelling else "<anonymous>"
+        location = var_decl_node.location
+        source_file = str(location.file)
+        for element in init_expr_node.get_children():
+            if _is_PyMethodDef_sentinel(element):
+                break
             extracted = self._extract_PyMethodDef_struct_fields(
                 struct_init=element,
                 method_table=table_name,
@@ -435,17 +452,6 @@ class CSignatureExtractor:
             if extracted is None:
                 continue
             output.setdefault(extracted.py_name, []).append(extracted)
-
-    def _iter_array_elements(self, array_node: Cursor) -> Iterable[Cursor]:
-        """迭代方法表数组元素，遇到终止哨兵即停止。"""
-        init_nodes = [array_node] if array_node.kind == CursorKind.INIT_LIST_EXPR else [
-            child for child in array_node.get_children() if child.kind == CursorKind.INIT_LIST_EXPR
-        ]
-        for init_node in init_nodes:
-            for element in init_node.get_children():
-                if _is_PyMethodDef_sentinel(element):
-                    break
-                yield element
 
     def _extract_PyMethodDef_struct_fields(
         self,
@@ -1154,10 +1160,9 @@ class CSignatureExtractor:
 
     def _find_initializer_list_node(self, node: Cursor) -> Cursor | None:
         """递归定位包含 `INIT_LIST_EXPR` 的实际初始化节点。"""
+        if node.kind == CursorKind.INIT_LIST_EXPR:
+            return node
         for child in node.get_children():
-            grand_children = list(child.get_children())
-            if grand_children and grand_children[0].kind == CursorKind.INIT_LIST_EXPR:
-                return child
             nested = self._find_initializer_list_node(child)
             if nested is not None:
                 return nested

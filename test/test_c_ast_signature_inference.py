@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import logging
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Iterable
 
 import clang.cindex
@@ -1502,6 +1503,11 @@ class _FakeToken:
         self.spelling = spelling
 
 
+class _FakeCursorLocation:
+    def __init__(self, file: str | None = None) -> None:
+        self.file = file
+
+
 class _FakeNode:
     def __init__(
         self,
@@ -1509,10 +1515,14 @@ class _FakeNode:
         kind: object,
         tokens: list[_FakeToken] | None = None,
         children: list[object] | None = None,
+        spelling: str = "",
+        location: object | None = None,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
         self._children = children or []
+        self.spelling = spelling
+        self.location = location if location is not None else _FakeCursorLocation()
 
     def get_tokens(self) -> list[_FakeToken]:
         return self._tokens
@@ -1611,7 +1621,10 @@ def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> 
     assert _is_PyMethodDef_sentinel(_init_list(_identifier_node(name))) is False
 
 
-def test_c_signature_engine_iter_array_elements_breaks_only_on_supported_sentinel(tmp_path: Path) -> None:
+def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_sentinel(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
     method_1 = _init_list(
@@ -1628,12 +1641,72 @@ def test_c_signature_engine_iter_array_elements_breaks_only_on_supported_sentine
     )
     supported_sentinel = _init_list(_null_ptr_literal())
     non_sentinel = _init_list(_identifier_node("nullptr"))
+    owner_file = str(tmp_path / "methods.cpp")
+    init_expr_file = str(tmp_path / "methods_init.cpp")
+    var_decl_node = _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        spelling="Methods",
+        location=_FakeCursorLocation(file=owner_file),
+    )
+    function_defs = {"add_impl": []}
+    calls: list[tuple[_FakeNode, str, str | None, dict[str, list[object]]]] = []
 
-    should_break_array = _init_list(method_1, supported_sentinel, method_2)
-    assert list(engine._iter_array_elements(should_break_array)) == [method_1]
+    def fake_extract(
+        *,
+        struct_init: _FakeNode,
+        method_table: str,
+        source_file: str | None,
+        function_defs: dict[str, list[object]],
+    ) -> SimpleNamespace:
+        calls.append((struct_init, method_table, source_file, function_defs))
+        return SimpleNamespace(py_name=f"entry_{len(calls)}")
 
-    should_not_break_array = _init_list(method_1, non_sentinel, method_2)
-    assert list(engine._iter_array_elements(should_not_break_array)) == [method_1, non_sentinel, method_2]
+    monkeypatch.setattr(engine, "_extract_PyMethodDef_struct_fields", fake_extract)
+
+    should_break_array = _FakeNode(
+        kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
+        children=[method_1, supported_sentinel, method_2],
+        location=_FakeCursorLocation(file=init_expr_file),
+    )
+    output: dict[str, list[SimpleNamespace]] = {}
+    engine._process_PyMethodDef_INIT_LIST_EXPR(var_decl_node, should_break_array, function_defs, output)
+    assert calls == [(method_1, "Methods", owner_file, function_defs)]
+    assert list(output) == ["entry_1"]
+
+    calls.clear()
+    output.clear()
+
+    should_not_break_array = _FakeNode(
+        kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
+        children=[method_1, non_sentinel, method_2],
+        location=_FakeCursorLocation(file=init_expr_file),
+    )
+    engine._process_PyMethodDef_INIT_LIST_EXPR(var_decl_node, should_not_break_array, function_defs, output)
+    assert [call[0] for call in calls] == [method_1, non_sentinel, method_2]
+    assert {call[1] for call in calls} == {"Methods"}
+    assert {call[2] for call in calls} == {owner_file}
+    assert list(output) == ["entry_1", "entry_2", "entry_3"]
+
+
+def test_c_signature_engine_finds_actual_initializer_list_expr(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+    target_init_expr = _init_list(_init_list(_identifier_node("entry")))
+    wrapped = _FakeNode(
+        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        children=[
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+                        children=[target_init_expr],
+                    )
+                ],
+            )
+        ],
+    )
+
+    assert engine._find_initializer_list_node(wrapped) is target_init_expr
 
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
