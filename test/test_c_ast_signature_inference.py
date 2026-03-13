@@ -183,6 +183,23 @@ class _FakeIndex:
         return self.translation_unit
 
 
+class _SequentialIndex:
+    def __init__(self, translation_units: list[_FakeTranslationUnit]) -> None:
+        self._translation_units = translation_units
+        self._index = 0
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def parse(self, filename: str, args: list[str]) -> _FakeTranslationUnit:
+        self.calls.append((filename, list(args)))
+        if not self._translation_units:
+            raise AssertionError("translation_units must not be empty")
+        if self._index < len(self._translation_units):
+            current = self._translation_units[self._index]
+            self._index += 1
+            return current
+        return self._translation_units[-1]
+
+
 class _RaisingIndex:
     def __init__(self, error: Exception) -> None:
         self.error = error
@@ -583,6 +600,212 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
 
     assert result is translation_unit
     assert caplog.records == []
+
+
+def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "src" / "module.c"
+    header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
+    header_path.parent.mkdir(parents=True, exist_ok=True)
+    header_path.write_text("/* header */", encoding="utf-8")
+
+    first = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=1,
+                column=1,
+            )
+        ]
+    )
+    second = _FakeTranslationUnit(diagnostics=[])
+    index = _SequentialIndex([first, second])
+
+    result = engine._parse_translation_unit(index=index, file_path=source)
+
+    assert result is second
+    expected_include_root = header_path.parents[1]
+    assert f"-I{expected_include_root}" in engine._clang_include_args
+    assert f"-I{header_path.parent}" not in engine._clang_include_args
+    assert len(index.calls) == 2
+
+
+def test_c_signature_engine_logs_info_when_auto_include_is_added(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "src" / "module.c"
+    header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
+    header_path.parent.mkdir(parents=True, exist_ok=True)
+    header_path.write_text("/* header */", encoding="utf-8")
+
+    first = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=1,
+                column=1,
+            )
+        ]
+    )
+    second = _FakeTranslationUnit(diagnostics=[])
+    index = _SequentialIndex([first, second])
+
+    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+        _ = engine._parse_translation_unit(index=index, file_path=source)
+
+    messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
+    assert any("Auto-added clang include path for missing header numpy/npy_common.h" in message for message in messages)
+    assert any(str(header_path.parents[1]) in message for message in messages)
+
+
+def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "pkg" / "src" / "module.c"
+
+    include_one = tmp_path / "vendor1" / "include"
+    include_two = tmp_path / "vendor2" / "include"
+    (include_one / "numpy").mkdir(parents=True, exist_ok=True)
+    (include_two / "pkg").mkdir(parents=True, exist_ok=True)
+    (include_one / "numpy" / "npy_common.h").write_text("/* one */", encoding="utf-8")
+    (include_two / "pkg" / "extra.h").write_text("/* two */", encoding="utf-8")
+
+    first = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=2,
+                column=7,
+            )
+        ]
+    )
+    second = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'pkg/extra.h' file not found",
+                file_name=str(source),
+                line=3,
+                column=5,
+            )
+        ]
+    )
+    third = _FakeTranslationUnit(diagnostics=[])
+    index = _SequentialIndex([first, second, third])
+
+    result = engine._parse_translation_unit(index=index, file_path=source)
+
+    include_arg_one = f"-I{include_one}"
+    include_arg_two = f"-I{include_two}"
+    assert result is third
+    assert include_arg_one in engine._clang_include_args
+    assert include_arg_two in engine._clang_include_args
+    assert len(index.calls) == 3
+    assert include_arg_one not in index.calls[0][1]
+    assert include_arg_one in index.calls[1][1]
+    assert include_arg_two not in index.calls[1][1]
+    assert include_arg_one in index.calls[2][1]
+    assert include_arg_two in index.calls[2][1]
+
+
+def test_c_signature_engine_matches_full_include_literal_without_filename_fallback(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "decoy" / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+
+    decoy_header = tmp_path / "decoy" / "npy_common.h"
+    expected_header = tmp_path / "target" / "include" / "numpy" / "npy_common.h"
+    decoy_header.parent.mkdir(parents=True, exist_ok=True)
+    expected_header.parent.mkdir(parents=True, exist_ok=True)
+    decoy_header.write_text("/* decoy */", encoding="utf-8")
+    expected_header.write_text("/* expected */", encoding="utf-8")
+
+    first = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=4,
+                column=2,
+            )
+        ]
+    )
+    second = _FakeTranslationUnit(diagnostics=[])
+    index = _SequentialIndex([first, second])
+
+    result = engine._parse_translation_unit(index=index, file_path=source)
+
+    assert result is second
+    assert f"-I{expected_header.parents[1]}" in engine._clang_include_args
+    assert f"-I{decoy_header.parent}" not in engine._clang_include_args
+
+
+def test_c_signature_engine_selects_nearest_header_match_for_ambiguous_include(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "workspace" / "feature" / "src" / "module.c"
+
+    near_include = tmp_path / "workspace" / "feature" / "include"
+    far_include = tmp_path / "external" / "vendor" / "include"
+    (near_include / "numpy").mkdir(parents=True, exist_ok=True)
+    (far_include / "numpy").mkdir(parents=True, exist_ok=True)
+    (near_include / "numpy" / "npy_common.h").write_text("/* near */", encoding="utf-8")
+    (far_include / "numpy" / "npy_common.h").write_text("/* far */", encoding="utf-8")
+
+    first = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=1,
+                column=1,
+            )
+        ]
+    )
+    second = _FakeTranslationUnit(diagnostics=[])
+    index = _SequentialIndex([first, second])
+
+    result = engine._parse_translation_unit(index=index, file_path=source)
+
+    assert result is second
+    assert f"-I{near_include}" in engine._clang_include_args
+    assert f"-I{far_include}" not in engine._clang_include_args
+
+
+def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "src" / "module.c"
+
+    unrelated_header = tmp_path / "include" / "numpy" / "arrayobject.h"
+    unrelated_header.parent.mkdir(parents=True, exist_ok=True)
+    unrelated_header.write_text("/* unrelated */", encoding="utf-8")
+
+    unresolved = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=clang.cindex.Diagnostic.Fatal,
+                message="'numpy/npy_common.h' file not found",
+                file_name=str(source),
+                line=6,
+                column=3,
+            )
+        ]
+    )
+    index = _SequentialIndex([unresolved])
+
+    result = engine._parse_translation_unit(index=index, file_path=source)
+
+    assert result is unresolved
+    assert engine._clang_include_args == []
+    assert len(index.calls) == 1
 
 
 def test_c_signature_engine_raises_when_diagnostic_missing_required_field(tmp_path: Path) -> None:

@@ -23,8 +23,8 @@ from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 DEFAULT_MODULE = "scipy"
 OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
-
-DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\scipy_scipy\scipy")
+DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\numpy_numpy\numpy")
+# DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\scipy_scipy\scipy")
 
 def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):

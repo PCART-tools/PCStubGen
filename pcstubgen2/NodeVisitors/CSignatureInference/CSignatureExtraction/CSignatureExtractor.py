@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"
+AUTO_INCLUDE_RETRY_LIMIT = 10
+AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
+HEADER_SOURCE_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
 
 SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
@@ -167,25 +170,6 @@ def _format_diagnostics_message(
     return "\n".join(lines)
 
 
-def _format_parse_exception_message(
-        *,
-        file_path: Path,
-        parse_args: list[str],
-        error: Exception,
-) -> str:
-    """格式化 translation unit 解析异常日志。"""
-    return "\n".join(
-        [
-            f"Failed to parse translation unit",
-            f"  file_path: {file_path}",
-            f"  suffix: {file_path.suffix.lower() or '<none>'}",
-            f"  parse_args: {parse_args!r}",
-            f"  exception_type: {type(error).__name__}",
-            f"  exception: {error}",
-        ]
-    )
-
-
 def _get_packaged_libclang_path() -> str | None:
     """从 `clang` 包的 `native` 目录探测可用的 `libclang` 动态库。"""
     native_dir = Path(clang.__file__).resolve().parent / "native"
@@ -234,6 +218,7 @@ class CSignatureExtractor:
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._cache_result: dict[str, list[ExtractedFunction]] | None = None
+        self._header_search_index: dict[str, list[Path]] | None = None
 
     def extract(self) -> dict[str, list[ExtractedFunction]]:
         """
@@ -292,6 +277,7 @@ class CSignatureExtractor:
     def _prepare_extract_parse_args(self) -> None:
         """在提取阶段补齐解析所需的额外参数。"""
         self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
+        self._header_search_index = self._build_header_search_index()
 
     def _build_user_include_args(self, clang_include: Iterable[str]) -> list[str]:
         """将 include 路径列表转换为 clang `-I` 参数。"""
@@ -315,6 +301,174 @@ class CSignatureExtractor:
                 args.append(include_arg)
         return args
 
+    def _build_header_search_index(self) -> dict[str, list[Path]]:
+        """为缺失头文件恢复构建后缀路径索引。"""
+        index: dict[str, list[Path]] = {}
+        if not self.source_root.exists():
+            return index
+
+        for header_path in self.source_root.rglob("*"):
+            if not header_path.is_file():
+                continue
+            if header_path.suffix.lower() not in HEADER_SOURCE_SUFFIXES:
+                continue
+            try:
+                relative_parts = header_path.relative_to(self.source_root).parts
+            except ValueError:
+                continue
+            for start in range(len(relative_parts)):
+                key = "/".join(relative_parts[start:])
+                index.setdefault(key, []).append(header_path)
+
+        for candidates in index.values():
+            candidates.sort(key=lambda path: path.as_posix().casefold())
+        return index
+
+    def _get_header_search_index(self) -> dict[str, list[Path]]:
+        if self._header_search_index is None:
+            self._header_search_index = self._build_header_search_index()
+        return self._header_search_index
+
+    def _normalize_include_literal(self, include_literal: str) -> str:
+        normalized = include_literal.replace("\\", "/").strip()
+        while "//" in normalized:
+            normalized = normalized.replace("//", "/")
+        if normalized.startswith("./"):
+            normalized = normalized[2:]
+        return normalized
+
+    def _split_include_literal_parts(self, include_literal: str) -> tuple[str, ...]:
+        normalized = self._normalize_include_literal(include_literal)
+        return tuple(part for part in normalized.split("/") if part and part != ".")
+
+    def _extract_missing_include_literals(self, diagnostics: list[Diagnostic]) -> list[str]:
+        missing: list[str] = []
+        seen: set[str] = set()
+        for diagnostic in diagnostics:
+            if diagnostic.severity < clang.cindex.Diagnostic.Error:
+                continue
+            message = str(diagnostic.spelling)
+            match = AUTO_INCLUDE_MISSING_HEADER_RE.search(message)
+            if match is None:
+                continue
+            include_literal = self._normalize_include_literal(match.group(1))
+            if not include_literal:
+                continue
+            if include_literal in seen:
+                continue
+            seen.add(include_literal)
+            missing.append(include_literal)
+        return missing
+
+    def _match_include_to_include_dir(
+            self,
+            *,
+            header_path: Path,
+            include_parts: tuple[str, ...],
+    ) -> Path | None:
+        if not include_parts:
+            return None
+        header_parts = header_path.parts
+        if len(include_parts) > len(header_parts):
+            return None
+        suffix_parts = header_parts[-len(include_parts):]
+        if any(left.casefold() != right.casefold() for left, right in zip(suffix_parts, include_parts)):
+            return None
+        include_root_depth = len(include_parts) - 1
+        if include_root_depth >= len(header_path.parents):
+            return None
+        return header_path.parents[include_root_depth]
+
+    def _build_include_candidate_rank(
+            self,
+            *,
+            source_dir: Path,
+            header_dir: Path,
+            include_dir: Path,
+    ) -> tuple[int, int, str, str]:
+        source_parts = source_dir.resolve().parts
+        header_parts = header_dir.resolve().parts
+        common_prefix = 0
+        for left, right in zip(source_parts, header_parts):
+            if left.casefold() != right.casefold():
+                break
+            common_prefix += 1
+        distance = (len(source_parts) - common_prefix) + (len(header_parts) - common_prefix)
+        include_dir_posix = include_dir.as_posix()
+        return distance, -common_prefix, include_dir_posix.casefold(), include_dir_posix
+
+    def _resolve_missing_include_dir(self, *, include_literal: str, source_file: Path) -> Path | None:
+        include_literal = self._normalize_include_literal(include_literal)
+        include_parts = self._split_include_literal_parts(include_literal)
+        if not include_parts:
+            return None
+
+        candidates = self._get_header_search_index().get(include_literal)
+        if not candidates:
+            return None
+
+        best_rank: tuple[int, int, str, str] | None = None
+        best_include_dir: Path | None = None
+        for header_path in candidates:
+            include_dir = self._match_include_to_include_dir(
+                header_path=header_path,
+                include_parts=include_parts,
+            )
+            if include_dir is None:
+                continue
+            rank = self._build_include_candidate_rank(
+                source_dir=source_file.parent,
+                header_dir=header_path.parent,
+                include_dir=include_dir,
+            )
+            if best_rank is None or rank < best_rank:
+                best_rank = rank
+                best_include_dir = include_dir
+        return best_include_dir
+
+    def _append_include_args(self, include_args: Iterable[str]) -> list[str]:
+        added: list[str] = []
+        for include_arg in include_args:
+            if include_arg in self._clang_include_args:
+                continue
+            if include_arg in added:
+                continue
+            self._clang_include_args.append(include_arg)
+            added.append(include_arg)
+        return added
+
+    def _discover_missing_include_args(
+            self,
+            *,
+            file_path: Path,
+            diagnostics: list[Diagnostic],
+    ) -> list[str]:
+        resolved_pairs: list[tuple[str, str]] = []
+        missing_literals = self._extract_missing_include_literals(diagnostics)
+        for include_literal in missing_literals:
+            include_dir = self._resolve_missing_include_dir(
+                include_literal=include_literal,
+                source_file=file_path,
+            )
+            if include_dir is None:
+                continue
+            resolved_pairs.append((include_literal, f"-I{include_dir}"))
+
+        added = self._append_include_args(include_arg for _, include_arg in resolved_pairs)
+        if not added:
+            return added
+
+        for include_literal, include_arg in resolved_pairs:
+            if include_arg not in added:
+                continue
+            logger.info(
+                "Auto-added clang include path for missing header %s in %s: %s",
+                include_literal,
+                file_path,
+                include_arg[2:],
+            )
+        return added
+
     def _find_candidate_files(self) -> list[Path]:
         """查找可能包含 `PyMethodDef` 的 C/C++ 源文件。"""
         result: list[Path] = []
@@ -328,14 +482,25 @@ class CSignatureExtractor:
 
     def _parse_translation_unit(self, index: Index, file_path: Path) -> TranslationUnit | None:
         """解析单个源码文件为 clang translation unit。"""
-        parse_args = self._build_parse_args(file_path)
-        parse_args.extend(["-include", "Python.h"])
-        try:
+        translation_unit: TranslationUnit | None = None
+        diagnostics: list[Diagnostic] = []
+        parse_args: list[str] = []
+        for attempt in range(AUTO_INCLUDE_RETRY_LIMIT):
+            parse_args = self._build_parse_args(file_path)
+            parse_args.extend(["-include", "Python.h"])
             translation_unit = index.parse(str(file_path), args=parse_args)
-        except Exception as ex:  # pragma: no cover
-            logger.warning(_format_parse_exception_message(file_path=file_path, parse_args=parse_args, error=ex))
+            diagnostics = list(translation_unit.diagnostics)
+            added = self._discover_missing_include_args(
+                file_path=file_path,
+                diagnostics=diagnostics,
+            )
+            if added and attempt + 1 < AUTO_INCLUDE_RETRY_LIMIT:
+                continue
+            break
+
+        if translation_unit is None:
             return None
-        diagnostics: list[Diagnostic] = list(translation_unit.diagnostics)
+
         if self._has_error_diagnostics(diagnostics):
             logger.warning(
                 _format_diagnostics_message(
