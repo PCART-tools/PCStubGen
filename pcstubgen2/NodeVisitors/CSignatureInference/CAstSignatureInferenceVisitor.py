@@ -27,7 +27,7 @@ from ...IR import (
 
 logger = logging.getLogger(__name__)
 
-SignatureLoadStatus = Literal["nonempty", "empty", "extract_failed"]
+SignatureLoadStatus = Literal["nonempty", "empty"]
 RewriteOutcome = Literal[
     "success",
     "no_candidates",
@@ -45,7 +45,6 @@ class _InferenceStats:
     candidate_selection_failed: int = 0
     empty_selected_signatures: int = 0
     empty_extract: int = 0
-    extract_failed: int = 0
 
 
 class CAstSignatureInferenceVisitor(NodeVisitor):
@@ -114,7 +113,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             "C AST signature inference summary for %s: "
             "total_generic=%d, success=%d, failed=%d, no_candidates=%d, "
             "candidate_selection_failed=%d, empty_selected_signatures=%d, "
-            "empty_extract=%d, extract_failed=%d",
+            "empty_extract=%d",
             project_name,
             self._stats.total_generic,
             self._stats.success,
@@ -123,7 +122,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             self._stats.candidate_selection_failed,
             self._stats.empty_selected_signatures,
             self._stats.empty_extract,
-            self._stats.extract_failed,
         )
         self._reset_stats()
 
@@ -138,7 +136,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         if load_status != "nonempty":
             self._record_unavailable_extract(
                 funcs=[(func, False) for func in funcs],
-                failure_key="empty_extract" if load_status == "empty" else "extract_failed",
+                failure_key="empty_extract",
             )
             return funcs
 
@@ -164,7 +162,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         if load_status != "nonempty":
             self._record_unavailable_extract(
                 funcs=[(method.function, True) for method in methods],
-                failure_key="empty_extract" if load_status == "empty" else "extract_failed",
+                failure_key="empty_extract",
             )
             return methods
 
@@ -392,19 +390,13 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """
         按需提取 C AST 结果；缓存由 extraction engine 负责。
 
-        任何提取失败都降级为空结果，保证 stub 生成主流程可持续执行。
+        提取失败时直接向上传播异常，由调用方决定是否中断主流程。
         """
         if self._signatures is not None and self._signature_load_status is not None:
             return self._signatures, self._signature_load_status
 
-        try:
-            self._signatures = self._extractor.extract()
-            self._signature_load_status = "nonempty" if self._signatures else "empty"
-        except Exception as ex:  # pragma: no cover - 防御性分支
-            # 提取阶段异常不应阻断整体生成流程。
-            logger.warning("Failed to extract C signatures: %s", ex)
-            self._signatures = {}
-            self._signature_load_status = "extract_failed"
+        self._signatures = self._extractor.extract()
+        self._signature_load_status = "nonempty" if self._signatures else "empty"
         return self._signatures, self._signature_load_status
 
     def _record_outcome(self, *, func: IRFunction, outcome: RewriteOutcome | None) -> None:
@@ -423,13 +415,10 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self,
         *,
         funcs: list[tuple[IRFunction, bool]],
-        failure_key: Literal["empty_extract", "extract_failed"],
+        failure_key: Literal["empty_extract"],
     ) -> None:
         generic_count = 0
-        reason = {
-            "empty_extract": "C signature extraction returned no results",
-            "extract_failed": "C signature extraction failed",
-        }[failure_key]
+        reason = "C signature extraction returned no results"
         for func, is_method in funcs:
             if not func.is_generic_signature():
                 continue

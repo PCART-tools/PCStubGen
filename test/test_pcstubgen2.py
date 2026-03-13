@@ -59,23 +59,18 @@ def run_single_module(module_name: str) -> int:
     output_dir = prepare_output_dir(OUTPUT_DIR)
     print(f"输出目录: {output_dir}")
 
-    try:
-        write_stubs(
-            module_name,
-            output_dir,
-            options=StubGenerationOptions(include_docstrings=False,
-            include_module_type_comment=True,
-            enable_c_signature_inference=True,
-            c_source_root=DEFAULT_C_SOURCE_ROOT,
-            clang_parse_args=DEFAULT_CLANG_PARSE_ARGS,
-            clang_c_std=DEFAULT_CLANG_C_STD,
-            clang_cpp_std=DEFAULT_CLANG_CPP_STD,
-            ),
-        )
-    except Exception as exc:
-        print(f"生成失败: {exc}")
-        traceback.print_exc()
-        return 1
+    write_stubs(
+        module_name,
+        output_dir,
+        options=StubGenerationOptions(include_docstrings=False,
+        include_module_type_comment=True,
+        enable_c_signature_inference=True,
+        c_source_root=DEFAULT_C_SOURCE_ROOT,
+        clang_parse_args=DEFAULT_CLANG_PARSE_ARGS,
+        clang_c_std=DEFAULT_CLANG_C_STD,
+        clang_cpp_std=DEFAULT_CLANG_CPP_STD,
+        ),
+    )
 
     stub_files = collect_stub_files(output_dir)
     if not stub_files:

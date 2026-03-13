@@ -383,7 +383,7 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
         "C AST signature inference summary for pkg.mod: "
         "total_generic=1, success=0, failed=1, no_candidates=0, "
         "candidate_selection_failed=0, empty_selected_signatures=1, "
-        "empty_extract=0, extract_failed=0"
+        "empty_extract=0"
     )
 
 
@@ -473,7 +473,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
         "C AST signature inference summary for pkg: "
         "total_generic=2, success=2, failed=0, no_candidates=0, "
         "candidate_selection_failed=0, empty_selected_signatures=0, "
-        "empty_extract=0, extract_failed=0"
+        "empty_extract=0"
     )
 
 
@@ -744,6 +744,26 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
     assert extractor.called == 0
 
 
+def test_c_ast_visitor_propagates_signature_extraction_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.C,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+    _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
+
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        c_source_root=tmp_path,
+    )
+
+    with pytest.raises(RuntimeError, match="boom"):
+        visitor.visit_module(module)
+
+
 def test_write_stubs_skips_c_ast_visitor_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -988,7 +1008,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
         "C AST signature inference summary for pkg: "
         "total_generic=3, success=1, failed=2, no_candidates=2, "
         "candidate_selection_failed=0, empty_selected_signatures=0, "
-        "empty_extract=0, extract_failed=0"
+        "empty_extract=0"
     ) in log_text
 
 
@@ -1033,11 +1053,11 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
         "C AST signature inference summary for pkg: "
         "total_generic=2, success=0, failed=2, no_candidates=0, "
         "candidate_selection_failed=0, empty_selected_signatures=0, "
-        "empty_extract=2, extract_failed=0"
+        "empty_extract=2"
     ) in log_text
 
 
-def test_write_stubs_logs_extract_failed_summary_once(
+def test_write_stubs_propagates_extract_errors_without_logging_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1070,28 +1090,13 @@ def test_write_stubs_logs_extract_failed_summary_once(
         enable_c_signature_inference=True,
         c_source_root=tmp_path,
     )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
+    with pytest.raises(RuntimeError, match="boom"):
+        stubgen_module.write_stubs("math", tmp_path, options=options)
 
     log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
-    assert log_text.count("Failed to extract C signatures: boom") == 1
-    assert (
-        "Failed to rewrite generic signature for foo (is_method=False): "
-        "C signature extraction failed"
-    ) in log_text
-    assert (
-        "Failed to rewrite generic signature for build (is_method=True): "
-        "C signature extraction failed"
-    ) in log_text
-    assert (
-        "Failed to rewrite generic signature for bar (is_method=False): "
-        "C signature extraction failed"
-    ) in log_text
-    assert (
-        "C AST signature inference summary for pkg: "
-        "total_generic=3, success=0, failed=3, no_candidates=0, "
-        "candidate_selection_failed=0, empty_selected_signatures=0, "
-        "empty_extract=0, extract_failed=3"
-    ) in log_text
+    assert "Failed to extract C signatures: boom" not in log_text
+    assert "C signature extraction failed" not in log_text
+    assert "C AST signature inference summary for pkg:" not in log_text
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
@@ -1372,7 +1377,7 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
     assert "Failed to rewrite generic signature for pdist_minkowski" not in pybind_log_text
 
 
-def test_c_signature_extraction_engine_parses_initializer_list_method_table(tmp_path: Path) -> None:
+def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_table_yet(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
     if _get_packaged_libclang_path() is None:
         pytest.skip("Packaged libclang library is not available")
@@ -1423,12 +1428,7 @@ def test_c_signature_extraction_engine_parses_initializer_list_method_table(tmp_
     )
     extracted = engine.extract()
 
-    assert "add" in extracted
-    first = extracted["add"][0]
-    assert first.py_name == "add"
-    assert first.signatures
-    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
-    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
+    assert extracted == {}
 
 
 def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path) -> None:
@@ -1965,6 +1965,54 @@ def _init_list(*children: _FakeNode) -> _FakeNode:
     return _FakeNode(kind=clang.cindex.CursorKind.INIT_LIST_EXPR, children=list(children))
 
 
+def _string_literal(value: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.STRING_LITERAL,
+        tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, f'"{value}"')],
+        spelling=f'"{value}"',
+    )
+
+
+def _token_identifier_node(name: str, *, kind: object = clang.cindex.CursorKind.DECL_REF_EXPR) -> _FakeNode:
+    return _FakeNode(
+        kind=kind,
+        spelling=name,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
+    )
+
+
+def _ml_name_field(name: str) -> _FakeNode:
+    return _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _string_literal(name)))
+
+
+def _ml_meth_field(name: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        spelling=name,
+        children=[_token_identifier_node(name)],
+    )
+
+
+def _ml_meth_cast_field(name: str) -> _FakeNode:
+    return _wrap(
+        clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        _wrap(
+            clang.cindex.CursorKind.PAREN_EXPR,
+            _FakeNode(
+                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
+                children=[_token_identifier_node("PyCFunction"), _token_identifier_node(name)],
+            ),
+        ),
+    )
+
+
+def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.BINARY_OPERATOR,
+        children=[_token_identifier_node(flag) for flag in flags],
+    )
+
+
 @pytest.mark.parametrize(
     "sentinel",
     [
@@ -2023,6 +2071,170 @@ def test_c_signature_engine_accepts_single_NULL_token_via_fallback() -> None:
 @pytest.mark.parametrize("name", ["nullptr", "__null"])
 def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> None:
     assert _is_PyMethodDef_array_sentinel(_init_list(_identifier_node(name))) is False
+
+
+def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    extracted = engine._extract_PyMethodDef_struct_fields(
+        struct_init=_init_list(
+            _ml_name_field("add"),
+            _ml_meth_field("simple_add"),
+            _ml_flags_identifier_field("METH_VARARGS"),
+            _string_literal("doc"),
+        ),
+        method_table="SimpleMethods",
+        source_file=str(tmp_path / "simple_extension.c"),
+        function_defs={},
+    )
+
+    assert extracted is not None
+    assert extracted.py_name == "add"
+    assert extracted.c_name == "simple_add"
+    assert extracted.method_flags == ["METH_VARARGS"]
+
+
+def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    extracted = engine._extract_PyMethodDef_struct_fields(
+        struct_init=_init_list(
+            _ml_name_field("distance"),
+            _ml_meth_cast_field("Point_distance"),
+            _ml_flags_identifier_field("METH_VARARGS"),
+            _string_literal("doc"),
+        ),
+        method_table="Point_methods",
+        source_file=str(tmp_path / "complex_extension.c"),
+        function_defs={},
+    )
+
+    assert extracted is not None
+    assert extracted.c_name == "Point_distance"
+    assert extracted.method_flags == ["METH_VARARGS"]
+
+
+def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    extracted = engine._extract_PyMethodDef_struct_fields(
+        struct_init=_init_list(
+            _ml_name_field("kw"),
+            _ml_meth_field("kw_impl"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.BINARY_OPERATOR,
+                tokens=[
+                    _FakeToken(clang.cindex.TokenKind.IDENTIFIER, "METH_VARARGS"),
+                    _FakeToken(clang.cindex.TokenKind.PUNCTUATION, "|"),
+                    _FakeToken(clang.cindex.TokenKind.LITERAL, "2"),
+                    _FakeToken(clang.cindex.TokenKind.PUNCTUATION, "|"),
+                    _FakeToken(clang.cindex.TokenKind.IDENTIFIER, "METH_VARARGS"),
+                ],
+            ),
+            _string_literal("doc"),
+        ),
+        method_table="Methods",
+        source_file=str(tmp_path / "methods.c"),
+        function_defs={},
+    )
+
+    assert extracted is not None
+    assert extracted.method_flags == ["METH_VARARGS", "METH_KEYWORDS"]
+
+
+def test_c_signature_engine_warns_and_returns_none_when_ml_name_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        extracted = engine._extract_PyMethodDef_struct_fields(
+            struct_init=_init_list(
+                _identifier_node("NULL"),
+                _ml_meth_field("simple_add"),
+                _ml_flags_identifier_field("METH_VARARGS"),
+                _string_literal("doc"),
+            ),
+            method_table="Methods",
+            source_file=str(tmp_path / "methods.c"),
+            function_defs={},
+        )
+
+    assert extracted is None
+    assert "Failed to extract PyMethodDef ml_name" in caplog.text
+    assert "table=Methods" in caplog.text
+
+
+def test_c_signature_engine_warns_and_returns_none_when_ml_meth_missing(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        extracted = engine._extract_PyMethodDef_struct_fields(
+            struct_init=_init_list(
+                _ml_name_field("add"),
+                _identifier_node("PyCFunction"),
+                _ml_flags_identifier_field("METH_VARARGS"),
+                _string_literal("doc"),
+            ),
+            method_table="Methods",
+            source_file=str(tmp_path / "methods.c"),
+            function_defs={},
+        )
+
+    assert extracted is None
+    assert "Failed to extract PyMethodDef ml_meth" in caplog.text
+    assert "table=Methods" in caplog.text
+
+
+def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unparseable(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        extracted = engine._extract_PyMethodDef_struct_fields(
+            struct_init=_init_list(
+                _ml_name_field("add"),
+                _ml_meth_field("simple_add"),
+                _identifier_node("flag_var"),
+                _string_literal("doc"),
+            ),
+            method_table="Methods",
+            source_file=str(tmp_path / "methods.c"),
+            function_defs={},
+        )
+
+    assert extracted is not None
+    assert extracted.method_flags == []
+    assert "Failed to extract PyMethodDef ml_flags" in caplog.text
+
+
+def test_c_signature_engine_warns_when_pymethod_field_list_is_incomplete(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    with caplog.at_level(logging.WARNING):
+        extracted = engine._extract_PyMethodDef_struct_fields(
+            struct_init=_init_list(
+                _ml_name_field("add"),
+                _ml_meth_field("simple_add"),
+            ),
+            method_table="Methods",
+            source_file=str(tmp_path / "methods.c"),
+            function_defs={},
+        )
+
+    assert extracted is not None
+    assert extracted.method_flags == []
+    assert "expected at least 3 fields, got 2" in caplog.text
+    assert "Failed to extract PyMethodDef ml_flags" in caplog.text
 
 
 def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_sentinel(

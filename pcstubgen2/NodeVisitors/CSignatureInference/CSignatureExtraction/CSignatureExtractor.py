@@ -14,13 +14,13 @@ from clang.cindex import (
     CursorKind,
     Diagnostic,
     Index,
-    Token,
     TokenKind,
     TranslationUnit,
     Type,
     TypeKind
 )
 
+from . import ClangEval
 from .Constants import (
     CPP_SOURCE_SUFFIXES,
     FORMAT_TYPE_MAP,
@@ -71,21 +71,18 @@ def _is_PyMethodDef_array_sentinel(element: Cursor) -> bool:
             current = children[0]
         return current
 
-    def _is_zero_integer_literal(node: Cursor) -> bool:
+    # llvm-project issue #68340
+    def _is_zero_integer_literal(cursor: Cursor) -> bool:
         """
         是0整数字面量，NULL如果展开为((void*)0)也会走这里
         """
-        if node.kind != CursorKind.INTEGER_LITERAL:
+        if cursor.kind != CursorKind.INTEGER_LITERAL:
             return False
-        for token in node.get_tokens():
-            if token.kind != TokenKind.LITERAL:
-                continue
-            text = str(token.spelling).replace("'", "").rstrip("uUlLzZ")
-            try:
-                return int(text, 0) == 0
-            except ValueError:
-                return False
-        return False
+        value = ClangEval.eval_int(cursor)
+        if value is None:
+            return False
+        return value == 0
+
 
     def _is_null_token(node: Cursor) -> bool:
         return any(str(token.spelling) == "NULL" for token in node.get_tokens())
@@ -399,12 +396,12 @@ class CSignatureExtractor:
         output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
-        for node in self._walk(cursor):
-            if node.kind == CursorKind.VAR_DECL:
-                if _is_PyMethodDef_array_definition(node):
-                    init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(node)
+        for child in cursor.get_children():
+            if child.kind == CursorKind.VAR_DECL:
+                if _is_PyMethodDef_array_definition(child):
+                    init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(child)
                     self._process_PyMethodDef_array_INIT_LIST_EXPR(
-                        node,
+                        child,
                         init_expr_node,
                         function_defs,
                         output,
@@ -457,35 +454,16 @@ class CSignatureExtractor:
         若关键字段（Python 名、C 函数名）缺失则返回 `None`，
         保持提取过程对异常样本的容错性。
         """
-        tokens = list(struct_init.get_tokens())
-        if not tokens:
-            return None
+        fields = list(struct_init.get_children())
 
-        ml_name: str | None = None
-        ml_flags: list[str] = []
-        for token in tokens:
-            spelling = str(token.spelling)
-            if token.kind == TokenKind.LITERAL:
-                # 第一个字符串字面量通常是 Python 暴露名。
-                if ml_name is None and '"' in spelling:
-                    lit = self._strip_literal_quotes(spelling)
-                    if lit and lit != "NULL":
-                        ml_name = lit
-                ml_flags.extend(self._decode_meth_literal_flags(spelling))
-                continue
-            if token.kind == TokenKind.IDENTIFIER and spelling.startswith("METH_"):
-                ml_flags.append(spelling)
+        ml_name = self._extract_PyMethodDef_ml_name(fields[0])
 
-        if not ml_name:
-            return None
-        ml_flags = self._unique_keep_order(ml_flags)
+        ml_meth = self._extract_PyMethodDef_ml_meth(fields[1])
 
-        c_name = self._find_c_function_name(tokens)
-        if not c_name:
-            return None
+        ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
 
         function_cursor = self._select_function_cursor(
-            function_defs.get(c_name, []),
+            function_defs.get(ml_meth, []),
             preferred_file=source_file,
         )
         signatures: list[ExtractedSignature] = []
@@ -507,12 +485,117 @@ class CSignatureExtractor:
         signatures = self._deduplicate_signatures(signatures)
         return ExtractedFunction(
             py_name=ml_name,
-            c_name=c_name,
+            c_name=ml_meth,
             method_flags=ml_flags,
             signatures=signatures,
             source_file=source_file,
             method_table=method_table,
         )
+
+    def _extract_PyMethodDef_ml_name(self, field_cursor: Cursor) -> str | None:
+        """从 `ml_name` 字段 AST 子树中提取 Python 暴露名。"""
+        for node in self._walk(field_cursor):
+            if node.kind != CursorKind.STRING_LITERAL:
+                continue
+            literal = self._get_literal_token_spelling(node)
+            if literal is None:
+                continue
+            value = self._strip_literal_quotes(literal)
+            if value and value != "NULL":
+                return value
+        return None
+
+    def _extract_PyMethodDef_ml_meth(self, field_cursor: Cursor) -> str | None:
+        """从 `ml_meth` 字段 AST 子树中提取底层 C 函数名。"""
+        for node in self._walk(field_cursor):
+            if node.kind != CursorKind.DECL_REF_EXPR:
+                continue
+            candidate = self._get_cursor_spelling(node)
+            if candidate and self._is_valid_pymethod_function_name(candidate):
+                return candidate
+
+        for node in self._walk(field_cursor):
+            for token in node.get_tokens():
+                if token.kind != TokenKind.IDENTIFIER:
+                    continue
+                candidate = str(token.spelling)
+                if self._is_valid_pymethod_function_name(candidate):
+                    return candidate
+        return None
+
+    def _extract_PyMethodDef_ml_flags(self, field_cursor: Cursor) -> list[str]:
+        """从 `ml_flags` 字段 AST 子树中提取 `METH_*` 列表。"""
+        flags: list[str] = []
+        for node in self._walk(field_cursor):
+            for token in node.get_tokens():
+                spelling = str(token.spelling)
+                if token.kind == TokenKind.IDENTIFIER and spelling.startswith("METH_"):
+                    flags.append(spelling)
+                    continue
+                if token.kind == TokenKind.LITERAL:
+                    flags.extend(self._decode_meth_literal_flags(spelling))
+        return self._unique_keep_order(flags)
+
+    def _warn_pymethod_field_extraction(
+        self,
+        *,
+        method_table: str,
+        source_file: str | None,
+        field_name: str,
+        field_cursor: Cursor | None,
+        message: str,
+    ) -> None:
+        """为 `PyMethodDef` 字段提取失败输出稳定的 warning。"""
+        logger.warning(
+            "Failed to extract PyMethodDef %s: table=%s source=%s kind=%s spelling=%r: %s",
+            field_name,
+            method_table,
+            source_file,
+            self._cursor_kind_name(field_cursor),
+            self._get_cursor_spelling(field_cursor),
+            message,
+        )
+
+    def _cursor_kind_name(self, cursor: Cursor | None) -> str:
+        """将 cursor.kind 规范化为稳定字符串。"""
+        if cursor is None:
+            return "None"
+        kind = getattr(cursor, "kind", None)
+        if kind is None:
+            return "None"
+        return str(getattr(kind, "name", kind))
+
+    def _get_cursor_spelling(self, cursor: Cursor | None) -> str:
+        """优先返回 cursor.spelling，缺失时回退到首个标识或字面量 token。"""
+        if cursor is None:
+            return ""
+        spelling = str(getattr(cursor, "spelling", "") or "").strip()
+        if spelling:
+            return spelling
+        literal = self._get_literal_token_spelling(cursor)
+        if literal is not None:
+            return literal
+        for token in cursor.get_tokens():
+            text = str(token.spelling).strip()
+            if text:
+                return text
+        return ""
+
+    def _get_literal_token_spelling(self, cursor: Cursor) -> str | None:
+        """返回 cursor 上首个字面量 token 的原始文本。"""
+        for token in cursor.get_tokens():
+            if token.kind == TokenKind.LITERAL:
+                return str(token.spelling)
+        spelling = str(getattr(cursor, "spelling", "") or "").strip()
+        return spelling or None
+
+    def _is_valid_pymethod_function_name(self, candidate: str) -> bool:
+        """过滤 cast、空指针与无效标识，留下可作为 C 函数名的符号。"""
+        if not candidate:
+            return False
+        if candidate.startswith("METH_"):
+            return False
+        return candidate not in POINTER_CAST_IDENTIFIER_SKIP
 
     def _extract_signatures_from_function(self, func_cursor: Cursor, meth_flags: list[str]) -> list[ExtractedSignature]:
         """从函数体中提取候选签名，并在末尾做去重。"""
@@ -1086,26 +1169,6 @@ class CSignatureExtractor:
             for child in self._walk(node):
                 if child.kind == CursorKind.STRING_LITERAL:
                     return self._strip_literal_quotes(str(child.spelling))
-        return None
-
-    def _find_c_function_name(self, tokens: list[Token]) -> str | None:
-        """从方法表初始化 token 中提取 C 函数符号名。"""
-        literal_found = False
-        for token in tokens:
-            spelling = str(token.spelling)
-            if token.kind == TokenKind.LITERAL and not literal_found:
-                literal_found = True
-                continue
-            if not literal_found:
-                continue
-            if token.kind != TokenKind.IDENTIFIER:
-                continue
-            if spelling.startswith("METH_"):
-                continue
-            if spelling in POINTER_CAST_IDENTIFIER_SKIP:
-                # 过滤函数指针 cast 与空指针标识，避免误识别为函数名。
-                continue
-            return spelling
         return None
 
     def _select_function_cursor(
