@@ -469,6 +469,7 @@ class CSignatureExtractor:
 
         ml_meth_cursor = _unwrap_transparent(fields[1])
         ml_meth = ml_meth_cursor.spelling
+        logger.info(f"ml_meth_cursor.referenced.location: {ml_meth_cursor.referenced.location}")
 
         ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
 
