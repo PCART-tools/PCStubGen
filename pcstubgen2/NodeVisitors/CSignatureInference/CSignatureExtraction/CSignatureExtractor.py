@@ -44,7 +44,7 @@ FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[Signature
 
 transparent_kinds = {
     # 没有暴露给python libclang的表达式
-    # 比如ImplicitCastExpr
+    # 比如ImplicitCastExpr、RecoveryExpr（解析错误的时候产生）
     CursorKind.UNEXPOSED_EXPR,
     CursorKind.PAREN_EXPR,  # (expr)
     CursorKind.CSTYLE_CAST_EXPR,  # (T)expr
@@ -207,7 +207,7 @@ def _is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
     if cursor.type.kind in array_type_kinds and cursor.is_definition():
         elem_type = cursor.type.get_array_element_type()
-        if elem_type.get_canonical().spelling == "struct PyMethodDef":
+        if elem_type.spelling in {"PyMethodDef", "struct PyMethodDef"}:
             return True
     return False
 
@@ -391,23 +391,30 @@ class CSignatureExtractor:
     def _array_VAR_DECL_to_INIT_LIST_EXPR(cursor: Cursor) -> Cursor:
         # VAR_DECL
         #   TYPE_REF
-        #   INIT_LIST_EXPR
-        it = iter(cursor.get_children())
-        _ = next(it)
-        init_list_expr = next(it)
+        #   UNEXPOSED_EXPR
+        #     INIT_LIST_EXPR
+        assert cursor.kind == CursorKind.VAR_DECL
+
+        children = list(cursor.get_children())
+        assert len(children) >= 2
+
+        init_list_expr = _unwrap_transparent(children[1])
+        assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
         return init_list_expr
 
     def _process_PyMethodDef_array_INIT_LIST_EXPR(
             self,
             var_decl_node: Cursor,
-            init_expr_node: Cursor,
+            init_list_expr_node: Cursor,
             output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
+        assert init_list_expr_node.kind == CursorKind.INIT_LIST_EXPR
+
         table_name = var_decl_node.spelling
         location = var_decl_node.location
         source_file = str(location.file)
-        for element in init_expr_node.get_children():
+        for element in init_list_expr_node.get_children():
             if _is_PyMethodDef_array_sentinel(element):
                 break
             extracted = self._extract_PyMethodDef_INIT_LIST_EXPR(
@@ -431,6 +438,7 @@ class CSignatureExtractor:
         若关键字段（Python 名、C 函数名）缺失则返回 `None`，
         保持提取过程对异常样本的容错性。
         """
+        # {"name", func, METH_VARARGS, NULL}
         # INIT_LIST_EXPR
         #   UNEXPOSED_EXPR
         #     UNEXPOSED_EXPR
@@ -438,17 +446,25 @@ class CSignatureExtractor:
         #   UNEXPOSED_EXPR
         #     DECL_REF_EXPR
         #   INTEGER_LITERAL
+        assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
+
         fields = list(init_list_expr.get_children())
+        assert len(fields) >= 3
 
         ml_name_cursor = _unwrap_transparent(fields[0])
+        assert ml_name_cursor.kind == CursorKind.STRING_LITERAL
         ml_name = self._strip_string_literal_quotes(ml_name_cursor.spelling)
 
         ml_meth_cursor = _unwrap_transparent(fields[1])
+        assert ml_meth_cursor.kind == CursorKind.DECL_REF_EXPR
         ml_meth = ml_meth_cursor.spelling
 
         ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
 
         function_cursor = ml_meth_cursor.referenced
+        if function_cursor is None:
+            logger.warning(f"cant find function cursor, location: {ml_meth_cursor.location}")
+            return None
 
         signatures: list[ExtractedSignature] = []
         return_type_name: str | None = None

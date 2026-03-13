@@ -16,7 +16,6 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSi
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
     _format_single_diagnostic,
     _get_diagnostic_severity_name,
-    _is_initializer_list_PyMethodDef,
     _is_PyMethodDef_array_definition,
     _is_PyMethodDef_array_sentinel,
 )

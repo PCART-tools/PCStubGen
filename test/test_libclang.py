@@ -35,9 +35,6 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 DEFAULT_OUTPUT_EXTENSION = ".ast.json"
 
 EXIT_OK = 0
-EXIT_INVALID_INPUT = 1
-EXIT_CLANG_INIT_FAILED = 2
-EXIT_PARSE_FAILED = 3
 
 
 class SerializedDiagnostic(TypedDict):
@@ -265,7 +262,7 @@ def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) 
 
     source_path = Path(args.source_path).resolve()
     if not source_path.is_file():
-        return EXIT_INVALID_INPUT
+        raise FileNotFoundError(f"Source file not found: {source_path}")
 
     output_path = resolve_output_path(source_path, args.output).resolve()
     library_path, clang_parse_args = load_clang_settings(
@@ -274,19 +271,12 @@ def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) 
         extra_parse_args=args.clang_arg,
     )
 
-    try:
-        initialize_clang(library_path)
-    except Exception:
-        return EXIT_CLANG_INIT_FAILED
-
-    try:
-        translation_unit = parse_translation_unit(
-            source_path,
-            library_path=library_path,
-            parse_args=clang_parse_args,
-        )
-    except Exception:
-        return EXIT_PARSE_FAILED
+    initialize_clang(library_path)
+    translation_unit = parse_translation_unit(
+        source_path,
+        library_path=library_path,
+        parse_args=clang_parse_args,
+    )
 
     payload = build_ast_payload(
         translation_unit,
