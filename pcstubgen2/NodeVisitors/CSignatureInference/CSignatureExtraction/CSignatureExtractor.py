@@ -90,13 +90,13 @@ def _is_integer_literal_value(cursor: Cursor, value: int) -> bool:
     return ret == value
 
 
+cpp_nullptr_literal_kinds = {
+    CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
+    CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
+}
+
 def _is_PyMethodDef_array_sentinel(element: Cursor) -> bool:
     """判断 `PyMethodDef` 条目是否为数组结束哨兵。只要ml_name语义上为0就判定为哨兵"""
-
-    cpp_nullptr_literal_kinds = {
-        CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
-        CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
-    }
 
     def _is_null_token(node: Cursor) -> bool:
         return any(str(token.spelling) == "NULL" for token in node.get_tokens())
@@ -195,40 +195,20 @@ def _get_packaged_libclang_path() -> str | None:
             return str(candidate)
     return None
 
-
-def _is_array_kind(kind: TypeKind) -> bool:
-    """判断 clang 类型是否为 C/C++ 数组类型。"""
-    return (
-            kind == TypeKind.CONSTANTARRAY  # 固定长度数组，如 `int values[8]`
-            or kind == TypeKind.INCOMPLETEARRAY  # 不完整数组，如 `extern int values[]`
-            or kind == TypeKind.VARIABLEARRAY  # 变长数组，如 `int values[n]`
-            or kind == TypeKind.DEPENDENTSIZEDARRAY  # 依赖表达式推导长度的数组，多见于模板/泛型上下文
-    )
+array_type_kinds = {
+    TypeKind.CONSTANTARRAY,  # 固定长度数组，如 `int values[8]`
+    TypeKind.INCOMPLETEARRAY,  # 不完整数组，如 `extern int values[]`
+    TypeKind.VARIABLEARRAY,  # 变长数组，如 `int values[n]`
+    TypeKind.DEPENDENTSIZEDARRAY,  # 依赖表达式推导长度的数组，多见于模板/泛型上下文
+}
 
 
 def _is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
-    if _is_array_kind(cursor.type.kind) and cursor.is_definition():
+    if cursor.type.kind in array_type_kinds and cursor.is_definition():
         elem_type = cursor.type.get_array_element_type()
         if elem_type.get_canonical().spelling == "struct PyMethodDef":
             return True
-    return False
-
-
-def _is_initializer_list_PyMethodDef(cursor: Cursor) -> bool:
-    """判断变量是否是 `initializer_list<PyMethodDef>` 风格定义。"""
-    try:
-        type_obj = cursor.type
-        candidate_types = [type_obj]
-        canonical_type = type_obj.get_canonical()
-        if canonical_type is not None:
-            candidate_types.append(canonical_type)
-        for candidate_type in candidate_types:
-            spelling = candidate_type.spelling or ""
-            if "initializer_list" in spelling and "PyMethodDef" in spelling:
-                return True
-    except Exception:
-        return False
     return False
 
 
@@ -460,62 +440,15 @@ class CSignatureExtractor:
         #   INTEGER_LITERAL
         fields = list(init_list_expr.get_children())
 
-        if len(fields) < 3:
-            self._warn_pymethod_field_extraction(
-                method_table=method_table,
-                source_file=source_file,
-                field_name="ml_flags",
-                field_cursor=None,
-                message=f"expected at least 3 fields, got {len(fields)}",
-            )
-            return None
-
         ml_name_cursor = _unwrap_transparent(fields[0])
         ml_name = self._strip_string_literal_quotes(ml_name_cursor.spelling)
-        if not ml_name:
-            self._warn_pymethod_field_extraction(
-                method_table=method_table,
-                source_file=source_file,
-                field_name="ml_name",
-                field_cursor=ml_name_cursor,
-                message="missing or empty method name literal",
-            )
-            return None
 
         ml_meth_cursor = _unwrap_transparent(fields[1])
         ml_meth = ml_meth_cursor.spelling
 
-        function_cursor = ml_meth_cursor.referenced
-        if function_cursor is None:
-            self._warn_pymethod_field_extraction(
-                method_table=method_table,
-                source_file=source_file,
-                field_name="ml_meth",
-                field_cursor=ml_meth_cursor,
-                message="ml_meth cursor has no referenced function",
-            )
-            return None
-
-        function_kinds = {CursorKind.FUNCTION_DECL, CursorKind.CXX_METHOD}
-        if function_cursor.kind not in function_kinds:
-            self._warn_pymethod_field_extraction(
-                method_table=method_table,
-                source_file=source_file,
-                field_name="ml_meth",
-                field_cursor=ml_meth_cursor,
-                message=f"referenced cursor is not a function: {self._cursor_kind_name(function_cursor)}",
-            )
-            return None
-
         ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
-        if not ml_flags:
-            self._warn_pymethod_field_extraction(
-                method_table=method_table,
-                source_file=source_file,
-                field_name="ml_flags",
-                field_cursor=fields[2],
-                message="no supported METH_* flags found",
-            )
+
+        function_cursor = ml_meth_cursor.referenced
 
         signatures: list[ExtractedSignature] = []
         return_type_name: str | None = None
@@ -556,58 +489,6 @@ class CSignatureExtractor:
                     flags.extend(self._decode_meth_literal_flags(spelling))
         return self._unique_keep_order(flags)
 
-    def _warn_pymethod_field_extraction(
-            self,
-            *,
-            method_table: str,
-            source_file: str | None,
-            field_name: str,
-            field_cursor: Cursor | None,
-            message: str,
-    ) -> None:
-        """为 `PyMethodDef` 字段提取失败输出稳定的 warning。"""
-        logger.warning(
-            "Failed to extract PyMethodDef %s: table=%s source=%s kind=%s spelling=%r: %s",
-            field_name,
-            method_table,
-            source_file,
-            self._cursor_kind_name(field_cursor),
-            self._get_cursor_spelling(field_cursor),
-            message,
-        )
-
-    def _cursor_kind_name(self, cursor: Cursor | None) -> str:
-        """将 cursor.kind 规范化为稳定字符串。"""
-        if cursor is None:
-            return "None"
-        kind = getattr(cursor, "kind", None)
-        if kind is None:
-            return "None"
-        return str(getattr(kind, "name", kind))
-
-    def _get_cursor_spelling(self, cursor: Cursor | None) -> str:
-        """优先返回 cursor.spelling，缺失时回退到首个标识或字面量 token。"""
-        if cursor is None:
-            return ""
-        spelling = str(getattr(cursor, "spelling", "") or "").strip()
-        if spelling:
-            return spelling
-        literal = self._get_literal_token_spelling(cursor)
-        if literal is not None:
-            return literal
-        for token in cursor.get_tokens():
-            text = str(token.spelling).strip()
-            if text:
-                return text
-        return ""
-
-    def _get_literal_token_spelling(self, cursor: Cursor) -> str | None:
-        """返回 cursor 上首个字面量 token 的原始文本。"""
-        for token in cursor.get_tokens():
-            if token.kind == TokenKind.LITERAL:
-                return str(token.spelling)
-        spelling = str(getattr(cursor, "spelling", "") or "").strip()
-        return spelling or None
 
     def _extract_signatures_from_function(self, func_cursor: Cursor, meth_flags: list[str]) -> list[ExtractedSignature]:
         """从函数体中提取候选签名，并在末尾做去重。"""
