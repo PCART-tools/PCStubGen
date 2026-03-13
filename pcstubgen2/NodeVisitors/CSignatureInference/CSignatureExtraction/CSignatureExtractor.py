@@ -329,6 +329,7 @@ class CSignatureExtractor:
     def _parse_translation_unit(self, index: Index, file_path: Path) -> TranslationUnit | None:
         """解析单个源码文件为 clang translation unit。"""
         parse_args = self._build_parse_args(file_path)
+        parse_args.extend(["-include", "Python.h"])
         try:
             translation_unit = index.parse(str(file_path), args=parse_args)
         except Exception as ex:  # pragma: no cover
