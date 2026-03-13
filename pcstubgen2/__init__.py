@@ -92,7 +92,7 @@ def write_stubs(
             c_ast_visitor = CAstSignatureInferenceVisitor(
                 error_collector=error_collector,
                 c_source_root=options.c_source_root,
-                clang_parse_args=options.clang_parse_args,
+                clang_include=options.clang_include,
                 clang_c_std=options.clang_c_std,
                 clang_cpp_std=options.clang_cpp_std,
             )

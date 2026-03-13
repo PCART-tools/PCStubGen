@@ -72,7 +72,7 @@ def configure_output_encoding() -> None:
             pass
 
 
-def _normalize_clang_arg_tokens(argv: Sequence[str] | None) -> list[str] | None:
+def _normalize_clang_include_tokens(argv: Sequence[str] | None) -> list[str] | None:
     if argv is None:
         return None
 
@@ -80,7 +80,7 @@ def _normalize_clang_arg_tokens(argv: Sequence[str] | None) -> list[str] | None:
     index = 0
     while index < len(argv):
         token = argv[index]
-        if token != "--clang-arg":
+        if token != "--clang-include":
             normalized.append(token)
             index += 1
             continue
@@ -89,7 +89,7 @@ def _normalize_clang_arg_tokens(argv: Sequence[str] | None) -> list[str] | None:
             normalized.append(token)
             break
 
-        normalized.append(f"--clang-arg={argv[index + 1]}")
+        normalized.append(f"--clang-include={argv[index + 1]}")
         index += 2
 
     return normalized
@@ -105,16 +105,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="输出 JSON 文件路径；若传入目录，则自动生成 `<source_stem>.ast.json`。",
     )
     parser.add_argument(
-        "--clang-arg",
+        "--clang-include",
         action="append",
         default=[],
-        help="追加传给 libclang 的解析参数，可重复传入。",
+        help="追加 include 路径（不要带 -I 前缀），可重复传入。",
     )
+    parser.add_argument("--clang-c-std", help="覆盖 config.toml 中的 clang_c_std。")
+    parser.add_argument("--clang-cpp-std", help="覆盖 config.toml 中的 clang_cpp_std。")
     parser.add_argument(
         "--clang-library-path",
         help="显式覆盖 config.toml 中的 clang_library_path。",
     )
-    return parser.parse_args(_normalize_clang_arg_tokens(argv))
+    return parser.parse_args(_normalize_clang_include_tokens(argv))
 
 
 def _safe_str(value: str | None) -> str | None:
@@ -146,22 +148,84 @@ def load_clang_settings(
     config_path: Path = CONFIG_PATH,
     *,
     override_library_path: str | None = None,
-    extra_parse_args: Sequence[str] = (),
-) -> tuple[str | None, list[str]]:
+    extra_include_paths: Sequence[str] = (),
+    override_clang_c_std: str | None = None,
+    override_clang_cpp_std: str | None = None,
+) -> tuple[str | None, list[str], str | None, str | None]:
     config_library_path: str | None = None
-    config_parse_args: list[str] = []
+    config_include_paths: list[str] = []
+    config_clang_c_std: str | None = None
+    config_clang_cpp_std: str | None = None
 
     if config_path.exists():
         with config_path.open("rb") as file:
             config = tomllib.load(file)
         config_library_path = _safe_str(config.get("clang_library_path"))
-        raw_parse_args = config.get("clang_parse_args", [])
-        if isinstance(raw_parse_args, list):
-            config_parse_args = [str(arg) for arg in raw_parse_args]
+        raw_include_paths = config.get("clang_include", [])
+        if isinstance(raw_include_paths, list):
+            config_include_paths = [str(path) for path in raw_include_paths]
+        config_clang_c_std = _safe_str(config.get("clang_c_std"))
+        config_clang_cpp_std = _safe_str(config.get("clang_cpp_std"))
 
     library_path = override_library_path or config_library_path
-    parse_args = [*config_parse_args, *[str(arg) for arg in extra_parse_args]]
-    return library_path, parse_args
+    include_paths = [*config_include_paths, *[str(path) for path in extra_include_paths]]
+    clang_c_std = override_clang_c_std or config_clang_c_std
+    clang_cpp_std = override_clang_cpp_std or config_clang_cpp_std
+    return library_path, include_paths, clang_c_std, clang_cpp_std
+
+
+DEFAULT_CLANG_C_STD = "c11"
+DEFAULT_CLANG_CPP_STD = "c++17"
+CPP_SOURCE_SUFFIXES = {".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx"}
+
+
+def _normalize_std_arg(std_value: str | None) -> str | None:
+    if std_value is None:
+        return None
+    normalized = std_value.strip()
+    if not normalized:
+        return None
+    if normalized.startswith("-std="):
+        return normalized
+    return f"-std={normalized}"
+
+
+def _build_include_args(include_paths: Sequence[str]) -> list[str]:
+    include_args: list[str] = []
+    for raw_path in include_paths:
+        if raw_path is None:
+            raise TypeError("clang_include entries must be non-empty include paths")
+        include_path = str(raw_path).strip()
+        if not include_path:
+            raise ValueError("clang_include entries must be non-empty include paths")
+        if include_path.startswith("-I"):
+            raise ValueError("clang_include entries must not include '-I' prefix")
+        if include_path.startswith("-"):
+            raise ValueError(f"clang_include entry must be a path, got option-like value: {include_path!r}")
+        include_arg = f"-I{include_path}"
+        if include_arg not in include_args:
+            include_args.append(include_arg)
+    return include_args
+
+
+def build_clang_args(
+    *,
+    source_path: Path,
+    include_paths: Sequence[str],
+    clang_c_std: str | None,
+    clang_cpp_std: str | None,
+) -> list[str]:
+    suffix = source_path.suffix.lower()
+    if suffix in CPP_SOURCE_SUFFIXES:
+        std_arg = _normalize_std_arg(clang_cpp_std or DEFAULT_CLANG_CPP_STD)
+    else:
+        std_arg = _normalize_std_arg(clang_c_std or DEFAULT_CLANG_C_STD)
+
+    parse_args: list[str] = []
+    if std_arg is not None:
+        parse_args.append(std_arg)
+    parse_args.extend(_build_include_args(include_paths))
+    return parse_args
 
 
 def resolve_output_path(source_path: Path, output_arg: str | None) -> Path:
@@ -265,24 +329,32 @@ def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) 
         raise FileNotFoundError(f"Source file not found: {source_path}")
 
     output_path = resolve_output_path(source_path, args.output).resolve()
-    library_path, clang_parse_args = load_clang_settings(
+    library_path, clang_include, clang_c_std, clang_cpp_std = load_clang_settings(
         config_path,
         override_library_path=args.clang_library_path,
-        extra_parse_args=args.clang_arg,
+        extra_include_paths=args.clang_include,
+        override_clang_c_std=args.clang_c_std,
+        override_clang_cpp_std=args.clang_cpp_std,
+    )
+    clang_args = build_clang_args(
+        source_path=source_path,
+        include_paths=clang_include,
+        clang_c_std=clang_c_std,
+        clang_cpp_std=clang_cpp_std,
     )
 
     initialize_clang(library_path)
     translation_unit = parse_translation_unit(
         source_path,
         library_path=library_path,
-        parse_args=clang_parse_args,
+        parse_args=clang_args,
     )
 
     payload = build_ast_payload(
         translation_unit,
         source_path=source_path,
         output_path=output_path,
-        parse_args=clang_parse_args,
+        parse_args=clang_args,
     )
     json_text = json.dumps(payload, ensure_ascii=False, indent=2)
 

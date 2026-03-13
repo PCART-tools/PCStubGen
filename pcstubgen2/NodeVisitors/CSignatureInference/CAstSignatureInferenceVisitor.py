@@ -62,7 +62,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         error_collector: ErrorCollector,
         c_source_root: Path,
-        clang_parse_args: Iterable[str] = (),
+        clang_include: Iterable[str] = (),
         clang_c_std: str | None = None,
         clang_cpp_std: str | None = None,
     ) -> None:
@@ -70,7 +70,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self.error_collector = error_collector
         self._extractor = CSignatureExtractor(
             source_root=c_source_root,
-            clang_parse_args=clang_parse_args,
+            clang_include=clang_include,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
         )

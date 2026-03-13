@@ -224,13 +224,13 @@ class CSignatureExtractor:
             self,
             source_root: Path,
             *,
-            clang_parse_args: Iterable[str] = (),
+            clang_include: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = source_root
-        self._clang_parse_args = list(clang_parse_args)
+        self._clang_include_args = self._build_user_include_args(clang_include)
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._cache_result: dict[str, list[ExtractedFunction]] | None = None
@@ -291,7 +291,14 @@ class CSignatureExtractor:
 
     def _prepare_extract_parse_args(self) -> None:
         """在提取阶段补齐解析所需的额外参数。"""
-        self._clang_parse_args = self._inject_python_include_args(self._clang_parse_args)
+        self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
+
+    def _build_user_include_args(self, clang_include: Iterable[str]) -> list[str]:
+        """将 include 路径列表转换为 clang `-I` 参数。"""
+        include_args: list[str] = []
+        for include_path in clang_include:
+            include_args.append(f"-I{include_path}")
+        return include_args
 
     def _inject_python_include_args(self, parse_args: list[str]) -> list[str]:
         """向 clang 参数注入当前 Python 头文件目录。"""
@@ -347,7 +354,7 @@ class CSignatureExtractor:
 
     def _build_parse_args(self, file_path: Path) -> list[str]:
         """为单个源码文件拼装 clang 参数。"""
-        parse_args = list(self._clang_parse_args)
+        parse_args = list(self._clang_include_args)
         std_arg = self._build_std_arg_for_file(file_path)
         if std_arg is not None:
             parse_args.insert(0, std_arg)

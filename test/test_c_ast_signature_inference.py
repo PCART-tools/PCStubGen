@@ -78,11 +78,11 @@ def _patch_c_signature_extractor(
             self,
             source_root: Path,
             *,
-            clang_parse_args: Iterable[str] = (),
+            clang_include: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
-            _ = (source_root, clang_parse_args, clang_c_std, clang_cpp_std)
+            _ = (source_root, clang_include, clang_c_std, clang_cpp_std)
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
             return extractor.extract()
@@ -102,11 +102,11 @@ def _patch_raising_c_signature_extractor(
             self,
             source_root: Path,
             *,
-            clang_parse_args: Iterable[str] = (),
+            clang_include: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
-            _ = (source_root, clang_parse_args, clang_c_std, clang_cpp_std)
+            _ = (source_root, clang_include, clang_c_std, clang_cpp_std)
 
         def extract(self) -> dict[str, list[ExtractedFunction]]:
             raise error
@@ -479,7 +479,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
 def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_parse_args=["-DMY_FLAG=1"],
+        clang_include=["C:/MyInclude"],
     )
     source = tmp_path / "broken_module.cxx"
 
@@ -494,7 +494,7 @@ def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptu
     message = caplog.records[0].message
     assert str(source) in message
     assert "suffix: .cxx" in message
-    assert "parse_args: ['-std=c++17', '-DMY_FLAG=1']" in message
+    assert "parse_args: ['-std=c++17', '-IC:/MyInclude']" in message
     assert "exception_type: RuntimeError" in message
     assert "exception: boom" in message
 
@@ -862,29 +862,37 @@ def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
     ]
 
 
-def test_stub_generation_options_defaults_to_empty_clang_parse_args() -> None:
+def test_stub_generation_options_defaults_to_empty_clang_include() -> None:
     first = StubGenerationOptions()
     second = StubGenerationOptions()
 
-    assert first.clang_parse_args == []
-    assert second.clang_parse_args == []
-    assert first.clang_parse_args is not second.clang_parse_args
+    assert first.clang_include == []
+    assert second.clang_include == []
+    assert first.clang_include is not second.clang_include
 
 
-def test_c_ast_visitor_rejects_none_clang_parse_args(tmp_path: Path) -> None:
+def test_c_ast_visitor_rejects_none_clang_include(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
         CAstSignatureInferenceVisitor(
             error_collector=ErrorCollector(),
             c_source_root=tmp_path,
-            clang_parse_args=None,  # type: ignore[arg-type]
+            clang_include=None,  # type: ignore[arg-type]
         )
 
 
-def test_c_signature_engine_rejects_none_clang_parse_args(tmp_path: Path) -> None:
+def test_c_signature_engine_rejects_none_clang_include(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
         CSignatureExtractor(
             source_root=tmp_path,
-            clang_parse_args=None,  # type: ignore[arg-type]
+            clang_include=None,  # type: ignore[arg-type]
+        )
+
+
+def test_c_signature_engine_rejects_dash_i_prefixed_clang_include(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="must not include '-I' prefix"):
+        CSignatureExtractor(
+            source_root=tmp_path,
+            clang_include=["-IC:/MyInclude"],
         )
 
 
@@ -1539,13 +1547,13 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             self,
             source_root: Path,
             *,
-            clang_parse_args: Iterable[str] = (),
+            clang_include: Iterable[str] = (),
             clang_c_std: str | None = None,
             clang_cpp_std: str | None = None,
         ) -> None:
             captured["init_calls"] = int(captured["init_calls"]) + 1
             captured["source_root"] = source_root
-            captured["clang_parse_args"] = list(clang_parse_args)
+            captured["clang_include"] = list(clang_include)
             captured["clang_c_std"] = clang_c_std
             captured["clang_cpp_std"] = clang_cpp_std
             self._cached_result: dict[str, list[ExtractedFunction]] | None = None
@@ -1563,7 +1571,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
         c_source_root=tmp_path,
-        clang_parse_args=["-DMY_FLAG=1"],
+        clang_include=["C:/MyInclude"],
         clang_c_std="c99",
         clang_cpp_std="c++20",
     )
@@ -1571,7 +1579,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     assert captured["init_calls"] == 1
     assert captured["extract_calls"] == 0
     assert captured["source_root"] == tmp_path
-    assert captured["clang_parse_args"] == ["-DMY_FLAG=1"]
+    assert captured["clang_include"] == ["C:/MyInclude"]
     assert captured["clang_c_std"] == "c99"
     assert captured["clang_cpp_std"] == "c++20"
 
@@ -1601,8 +1609,8 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
     engine._clang = _FakeClang
 
     assert engine._ensure_clang_ready() is True
-    assert engine._clang_parse_args is not None
-    assert "-std=c11" not in engine._clang_parse_args
+    assert engine._clang_include_args is not None
+    assert "-std=c11" not in engine._clang_include_args
     assert engine._build_parse_args(tmp_path / "module.c")[0] == "-std=c11"
     assert engine._build_parse_args(tmp_path / "module.cxx")[0] == "-std=c++17"
 
@@ -1610,13 +1618,13 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_parse_args=["-DMY_FLAG=1"],
+        clang_include=["C:/MyInclude"],
         clang_c_std="c99",
         clang_cpp_std="c++20",
     )
 
-    assert engine._build_parse_args(tmp_path / "module.c") == ["-std=c99", "-DMY_FLAG=1"]
-    assert engine._build_parse_args(tmp_path / "module.hpp") == ["-std=c++20", "-DMY_FLAG=1"]
+    assert engine._build_parse_args(tmp_path / "module.c") == ["-std=c99", "-IC:/MyInclude"]
+    assert engine._build_parse_args(tmp_path / "module.hpp") == ["-std=c++20", "-IC:/MyInclude"]
 
 
 def test_c_signature_engine_configures_packaged_libclang_when_available(
@@ -1646,14 +1654,14 @@ def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
 
 
 def test_c_signature_engine_ensure_clang_ready_does_not_mutate_parse_args(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_parse_args=["-DMY_FLAG=1"])
+    engine = CSignatureExtractor(source_root=tmp_path, clang_include=["C:/MyInclude"])
 
     assert engine._ensure_clang_ready() is True
-    assert engine._clang_parse_args == ["-DMY_FLAG=1"]
+    assert engine._clang_include_args == ["-IC:/MyInclude"]
 
 
 def test_c_signature_engine_extract_runs_python_include_injection_as_separate_step(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_parse_args=["-DMY_FLAG=1"])
+    engine = CSignatureExtractor(source_root=tmp_path, clang_include=["C:/MyInclude"])
     captured: list[list[str]] = []
 
     def fake_inject(parse_args: list[str]) -> list[str]:
@@ -1665,8 +1673,8 @@ def test_c_signature_engine_extract_runs_python_include_injection_as_separate_st
     engine._find_candidate_files = lambda: []
 
     assert engine.extract() == {}
-    assert captured == [["-DMY_FLAG=1"]]
-    assert engine._clang_parse_args == ["-DMY_FLAG=1", "-IC:/Python/include"]
+    assert captured == [["-IC:/MyInclude"]]
+    assert engine._clang_include_args == ["-IC:/MyInclude", "-IC:/Python/include"]
 
 
 def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
@@ -2423,3 +2431,4 @@ def test_c_signature_engine_strips_cpp_string_literal_prefixes(
     engine = CSignatureExtractor(source_root=tmp_path)
 
     assert engine._strip_string_literal_quotes(literal) == expected
+

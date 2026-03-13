@@ -9,7 +9,6 @@
 
 import shutil
 import sys
-import traceback
 from pathlib import Path
 
 SCRIPT_PATH = Path(__file__).resolve()
@@ -26,9 +25,6 @@ OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
 
 DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\scipy_scipy\scipy")
-DEFAULT_CLANG_PARSE_ARGS: list[str] = []
-DEFAULT_CLANG_C_STD = "c11"
-DEFAULT_CLANG_CPP_STD = "c++17"
 
 def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):
@@ -62,13 +58,11 @@ def run_single_module(module_name: str) -> int:
     write_stubs(
         module_name,
         output_dir,
-        options=StubGenerationOptions(include_docstrings=False,
-        include_module_type_comment=True,
-        enable_c_signature_inference=True,
-        c_source_root=DEFAULT_C_SOURCE_ROOT,
-        clang_parse_args=DEFAULT_CLANG_PARSE_ARGS,
-        clang_c_std=DEFAULT_CLANG_C_STD,
-        clang_cpp_std=DEFAULT_CLANG_CPP_STD,
+        options=StubGenerationOptions(
+            include_docstrings=False,
+            include_module_type_comment=True,
+            enable_c_signature_inference=True,
+            c_source_root=DEFAULT_C_SOURCE_ROOT,
         ),
     )
 

@@ -75,10 +75,20 @@ def parse_args() -> argparse.Namespace:
         help=f"输出根目录，默认: {DEFAULT_OUTPUT_ROOT}",
     )
     parser.add_argument(
-        "--clang-arg",
+        "--clang-include",
         action="append",
         default=[],
-        help="透传给 libclang 的参数，可重复传入。",
+        help="追加 libclang include 路径，可重复传入（不要带 -I 前缀）。",
+    )
+    parser.add_argument(
+        "--clang-c-std",
+        default=None,
+        help="C 源文件使用的标准版本，例如 c11。",
+    )
+    parser.add_argument(
+        "--clang-cpp-std",
+        default=None,
+        help="C++ 源文件使用的标准版本，例如 c++17。",
     )
     return parser.parse_args()
 
@@ -122,7 +132,9 @@ def run_single_generation(
     output_dir: Path,
     c_inference_enabled: bool,
     c_source_root: Path | None,
-    clang_parse_args: list[str],
+    clang_include: list[str],
+    clang_c_std: str | None,
+    clang_cpp_std: str | None,
 ) -> GenerationResult:
     prepare_output_dir(output_dir)
     started = time.perf_counter()
@@ -130,7 +142,9 @@ def run_single_generation(
         options = StubGenerationOptions(
             enable_c_signature_inference=c_inference_enabled,
             c_source_root=c_source_root if c_inference_enabled else None,
-            clang_parse_args=clang_parse_args,
+            clang_include=clang_include,
+            clang_c_std=clang_c_std,
+            clang_cpp_std=clang_cpp_std,
             include_docstrings=False,
             include_module_type_comment=True,
         )
@@ -261,7 +275,9 @@ def main() -> int:
     module_name = args.module_name
     c_source_root = Path(args.c_source_root)
     output_root = Path(args.output_root)
-    clang_parse_args: list[str] = list(args.clang_arg)
+    clang_include: list[str] = list(args.clang_include)
+    clang_c_std: str | None = args.clang_c_std
+    clang_cpp_std: str | None = args.clang_cpp_std
 
     disabled_output_dir = output_root / "disabled"
     enabled_output_dir = output_root / "enabled"
@@ -272,8 +288,12 @@ def main() -> int:
     print(f"C 源码目录: {c_source_root}")
     if not c_source_root.exists():
         print("警告: C 源码目录不存在，C 签名推导可能不会生效。")
-    if clang_parse_args:
-        print(f"clang 参数: {clang_parse_args}")
+    if clang_include:
+        print(f"clang include 路径: {clang_include}")
+    if clang_c_std:
+        print(f"clang C 标准: {clang_c_std}")
+    if clang_cpp_std:
+        print(f"clang C++ 标准: {clang_cpp_std}")
 
     print("\n[1/2] 生成关闭 C 推导版本（enable_c_signature_inference=False）...")
     disabled_result = run_single_generation(
@@ -281,7 +301,9 @@ def main() -> int:
         output_dir=disabled_output_dir,
         c_inference_enabled=False,
         c_source_root=c_source_root,
-        clang_parse_args=clang_parse_args,
+        clang_include=clang_include,
+        clang_c_std=clang_c_std,
+        clang_cpp_std=clang_cpp_std,
     )
     print(
         f"完成: success={disabled_result.success}, stubs={disabled_result.stub_count}, "
@@ -297,7 +319,9 @@ def main() -> int:
         output_dir=enabled_output_dir,
         c_inference_enabled=True,
         c_source_root=c_source_root,
-        clang_parse_args=clang_parse_args,
+        clang_include=clang_include,
+        clang_c_std=clang_c_std,
+        clang_cpp_std=clang_cpp_std,
     )
     print(
         f"完成: success={enabled_result.success}, stubs={enabled_result.stub_count}, "
