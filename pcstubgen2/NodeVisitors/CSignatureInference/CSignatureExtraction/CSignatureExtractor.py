@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import sysconfig
 from pathlib import Path
@@ -26,7 +25,6 @@ from .Constants import (
     FORMAT_TYPE_MAP,
     METH_TYPE_LITERAL_MAP,
     NATIVE_SOURCE_SUFFIXES,
-    POINTER_CAST_IDENTIFIER_SKIP,
     PY_BUILDVALUE_SINGLE_MARKER_TYPE_MAP,
     RETURN_CALL_PREFIX_TYPE_MAP,
     RETURN_MACRO_TYPE_MAP,
@@ -56,12 +54,26 @@ transparent_kinds = {
     CursorKind.CXX_FUNCTIONAL_CAST_EXPR,  # T(expr)
 }
 
+cast_kinds = {
+    CursorKind.CSTYLE_CAST_EXPR,
+    CursorKind.CXX_STATIC_CAST_EXPR,
+    CursorKind.CXX_REINTERPRET_CAST_EXPR,
+    CursorKind.CXX_CONST_CAST_EXPR,
+    CursorKind.CXX_FUNCTIONAL_CAST_EXPR,
+}
+
 _CPP_STRING_LITERAL_RE = re.compile(r'^(?:u8|u|U|L)?"(.*)"$', re.DOTALL)
 
 
 def _unwrap_transparent(cursor: Cursor) -> Cursor:
     while cursor.kind in transparent_kinds:
-        cursor = next(cursor.get_children())
+        children = list(cursor.get_children())
+        if not children:
+            break
+        if cursor.kind in cast_kinds:
+            cursor = children[-1]
+        else:
+            cursor = children[0]
     return cursor
 
 
@@ -278,15 +290,10 @@ class CSignatureExtractor:
                 continue
             translation_units.append(tu)
 
-        # 第一阶段先收集函数定义，供方法表条目回查 C 函数体。
-        function_defs: dict[str, list[Cursor]] = {}
-        for tu in translation_units:
-            self._collect_function_definitions(tu.cursor, function_defs)
-
-        # 第二阶段处理 PyMethodDef，拼装提取结果。
+        # 处理 PyMethodDef，拼装提取结果。
         result: dict[str, list[ExtractedFunction]] = {}
         for tu in translation_units:
-            self._collect_pymethod_defs(tu.cursor, function_defs, result)
+            self._collect_pymethod_defs(tu.cursor, result)
 
         self._cache_result = self._deduplicate_result(result)
         return self._cache_result
@@ -384,16 +391,9 @@ class CSignatureExtractor:
             return normalized
         return f"-std={normalized}"
 
-    def _collect_function_definitions(self, cursor: Cursor, output: dict[str, list[Cursor]]) -> None:
-        """遍历 AST，按函数名收集 `FUNCTION_DECL` 节点。"""
-        for node in self._walk(cursor):
-            if node.kind == CursorKind.FUNCTION_DECL and node.spelling:
-                output.setdefault(node.spelling, []).append(node)
-
     def _collect_pymethod_defs(
             self,
             cursor: Cursor,
-            function_defs: dict[str, list[Cursor]],
             output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
@@ -404,7 +404,6 @@ class CSignatureExtractor:
                     self._process_PyMethodDef_array_INIT_LIST_EXPR(
                         child,
                         init_expr_node,
-                        function_defs,
                         output,
                     )
 
@@ -422,7 +421,6 @@ class CSignatureExtractor:
             self,
             var_decl_node: Cursor,
             init_expr_node: Cursor,
-            function_defs: dict[str, list[Cursor]],
             output: dict[str, list[ExtractedFunction]],
     ) -> None:
         """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
@@ -436,7 +434,6 @@ class CSignatureExtractor:
                 init_list_expr=element,
                 method_table=table_name,
                 source_file=source_file,
-                function_defs=function_defs,
             )
             if extracted is None:
                 continue
@@ -447,7 +444,6 @@ class CSignatureExtractor:
             init_list_expr: Cursor,
             method_table: str,
             source_file: str | None,
-            function_defs: dict[str, list[Cursor]],
     ) -> ExtractedFunction | None:
         """
         从 `PyMethodDef` 的单个初始化项提取函数元数据和签名。
@@ -464,29 +460,72 @@ class CSignatureExtractor:
         #   INTEGER_LITERAL
         fields = list(init_list_expr.get_children())
 
+        if len(fields) < 3:
+            self._warn_pymethod_field_extraction(
+                method_table=method_table,
+                source_file=source_file,
+                field_name="ml_flags",
+                field_cursor=None,
+                message=f"expected at least 3 fields, got {len(fields)}",
+            )
+            return None
+
         ml_name_cursor = _unwrap_transparent(fields[0])
         ml_name = self._strip_string_literal_quotes(ml_name_cursor.spelling)
+        if not ml_name:
+            self._warn_pymethod_field_extraction(
+                method_table=method_table,
+                source_file=source_file,
+                field_name="ml_name",
+                field_cursor=ml_name_cursor,
+                message="missing or empty method name literal",
+            )
+            return None
 
         ml_meth_cursor = _unwrap_transparent(fields[1])
         ml_meth = ml_meth_cursor.spelling
-        logger.info(f"ml_meth_cursor.referenced.location: {ml_meth_cursor.referenced.location}")
+
+        function_cursor = ml_meth_cursor.referenced
+        if function_cursor is None:
+            self._warn_pymethod_field_extraction(
+                method_table=method_table,
+                source_file=source_file,
+                field_name="ml_meth",
+                field_cursor=ml_meth_cursor,
+                message="ml_meth cursor has no referenced function",
+            )
+            return None
+
+        function_kinds = {CursorKind.FUNCTION_DECL, CursorKind.CXX_METHOD}
+        if function_cursor.kind not in function_kinds:
+            self._warn_pymethod_field_extraction(
+                method_table=method_table,
+                source_file=source_file,
+                field_name="ml_meth",
+                field_cursor=ml_meth_cursor,
+                message=f"referenced cursor is not a function: {self._cursor_kind_name(function_cursor)}",
+            )
+            return None
 
         ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
+        if not ml_flags:
+            self._warn_pymethod_field_extraction(
+                method_table=method_table,
+                source_file=source_file,
+                field_name="ml_flags",
+                field_cursor=fields[2],
+                message="no supported METH_* flags found",
+            )
 
-        function_cursor = self._select_function_cursor(
-            function_defs.get(ml_meth, []),
-            preferred_file=source_file,
-        )
         signatures: list[ExtractedSignature] = []
         return_type_name: str | None = None
-        if function_cursor is not None:
-            signatures = self._extract_signatures_from_function(function_cursor, ml_flags)
-            return_type_name = self._infer_return_type_from_function(function_cursor)
-            if not signatures:
-                # 解析不到 PyArg_* 调用时，回退到 C 形参声明推断。
-                fallback = self._signature_from_param_decls(function_cursor)
-                if fallback.arguments:
-                    signatures = [fallback]
+        signatures = self._extract_signatures_from_function(function_cursor, ml_flags)
+        return_type_name = self._infer_return_type_from_function(function_cursor)
+        if not signatures:
+            # 解析不到 PyArg_* 调用时，回退到 C 形参声明推断。
+            fallback = self._signature_from_param_decls(function_cursor)
+            if fallback.arguments:
+                signatures = [fallback]
 
         if not signatures:
             signatures = [ExtractedSignature(arguments=[], return_type_name=return_type_name)]
@@ -569,14 +608,6 @@ class CSignatureExtractor:
                 return str(token.spelling)
         spelling = str(getattr(cursor, "spelling", "") or "").strip()
         return spelling or None
-
-    def _is_valid_pymethod_function_name(self, candidate: str) -> bool:
-        """过滤 cast、空指针与无效标识，留下可作为 C 函数名的符号。"""
-        if not candidate:
-            return False
-        if candidate.startswith("METH_"):
-            return False
-        return candidate not in POINTER_CAST_IDENTIFIER_SKIP
 
     def _extract_signatures_from_function(self, func_cursor: Cursor, meth_flags: list[str]) -> list[ExtractedSignature]:
         """从函数体中提取候选签名，并在末尾做去重。"""
@@ -1151,44 +1182,6 @@ class CSignatureExtractor:
                 if child.kind == CursorKind.STRING_LITERAL:
                     return self._strip_string_literal_quotes(str(child.spelling))
         return None
-
-    def _select_function_cursor(
-            self,
-            candidates: list[Cursor],
-            *,
-            preferred_file: str | None = None,
-    ) -> Cursor | None:
-        """优先返回同源文件中的函数定义；若无定义则退化到首个声明。"""
-        if not candidates:
-            return None
-
-        selected = list(candidates)
-        preferred_key = self._normalize_file_key(preferred_file)
-        if preferred_key is not None:
-            same_file_candidates: list[Cursor] = []
-            for candidate in candidates:
-                candidate_file = candidate.location.file
-                if self._normalize_file_key(candidate_file) == preferred_key:
-                    same_file_candidates.append(candidate)
-            if same_file_candidates:
-                selected = same_file_candidates
-
-        for candidate in selected:
-            try:
-                if candidate.is_definition():
-                    return candidate
-            except Exception:
-                continue
-        return selected[0]
-
-    def _normalize_file_key(self, value: object | None) -> str | None:
-        """将 clang 文件位置标准化为可比较键值。"""
-        if value is None:
-            return None
-        raw = str(value).strip()
-        if not raw:
-            return None
-        return os.path.normcase(os.path.normpath(raw))
 
     def _walk(self, node: Cursor) -> Iterable[Cursor]:
         """生成器，深度优先遍历 cursor 子树。"""

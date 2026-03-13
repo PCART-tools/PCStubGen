@@ -1691,33 +1691,27 @@ def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Pat
     )
 
 
-def test_c_signature_engine_prefers_same_file_function_definition(tmp_path: Path) -> None:
+def test_c_signature_engine_warns_when_ml_meth_referenced_is_not_function(
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
-    preferred_file = str(tmp_path / "module_a.c")
-    other_file = str(tmp_path / "module_b.c")
 
-    class _FakeLocation:
-        def __init__(self, file: str) -> None:
-            self.file = file
+    with caplog.at_level(logging.WARNING):
+        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
+                _ml_name_field("add"),
+                _ml_meth_field("simple_add", referenced_kind=clang.cindex.CursorKind.VAR_DECL),
+                _ml_flags_identifier_field("METH_VARARGS"),
+                _string_literal("doc"),
+            ),
+            method_table="Methods",
+            source_file=str(tmp_path / "methods.c"),
+        )
 
-    class _FakeFunctionCursor:
-        def __init__(self, *, file: str, is_definition: bool) -> None:
-            self.location = _FakeLocation(file=file)
-            self._is_definition = is_definition
-
-        def is_definition(self) -> bool:
-            return self._is_definition
-
-    from_other_file = _FakeFunctionCursor(file=other_file, is_definition=True)
-    in_same_file_decl = _FakeFunctionCursor(file=preferred_file, is_definition=False)
-    in_same_file_def = _FakeFunctionCursor(file=preferred_file, is_definition=True)
-
-    selected = engine._select_function_cursor(
-        [from_other_file, in_same_file_decl, in_same_file_def],
-        preferred_file=preferred_file,
-    )
-
-    assert selected is in_same_file_def
+    assert extracted is None
+    assert "Failed to extract PyMethodDef ml_meth" in caplog.text
+    assert "table=Methods" in caplog.text
 
 
 def test_c_signature_engine_skips_non_array_types_before_reading_array_element() -> None:
@@ -1921,18 +1915,20 @@ class _FakeNode:
         children: list[object] | None = None,
         spelling: str = "",
         location: object | None = None,
+        referenced: object | None = None,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
         self._children = children or []
         self.spelling = spelling
         self.location = location if location is not None else _FakeCursorLocation()
+        self.referenced = referenced
 
     def get_tokens(self) -> list[_FakeToken]:
         return self._tokens
 
-    def get_children(self) -> list[object]:
-        return self._children
+    def get_children(self) -> Iterable[object]:
+        return iter(self._children)
 
 
 def _int_literal(value: str = "0") -> _FakeNode:
@@ -1973,11 +1969,17 @@ def _string_literal(value: str) -> _FakeNode:
     )
 
 
-def _token_identifier_node(name: str, *, kind: object = clang.cindex.CursorKind.DECL_REF_EXPR) -> _FakeNode:
+def _token_identifier_node(
+    name: str,
+    *,
+    kind: object = clang.cindex.CursorKind.DECL_REF_EXPR,
+    referenced: object | None = None,
+) -> _FakeNode:
     return _FakeNode(
         kind=kind,
         spelling=name,
         tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
+        referenced=referenced,
     )
 
 
@@ -1985,22 +1987,28 @@ def _ml_name_field(name: str) -> _FakeNode:
     return _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _string_literal(name)))
 
 
-def _ml_meth_field(name: str) -> _FakeNode:
+def _ml_meth_field(
+    name: str,
+    *,
+    referenced_kind: object = clang.cindex.CursorKind.FUNCTION_DECL,
+) -> _FakeNode:
+    referenced = _FakeNode(kind=referenced_kind, spelling=name)
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
         spelling=name,
-        children=[_token_identifier_node(name)],
+        children=[_token_identifier_node(name, referenced=referenced)],
     )
 
 
 def _ml_meth_cast_field(name: str) -> _FakeNode:
+    referenced = _FakeNode(kind=clang.cindex.CursorKind.FUNCTION_DECL, spelling=name)
     return _wrap(
         clang.cindex.CursorKind.UNEXPOSED_EXPR,
         _wrap(
             clang.cindex.CursorKind.PAREN_EXPR,
             _FakeNode(
                 kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
-                children=[_token_identifier_node("PyCFunction"), _token_identifier_node(name)],
+                children=[_token_identifier_node(name, referenced=referenced)],
             ),
         ),
     )
@@ -2011,6 +2019,29 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
         kind=clang.cindex.CursorKind.BINARY_OPERATOR,
         children=[_token_identifier_node(flag) for flag in flags],
     )
+
+
+def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
+    original_eval_int = c_signature_extractor_module.ClangEval.eval_int
+
+    def _eval_int(cursor: object) -> int | None:
+        if not isinstance(cursor, _FakeNode):
+            return original_eval_int(cursor)
+        if cursor.kind != clang.cindex.CursorKind.INTEGER_LITERAL:
+            return None
+        for token in cursor.get_tokens():
+            if token.kind != clang.cindex.TokenKind.LITERAL:
+                continue
+            text = str(token.spelling).strip()
+            if not text:
+                continue
+            try:
+                return int(text, 0)
+            except ValueError:
+                continue
+        return None
+
+    monkeypatch.setattr(c_signature_extractor_module.ClangEval, "eval_int", _eval_int)
 
 
 @pytest.mark.parametrize(
@@ -2028,7 +2059,11 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
         lambda c_null: _init_list(_int_literal("0"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
     ],
 )
-def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(sentinel) -> None:
+def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(
+    sentinel,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_fake_eval_int(monkeypatch)
     c_null = _wrap(
         clang.cindex.CursorKind.UNEXPOSED_EXPR,
         _wrap(clang.cindex.CursorKind.PAREN_EXPR, _wrap(clang.cindex.CursorKind.CSTYLE_CAST_EXPR, _int_literal("0"))),
@@ -2060,7 +2095,11 @@ def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(sentinel)
         ),
     ],
 )
-def test_c_signature_engine_array_end_rejects_non_sentinel_forms(non_sentinel: _FakeNode) -> None:
+def test_c_signature_engine_array_end_rejects_non_sentinel_forms(
+    non_sentinel: _FakeNode,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_fake_eval_int(monkeypatch)
     assert _is_PyMethodDef_array_sentinel(non_sentinel) is False
 
 
@@ -2085,7 +2124,6 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
         ),
         method_table="SimpleMethods",
         source_file=str(tmp_path / "simple_extension.c"),
-        function_defs={},
     )
 
     assert extracted is not None
@@ -2106,7 +2144,6 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
         ),
         method_table="Point_methods",
         source_file=str(tmp_path / "complex_extension.c"),
-        function_defs={},
     )
 
     assert extracted is not None
@@ -2135,7 +2172,6 @@ def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Pat
         ),
         method_table="Methods",
         source_file=str(tmp_path / "methods.c"),
-        function_defs={},
     )
 
     assert extracted is not None
@@ -2158,7 +2194,6 @@ def test_c_signature_engine_warns_and_returns_none_when_ml_name_missing(
             ),
             method_table="Methods",
             source_file=str(tmp_path / "methods.c"),
-            function_defs={},
         )
 
     assert extracted is None
@@ -2182,7 +2217,6 @@ def test_c_signature_engine_warns_and_returns_none_when_ml_meth_missing(
             ),
             method_table="Methods",
             source_file=str(tmp_path / "methods.c"),
-            function_defs={},
         )
 
     assert extracted is None
@@ -2206,7 +2240,6 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
             ),
             method_table="Methods",
             source_file=str(tmp_path / "methods.c"),
-            function_defs={},
         )
 
     assert extracted is not None
@@ -2228,11 +2261,9 @@ def test_c_signature_engine_warns_when_pymethod_field_list_is_incomplete(
             ),
             method_table="Methods",
             source_file=str(tmp_path / "methods.c"),
-            function_defs={},
         )
 
-    assert extracted is not None
-    assert extracted.method_flags == []
+    assert extracted is None
     assert "expected at least 3 fields, got 2" in caplog.text
     assert "Failed to extract PyMethodDef ml_flags" in caplog.text
 
@@ -2264,20 +2295,18 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
         spelling="Methods",
         location=_FakeCursorLocation(file=owner_file),
     )
-    function_defs = {"add_impl": []}
-    calls: list[tuple[_FakeNode, str, str | None, dict[str, list[object]]]] = []
+    calls: list[tuple[_FakeNode, str, str | None]] = []
 
     def fake_extract(
         *,
-        struct_init: _FakeNode,
+        init_list_expr: _FakeNode,
         method_table: str,
         source_file: str | None,
-        function_defs: dict[str, list[object]],
     ) -> SimpleNamespace:
-        calls.append((struct_init, method_table, source_file, function_defs))
+        calls.append((init_list_expr, method_table, source_file))
         return SimpleNamespace(py_name=f"entry_{len(calls)}")
 
-    monkeypatch.setattr(engine, "_extract_PyMethodDef_struct_fields", fake_extract)
+    monkeypatch.setattr(engine, "_extract_PyMethodDef_INIT_LIST_EXPR", fake_extract)
 
     should_break_array = _FakeNode(
         kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
@@ -2285,8 +2314,8 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
         location=_FakeCursorLocation(file=init_expr_file),
     )
     output: dict[str, list[SimpleNamespace]] = {}
-    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_break_array, function_defs, output)
-    assert calls == [(method_1, "Methods", owner_file, function_defs)]
+    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_break_array, output)
+    assert calls == [(method_1, "Methods", owner_file)]
     assert list(output) == ["entry_1"]
 
     calls.clear()
@@ -2297,7 +2326,7 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
         children=[method_1, non_sentinel, method_2],
         location=_FakeCursorLocation(file=init_expr_file),
     )
-    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_not_break_array, function_defs, output)
+    engine._process_PyMethodDef_array_INIT_LIST_EXPR(var_decl_node, should_not_break_array, output)
     assert [call[0] for call in calls] == [method_1, non_sentinel, method_2]
     assert {call[1] for call in calls} == {"Methods"}
     assert {call[2] for call in calls} == {owner_file}
@@ -2342,15 +2371,14 @@ def test_c_signature_engine_collects_array_method_table_from_init_list_child(
     def fake_process(
         var_decl_node: _FakeNode,
         init_expr_node: _FakeNode,
-        function_defs: dict[str, list[object]],
         output: dict[str, list[object]],
     ) -> None:
-        _ = (var_decl_node, function_defs, output)
+        _ = (var_decl_node, output)
         captured.append(init_expr_node)
 
     monkeypatch.setattr(engine, "_process_PyMethodDef_array_INIT_LIST_EXPR", fake_process)
 
-    engine._collect_pymethod_defs(root, {}, {})
+    engine._collect_pymethod_defs(root, {})
 
     assert captured == [target_init_expr]
 

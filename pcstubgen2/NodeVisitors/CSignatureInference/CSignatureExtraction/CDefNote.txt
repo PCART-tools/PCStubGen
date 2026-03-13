@@ -7,15 +7,43 @@ typedef struct PyMethodDef {
 
 ml = method list
 
-PyCFunction定义：
+# PyCFunction定义
 typedef PyObject* (*PyCFunction)(PyObject* self, PyObject* args);
 
-哨兵
+# PyCFunctionWithKeywords定义
+typedef PyObject *(*PyCFunctionWithKeywords)(
+    PyObject *self,
+    PyObject *args,
+    PyObject *kwargs
+);
+
+# PyCMethod定义
+typedef PyObject *(*PyCMethod)(
+    PyObject *self,
+    PyTypeObject *defining_class,
+    PyObject *const *args,
+    Py_ssize_t nargs,
+    PyObject *kwnames
+);
+
+# PyMethodDef数组哨兵
 {NULL, NULL, 0, NULL}
 {NULL}
 {0}
 {NULL, NULL}
-
 {nullptr, nullptr, 0, nullptr}
 {0, 0, 0, 0}
 {}
+
+#define METH_VARARGS   0x0001
+#define METH_KEYWORDS  0x0002
+#define METH_NOARGS    0x0004
+#define METH_O         0x0008
+
+#define METH_CLASS     0x0010
+#define METH_STATIC    0x0020
+#define METH_COEXIST   0x0040
+
+#define METH_FASTCALL  0x0080
+
+#define METH_METHOD    0x0200

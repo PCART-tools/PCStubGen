@@ -172,16 +172,6 @@ UNRELATED_TOKENS: set[str] = {
     "9",
 }
 
-# 在方法表 token 中查找 C 函数名时需要跳过的 cast/空指针标识。
-POINTER_CAST_IDENTIFIER_SKIP: set[str] = {
-    "PyCFunction",
-    "PyCFunctionWithKeywords",
-    "PyCMethod",
-    "PyObject",
-    "nullptr",
-    "NULL",
-}
-
 # 参与扫描的 C 源码后缀。
 C_SOURCE_SUFFIXES: set[str] = {
     ".c",
