@@ -2076,8 +2076,8 @@ def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> 
 def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    extracted = engine._extract_PyMethodDef_struct_fields(
-        struct_init=_init_list(
+    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(
             _ml_name_field("add"),
             _ml_meth_field("simple_add"),
             _ml_flags_identifier_field("METH_VARARGS"),
@@ -2097,8 +2097,8 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
 def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    extracted = engine._extract_PyMethodDef_struct_fields(
-        struct_init=_init_list(
+    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(
             _ml_name_field("distance"),
             _ml_meth_cast_field("Point_distance"),
             _ml_flags_identifier_field("METH_VARARGS"),
@@ -2117,8 +2117,8 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
 def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    extracted = engine._extract_PyMethodDef_struct_fields(
-        struct_init=_init_list(
+    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(
             _ml_name_field("kw"),
             _ml_meth_field("kw_impl"),
             _FakeNode(
@@ -2149,8 +2149,8 @@ def test_c_signature_engine_warns_and_returns_none_when_ml_name_missing(
     engine = CSignatureExtractor(source_root=tmp_path)
 
     with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_struct_fields(
-            struct_init=_init_list(
+        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
                 _identifier_node("NULL"),
                 _ml_meth_field("simple_add"),
                 _ml_flags_identifier_field("METH_VARARGS"),
@@ -2173,8 +2173,8 @@ def test_c_signature_engine_warns_and_returns_none_when_ml_meth_missing(
     engine = CSignatureExtractor(source_root=tmp_path)
 
     with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_struct_fields(
-            struct_init=_init_list(
+        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
                 _ml_name_field("add"),
                 _identifier_node("PyCFunction"),
                 _ml_flags_identifier_field("METH_VARARGS"),
@@ -2197,8 +2197,8 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
     engine = CSignatureExtractor(source_root=tmp_path)
 
     with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_struct_fields(
-            struct_init=_init_list(
+        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
                 _ml_name_field("add"),
                 _ml_meth_field("simple_add"),
                 _identifier_node("flag_var"),
@@ -2221,8 +2221,8 @@ def test_c_signature_engine_warns_when_pymethod_field_list_is_incomplete(
     engine = CSignatureExtractor(source_root=tmp_path)
 
     with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_struct_fields(
-            struct_init=_init_list(
+        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
                 _ml_name_field("add"),
                 _ml_meth_field("simple_add"),
             ),
@@ -2376,3 +2376,23 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
     assert args is not None
     assert [arg.name for arg in args] == ["count", "expected_type", "value"]
     assert [arg.type_name for arg in args] == ["int", "object", "object"]
+
+
+@pytest.mark.parametrize(
+    ("literal", "expected"),
+    [
+        ('"plain"', "plain"),
+        ('u8"utf8"', "utf8"),
+        ('u"utf16"', "utf16"),
+        ('U"utf32"', "utf32"),
+        ('L"wide"', "wide"),
+    ],
+)
+def test_c_signature_engine_strips_cpp_string_literal_prefixes(
+    tmp_path: Path,
+    literal: str,
+    expected: str,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+
+    assert engine._strip_string_literal_quotes(literal) == expected
