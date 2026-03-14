@@ -13,7 +13,7 @@ class IRModuleType(Enum):
     UNKNOWN = "unknown"
     PYTHON = "python"
     BUILTIN = "builtin"
-    C = "c"
+    EXTENSION = "extension"
 
 
 @dataclass

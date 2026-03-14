@@ -68,7 +68,7 @@ class ModuleBuilder:
             return IRModuleType.BUILTIN
 
         if isinstance(loader, importlib.machinery.ExtensionFileLoader):
-            return IRModuleType.C
+            return IRModuleType.EXTENSION
 
         if isinstance(
             loader,

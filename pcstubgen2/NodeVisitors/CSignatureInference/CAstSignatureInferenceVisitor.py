@@ -81,7 +81,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
 
-        if node.module_type is IRModuleType.C:
+        if node.module_type is IRModuleType.EXTENSION:
             signatures, load_status = self._get_signatures()
             node.functions = self._rewrite_module_functions(
                 node.functions,
@@ -94,7 +94,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     def visit_class(self, node: IRClass, module: IRModule) -> None:
         """在模块启用时重写类方法签名。"""
 
-        if module.module_type is IRModuleType.C:
+        if module.module_type is IRModuleType.EXTENSION:
             signatures, load_status = self._get_signatures()
             node.methods = self._rewrite_class_methods(
                 node.methods,

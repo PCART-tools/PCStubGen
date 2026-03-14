@@ -33,7 +33,7 @@ def test_detect_module_type_uses_loader_mapping() -> None:
 
     cases = [
         ("demo_builtin", importlib.machinery.BuiltinImporter, IRModuleType.BUILTIN),
-        ("demo_extension", extension_loader, IRModuleType.C),
+        ("demo_extension", extension_loader, IRModuleType.EXTENSION),
         ("demo_sourceless", sourceless_loader, IRModuleType.PYTHON),
         ("demo_source", source_loader, IRModuleType.PYTHON),
     ]

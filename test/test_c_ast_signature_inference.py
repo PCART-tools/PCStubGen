@@ -214,7 +214,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     func = IRFunction(name="foo", args=_generic_signature())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[func],
     )
     _patch_c_signature_extractor(
@@ -264,7 +264,7 @@ def test_c_ast_visitor_logs_successful_generic_rewrite(
     func = IRFunction(name="foo", args=_generic_signature())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[func],
     )
     _patch_c_signature_extractor(
@@ -364,7 +364,7 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
 ) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
     _patch_c_signature_extractor(
@@ -462,12 +462,12 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
     )
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
     second_module = IRModule(
         full_name=QualifiedName.from_str("pkg.second"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="bar", args=_generic_signature())],
     )
 
@@ -851,7 +851,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[func],
     )
     _patch_c_signature_extractor(
@@ -888,7 +888,7 @@ def test_c_ast_visitor_generates_overloads_for_methods(monkeypatch: pytest.Monke
     method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         classes=[IRClass(name="C", methods=[method])],
     )
 
@@ -972,7 +972,7 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
 ) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
@@ -1195,7 +1195,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
         classes=[
             IRClass(
@@ -1206,7 +1206,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
         sub_modules=[
             IRModule(
                 full_name=QualifiedName.from_str("pkg.child"),
-                module_type=IRModuleType.C,
+                module_type=IRModuleType.EXTENSION,
                 functions=[IRFunction(name="bar", args=_generic_signature())],
             )
         ],
@@ -1251,7 +1251,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
         classes=[
             IRClass(
@@ -1296,7 +1296,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
         classes=[
             IRClass(
@@ -1307,7 +1307,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
         sub_modules=[
             IRModule(
                 full_name=QualifiedName.from_str("pkg.child"),
-                module_type=IRModuleType.C,
+                module_type=IRModuleType.EXTENSION,
                 functions=[IRFunction(name="bar", args=_generic_signature())],
             )
         ],
@@ -1334,7 +1334,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
 ) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[
             IRFunction(
                 name="foo",
@@ -1379,7 +1379,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
 ) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         functions=[
             IRFunction(
                 name="cdist_minkowski",
@@ -1421,7 +1421,7 @@ def test_infer_method_modifier_after_c_ast_visitor(monkeypatch: pytest.MonkeyPat
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         classes=[IRClass(name="Builder", methods=[method])],
     )
     _patch_c_signature_extractor(
@@ -1808,7 +1808,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
     )
     visitor.visit_module(module)
     visitor.visit_module(module)
@@ -2021,7 +2021,7 @@ def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.
     method = IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.C,
+        module_type=IRModuleType.EXTENSION,
         classes=[IRClass(name="Builder", methods=[method])],
     )
     _patch_c_signature_extractor(
@@ -2064,7 +2064,7 @@ def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.
 @pytest.mark.parametrize(
     ("module_type", "expected_args", "expected_calls"),
     [
-        (IRModuleType.C, ["count"], 1),
+        (IRModuleType.EXTENSION, ["count"], 1),
         (IRModuleType.PYTHON, ["args", "kwargs"], 0),
     ],
 )
