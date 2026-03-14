@@ -238,7 +238,8 @@ class CSignatureExtractor:
             self._cache_result = {}
             return self._cache_result
 
-        self._prepare_extract_parse_args()
+        self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
+        self._header_search_index = self._build_header_search_index()
 
         source_files = self._find_candidate_files()
         if not source_files:
@@ -276,10 +277,6 @@ class CSignatureExtractor:
             logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
 
-    def _prepare_extract_parse_args(self) -> None:
-        """在提取阶段补齐解析所需的额外参数。"""
-        self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
-        self._header_search_index = self._build_header_search_index()
 
     def _build_user_include_args(self, clang_include: Iterable[str]) -> list[str]:
         """将 include 路径列表转换为 clang `-I` 参数。"""
@@ -326,11 +323,6 @@ class CSignatureExtractor:
             candidates.sort(key=lambda path: path.as_posix().casefold())
         return index
 
-    def _get_header_search_index(self) -> dict[str, list[Path]]:
-        if self._header_search_index is None:
-            self._header_search_index = self._build_header_search_index()
-        return self._header_search_index
-
     def _normalize_include_literal(self, include_literal: str) -> str:
         normalized = include_literal.replace("\\", "/").strip()
         while "//" in normalized:
@@ -344,8 +336,7 @@ class CSignatureExtractor:
         return tuple(part for part in normalized.split("/") if part and part != ".")
 
     def _extract_missing_include_literals(self, diagnostics: list[Diagnostic]) -> list[str]:
-        missing: list[str] = []
-        seen: set[str] = set()
+        missing: set[str] = set()
         for diagnostic in diagnostics:
             if diagnostic.severity < clang.cindex.Diagnostic.Error:
                 continue
@@ -356,11 +347,8 @@ class CSignatureExtractor:
             include_literal = self._normalize_include_literal(match.group(1))
             if not include_literal:
                 continue
-            if include_literal in seen:
-                continue
-            seen.add(include_literal)
-            missing.append(include_literal)
-        return missing
+            missing.add(include_literal)
+        return sorted(missing)
 
     def _match_include_to_include_dir(
             self,
@@ -405,7 +393,7 @@ class CSignatureExtractor:
         if not include_parts:
             return None
 
-        candidates = self._get_header_search_index().get(include_literal)
+        candidates = self._header_search_index.get(include_literal)
         if not candidates:
             return None
 
@@ -487,7 +475,7 @@ class CSignatureExtractor:
         translation_unit: TranslationUnit | None = None
         diagnostics: list[Diagnostic] = []
         parse_args: list[str] = []
-        for attempt in range(AUTO_INCLUDE_RETRY_LIMIT):
+        for _ in range(AUTO_INCLUDE_RETRY_LIMIT):
             parse_args = self._build_parse_args(file_path)
             parse_args.extend(["-include", "Python.h"])
             translation_unit = index.parse(str(file_path), args=parse_args)
@@ -496,9 +484,8 @@ class CSignatureExtractor:
                 file_path=file_path,
                 diagnostics=diagnostics,
             )
-            if added and attempt + 1 < AUTO_INCLUDE_RETRY_LIMIT:
-                continue
-            break
+            if not added:
+                break
 
         if translation_unit is None:
             return None
