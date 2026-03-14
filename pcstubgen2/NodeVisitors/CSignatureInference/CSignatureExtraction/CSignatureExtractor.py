@@ -15,7 +15,6 @@ from clang.cindex import (
     Index,
     TokenKind,
     TranslationUnit,
-    Type,
     TypeKind
 )
 
@@ -30,7 +29,6 @@ from .Constants import (
     RETURN_MACRO_TYPE_MAP,
     RETURN_TOKEN_TYPE_MAP,
     UNRELATED_TOKENS,
-    HEADER_SOURCE_SUFFIXES,
 )
 from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
@@ -217,7 +215,6 @@ class CSignatureExtractor:
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._cache_result: dict[str, list[ExtractedFunction]] | None = None
-        self._header_search_index: dict[str, list[Path]] | None = None
 
     def extract(self) -> dict[str, list[ExtractedFunction]]:
         """
@@ -239,7 +236,6 @@ class CSignatureExtractor:
             return self._cache_result
 
         self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
-        self._header_search_index = self._build_header_search_index()
 
         source_files = self._find_candidate_files()
         if not source_files:
@@ -299,29 +295,6 @@ class CSignatureExtractor:
             if include_arg not in args:
                 args.append(include_arg)
         return args
-
-    def _build_header_search_index(self) -> dict[str, list[Path]]:
-        """为缺失头文件恢复构建后缀路径索引。"""
-        index: dict[str, list[Path]] = {}
-        if not self.source_root.exists():
-            return index
-
-        for header_path in self.source_root.rglob("*"):
-            if not header_path.is_file():
-                continue
-            if header_path.suffix.lower() not in HEADER_SOURCE_SUFFIXES:
-                continue
-            try:
-                relative_parts = header_path.relative_to(self.source_root).parts
-            except ValueError:
-                continue
-            for start in range(len(relative_parts)):
-                key = "/".join(relative_parts[start:])
-                index.setdefault(key, []).append(header_path)
-
-        for candidates in index.values():
-            candidates.sort(key=lambda path: path.as_posix().casefold())
-        return index
 
     def _normalize_include_literal(self, include_literal: str) -> str:
         normalized = include_literal.replace("\\", "/").strip()
@@ -393,13 +366,14 @@ class CSignatureExtractor:
         if not include_parts:
             return None
 
-        candidates = self._header_search_index.get(include_literal)
-        if not candidates:
+        if not self.source_root.exists():
             return None
 
         best_rank: tuple[int, int, str, str] | None = None
         best_include_dir: Path | None = None
-        for header_path in candidates:
+        for header_path in self.source_root.rglob(include_literal):
+            if not header_path.is_file():
+                continue
             include_dir = self._match_include_to_include_dir(
                 header_path=header_path,
                 include_parts=include_parts,

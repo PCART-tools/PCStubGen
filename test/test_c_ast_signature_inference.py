@@ -624,6 +624,35 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     assert len(index.calls) == 2
 
 
+def test_c_signature_engine_resolves_missing_include_with_literal_rglob(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    header_path = tmp_path / "vendor" / "include" / "numpy" / "npy_common.h"
+    header_path.parent.mkdir(parents=True, exist_ok=True)
+    header_path.write_text("/* header */", encoding="utf-8")
+
+    rglob_patterns: list[str] = []
+    original_rglob = Path.rglob
+
+    def _record_rglob(self: Path, pattern: str):
+        rglob_patterns.append(pattern)
+        return original_rglob(self, pattern)
+
+    monkeypatch.setattr(Path, "rglob", _record_rglob)
+
+    include_dir = engine._resolve_missing_include_dir(
+        include_literal="numpy/npy_common.h",
+        source_file=source,
+    )
+
+    assert include_dir == header_path.parents[1]
+    assert rglob_patterns == ["numpy/npy_common.h"]
+
+
 def test_c_signature_engine_logs_info_when_auto_include_is_added(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
