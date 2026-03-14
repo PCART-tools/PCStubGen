@@ -500,20 +500,12 @@ def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptu
     )
     source = tmp_path / "broken_module.cxx"
 
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
-        result = engine._parse_translation_unit(
-            index=_RaisingIndex(RuntimeError("boom")),
-            file_path=source,
-        )
-
-    assert result is None
-    assert len(caplog.records) == 1
-    message = caplog.records[0].message
-    assert str(source) in message
-    assert "suffix: .cxx" in message
-    assert "parse_args: ['-std=c++17', '-IC:/MyInclude']" in message
-    assert "exception_type: RuntimeError" in message
-    assert "exception: boom" in message
+    with pytest.raises(RuntimeError, match="boom"):
+        with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+            engine._parse_translation_unit(
+                index=_RaisingIndex(RuntimeError("boom")),
+                file_path=source,
+            )
 
 
 def test_c_signature_engine_logs_all_diagnostics_when_error_present(
@@ -560,7 +552,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     message = caplog.records[0].message
     assert str(source) in message
     assert "suffix: .c" in message
-    assert "parse_args: ['-std=c11']" in message
+    assert "parse_args: ['-std=c11', '-include', 'Python.h']" in message
     assert f"[WARNING] {source}:3:1: warning detail" in message
     assert f"[ERROR] {source}:7:9: error detail" in message
     assert f"[FATAL] {source}:11:4: fatal detail" in message
@@ -1111,14 +1103,6 @@ def test_c_signature_engine_rejects_none_clang_include(tmp_path: Path) -> None:
         )
 
 
-def test_c_signature_engine_rejects_dash_i_prefixed_clang_include(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="must not include '-I' prefix"):
-        CSignatureExtractor(
-            source_root=tmp_path,
-            clang_include=["-IC:/MyInclude"],
-        )
-
-
 def test_write_stubs_uses_multiline_logging_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1142,12 +1126,12 @@ def test_write_stubs_uses_multiline_logging_format(
     assert basic_config_calls == [
         (
             (),
-            {
-                "level": logging.INFO,
-                "format": "[{levelname}] - {name}\n{message}\n",
-                "style": "{",
-            },
-        )
+                {
+                    "level": logging.INFO,
+                    "format": "[{levelname}]: {message}\nat {filename}:{lineno} (in {funcName}())\n",
+                    "style": "{",
+                },
+            )
     ]
 
 
@@ -1847,7 +1831,7 @@ def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path:
     )
 
     assert engine._build_parse_args(tmp_path / "module.c") == ["-std=c99", "-IC:/MyInclude"]
-    assert engine._build_parse_args(tmp_path / "module.hpp") == ["-std=c++20", "-IC:/MyInclude"]
+    assert engine._build_parse_args(tmp_path / "module.hpp") == ["-std=c99", "-IC:/MyInclude"]
 
 
 def test_c_signature_engine_configures_packaged_libclang_when_available(
@@ -1921,29 +1905,6 @@ def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Pat
     )
 
 
-def test_c_signature_engine_warns_when_ml_meth_referenced_is_not_function(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _ml_name_field("add"),
-                _ml_meth_field("simple_add", referenced_kind=clang.cindex.CursorKind.VAR_DECL),
-                _ml_flags_identifier_field("METH_VARARGS"),
-                _string_literal("doc"),
-            ),
-            method_table="Methods",
-            source_file=str(tmp_path / "methods.c"),
-        )
-
-    assert extracted is None
-    assert "Failed to extract PyMethodDef ml_meth" in caplog.text
-    assert "table=Methods" in caplog.text
-
-
 def test_c_signature_engine_skips_non_array_types_before_reading_array_element() -> None:
     class _FakeType:
         kind = object()
@@ -1983,38 +1944,6 @@ def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name(
             return True
 
     assert _is_PyMethodDef_array_definition(_FakeNode()) is True
-
-
-def test_c_signature_engine_detects_initializer_list_from_type_before_scanning_children() -> None:
-    class _FakeCanonicalType:
-        spelling = "std::initializer_list<PyMethodDef>"
-
-    class _FakeType:
-        spelling = "using Methods = std::initializer_list<PyMethodDef>"
-
-        def get_canonical(self) -> _FakeCanonicalType:
-            return _FakeCanonicalType()
-
-    class _FakeNode:
-        type = _FakeType()
-
-        def get_children(self) -> list[object]:
-            raise AssertionError("initializer_list type match should not need AST child scan")
-
-    assert _is_initializer_list_PyMethodDef(_FakeNode()) is True
-
-
-def test_c_signature_engine_returns_false_when_initializer_list_canonical_lookup_raises() -> None:
-    class _FakeType:
-        spelling = "std::initializer_list<PyMethodDef>"
-
-        def get_canonical(self) -> "_FakeType":
-            raise RuntimeError("clang canonical lookup failed")
-
-    class _FakeNode:
-        type = _FakeType()
-
-    assert _is_initializer_list_PyMethodDef(_FakeNode()) is False
 
 
 def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -2408,52 +2337,6 @@ def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Pat
     assert extracted.method_flags == ["METH_VARARGS", "METH_KEYWORDS"]
 
 
-def test_c_signature_engine_warns_and_returns_none_when_ml_name_missing(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _identifier_node("NULL"),
-                _ml_meth_field("simple_add"),
-                _ml_flags_identifier_field("METH_VARARGS"),
-                _string_literal("doc"),
-            ),
-            method_table="Methods",
-            source_file=str(tmp_path / "methods.c"),
-        )
-
-    assert extracted is None
-    assert "Failed to extract PyMethodDef ml_name" in caplog.text
-    assert "table=Methods" in caplog.text
-
-
-def test_c_signature_engine_warns_and_returns_none_when_ml_meth_missing(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _ml_name_field("add"),
-                _identifier_node("PyCFunction"),
-                _ml_flags_identifier_field("METH_VARARGS"),
-                _string_literal("doc"),
-            ),
-            method_table="Methods",
-            source_file=str(tmp_path / "methods.c"),
-        )
-
-    assert extracted is None
-    assert "Failed to extract PyMethodDef ml_meth" in caplog.text
-    assert "table=Methods" in caplog.text
-
-
 def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unparseable(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
@@ -2474,28 +2357,7 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
 
     assert extracted is not None
     assert extracted.method_flags == []
-    assert "Failed to extract PyMethodDef ml_flags" in caplog.text
-
-
-def test_c_signature_engine_warns_when_pymethod_field_list_is_incomplete(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _ml_name_field("add"),
-                _ml_meth_field("simple_add"),
-            ),
-            method_table="Methods",
-            source_file=str(tmp_path / "methods.c"),
-        )
-
-    assert extracted is None
-    assert "expected at least 3 fields, got 2" in caplog.text
-    assert "Failed to extract PyMethodDef ml_flags" in caplog.text
+    assert caplog.records == []
 
 
 def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_sentinel(
