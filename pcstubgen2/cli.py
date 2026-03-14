@@ -52,6 +52,16 @@ def _normalize_clang_include(include_paths: Sequence[str]) -> list[str]:
     return normalized
 
 
+def _normalize_source_root(raw_source_root: str | None) -> Path | None:
+    if raw_source_root is None:
+        return None
+
+    source_root = str(raw_source_root).strip()
+    if not source_root:
+        return None
+    return Path(source_root)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pcstubgen2",
@@ -94,12 +104,6 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="enable_docstring_signature_parser",
         default=True,
         help="Disable parsing signatures from docstrings",
-    )
-    parser.add_argument(
-        "--enable-c-signature-inference",
-        default=False,
-        action="store_true",
-        help="Enable C AST based signature inference",
     )
     parser.add_argument(
         "--source-root",
@@ -158,11 +162,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    if args.enable_c_signature_inference and args.source_root is None:
-        parser.error(
-            "--source-root is required when --enable-c-signature-inference is set"
-        )
-
     try:
         args.clang_include = _normalize_clang_include(args.clang_include)
     except (TypeError, ValueError) as ex:
@@ -173,14 +172,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
     default_options = StubGenerationOptions()
-    source_root = Path(args.source_root) if args.source_root is not None else None
+    source_root = _normalize_source_root(args.source_root)
 
     return StubGenerationOptions(
         ignore_invalid_expressions=args.ignore_invalid_expressions,
         ignore_all_errors=args.ignore_all_errors,
         enum_class_locations=list(args.enum_class_locations),
         enable_docstring_signature_parser=args.enable_docstring_signature_parser,
-        enable_c_signature_inference=args.enable_c_signature_inference,
         source_root=source_root,
         clang_c_std=args.clang_c_std or default_options.clang_c_std,
         clang_cpp_std=args.clang_cpp_std or default_options.clang_cpp_std,

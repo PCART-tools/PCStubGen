@@ -61,7 +61,6 @@ def run_single_module(module_name: str) -> int:
         options=StubGenerationOptions(
             include_docstrings=False,
             include_module_type_comment=True,
-            enable_c_signature_inference=True,
             source_root=DEFAULT_SOURCE_ROOT,
         ),
     )

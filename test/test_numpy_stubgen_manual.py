@@ -139,9 +139,9 @@ def run_single_generation(
     prepare_output_dir(output_dir)
     started = time.perf_counter()
     try:
+        effective_source_root = source_root if c_inference_enabled else None
         options = StubGenerationOptions(
-            enable_c_signature_inference=c_inference_enabled,
-            source_root=source_root if c_inference_enabled else None,
+            source_root=effective_source_root,
             clang_include=clang_include,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
@@ -295,7 +295,7 @@ def main() -> int:
     if clang_cpp_std:
         print(f"clang C++ 标准: {clang_cpp_std}")
 
-    print("\n[1/2] 生成关闭 C 推导版本（enable_c_signature_inference=False）...")
+    print("\n[1/2] 生成关闭 C 推导版本（source_root=None）...")
     disabled_result = run_single_generation(
         module_name=module_name,
         output_dir=disabled_output_dir,
@@ -313,7 +313,7 @@ def main() -> int:
     if disabled_result.error:
         print(f"错误: {disabled_result.error}")
 
-    print("\n[2/2] 生成启用 C 推导版本（enable_c_signature_inference=True）...")
+    print("\n[2/2] 生成启用 C 推导版本（source_root=非空）...")
     enabled_result = run_single_generation(
         module_name=module_name,
         output_dir=enabled_output_dir,

@@ -16,7 +16,7 @@ class StubGenerationOptions:
 
     # 签名补全管道控制
     enable_docstring_signature_parser: bool = True
-    enable_c_signature_inference: bool = False
+
     source_root: Path | None = None
     clang_c_std: str = "c11"
     clang_cpp_std: str = "c++17"

@@ -1000,7 +1000,6 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=False,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1009,21 +1008,23 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     assert list(tmp_path.rglob("*.pyi"))
 
 
-def test_write_stubs_raises_when_c_inference_enabled_without_source_root(tmp_path: Path) -> None:
+def test_write_stubs_skips_c_inference_when_source_root_not_set(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     import pcstubgen2 as stubgen_module
     from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
+    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
+        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when source_root is not set")
+
+    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=True,
         source_root=None,
     )
-
-    with pytest.raises(
-        ValueError,
-        match="enable_c_signature_inference=True requires source_root",
-    ):
-        stubgen_module.write_stubs("math", tmp_path, options=options)
+    stubgen_module.write_stubs("math", tmp_path, options=options)
 
 
 def test_write_stubs_defaults_do_not_require_source_root(
@@ -1039,7 +1040,7 @@ def test_write_stubs_defaults_do_not_require_source_root(
     monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
 
     options = StubGenerationOptions()
-    assert options.enable_c_signature_inference is False
+    assert options.source_root is None
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
     assert list(tmp_path.rglob("*.pyi"))
@@ -1065,7 +1066,6 @@ def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=True,
-        enable_c_signature_inference=True,
         source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
@@ -1119,7 +1119,6 @@ def test_write_stubs_uses_multiline_logging_format(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=False,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1150,7 +1149,6 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=False,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1212,7 +1210,6 @@ def test_write_stubs_logs_project_level_c_ast_summary(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=True,
         source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
@@ -1249,7 +1246,6 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=True,
         source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
@@ -1301,7 +1297,6 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
-        enable_c_signature_inference=True,
         source_root=tmp_path,
     )
     with pytest.raises(RuntimeError, match="boom"):
@@ -1565,7 +1560,6 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
     options = StubGenerationOptions(
         include_docstrings=False,
         enable_docstring_signature_parser=True,
-        enable_c_signature_inference=True,
         source_root=spatial_src_root,
     )
 
