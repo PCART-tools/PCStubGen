@@ -102,7 +102,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Enable C AST based signature inference",
     )
     parser.add_argument(
-        "--c-source-root",
+        "--source-root",
         default=None,
         help="C/C++ source root used for C signature inference",
     )
@@ -158,9 +158,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    if args.enable_c_signature_inference and args.c_source_root is None:
+    if args.enable_c_signature_inference and args.source_root is None:
         parser.error(
-            "--c-source-root is required when --enable-c-signature-inference is set"
+            "--source-root is required when --enable-c-signature-inference is set"
         )
 
     try:
@@ -173,7 +173,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
     default_options = StubGenerationOptions()
-    c_source_root = Path(args.c_source_root) if args.c_source_root is not None else None
+    source_root = Path(args.source_root) if args.source_root is not None else None
 
     return StubGenerationOptions(
         ignore_invalid_expressions=args.ignore_invalid_expressions,
@@ -181,7 +181,7 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
         enum_class_locations=list(args.enum_class_locations),
         enable_docstring_signature_parser=args.enable_docstring_signature_parser,
         enable_c_signature_inference=args.enable_c_signature_inference,
-        c_source_root=c_source_root,
+        source_root=source_root,
         clang_c_std=args.clang_c_std or default_options.clang_c_std,
         clang_cpp_std=args.clang_cpp_std or default_options.clang_cpp_std,
         clang_include=list(args.clang_include),

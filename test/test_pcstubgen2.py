@@ -23,8 +23,8 @@ from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 DEFAULT_MODULE = "scipy"
 OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
-DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\numpy_numpy\numpy")
-# DEFAULT_C_SOURCE_ROOT = Path(r"C:\Things\third_package_source\scipy_scipy\scipy")
+DEFAULT_SOURCE_ROOT = Path(r"C:\Things\third_package_source\numpy_numpy\numpy")
+# DEFAULT_SOURCE_ROOT = Path(r"C:\Things\third_package_source\scipy_scipy\scipy")
 
 def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):
@@ -62,7 +62,7 @@ def run_single_module(module_name: str) -> int:
             include_docstrings=False,
             include_module_type_comment=True,
             enable_c_signature_inference=True,
-            c_source_root=DEFAULT_C_SOURCE_ROOT,
+            source_root=DEFAULT_SOURCE_ROOT,
         ),
     )
 

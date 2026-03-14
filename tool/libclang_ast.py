@@ -128,8 +128,6 @@ def _cursor_file_path(cursor: Cursor) -> Path | None:
         return Path(str(file))
 
 
-DEFAULT_CLANG_C_STD = "c11"
-DEFAULT_CLANG_CPP_STD = "c++17"
 CPP_SOURCE_SUFFIXES = {".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx"}
 
 
@@ -171,9 +169,9 @@ def build_clang_args(
 ) -> list[str]:
     suffix = source_path.suffix.lower()
     if suffix in CPP_SOURCE_SUFFIXES:
-        std_arg = _normalize_std_arg(clang_cpp_std or DEFAULT_CLANG_CPP_STD)
+        std_arg = _normalize_std_arg(clang_cpp_std or "c++17")
     else:
-        std_arg = _normalize_std_arg(clang_c_std or DEFAULT_CLANG_C_STD)
+        std_arg = _normalize_std_arg(clang_c_std or "c11")
 
     clang_args: list[str] = []
     if std_arg is not None:

@@ -36,8 +36,6 @@ from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CLANG_C_STD = "c11"
-DEFAULT_CLANG_CPP_STD = "c++17"
 AUTO_INCLUDE_RETRY_LIMIT = 10
 AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
 
@@ -210,8 +208,8 @@ class CSignatureExtractor:
             source_root: Path,
             *,
             clang_include: Iterable[str] = (),
-            clang_c_std: str | None = None,
-            clang_cpp_std: str | None = None,
+            clang_c_std: str = "c11",
+            clang_cpp_std: str = "c++17",
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = source_root
@@ -232,7 +230,7 @@ class CSignatureExtractor:
             return self._cache_result
 
         if not self.source_root.exists():
-            logger.warning("c_source_root does not exist: %s", self.source_root)
+            logger.warning("source_root does not exist: %s", self.source_root)
             self._cache_result = {}
             return self._cache_result
 
@@ -530,20 +528,18 @@ class CSignatureExtractor:
             parse_args.insert(0, std_arg)
         return parse_args
 
-    def _build_std_arg_for_file(self, file_path: Path) -> str | None:
+    def _build_std_arg_for_file(self, file_path: Path) -> str:
         """按后缀为源码文件选择 C 或 C++ 标准参数。"""
         suffix = file_path.suffix.lower()
         if suffix in CPP_SOURCE_SUFFIXES:
-            return self._normalize_std_arg(self._clang_cpp_std or DEFAULT_CLANG_CPP_STD)
-        return self._normalize_std_arg(self._clang_c_std or DEFAULT_CLANG_C_STD)
+            return self._normalize_std_arg(self._clang_cpp_std, default_std="c++17")
+        return self._normalize_std_arg(self._clang_c_std, default_std="c11")
 
-    def _normalize_std_arg(self, std_value: str | None) -> str | None:
+    def _normalize_std_arg(self, std_value: str, *, default_std: str) -> str:
         """将标准配置统一为 `-std=` 参数。"""
-        if std_value is None:
-            return None
         normalized = std_value.strip()
         if not normalized:
-            return None
+            normalized = default_std
         if normalized.startswith("-std="):
             return normalized
         return f"-std={normalized}"

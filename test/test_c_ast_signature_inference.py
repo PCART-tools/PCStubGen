@@ -79,8 +79,8 @@ def _patch_c_signature_extractor(
             source_root: Path,
             *,
             clang_include: Iterable[str] = (),
-            clang_c_std: str | None = None,
-            clang_cpp_std: str | None = None,
+            clang_c_std: str = "c11",
+            clang_cpp_std: str = "c++17",
         ) -> None:
             _ = (source_root, clang_include, clang_c_std, clang_cpp_std)
 
@@ -103,8 +103,8 @@ def _patch_raising_c_signature_extractor(
             source_root: Path,
             *,
             clang_include: Iterable[str] = (),
-            clang_c_std: str | None = None,
-            clang_cpp_std: str | None = None,
+            clang_c_std: str = "c11",
+            clang_cpp_std: str = "c++17",
         ) -> None:
             _ = (source_root, clang_include, clang_c_std, clang_cpp_std)
 
@@ -242,7 +242,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -285,7 +285,7 @@ def test_c_ast_visitor_logs_successful_generic_rewrite(
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     with caplog.at_level(logging.INFO, logger="pcstubgen2"):
         visitor.visit_module(module)
@@ -305,7 +305,7 @@ def test_c_ast_visitor_logs_when_generic_function_has_no_candidates(
 ) -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     func = IRFunction(name="foo", args=_generic_signature())
 
@@ -329,7 +329,7 @@ def test_c_ast_visitor_logs_when_candidate_selection_fails(
 ) -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     func = IRFunction(name="foo", args=_generic_signature())
     signatures = {
@@ -382,7 +382,7 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
 
     with caplog.at_level(logging.INFO, logger="pcstubgen2"):
@@ -409,7 +409,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
 ) -> None:
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     func = IRFunction(name="foo", args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])
     signatures = {
@@ -458,7 +458,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
@@ -867,7 +867,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -914,7 +914,7 @@ def test_c_ast_visitor_generates_overloads_for_methods(monkeypatch: pytest.Monke
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -950,7 +950,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     visitor.visit_module(module)
 
@@ -971,7 +971,7 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
 
     with pytest.raises(RuntimeError, match="boom"):
@@ -1016,17 +1016,17 @@ def test_write_stubs_raises_when_c_inference_enabled_without_source_root(tmp_pat
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
         enable_c_signature_inference=True,
-        c_source_root=None,
+        source_root=None,
     )
 
     with pytest.raises(
         ValueError,
-        match="enable_c_signature_inference=True requires c_source_root",
+        match="enable_c_signature_inference=True requires source_root",
     ):
         stubgen_module.write_stubs("math", tmp_path, options=options)
 
 
-def test_write_stubs_defaults_do_not_require_c_source_root(
+def test_write_stubs_defaults_do_not_require_source_root(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1066,7 +1066,7 @@ def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
     options = StubGenerationOptions(
         enable_docstring_signature_parser=True,
         enable_c_signature_inference=True,
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1090,7 +1090,7 @@ def test_c_ast_visitor_rejects_none_clang_include(tmp_path: Path) -> None:
     with pytest.raises(TypeError):
         CAstSignatureInferenceVisitor(
             error_collector=ErrorCollector(),
-            c_source_root=tmp_path,
+            source_root=tmp_path,
             clang_include=None,  # type: ignore[arg-type]
         )
 
@@ -1213,7 +1213,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
         enable_c_signature_inference=True,
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1250,7 +1250,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
         enable_c_signature_inference=True,
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -1302,7 +1302,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
         enable_c_signature_inference=True,
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
@@ -1344,7 +1344,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
             DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=tmp_path,
+                source_root=tmp_path,
             ),
         ]
     )
@@ -1386,7 +1386,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
                 DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
                 CAstSignatureInferenceVisitor(
                     error_collector=ErrorCollector(),
-                    c_source_root=tmp_path,
+                    source_root=tmp_path,
                 ),
             ]
         ).run(module)
@@ -1433,7 +1433,7 @@ def test_infer_method_modifier_after_c_ast_visitor(monkeypatch: pytest.MonkeyPat
         [
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=tmp_path,
+                source_root=tmp_path,
             ),
             InferMethodModifierVisitor(),
         ]
@@ -1566,7 +1566,7 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
         include_docstrings=False,
         enable_docstring_signature_parser=True,
         enable_c_signature_inference=True,
-        c_source_root=spatial_src_root,
+        source_root=spatial_src_root,
     )
 
     stubgen_module.write_stubs("scipy.spatial._distance_pybind", pybind_output_dir, options=options)
@@ -1755,8 +1755,8 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             source_root: Path,
             *,
             clang_include: Iterable[str] = (),
-            clang_c_std: str | None = None,
-            clang_cpp_std: str | None = None,
+            clang_c_std: str = "c11",
+            clang_cpp_std: str = "c++17",
         ) -> None:
             captured["init_calls"] = int(captured["init_calls"]) + 1
             captured["source_root"] = source_root
@@ -1777,7 +1777,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
         clang_include=["C:/MyInclude"],
         clang_c_std="c99",
         clang_cpp_std="c++20",
@@ -1978,7 +1978,7 @@ def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.
         [
             CAstSignatureInferenceVisitor(
                 error_collector=ErrorCollector(),
-                c_source_root=tmp_path,
+                source_root=tmp_path,
             ),
             InferMethodModifierVisitor(),
         ]
@@ -2038,7 +2038,7 @@ def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_class
 
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
-        c_source_root=tmp_path,
+        source_root=tmp_path,
     )
     visitor.visit_class(outer_class, module)
 
@@ -2516,4 +2516,3 @@ def test_c_signature_engine_strips_cpp_string_literal_prefixes(
     engine = CSignatureExtractor(source_root=tmp_path)
 
     assert engine._strip_string_literal_quotes(literal) == expected
-

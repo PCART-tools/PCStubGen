@@ -18,7 +18,7 @@ from pcstubgen2 import write_stubs
 from pcstubgen2.StubGenerationOptions import StubGenerationOptions
 
 DEFAULT_MODULE = "numpy"
-DEFAULT_C_SOURCE_ROOT = Path(r"C:/Things/third_package_source/numpy_numpy/numpy")
+DEFAULT_SOURCE_ROOT = Path(r"C:/Things/third_package_source/numpy_numpy/numpy")
 DEFAULT_OUTPUT_ROOT = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 
 EXIT_OK = 0
@@ -65,9 +65,9 @@ def parse_args() -> argparse.Namespace:
         help=f"目标包名，默认: {DEFAULT_MODULE}",
     )
     parser.add_argument(
-        "--c-source-root",
-        default=str(DEFAULT_C_SOURCE_ROOT),
-        help=f"C 源码根目录，默认: {DEFAULT_C_SOURCE_ROOT}",
+        "--source-root",
+        default=str(DEFAULT_SOURCE_ROOT),
+        help=f"C 源码根目录，默认: {DEFAULT_SOURCE_ROOT}",
     )
     parser.add_argument(
         "--output-root",
@@ -82,12 +82,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--clang-c-std",
-        default=None,
+        default="c11",
         help="C 源文件使用的标准版本，例如 c11。",
     )
     parser.add_argument(
         "--clang-cpp-std",
-        default=None,
+        default="c++17",
         help="C++ 源文件使用的标准版本，例如 c++17。",
     )
     return parser.parse_args()
@@ -131,17 +131,17 @@ def run_single_generation(
     module_name: str,
     output_dir: Path,
     c_inference_enabled: bool,
-    c_source_root: Path | None,
+    source_root: Path | None,
     clang_include: list[str],
-    clang_c_std: str | None,
-    clang_cpp_std: str | None,
+    clang_c_std: str,
+    clang_cpp_std: str,
 ) -> GenerationResult:
     prepare_output_dir(output_dir)
     started = time.perf_counter()
     try:
         options = StubGenerationOptions(
             enable_c_signature_inference=c_inference_enabled,
-            c_source_root=c_source_root if c_inference_enabled else None,
+            source_root=source_root if c_inference_enabled else None,
             clang_include=clang_include,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
@@ -201,7 +201,7 @@ def format_hotspots(title: str, hotspots: list[tuple[str, int]]) -> list[str]:
 def write_report(
     report_path: Path,
     module_name: str,
-    c_source_root: Path,
+    source_root: Path,
     disabled_result: GenerationResult,
     enabled_result: GenerationResult,
 ) -> None:
@@ -219,7 +219,7 @@ def write_report(
     lines.append("## 运行参数")
     lines.append("")
     lines.append(f"- 目标模块: `{module_name}`")
-    lines.append(f"- C 源码目录: `{c_source_root.as_posix()}`")
+    lines.append(f"- C 源码目录: `{source_root.as_posix()}`")
     lines.append(f"- 关闭 C 推导输出目录: `{disabled_result.output_dir.as_posix()}`")
     lines.append(f"- 启用 C 推导输出目录: `{enabled_result.output_dir.as_posix()}`")
     lines.append("")
@@ -247,8 +247,8 @@ def write_report(
         f"`{c_inference_label(enabled_result.c_inference_enabled)}` 的泛型签名计数变化: `{delta}`（{trend}）。"
     )
     lines.append("- 优先人工检查热点文件中函数签名是否从泛型变为具体参数。")
-    if not c_source_root.exists():
-        lines.append("- 注意：当前 `c_source_root` 不存在，C 签名推导可能被跳过。")
+    if not source_root.exists():
+        lines.append("- 注意：当前 `source_root` 不存在，C 签名推导可能被跳过。")
     lines.append("")
 
     lines.extend(
@@ -273,11 +273,11 @@ def main() -> int:
     args = parse_args()
 
     module_name = args.module_name
-    c_source_root = Path(args.c_source_root)
+    source_root = Path(args.source_root)
     output_root = Path(args.output_root)
     clang_include: list[str] = list(args.clang_include)
-    clang_c_std: str | None = args.clang_c_std
-    clang_cpp_std: str | None = args.clang_cpp_std
+    clang_c_std: str = args.clang_c_std
+    clang_cpp_std: str = args.clang_cpp_std
 
     disabled_output_dir = output_root / "disabled"
     enabled_output_dir = output_root / "enabled"
@@ -285,8 +285,8 @@ def main() -> int:
 
     print(f"开始生成存根，目标模块: {module_name}")
     print(f"输出根目录: {output_root}")
-    print(f"C 源码目录: {c_source_root}")
-    if not c_source_root.exists():
+    print(f"C 源码目录: {source_root}")
+    if not source_root.exists():
         print("警告: C 源码目录不存在，C 签名推导可能不会生效。")
     if clang_include:
         print(f"clang include 路径: {clang_include}")
@@ -300,7 +300,7 @@ def main() -> int:
         module_name=module_name,
         output_dir=disabled_output_dir,
         c_inference_enabled=False,
-        c_source_root=c_source_root,
+        source_root=source_root,
         clang_include=clang_include,
         clang_c_std=clang_c_std,
         clang_cpp_std=clang_cpp_std,
@@ -318,7 +318,7 @@ def main() -> int:
         module_name=module_name,
         output_dir=enabled_output_dir,
         c_inference_enabled=True,
-        c_source_root=c_source_root,
+        source_root=source_root,
         clang_include=clang_include,
         clang_c_std=clang_c_std,
         clang_cpp_std=clang_cpp_std,
@@ -335,7 +335,7 @@ def main() -> int:
         write_report(
             report_path=report_path,
             module_name=module_name,
-            c_source_root=c_source_root,
+            source_root=source_root,
             disabled_result=disabled_result,
             enabled_result=enabled_result,
         )
@@ -356,3 +356,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

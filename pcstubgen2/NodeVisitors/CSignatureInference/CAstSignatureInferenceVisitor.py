@@ -61,15 +61,15 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self,
         *,
         error_collector: ErrorCollector,
-        c_source_root: Path,
+        source_root: Path,
         clang_include: Iterable[str] = (),
-        clang_c_std: str | None = None,
-        clang_cpp_std: str | None = None,
+        clang_c_std: str = "c11",
+        clang_cpp_std: str = "c++17",
     ) -> None:
         """初始化 Visitor 运行配置与 C 签名提取器。"""
         self.error_collector = error_collector
         self._extractor = CSignatureExtractor(
-            source_root=c_source_root,
+            source_root=source_root,
             clang_include=clang_include,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
