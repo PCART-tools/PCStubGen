@@ -175,7 +175,6 @@ UNRELATED_TOKENS: set[str] = {
 # 参与扫描的 C 源码后缀。
 C_SOURCE_SUFFIXES: set[str] = {
     ".c",
-    ".h",
 }
 
 # 参与扫描并按 C++ 标准解析的源码后缀。
@@ -183,9 +182,17 @@ CPP_SOURCE_SUFFIXES: set[str] = {
     ".cc",
     ".cpp",
     ".cxx",
-    ".hpp",
+    ".c++",
+    ".cp"
 }
 
 # 提取阶段需要扫描的全部原生源码后缀。
 NATIVE_SOURCE_SUFFIXES: set[str] = C_SOURCE_SUFFIXES | CPP_SOURCE_SUFFIXES
 
+HEADER_SOURCE_SUFFIXES = {
+    ".h",
+    ".hpp",
+    ".hh",
+    ".hxx",
+    ".h++",
+}

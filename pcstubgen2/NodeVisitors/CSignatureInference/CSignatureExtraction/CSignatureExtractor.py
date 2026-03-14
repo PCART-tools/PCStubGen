@@ -30,6 +30,7 @@ from .Constants import (
     RETURN_MACRO_TYPE_MAP,
     RETURN_TOKEN_TYPE_MAP,
     UNRELATED_TOKENS,
+    HEADER_SOURCE_SUFFIXES,
 )
 from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
@@ -39,7 +40,7 @@ DEFAULT_CLANG_C_STD = "c11"
 DEFAULT_CLANG_CPP_STD = "c++17"
 AUTO_INCLUDE_RETRY_LIMIT = 10
 AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
-HEADER_SOURCE_SUFFIXES = {".h", ".hpp", ".hh", ".hxx"}
+
 
 SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
@@ -258,7 +259,10 @@ class CSignatureExtractor:
         # 处理 PyMethodDef，拼装提取结果。
         result: dict[str, list[ExtractedFunction]] = {}
         for tu in translation_units:
-            self._collect_pymethod_defs(tu.cursor, result)
+            try:
+                self._collect_pymethod_defs(tu.cursor, result)
+            except AssertionError as ex:
+                logger.exception("AssertionError", exc_info=ex)
 
         self._cache_result = self._deduplicate_result(result)
         return self._cache_result

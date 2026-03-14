@@ -3,34 +3,18 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tomllib
 from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TypedDict
 
-if TYPE_CHECKING:
-    from clang.cindex import Cursor, CursorKind, Diagnostic, SourceLocation, TranslationUnit
-else:
-    Cursor = Any
-    CursorKind = Any
-    Diagnostic = Any
-    SourceLocation = Any
-    TranslationUnit = Any
+from clang.cindex import Cursor, CursorKind, Diagnostic, TranslationUnit
 
-try:
-    import clang.cindex as clang_cindex
-except Exception as exc:  # pragma: no cover - exercised via init failure path
-    clang_cindex = None
-    _CLANG_IMPORT_ERROR: Exception | None = exc
-else:
-    _CLANG_IMPORT_ERROR = None
+import clang.cindex as clang_cindex
 
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-CONFIG_PATH = PROJECT_ROOT / "config.toml"
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
 DEFAULT_OUTPUT_EXTENSION = ".ast.json"
 
@@ -63,12 +47,12 @@ def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             pass
     if hasattr(sys.stderr, "reconfigure"):
         try:
             sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             pass
 
 
@@ -110,11 +94,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=[],
         help="追加 include 路径（不要带 -I 前缀），可重复传入。",
     )
-    parser.add_argument("--clang-c-std", help="覆盖 config.toml 中的 clang_c_std。")
-    parser.add_argument("--clang-cpp-std", help="覆盖 config.toml 中的 clang_cpp_std。")
+    parser.add_argument("--clang-c-std", help="指定 C 标准（如 c11 或 -std=c11）。")
+    parser.add_argument("--clang-cpp-std", help="指定 C++ 标准（如 c++17 或 -std=c++17）。")
     parser.add_argument(
         "--clang-library-path",
-        help="显式覆盖 config.toml 中的 clang_library_path。",
+        help="显式指定 libclang 动态库路径。",
     )
     return parser.parse_args(_normalize_clang_include_tokens(argv))
 
@@ -142,36 +126,6 @@ def _cursor_file_path(cursor: Cursor) -> Path | None:
         return Path(str(file)).resolve()
     except OSError:
         return Path(str(file))
-
-
-def load_clang_settings(
-    config_path: Path = CONFIG_PATH,
-    *,
-    override_library_path: str | None = None,
-    extra_include_paths: Sequence[str] = (),
-    override_clang_c_std: str | None = None,
-    override_clang_cpp_std: str | None = None,
-) -> tuple[str | None, list[str], str | None, str | None]:
-    config_library_path: str | None = None
-    config_include_paths: list[str] = []
-    config_clang_c_std: str | None = None
-    config_clang_cpp_std: str | None = None
-
-    if config_path.exists():
-        with config_path.open("rb") as file:
-            config = tomllib.load(file)
-        config_library_path = _safe_str(config.get("clang_library_path"))
-        raw_include_paths = config.get("clang_include", [])
-        if isinstance(raw_include_paths, list):
-            config_include_paths = [str(path) for path in raw_include_paths]
-        config_clang_c_std = _safe_str(config.get("clang_c_std"))
-        config_clang_cpp_std = _safe_str(config.get("clang_cpp_std"))
-
-    library_path = override_library_path or config_library_path
-    include_paths = [*config_include_paths, *[str(path) for path in extra_include_paths]]
-    clang_c_std = override_clang_c_std or config_clang_c_std
-    clang_cpp_std = override_clang_cpp_std or config_clang_cpp_std
-    return library_path, include_paths, clang_c_std, clang_cpp_std
 
 
 DEFAULT_CLANG_C_STD = "c11"
@@ -221,11 +175,11 @@ def build_clang_args(
     else:
         std_arg = _normalize_std_arg(clang_c_std or DEFAULT_CLANG_C_STD)
 
-    parse_args: list[str] = []
+    clang_args: list[str] = []
     if std_arg is not None:
-        parse_args.append(std_arg)
-    parse_args.extend(_build_include_args(include_paths))
-    return parse_args
+        clang_args.append(std_arg)
+    clang_args.extend(_build_include_args(include_paths))
+    return clang_args
 
 
 def resolve_output_path(source_path: Path, output_arg: str | None) -> Path:
@@ -258,19 +212,17 @@ def _serialize_cursor(cursor: Cursor, *, source_path: Path) -> SerializedCursor 
         for child in cursor.get_children()
         if (serialized_child := _serialize_cursor(child, source_path=source_path)) is not None
     ]
-    return {
+    serialized: SerializedCursor = {
         "kind": _kind_name(cursor.kind),
         "spelling": _safe_str(cursor.spelling),
         "displayname": _safe_str(cursor.displayname),
         "type_spelling": type_spelling,
         "children": children,
     }
+    return serialized
 
 
 def _diagnostic_severity_name(severity: int) -> str:
-    if clang_cindex is None:
-        return str(severity)
-
     diagnostic_type = clang_cindex.Diagnostic
     mapping = {
         diagnostic_type.Ignored: "IGNORED",
@@ -283,9 +235,6 @@ def _diagnostic_severity_name(severity: int) -> str:
 
 
 def initialize_clang(library_path: str | None) -> ModuleType:
-    if clang_cindex is None:
-        raise RuntimeError(f"Failed to import clang.cindex: {_CLANG_IMPORT_ERROR}")
-
     if library_path and not clang_cindex.Config.loaded:
         clang_cindex.Config.set_library_file(library_path)
     return clang_cindex
@@ -295,11 +244,11 @@ def parse_translation_unit(
     source_path: Path,
     *,
     library_path: str | None,
-    parse_args: Sequence[str],
+    clang_args: Sequence[str],
 ) -> TranslationUnit:
     cindex = initialize_clang(library_path)
     index = cindex.Index.create()
-    return index.parse(str(source_path), args=list(parse_args))
+    return index.parse(str(source_path), args=list(clang_args), options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
 
 
 def build_ast_payload(
@@ -307,20 +256,22 @@ def build_ast_payload(
     *,
     source_path: Path,
     output_path: Path,
-    parse_args: Sequence[str],
+    clang_args: Sequence[str],
 ) -> AstPayload:
     diagnostics = [_serialize_diagnostic(diagnostic) for diagnostic in translation_unit.diagnostics]
     ast = _serialize_cursor(translation_unit.cursor, source_path=source_path)
+    if ast is None:
+        raise RuntimeError(f"Failed to serialize root cursor for source file: {source_path}")
     return {
         "source_file": str(source_path.resolve()),
         "output_file": str(output_path.resolve()),
-        "parse_args": [str(arg) for arg in parse_args],
+        "parse_args": [str(arg) for arg in clang_args],
         "diagnostics": diagnostics,
-        "ast": ast if ast is not None else _serialize_cursor(translation_unit.cursor, source_path=source_path),
+        "ast": ast,
     }
 
 
-def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     configure_output_encoding()
     args = parse_args(argv)
 
@@ -329,13 +280,10 @@ def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) 
         raise FileNotFoundError(f"Source file not found: {source_path}")
 
     output_path = resolve_output_path(source_path, args.output).resolve()
-    library_path, clang_include, clang_c_std, clang_cpp_std = load_clang_settings(
-        config_path,
-        override_library_path=args.clang_library_path,
-        extra_include_paths=args.clang_include,
-        override_clang_c_std=args.clang_c_std,
-        override_clang_cpp_std=args.clang_cpp_std,
-    )
+    library_path: str | None = _safe_str(args.clang_library_path)
+    clang_include = [str(path) for path in args.clang_include]
+    clang_c_std: str | None = _safe_str(args.clang_c_std)
+    clang_cpp_std: str | None = _safe_str(args.clang_cpp_std)
     clang_args = build_clang_args(
         source_path=source_path,
         include_paths=clang_include,
@@ -347,14 +295,14 @@ def main(argv: Sequence[str] | None = None, *, config_path: Path = CONFIG_PATH) 
     translation_unit = parse_translation_unit(
         source_path,
         library_path=library_path,
-        parse_args=clang_args,
+        clang_args=clang_args,
     )
 
     payload = build_ast_payload(
         translation_unit,
         source_path=source_path,
         output_path=output_path,
-        parse_args=clang_args,
+        clang_args=clang_args,
     )
     json_text = json.dumps(payload, ensure_ascii=False, indent=2)
 

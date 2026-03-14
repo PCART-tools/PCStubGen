@@ -221,3 +221,4 @@ __marimo__/
 /.cursor/rules/
 /test/output/
 AGENTS.md
+/tool/output/
