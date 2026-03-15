@@ -6,7 +6,7 @@ import sysconfig
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeAlias, TypeVar
+from typing import TypeAlias
 
 import clang
 import clang.cindex
@@ -17,7 +17,6 @@ from clang.cindex import (
     Index,
     TokenKind,
     TranslationUnit,
-    Type,
     TypeKind
 )
 
@@ -54,6 +53,7 @@ FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[Signature
 
 @dataclass
 class _DiscoveredMethodTable:
+    cursor: Cursor
     name: str
     source_file: str | None
     functions: list[ExtractedFunction] = field(default_factory=list)
@@ -61,40 +61,26 @@ class _DiscoveredMethodTable:
 
 @dataclass
 class _DiscoveredModuleDef:
+    cursor: Cursor
     name: str
     module_name: str | None
-    methods_table_name: str | None
+    methods_table_cursor: Cursor | None
     source_file: str | None
 
 
 @dataclass
 class _DiscoveredTypeDef:
+    cursor: Cursor
     name: str
     tp_name: str | None
-    methods_table_name: str | None
+    methods_table_cursor: Cursor | None
     source_file: str | None
 
 
 @dataclass
 class _RegisteredTypeRef:
     exported_name: str | None
-    type_name: str
-
-
-@dataclass
-class _DiscoveredInitBinding:
-    init_func_name: str
-    module_def_name: str
-    source_file: str | None
-    registered_types: list[_RegisteredTypeRef] = field(default_factory=list)
-
-
-DiscoveredSymbolT = TypeVar(
-    "DiscoveredSymbolT",
-    _DiscoveredMethodTable,
-    _DiscoveredModuleDef,
-    _DiscoveredTypeDef,
-)
+    type_def: _DiscoveredTypeDef
 
 transparent_cursor_kinds = {
     # 没有暴露给python libclang的表达式
@@ -126,6 +112,12 @@ array_type_kinds = {
 cpp_nullptr_literal_cursor_kinds = {
     CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
     CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
+}
+
+record_cursor_kinds = {
+    CursorKind.STRUCT_DECL,
+    CursorKind.UNION_DECL,
+    CursorKind.CLASS_DECL,
 }
 
 _CPP_STRING_LITERAL_RE = re.compile(r'^(?:u8|u|U|L)?"(.*)"$', re.DOTALL)
@@ -250,8 +242,9 @@ class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
 
-    该引擎会先扫描源码中的 `PyModuleDef` / `PyTypeObject` / `PyMethodDef`，
-    构建模块级提取树，再结合 `PyArg_*` 调用和格式串规则推断 Python 侧参数信息。
+    该引擎从 `PyInit_*` 入口函数出发，沿 clang AST 的 `referenced` 关系
+    定位 `PyModuleDef` / `PyTypeObject` / `PyMethodDef`，再结合 `PyArg_*`
+    调用和格式串规则推断 Python 侧参数信息。
     """
 
     def __init__(
@@ -301,28 +294,26 @@ class CSignatureExtractor:
                 continue
             translation_units.append(tu)
 
-        method_tables: dict[str, _DiscoveredMethodTable] = {}
-        module_defs: dict[str, _DiscoveredModuleDef] = {}
-        type_defs: dict[str, _DiscoveredTypeDef] = {}
-        init_bindings: list[_DiscoveredInitBinding] = []
+        discovered_modules: dict[str, ExtractedModule] = {}
         for tu in translation_units:
             try:
-                self._discover_translation_unit(
-                    tu.cursor,
-                    method_tables=method_tables,
-                    module_defs=module_defs,
-                    type_defs=type_defs,
-                    init_bindings=init_bindings,
-                )
+                modules = self._discover_translation_unit(tu.cursor)
             except AssertionError as ex:
                 logger.exception("AssertionError", exc_info=ex)
+                continue
+            for module in modules:
+                existing = discovered_modules.get(module.name)
+                if existing is None:
+                    discovered_modules[module.name] = module
+                    continue
+                self._merge_extracted_module(existing, module)
 
-        self._cache_modules = self._build_modules_from_discovery(
-            method_tables=method_tables,
-            module_defs=module_defs,
-            type_defs=type_defs,
-            init_bindings=init_bindings,
-        )
+        for module in discovered_modules.values():
+            module.functions = self._deduplicate_result(module.functions)
+            for extracted_class in module.classes.values():
+                extracted_class.methods = self._deduplicate_result(extracted_class.methods)
+
+        self._cache_modules = discovered_modules
         return self._cache_modules
 
     def _ensure_clang_ready(self) -> bool:
@@ -575,101 +566,181 @@ class CSignatureExtractor:
     def _discover_translation_unit(
             self,
             cursor: Cursor,
-            *,
-            method_tables: dict[str, list[_DiscoveredMethodTable]],
-            module_defs: dict[str, list[_DiscoveredModuleDef]],
-            type_defs: dict[str, list[_DiscoveredTypeDef]],
-            init_bindings: list[_DiscoveredInitBinding],
-    ) -> None:
-        """扫描单个 translation unit，收集模块树所需的中间符号。"""
-        nodes = list(self._walk(cursor))
-
-        for node in nodes:
-            if node.kind != CursorKind.VAR_DECL:
-                continue
-            if _is_PyMethodDef_array_definition(node):
-                discovered = self._extract_method_table(node)
-                if discovered is not None:
-                    self._append_discovered_symbol(method_tables, discovered.name, discovered)
-                continue
-            if self._is_PyModuleDef_definition(node):
-                discovered = self._extract_module_def(node)
-                if discovered is not None:
-                    self._append_discovered_symbol(module_defs, discovered.name, discovered)
-                continue
-            if self._is_PyTypeObject_definition(node):
-                discovered = self._extract_type_def(node)
-                if discovered is not None:
-                    self._append_discovered_symbol(type_defs, discovered.name, discovered)
-
-        for node in nodes:
+    ) -> list[ExtractedModule]:
+        """从单个 translation unit 的 `PyInit_*` 根节点提取模块。"""
+        discovered: list[ExtractedModule] = []
+        method_table_cache: dict[tuple[str | None, int, int, str, str], _DiscoveredMethodTable] = {}
+        for node in self._walk(cursor):
             if node.kind != CursorKind.FUNCTION_DECL:
                 continue
-            if not self._is_cursor_definition(node):
+            if not node.is_definition():
                 continue
             if not str(node.spelling).startswith("PyInit_"):
                 continue
-            discovered = self._extract_init_binding(node, type_defs=type_defs)
-            if discovered is not None:
-                init_bindings.append(discovered)
+            extracted = self._extract_module_from_init(
+                node,
+                method_table_cache=method_table_cache,
+            )
+            if extracted is not None:
+                discovered.append(extracted)
+        return discovered
 
-    def _append_discovered_symbol(
+    def _extract_module_from_init(
             self,
-            store: dict[str, list[object]],
-            name: str,
-            item: object,
-    ) -> None:
-        store.setdefault(name, []).append(item)
+            func_cursor: Cursor,
+            *,
+            method_table_cache: dict[tuple[str | None, int, int, str, str], _DiscoveredMethodTable],
+    ) -> ExtractedModule | None:
+        module_def: _DiscoveredModuleDef | None = None
+        registered_types: list[_RegisteredTypeRef] = []
 
-    def _resolve_discovered_symbol(
-            self,
-            store: dict[str, list[DiscoveredSymbolT]],
-            name: str | None,
-            preferred_source_file: str | None,
-    ) -> DiscoveredSymbolT | None:
-        if not name:
-            return None
-        candidates = store.get(name)
-        if not candidates:
-            return None
-        if preferred_source_file is not None:
-            same_file = [
-                item
-                for item in candidates
-                if item.source_file == preferred_source_file
-            ]
-            if len(same_file) == 1:
-                return same_file[0]
-        if len(candidates) == 1:
-            return candidates[0]
-        return None
+        for node in self._walk(func_cursor):
+            if node.kind != CursorKind.CALL_EXPR:
+                continue
 
-    def _is_cursor_definition(self, cursor: Cursor) -> bool:
-        return bool(cursor.is_definition())
+            call_name = self._get_call_target_name(node)
+            if call_name is None:
+                continue
 
-    def _get_type_spelling(self, type_obj: Type | None) -> str | None:
-        if type_obj is None:
-            return None
-        return str(type_obj.spelling)
+            arg_nodes = self._extract_call_argument_nodes(node)
+            if not arg_nodes:
+                continue
 
-    def _get_canonical_type_spelling(self, type_obj: Type | None) -> str | None:
-        if type_obj is None:
+            if call_name.startswith("PyModule_Create"):
+                referenced_var = self._resolve_referenced_var_decl(arg_nodes[0])
+                candidate_module_def = self._extract_module_def(referenced_var)
+                if candidate_module_def is None:
+                    continue
+                if module_def is None:
+                    module_def = candidate_module_def
+                elif not self._same_cursor(module_def.cursor, candidate_module_def.cursor):
+                    logger.warning(
+                        "Multiple module defs referenced from %s; keeping %s and ignoring %s",
+                        func_cursor.spelling,
+                        module_def.name,
+                        candidate_module_def.name,
+                    )
+                continue
+
+            registered = self._extract_registered_type_ref(call_name, arg_nodes)
+            if registered is not None:
+                registered_types.append(registered)
+
+        if module_def is None:
             return None
-        canonical = type_obj.get_canonical()
-        return self._get_type_spelling(canonical)
+
+        module_name = (
+            module_def.module_name
+            or self._module_name_from_init_func(func_cursor.spelling)
+            or module_def.name
+        )
+        module = ExtractedModule(name=module_name)
+        module.module_def_name = module_def.name
+        module.init_func_name = func_cursor.spelling
+        module.lookup_names.update(self._build_module_lookup_names(module_name, func_cursor.spelling))
+
+        for source_file in {
+            self._get_cursor_source_file(func_cursor),
+            module_def.source_file,
+        }:
+            if source_file is not None:
+                module.source_files.add(source_file)
+
+        module_method_table = self._extract_method_table(
+            module_def.methods_table_cursor,
+            method_table_cache=method_table_cache,
+        )
+        if module_method_table is not None:
+            if module_method_table.source_file is not None:
+                module.source_files.add(module_method_table.source_file)
+            self._merge_discovered_functions(module.functions, module_method_table.functions)
+
+        for registered in registered_types:
+            type_def = registered.type_def
+            class_name = (
+                registered.exported_name
+                or self._extract_type_leaf_name(type_def.tp_name)
+                or type_def.name
+            )
+            extracted_class = module.classes.get(class_name)
+            if extracted_class is None:
+                extracted_class = ExtractedClass(name=class_name)
+                module.classes[class_name] = extracted_class
+
+            extracted_class.c_type_name = extracted_class.c_type_name or type_def.name
+            extracted_class.tp_name = extracted_class.tp_name or type_def.tp_name
+            extracted_class.source_file = extracted_class.source_file or type_def.source_file
+
+            if type_def.source_file is not None:
+                module.source_files.add(type_def.source_file)
+
+            type_method_table = self._extract_method_table(
+                type_def.methods_table_cursor,
+                method_table_cache=method_table_cache,
+            )
+            if type_method_table is None:
+                continue
+            if type_method_table.source_file is not None:
+                module.source_files.add(type_method_table.source_file)
+            self._merge_discovered_functions(
+                extracted_class.methods,
+                self._specialize_functions_for_class(
+                    type_method_table.functions,
+                    class_name=class_name,
+                ),
+            )
+
+        module.functions = self._deduplicate_result(module.functions)
+        for extracted_class in module.classes.values():
+            extracted_class.methods = self._deduplicate_result(extracted_class.methods)
+        return module
+
+    def _merge_extracted_module(self, target: ExtractedModule, incoming: ExtractedModule) -> None:
+        target.lookup_names.update(incoming.lookup_names)
+        target.source_files.update(incoming.source_files)
+        target.module_def_name = target.module_def_name or incoming.module_def_name
+        target.init_func_name = target.init_func_name or incoming.init_func_name
+        for functions in incoming.functions.values():
+            self._merge_discovered_functions(target.functions, functions)
+        for class_name, incoming_class in incoming.classes.items():
+            target_class = target.classes.get(class_name)
+            if target_class is None:
+                target.classes[class_name] = incoming_class
+                continue
+            self._merge_extracted_class(target_class, incoming_class)
+
+    def _merge_extracted_class(self, target: ExtractedClass, incoming: ExtractedClass) -> None:
+        target.c_type_name = target.c_type_name or incoming.c_type_name
+        target.tp_name = target.tp_name or incoming.tp_name
+        target.source_file = target.source_file or incoming.source_file
+        for functions in incoming.methods.values():
+            self._merge_discovered_functions(target.methods, functions)
+
+    def _cursor_identity(self, cursor: Cursor) -> tuple[str | None, int, int, str, str]:
+        location = cursor.location
+        line = location.line if location is not None else 0
+        column = location.column if location is not None else 0
+        return (
+            self._get_cursor_source_file(cursor),
+            line,
+            column,
+            str(cursor.kind.name),
+            str(cursor.spelling),
+        )
+
+    def _same_cursor(self, left: Cursor, right: Cursor) -> bool:
+        return self._cursor_identity(left) == self._cursor_identity(right)
 
     def _is_type_definition(self, cursor: Cursor, accepted_spellings: set[str]) -> bool:
-        if not self._is_cursor_definition(cursor):
+        if not cursor.is_definition():
             return False
         type_obj = cursor.type
-        spellings = {
-            spelling
-            for spelling in (
-                self._get_type_spelling(type_obj),
-                self._get_canonical_type_spelling(type_obj),
-            )
-            if spelling is not None
-        }
+        spellings: set[str] = set()
+        if type_obj is not None:
+            spellings.add(str(type_obj.spelling))
+            canonical = type_obj.get_canonical()
+            if canonical is not None:
+                spellings.add(str(canonical.spelling))
         return bool(spellings & accepted_spellings)
 
     def _is_PyModuleDef_definition(self, cursor: Cursor) -> bool:
@@ -684,7 +755,23 @@ class CSignatureExtractor:
             {"PyTypeObject", "struct PyTypeObject", "struct _typeobject"},
         )
 
-    def _extract_method_table(self, cursor: Cursor) -> _DiscoveredMethodTable | None:
+    def _extract_method_table(
+            self,
+            cursor: Cursor | None,
+            *,
+            method_table_cache: dict[tuple[str | None, int, int, str, str], _DiscoveredMethodTable] | None = None,
+    ) -> _DiscoveredMethodTable | None:
+        if cursor is None or cursor.kind != CursorKind.VAR_DECL:
+            return None
+        if not _is_PyMethodDef_array_definition(cursor):
+            return None
+
+        cache_key = self._cursor_identity(cursor)
+        if method_table_cache is not None:
+            cached = method_table_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         grouped: dict[str, list[ExtractedFunction]] = {}
         init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(cursor)
         self._process_PyMethodDef_array_INIT_LIST_EXPR(
@@ -694,201 +781,210 @@ class CSignatureExtractor:
         )
         deduped = self._deduplicate_result(grouped)
         functions = [item for items in deduped.values() for item in items]
-        return _DiscoveredMethodTable(
+        discovered = _DiscoveredMethodTable(
+            cursor=cursor,
             name=cursor.spelling,
             source_file=self._get_cursor_source_file(cursor),
             functions=functions,
         )
+        if method_table_cache is not None:
+            method_table_cache[cache_key] = discovered
+        return discovered
 
-    def _extract_module_def(self, cursor: Cursor) -> _DiscoveredModuleDef | None:
-        entries = self._extract_var_decl_initializer_entries(cursor)
-        if entries is None:
+    def _extract_module_def(self, cursor: Cursor | None) -> _DiscoveredModuleDef | None:
+        if cursor is None or cursor.kind != CursorKind.VAR_DECL:
+            return None
+        if not self._is_PyModuleDef_definition(cursor):
             return None
 
-        designated = self._extract_designated_initializer_map(entries)
-        positional = [entry for entry in entries if self._extract_designated_field_name(entry) is None]
-
-        if designated:
-            module_name = self._extract_string_literal_from_tokens(designated.get("m_name", []))
-            methods_table_name = self._extract_reference_name(designated.get("m_methods", []))
-        else:
-            module_name = self._extract_string_literal_from_tokens(positional[1]) if len(positional) > 1 else None
-            methods_table_name = self._extract_reference_name(positional[4]) if len(positional) > 4 else None
-
+        field_values = self._extract_struct_initializer_fields(cursor)
         return _DiscoveredModuleDef(
+            cursor=cursor,
             name=cursor.spelling,
-            module_name=module_name,
-            methods_table_name=methods_table_name,
+            module_name=self._extract_string_literal_from_cursor(field_values.get("m_name")),
+            methods_table_cursor=self._resolve_method_table_cursor(field_values.get("m_methods")),
             source_file=self._get_cursor_source_file(cursor),
         )
 
-    def _extract_type_def(self, cursor: Cursor) -> _DiscoveredTypeDef | None:
-        entries = self._extract_var_decl_initializer_entries(cursor)
-        if entries is None:
+    def _extract_type_def(self, cursor: Cursor | None) -> _DiscoveredTypeDef | None:
+        if cursor is None or cursor.kind != CursorKind.VAR_DECL:
+            return None
+        if not self._is_PyTypeObject_definition(cursor):
             return None
 
-        designated = self._extract_designated_initializer_map(entries)
-        tp_name = self._extract_string_literal_from_tokens(designated.get("tp_name", []))
-        methods_table_name = self._extract_reference_name(designated.get("tp_methods", []))
+        field_values = self._extract_struct_initializer_fields(cursor)
         return _DiscoveredTypeDef(
+            cursor=cursor,
             name=cursor.spelling,
-            tp_name=tp_name,
-            methods_table_name=methods_table_name,
+            tp_name=self._extract_string_literal_from_cursor(field_values.get("tp_name")),
+            methods_table_cursor=self._resolve_method_table_cursor(field_values.get("tp_methods")),
             source_file=self._get_cursor_source_file(cursor),
         )
 
-    def _extract_init_binding(
+    def _extract_registered_type_ref(
             self,
-            func_cursor: Cursor,
-            *,
-            type_defs: dict[str, list[_DiscoveredTypeDef]],
-    ) -> _DiscoveredInitBinding | None:
-        module_def_name: str | None = None
-        registered_types: list[_RegisteredTypeRef] = []
-        source_file = self._get_cursor_source_file(func_cursor)
+            call_name: str,
+            arg_nodes: list[Cursor],
+    ) -> _RegisteredTypeRef | None:
+        if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef"} and len(arg_nodes) >= 3:
+            type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[2]))
+            if type_def is None:
+                return None
+            return _RegisteredTypeRef(
+                exported_name=self._extract_string_literal_from_cursor(arg_nodes[1]),
+                type_def=type_def,
+            )
 
-        for node in self._walk(func_cursor):
-            if node.kind != CursorKind.CALL_EXPR:
+        if call_name == "PyModule_AddType" and len(arg_nodes) >= 2:
+            type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[1]))
+            if type_def is None:
+                return None
+            return _RegisteredTypeRef(
+                exported_name=self._extract_type_leaf_name(type_def.tp_name),
+                type_def=type_def,
+            )
+
+        return None
+
+    def _get_call_target_name(self, node: Cursor) -> str | None:
+        referenced = node.referenced
+        if referenced is not None and referenced.spelling:
+            return str(referenced.spelling)
+        return self._get_call_name(node)
+
+    def _extract_call_argument_nodes(self, node: Cursor) -> list[Cursor]:
+        children = list(node.get_children())
+        if len(children) <= 1:
+            return []
+        return children[1:]
+
+    def _resolve_method_table_cursor(self, cursor: Cursor | None) -> Cursor | None:
+        referenced = self._resolve_referenced_var_decl(cursor)
+        if referenced is None or not _is_PyMethodDef_array_definition(referenced):
+            return None
+        return referenced
+
+    def _resolve_referenced_var_decl(self, cursor: Cursor | None) -> Cursor | None:
+        return self._resolve_referenced_cursor(cursor, {CursorKind.VAR_DECL})
+
+    def _resolve_referenced_cursor(
+            self,
+            cursor: Cursor | None,
+            accepted_kinds: set[CursorKind],
+    ) -> Cursor | None:
+        if cursor is None:
+            return None
+        for node in self._walk(_unwrap_transparent(cursor)):
+            referenced = node.referenced
+            if referenced is None:
                 continue
-            call_name = self._get_call_name(node)
-            if call_name is None:
+            if referenced.kind not in accepted_kinds:
                 continue
-            arg_groups = self._extract_call_argument_groups(node)
-            if not arg_groups:
+            return referenced
+        return None
+
+    def _extract_struct_initializer_fields(self, cursor: Cursor) -> dict[str, Cursor]:
+        init_list_expr = self._var_decl_to_init_list_expr(cursor)
+        if init_list_expr is None:
+            return {}
+
+        field_names = self._get_record_field_names(cursor)
+        if not field_names:
+            return {}
+
+        field_name_to_index = {field_name: index for index, field_name in enumerate(field_names)}
+        values: dict[str, Cursor] = {}
+        positional_index = 0
+
+        for entry in init_list_expr.get_children():
+            designated_name, value_cursor = self._extract_initializer_entry(entry)
+            if value_cursor is None:
                 continue
 
-            if module_def_name is None and call_name.startswith("PyModule_Create"):
-                module_def_name = self._extract_reference_name(arg_groups[0], require_address_of=True)
-                continue
-
-            if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef"} and len(arg_groups) >= 3:
-                type_name = self._extract_reference_name(arg_groups[2], require_address_of=True)
-                if type_name is None or type_name not in type_defs:
+            if designated_name is None:
+                if positional_index >= len(field_names):
                     continue
-                registered_types.append(
-                    _RegisteredTypeRef(
-                        exported_name=self._extract_string_literal_from_tokens(arg_groups[1]),
-                        type_name=type_name,
-                    )
-                )
+                field_name = field_names[positional_index]
+                positional_index += 1
+            else:
+                field_name = designated_name
+                designated_index = field_name_to_index.get(field_name)
+                if designated_index is not None:
+                    positional_index = designated_index + 1
+
+            values[field_name] = value_cursor
+
+        return values
+
+    def _extract_initializer_entry(self, entry: Cursor) -> tuple[str | None, Cursor | None]:
+        children = list(entry.get_children())
+        if len(children) >= 2 and children[0].kind == CursorKind.MEMBER_REF:
+            member_ref = children[0]
+            field_name = str(member_ref.spelling) or None
+            referenced = member_ref.referenced
+            if referenced is not None and referenced.spelling:
+                field_name = str(referenced.spelling)
+            return field_name, _unwrap_transparent(children[-1])
+        return None, _unwrap_transparent(entry)
+
+    def _get_record_field_names(self, cursor: Cursor) -> list[str]:
+        type_obj = cursor.type
+        candidate_types = [type_obj]
+        canonical = type_obj.get_canonical()
+        if canonical is not None and canonical.spelling != type_obj.spelling:
+            candidate_types.append(canonical)
+
+        for candidate in candidate_types:
+            record_decl = self._resolve_record_decl(candidate.get_declaration())
+            if record_decl is None:
                 continue
+            field_names = [
+                str(child.spelling)
+                for child in record_decl.get_children()
+                if child.kind == CursorKind.FIELD_DECL and child.spelling
+            ]
+            if field_names:
+                return field_names
+        return []
 
-            if call_name == "PyModule_AddType" and len(arg_groups) >= 2:
-                type_name = self._extract_reference_name(arg_groups[1], require_address_of=True)
-                if type_name is None or type_name not in type_defs:
-                    continue
-                resolved = self._resolve_discovered_symbol(type_defs, type_name, source_file)
-                if resolved is None:
-                    continue
-                tp_name = resolved.tp_name
-                registered_types.append(
-                    _RegisteredTypeRef(
-                        exported_name=self._extract_type_leaf_name(tp_name),
-                        type_name=type_name,
-                    )
-                )
-
-        if module_def_name is None:
+    def _resolve_record_decl(self, cursor: Cursor | None) -> Cursor | None:
+        if cursor is None:
             return None
 
-        return _DiscoveredInitBinding(
-            init_func_name=func_cursor.spelling,
-            module_def_name=module_def_name,
-            source_file=source_file,
-            registered_types=registered_types,
-        )
+        if cursor.kind in record_cursor_kinds:
+            if cursor.is_definition():
+                return cursor
+            definition = cursor.get_definition()
+            if definition is not None:
+                return definition
+            return None
 
-    def _build_modules_from_discovery(
-            self,
-            *,
-            method_tables: dict[str, list[_DiscoveredMethodTable]],
-            module_defs: dict[str, list[_DiscoveredModuleDef]],
-            type_defs: dict[str, list[_DiscoveredTypeDef]],
-            init_bindings: list[_DiscoveredInitBinding],
-    ) -> dict[str, ExtractedModule]:
-        modules: dict[str, ExtractedModule] = {}
-        bindings_by_module: dict[tuple[str | None, str], list[_DiscoveredInitBinding]] = {}
+        if cursor.kind != CursorKind.TYPEDEF_DECL:
+            return None
 
-        for binding in init_bindings:
-            resolved = self._resolve_discovered_symbol(module_defs, binding.module_def_name, binding.source_file)
-            if resolved is None:
+        for child in cursor.get_children():
+            if child.kind not in record_cursor_kinds:
                 continue
-            module_def = resolved
-            bindings_by_module.setdefault((module_def.source_file, module_def.name), []).append(binding)
+            if child.is_definition():
+                return child
+            definition = child.get_definition()
+            if definition is not None:
+                return definition
 
-        for discovered_list in module_defs.values():
-            for module_def in discovered_list:
-                binding_list = bindings_by_module.get((module_def.source_file, module_def.name), [])
-                init_func_name = binding_list[0].init_func_name if binding_list else None
-                module_name = module_def.module_name or self._module_name_from_init_func(init_func_name) or module_def.name
-                module = modules.get(module_name)
-                if module is None:
-                    module = ExtractedModule(name=module_name)
-                    modules[module_name] = module
+        underlying = cursor.underlying_typedef_type
+        if underlying is None:
+            return None
+        underlying_decl = underlying.get_declaration()
+        if underlying_decl == cursor:
+            return None
+        return self._resolve_record_decl(underlying_decl)
 
-                module.module_def_name = module.module_def_name or module_def.name
-                module.init_func_name = module.init_func_name or init_func_name
-                module.lookup_names.update(self._build_module_lookup_names(module_name, init_func_name))
-                if module_def.source_file is not None:
-                    module.source_files.add(module_def.source_file)
-
-                method_table = self._resolve_discovered_symbol(
-                    method_tables,
-                    module_def.methods_table_name,
-                    module_def.source_file,
-                )
-                if method_table is not None:
-                    if method_table.source_file is not None:
-                        module.source_files.add(method_table.source_file)
-                    self._merge_discovered_functions(module.functions, method_table.functions)
-
-                for binding in binding_list:
-                    if binding.source_file is not None:
-                        module.source_files.add(binding.source_file)
-                    for registered in binding.registered_types:
-                        resolved_type = self._resolve_discovered_symbol(
-                            type_defs,
-                            registered.type_name,
-                            binding.source_file,
-                        )
-                        if resolved_type is None:
-                            continue
-                        class_name = (
-                            registered.exported_name
-                            or self._extract_type_leaf_name(resolved_type.tp_name)
-                            or resolved_type.name
-                        )
-                        extracted_class = module.classes.get(class_name)
-                        if extracted_class is None:
-                            extracted_class = ExtractedClass(name=class_name)
-                            module.classes[class_name] = extracted_class
-
-                        extracted_class.c_type_name = extracted_class.c_type_name or resolved_type.name
-                        extracted_class.tp_name = extracted_class.tp_name or resolved_type.tp_name
-                        extracted_class.source_file = extracted_class.source_file or resolved_type.source_file
-
-                        type_method_table = self._resolve_discovered_symbol(
-                            method_tables,
-                            resolved_type.methods_table_name,
-                            resolved_type.source_file,
-                        )
-                        if type_method_table is not None:
-                            if type_method_table.source_file is not None:
-                                module.source_files.add(type_method_table.source_file)
-                            self._merge_discovered_functions(
-                                extracted_class.methods,
-                                self._specialize_functions_for_class(
-                                    type_method_table.functions,
-                                    class_name=class_name,
-                                ),
-                            )
-
-        for module in modules.values():
-            module.functions = self._deduplicate_result(module.functions)
-            for extracted_class in module.classes.values():
-                extracted_class.methods = self._deduplicate_result(extracted_class.methods)
-
-        return modules
+    def _var_decl_to_init_list_expr(self, cursor: Cursor) -> Cursor | None:
+        for child in cursor.get_children():
+            target = _unwrap_transparent(child)
+            if target.kind == CursorKind.INIT_LIST_EXPR:
+                return target
+        return None
 
     def _collect_pymethod_defs(
             self,
@@ -906,18 +1002,10 @@ class CSignatureExtractor:
                         output,
                     )
 
-    @staticmethod
-    def _array_VAR_DECL_to_INIT_LIST_EXPR(cursor: Cursor) -> Cursor:
-        # VAR_DECL
-        #   TYPE_REF
-        #   UNEXPOSED_EXPR
-        #     INIT_LIST_EXPR
+    def _array_VAR_DECL_to_INIT_LIST_EXPR(self, cursor: Cursor) -> Cursor:
         assert cursor.kind == CursorKind.VAR_DECL
-
-        children = list(cursor.get_children())
-        assert len(children) >= 2
-
-        init_list_expr = _unwrap_transparent(children[1])
+        init_list_expr = self._var_decl_to_init_list_expr(cursor)
+        assert init_list_expr is not None
         assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
         return init_list_expr
 
@@ -1714,6 +1802,15 @@ class CSignatureExtractor:
             else:
                 result[field_name] = entry[2:]
         return result
+
+    def _extract_string_literal_from_cursor(self, cursor: Cursor | None) -> str | None:
+        if cursor is None:
+            return None
+        for node in self._walk(_unwrap_transparent(cursor)):
+            if node.kind != CursorKind.STRING_LITERAL:
+                continue
+            return self._strip_string_literal_quotes(str(node.spelling))
+        return None
 
     def _extract_string_literal_from_tokens(self, tokens: list[str]) -> str | None:
         for token in tokens:
