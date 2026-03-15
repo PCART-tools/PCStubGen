@@ -78,7 +78,13 @@ def parse_args() -> argparse.Namespace:
         "--clang-include",
         action="append",
         default=[],
-        help="追加 libclang include 路径，可重复传入（不要带 -I 前缀）。",
+        help="追加 libclang include 头文件，可重复传入。",
+    )
+    parser.add_argument(
+        "--clang-include-directory",
+        action="append",
+        default=[],
+        help="追加 libclang include 目录路径，可重复传入。",
     )
     parser.add_argument(
         "--clang-c-std",
@@ -133,6 +139,7 @@ def run_single_generation(
     c_inference_enabled: bool,
     source_root: Path | None,
     clang_include: list[str],
+    clang_include_directory: list[str],
     clang_c_std: str,
     clang_cpp_std: str,
 ) -> GenerationResult:
@@ -143,6 +150,7 @@ def run_single_generation(
         options = StubGenerationOptions(
             source_root=effective_source_root,
             clang_include=clang_include,
+            clang_include_directory=clang_include_directory,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
             include_docstrings=False,
@@ -276,6 +284,7 @@ def main() -> int:
     source_root = Path(args.source_root)
     output_root = Path(args.output_root)
     clang_include: list[str] = list(args.clang_include)
+    clang_include_directory: list[str] = list(args.clang_include_directory)
     clang_c_std: str = args.clang_c_std
     clang_cpp_std: str = args.clang_cpp_std
 
@@ -289,7 +298,9 @@ def main() -> int:
     if not source_root.exists():
         print("警告: C 源码目录不存在，C 签名推导可能不会生效。")
     if clang_include:
-        print(f"clang include 路径: {clang_include}")
+        print(f"clang include 头文件: {clang_include}")
+    if clang_include_directory:
+        print(f"clang include 路径: {clang_include_directory}")
     if clang_c_std:
         print(f"clang C 标准: {clang_c_std}")
     if clang_cpp_std:
@@ -302,6 +313,7 @@ def main() -> int:
         c_inference_enabled=False,
         source_root=source_root,
         clang_include=clang_include,
+        clang_include_directory=clang_include_directory,
         clang_c_std=clang_c_std,
         clang_cpp_std=clang_cpp_std,
     )
@@ -320,6 +332,7 @@ def main() -> int:
         c_inference_enabled=True,
         source_root=source_root,
         clang_include=clang_include,
+        clang_include_directory=clang_include_directory,
         clang_c_std=clang_c_std,
         clang_cpp_std=clang_cpp_std,
     )
@@ -356,4 +369,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

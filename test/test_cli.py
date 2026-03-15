@@ -38,3 +38,31 @@ def test_build_options_keeps_non_empty_source_root_path() -> None:
     options = cli._build_options(args)
 
     assert options.source_root == Path("C:/tmp/src")
+
+
+def test_parse_args_accepts_clang_include_directory() -> None:
+    args = cli.parse_args(
+        [
+            "math",
+            "--clang-include-directory",
+            "C:/IncludeA",
+            "--clang-include-directory=C:/IncludeB",
+        ]
+    )
+    options = cli._build_options(args)
+
+    assert options.clang_include_directory == ["C:/IncludeA", "C:/IncludeB"]
+
+
+def test_parse_args_accepts_clang_include() -> None:
+    args = cli.parse_args(
+        [
+            "math",
+            "--clang-include",
+            "Python.h",
+            "--clang-include=numpy/arrayobject.h",
+        ]
+    )
+    options = cli._build_options(args)
+
+    assert options.clang_include == ["Python.h", "numpy/arrayobject.h"]

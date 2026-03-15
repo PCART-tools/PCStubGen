@@ -5,7 +5,7 @@ import dataclasses
 import logging
 import re
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Literal
 
 from .CSignatureExtraction import CSignatureExtractor, ExtractedArgument, ExtractedFunction
 from ..NodeVisitor import NodeVisitor
@@ -62,7 +62,8 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         error_collector: ErrorCollector,
         source_root: Path,
-        clang_include: Iterable[str] = (),
+        clang_include: list[str] = (),
+        clang_include_directory: list[str] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> None:
@@ -71,6 +72,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self._extractor = CSignatureExtractor(
             source_root=source_root,
             clang_include=clang_include,
+            clang_include_directory=clang_include_directory,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,
         )
@@ -437,4 +439,3 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
     def _reset_stats(self) -> None:
         self._stats = _InferenceStats()
-

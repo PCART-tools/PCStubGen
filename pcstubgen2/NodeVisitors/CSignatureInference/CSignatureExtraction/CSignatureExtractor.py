@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 import re
 import sysconfig
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, TypeAlias
+from typing import TypeAlias
 
 import clang
 import clang.cindex
@@ -34,7 +35,7 @@ from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 
 logger = logging.getLogger(__name__)
 
-AUTO_INCLUDE_RETRY_LIMIT = 10
+
 AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
 
 
@@ -42,7 +43,7 @@ SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
 FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[SignatureKey, ...]]
 
-transparent_kinds = {
+transparent_cursor_kinds = {
     # 没有暴露给python libclang的表达式
     # 比如ImplicitCastExpr、RecoveryExpr（解析错误的时候产生）
     CursorKind.UNEXPOSED_EXPR,
@@ -54,7 +55,7 @@ transparent_kinds = {
     CursorKind.CXX_FUNCTIONAL_CAST_EXPR,  # T(expr)
 }
 
-cast_kinds = {
+cast_cursor_kinds = {
     CursorKind.CSTYLE_CAST_EXPR,
     CursorKind.CXX_STATIC_CAST_EXPR,
     CursorKind.CXX_REINTERPRET_CAST_EXPR,
@@ -62,15 +63,27 @@ cast_kinds = {
     CursorKind.CXX_FUNCTIONAL_CAST_EXPR,
 }
 
+array_type_kinds = {
+    TypeKind.CONSTANTARRAY,  # 固定长度数组，如 `int values[8]`
+    TypeKind.INCOMPLETEARRAY,  # 不完整数组，如 `extern int values[]`
+    TypeKind.VARIABLEARRAY,  # 变长数组，如 `int values[n]`
+    TypeKind.DEPENDENTSIZEDARRAY,  # 依赖表达式推导长度的数组，多见于模板/泛型上下文
+}
+
+cpp_nullptr_literal_cursor_kinds = {
+    CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
+    CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
+}
+
 _CPP_STRING_LITERAL_RE = re.compile(r'^(?:u8|u|U|L)?"(.*)"$', re.DOTALL)
 
 
 def _unwrap_transparent(cursor: Cursor) -> Cursor:
-    while cursor.kind in transparent_kinds:
+    while cursor.kind in transparent_cursor_kinds:
         children = list(cursor.get_children())
         if not children:
             break
-        if cursor.kind in cast_kinds:
+        if cursor.kind in cast_cursor_kinds:
             cursor = children[-1]
         else:
             cursor = children[0]
@@ -90,11 +103,6 @@ def _is_integer_literal_value(cursor: Cursor, value: int) -> bool:
     return ret == value
 
 
-cpp_nullptr_literal_kinds = {
-    CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
-    CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
-}
-
 def _is_PyMethodDef_array_sentinel(element: Cursor) -> bool:
     """判断 `PyMethodDef` 条目是否为数组结束哨兵。只要ml_name语义上为0就判定为哨兵"""
 
@@ -103,7 +111,7 @@ def _is_PyMethodDef_array_sentinel(element: Cursor) -> bool:
 
     def _is_semantic_zero(node: Cursor) -> bool:
         target = _unwrap_transparent(node)
-        if target.kind in cpp_nullptr_literal_kinds:
+        if target.kind in cpp_nullptr_literal_cursor_kinds:
             return True
         if _is_integer_literal_value(target, 0):
             return True
@@ -176,14 +184,6 @@ def _get_packaged_libclang_path() -> str | None:
             return str(candidate)
     return None
 
-array_type_kinds = {
-    TypeKind.CONSTANTARRAY,  # 固定长度数组，如 `int values[8]`
-    TypeKind.INCOMPLETEARRAY,  # 不完整数组，如 `extern int values[]`
-    TypeKind.VARIABLEARRAY,  # 变长数组，如 `int values[n]`
-    TypeKind.DEPENDENTSIZEDARRAY,  # 依赖表达式推导长度的数组，多见于模板/泛型上下文
-}
-
-
 def _is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
     if cursor.type.kind in array_type_kinds and cursor.is_definition():
@@ -205,13 +205,15 @@ class CSignatureExtractor:
             self,
             source_root: Path,
             *,
-            clang_include: Iterable[str] = (),
+            clang_include: list[str] = (),
+            clang_include_directory: list[str] = (),
             clang_c_std: str = "c11",
             clang_cpp_std: str = "c++17",
     ) -> None:
         """初始化提取器并准备惰性缓存。"""
         self.source_root = source_root
-        self._clang_include_args = self._build_user_include_args(clang_include)
+        self._clang_include = [str(include_value) for include_value in clang_include]
+        self._clang_include_directory = [str(include_path) for include_path in clang_include_directory]
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._cache_result: dict[str, list[ExtractedFunction]] | None = None
@@ -235,7 +237,7 @@ class CSignatureExtractor:
             self._cache_result = {}
             return self._cache_result
 
-        self._clang_include_args = self._inject_python_include_args(self._clang_include_args)
+        self._clang_include_directory = self._inject_python_include_directories(self._clang_include_directory)
 
         source_files = self._find_candidate_files()
         if not source_files:
@@ -273,17 +275,9 @@ class CSignatureExtractor:
             logger.warning("Failed to configure packaged libclang: %s", ex)
         return True
 
-
-    def _build_user_include_args(self, clang_include: Iterable[str]) -> list[str]:
-        """将 include 路径列表转换为 clang `-I` 参数。"""
-        include_args: list[str] = []
-        for include_path in clang_include:
-            include_args.append(f"-I{include_path}")
-        return include_args
-
-    def _inject_python_include_args(self, parse_args: list[str]) -> list[str]:
-        """向 clang 参数注入当前 Python 头文件目录。"""
-        args = list(parse_args)
+    def _inject_python_include_directories(self, include_directories: list[str]) -> list[str]:
+        """向 include 目录列表注入当前 Python 头文件目录。"""
+        directories = list(include_directories)
         include_candidates = [
             sysconfig.get_path("include"),
             sysconfig.get_path("platinclude"),
@@ -291,10 +285,10 @@ class CSignatureExtractor:
         for include_dir in include_candidates:
             if not include_dir:
                 continue
-            include_arg = f"-I{include_dir}"
-            if include_arg not in args:
-                args.append(include_arg)
-        return args
+            if include_dir in directories:
+                continue
+            directories.append(include_dir)
+        return directories
 
     def _normalize_include_literal(self, include_literal: str) -> str:
         normalized = include_literal.replace("\\", "/").strip()
@@ -392,13 +386,13 @@ class CSignatureExtractor:
 
     def _append_include_args(self, include_args: Iterable[str]) -> list[str]:
         added: list[str] = []
-        for include_arg in include_args:
-            if include_arg in self._clang_include_args:
+        for include_dir in include_args:
+            if include_dir in self._clang_include_directory:
                 continue
-            if include_arg in added:
+            if include_dir in added:
                 continue
-            self._clang_include_args.append(include_arg)
-            added.append(include_arg)
+            self._clang_include_directory.append(include_dir)
+            added.append(include_dir)
         return added
 
     def _discover_missing_include_args(
@@ -416,20 +410,20 @@ class CSignatureExtractor:
             )
             if include_dir is None:
                 continue
-            resolved_pairs.append((include_literal, f"-I{include_dir}"))
+            resolved_pairs.append((include_literal, str(include_dir)))
 
-        added = self._append_include_args(include_arg for _, include_arg in resolved_pairs)
+        added = self._append_include_args(include_dir for _, include_dir in resolved_pairs)
         if not added:
             return added
 
-        for include_literal, include_arg in resolved_pairs:
-            if include_arg not in added:
+        for include_literal, include_dir in resolved_pairs:
+            if include_dir not in added:
                 continue
             logger.info(
                 "Auto-added clang include path for missing header %s in %s: %s",
                 include_literal,
                 file_path,
-                include_arg[2:],
+                include_dir,
             )
         return added
 
@@ -444,14 +438,30 @@ class CSignatureExtractor:
         result.sort()
         return result
 
+    def _build_std_value_for_file(self, file_path: Path) -> str:
+        """按后缀为源码文件选择 C 或 C++ 标准值。"""
+        suffix = file_path.suffix.lower()
+        if suffix in CPP_SOURCE_SUFFIXES:
+            return self._normalize_std_value(self._clang_cpp_std, default_std="c++17")
+        return self._normalize_std_value(self._clang_c_std, default_std="c11")
+
+    def _build_clang_parse_args(self, file_path: Path) -> list[str]:
+        parse_args = []
+        std_value = self._build_std_value_for_file(file_path)
+        parse_args.extend(["--std", std_value])
+        for include_value in self._clang_include:
+            parse_args.extend(["--include", include_value])
+        for include_dir in self._clang_include_directory:
+            parse_args.extend(["--include-directory", include_dir])
+        return parse_args
+
     def _parse_translation_unit(self, index: Index, file_path: Path) -> TranslationUnit | None:
         """解析单个源码文件为 clang translation unit。"""
         translation_unit: TranslationUnit | None = None
         diagnostics: list[Diagnostic] = []
-        parse_args: list[str] = []
-        for _ in range(AUTO_INCLUDE_RETRY_LIMIT):
-            parse_args = self._build_parse_args(file_path)
-            parse_args.extend(["-include", "Python.h"])
+        retry_limit = 10
+        for _ in range(retry_limit):
+            parse_args = self._build_clang_parse_args(file_path)
             translation_unit = index.parse(str(file_path), args=parse_args)
             diagnostics = list(translation_unit.diagnostics)
             added = self._discover_missing_include_args(
@@ -481,29 +491,16 @@ class CSignatureExtractor:
                 return True
         return False
 
-    def _build_parse_args(self, file_path: Path) -> list[str]:
-        """为单个源码文件拼装 clang 参数。"""
-        parse_args = list(self._clang_include_args)
-        std_arg = self._build_std_arg_for_file(file_path)
-        if std_arg is not None:
-            parse_args.insert(0, std_arg)
-        return parse_args
-
-    def _build_std_arg_for_file(self, file_path: Path) -> str:
-        """按后缀为源码文件选择 C 或 C++ 标准参数。"""
-        suffix = file_path.suffix.lower()
-        if suffix in CPP_SOURCE_SUFFIXES:
-            return self._normalize_std_arg(self._clang_cpp_std, default_std="c++17")
-        return self._normalize_std_arg(self._clang_c_std, default_std="c11")
-
-    def _normalize_std_arg(self, std_value: str, *, default_std: str) -> str:
-        """将标准配置统一为 `-std=` 参数。"""
+    def _normalize_std_value(self, std_value: str, *, default_std: str) -> str:
+        """将标准配置统一为纯标准值（如 `c11`、`c++17`）。"""
         normalized = std_value.strip()
         if not normalized:
             normalized = default_std
-        if normalized.startswith("-std="):
-            return normalized
-        return f"-std={normalized}"
+        if normalized.startswith("--std="):
+            normalized = normalized.partition("=")[2]
+        elif normalized.startswith("-std="):
+            normalized = normalized.partition("=")[2]
+        return normalized
 
     def _collect_pymethod_defs(
             self,

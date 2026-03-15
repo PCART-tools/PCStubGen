@@ -56,15 +56,16 @@ def configure_output_encoding() -> None:
             pass
 
 
-def _normalize_clang_include_tokens(argv: Sequence[str] | None) -> list[str] | None:
+def _normalize_clang_include_directory_tokens(argv: Sequence[str] | None) -> list[str] | None:
     if argv is None:
         return None
 
+    repeatable_flags = {"--clang-include-directory", "--clang-include"}
     normalized: list[str] = []
     index = 0
     while index < len(argv):
         token = argv[index]
-        if token != "--clang-include":
+        if token not in repeatable_flags:
             normalized.append(token)
             index += 1
             continue
@@ -73,7 +74,7 @@ def _normalize_clang_include_tokens(argv: Sequence[str] | None) -> list[str] | N
             normalized.append(token)
             break
 
-        normalized.append(f"--clang-include={argv[index + 1]}")
+        normalized.append(f"{token}={argv[index + 1]}")
         index += 2
 
     return normalized
@@ -81,7 +82,8 @@ def _normalize_clang_include_tokens(argv: Sequence[str] | None) -> list[str] | N
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="使用 libclang 解析单个 C/C++ 源文件，并将完整 AST 导出为 JSON。"
+        description="使用 libclang 解析单个 C/C++ 源文件，并将完整 AST 导出为 JSON。",
+        allow_abbrev=False,
     )
     parser.add_argument("source_path", help="待解析的 C/C++ 源文件路径。")
     parser.add_argument(
@@ -92,7 +94,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--clang-include",
         action="append",
         default=[],
-        help="追加 include 路径（不要带 -I 前缀），可重复传入。",
+        help="追加 include 头文件，可重复传入。",
+    )
+    parser.add_argument(
+        "--clang-include-directory",
+        action="append",
+        default=[],
+        help="追加 include 目录路径，可重复传入。",
     )
     parser.add_argument("--clang-c-std", help="指定 C 标准（如 c11 或 -std=c11）。")
     parser.add_argument("--clang-cpp-std", help="指定 C++ 标准（如 c++17 或 -std=c++17）。")
@@ -100,7 +108,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--clang-library-path",
         help="显式指定 libclang 动态库路径。",
     )
-    return parser.parse_args(_normalize_clang_include_tokens(argv))
+    return parser.parse_args(_normalize_clang_include_directory_tokens(argv))
 
 
 def _safe_str(value: str | None) -> str | None:
@@ -131,53 +139,91 @@ def _cursor_file_path(cursor: Cursor) -> Path | None:
 CPP_SOURCE_SUFFIXES = {".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx"}
 
 
-def _normalize_std_arg(std_value: str | None) -> str | None:
+def _normalize_std_value(std_value: str | None) -> str | None:
     if std_value is None:
         return None
     normalized = std_value.strip()
     if not normalized:
         return None
+    if normalized.startswith("--std="):
+        return normalized.partition("=")[2]
     if normalized.startswith("-std="):
-        return normalized
-    return f"-std={normalized}"
+        return normalized.partition("=")[2]
+    return normalized
 
 
-def _build_include_args(include_paths: Sequence[str]) -> list[str]:
-    include_args: list[str] = []
+def _normalize_include_paths(include_paths: Sequence[str]) -> list[str]:
+    normalized_paths: list[str] = []
     for raw_path in include_paths:
         if raw_path is None:
-            raise TypeError("clang_include entries must be non-empty include paths")
+            raise TypeError("clang_include_directory entries must be non-empty include paths")
         include_path = str(raw_path).strip()
         if not include_path:
-            raise ValueError("clang_include entries must be non-empty include paths")
-        if include_path.startswith("-I"):
-            raise ValueError("clang_include entries must not include '-I' prefix")
+            raise ValueError("clang_include_directory entries must be non-empty include paths")
         if include_path.startswith("-"):
-            raise ValueError(f"clang_include entry must be a path, got option-like value: {include_path!r}")
-        include_arg = f"-I{include_path}"
-        if include_arg not in include_args:
-            include_args.append(include_arg)
-    return include_args
+            raise ValueError(f"clang_include_directory entry must be a path, got option-like value: {include_path!r}")
+        if include_path not in normalized_paths:
+            normalized_paths.append(include_path)
+    return normalized_paths
+
+
+def _normalize_include_headers(include_headers: Sequence[str]) -> list[str]:
+    normalized_headers: list[str] = []
+    for raw_header in include_headers:
+        if raw_header is None:
+            raise TypeError("clang_include entries must be non-empty include headers")
+        include_header = str(raw_header).strip()
+        if not include_header:
+            raise ValueError("clang_include entries must be non-empty include headers")
+        if include_header.startswith("-"):
+            raise ValueError(f"clang_include entry must be a header, got option-like value: {include_header!r}")
+        if include_header not in normalized_headers:
+            normalized_headers.append(include_header)
+    return normalized_headers
 
 
 def build_clang_args(
     *,
     source_path: Path,
+) -> list[str]:
+    _ = source_path
+    clang_args: list[str] = []
+    return clang_args
+
+
+def _resolve_std_value_for_source(
+    *,
+    source_path: Path,
+    clang_c_std: str | None,
+    clang_cpp_std: str | None,
+) -> str:
+    suffix = source_path.suffix.lower()
+    if suffix in CPP_SOURCE_SUFFIXES:
+        return _normalize_std_value(clang_cpp_std or "c++17") or "c++17"
+    return _normalize_std_value(clang_c_std or "c11") or "c11"
+
+
+def _build_parse_args(
+    *,
+    source_path: Path,
+    clang_args: Sequence[str],
+    include_headers: Sequence[str],
     include_paths: Sequence[str],
     clang_c_std: str | None,
     clang_cpp_std: str | None,
 ) -> list[str]:
-    suffix = source_path.suffix.lower()
-    if suffix in CPP_SOURCE_SUFFIXES:
-        std_arg = _normalize_std_arg(clang_cpp_std or "c++17")
-    else:
-        std_arg = _normalize_std_arg(clang_c_std or "c11")
-
-    clang_args: list[str] = []
-    if std_arg is not None:
-        clang_args.append(std_arg)
-    clang_args.extend(_build_include_args(include_paths))
-    return clang_args
+    parse_args = list(clang_args)
+    std_value = _resolve_std_value_for_source(
+        source_path=source_path,
+        clang_c_std=clang_c_std,
+        clang_cpp_std=clang_cpp_std,
+    )
+    parse_args.extend(["--std", std_value])
+    for include_header in include_headers:
+        parse_args.extend(["--include", include_header])
+    for include_path in include_paths:
+        parse_args.extend(["--include-directory", include_path])
+    return parse_args
 
 
 def resolve_output_path(source_path: Path, output_arg: str | None) -> Path:
@@ -242,11 +288,11 @@ def parse_translation_unit(
     source_path: Path,
     *,
     library_path: str | None,
-    clang_args: Sequence[str],
+    parse_args: Sequence[str],
 ) -> TranslationUnit:
     cindex = initialize_clang(library_path)
     index = cindex.Index.create()
-    return index.parse(str(source_path), args=list(clang_args), options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
+    return index.parse(str(source_path), args=list(parse_args), options=TranslationUnit.PARSE_DETAILED_PROCESSING_RECORD)
 
 
 def build_ast_payload(
@@ -279,12 +325,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     output_path = resolve_output_path(source_path, args.output).resolve()
     library_path: str | None = _safe_str(args.clang_library_path)
-    clang_include = [str(path) for path in args.clang_include]
+    clang_include = _normalize_include_headers([str(header) for header in args.clang_include])
+    clang_include_directory = _normalize_include_paths([str(path) for path in args.clang_include_directory])
     clang_c_std: str | None = _safe_str(args.clang_c_std)
     clang_cpp_std: str | None = _safe_str(args.clang_cpp_std)
     clang_args = build_clang_args(
         source_path=source_path,
-        include_paths=clang_include,
+    )
+    clang_parse_args = _build_parse_args(
+        source_path=source_path,
+        clang_args=clang_args,
+        include_headers=clang_include,
+        include_paths=clang_include_directory,
         clang_c_std=clang_c_std,
         clang_cpp_std=clang_cpp_std,
     )
@@ -293,14 +345,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     translation_unit = parse_translation_unit(
         source_path,
         library_path=library_path,
-        clang_args=clang_args,
+        parse_args=clang_parse_args,
     )
 
     payload = build_ast_payload(
         translation_unit,
         source_path=source_path,
         output_path=output_path,
-        clang_args=clang_args,
+        clang_args=clang_parse_args,
     )
     json_text = json.dumps(payload, ensure_ascii=False, indent=2)
 

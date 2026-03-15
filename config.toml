@@ -1,7 +1,7 @@
 clang_library_path = 'C:\Users\Mojuko\miniforge3\envs\CStubAutoGen\Lib\site-packages\clang\native\libclang.dll'
 clang_c_std = 'c11'
 clang_cpp_std = 'c++17'
-clang_include = [
+clang_include_directory = [
     'C:\\Users\\Mojuko\\miniforge3\\envs\\CStubAutoGen\\Include'
 ]
 c_filename = 'example/simple_extension.c'

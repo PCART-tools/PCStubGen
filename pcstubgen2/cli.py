@@ -32,23 +32,39 @@ def _regex_colon_path(regex_path: str) -> tuple[re.Pattern, str]:
     return _regex(pattern_str), path
 
 
-def _normalize_clang_include(include_paths: Sequence[str]) -> list[str]:
+def _normalize_clang_include_directory(include_paths: Sequence[str]) -> list[str]:
     normalized: list[str] = []
     for raw_path in include_paths:
         if raw_path is None:
-            raise TypeError("clang_include entries must be non-empty include paths")
+            raise TypeError("clang_include_directory entries must be non-empty include paths")
 
         include_path = str(raw_path).strip()
         if not include_path:
-            raise ValueError("clang_include entries must be non-empty include paths")
-        if include_path.startswith("-I"):
-            raise ValueError("clang_include entries must not include '-I' prefix")
+            raise ValueError("clang_include_directory entries must be non-empty include paths")
         if include_path.startswith("-"):
             raise ValueError(
-                f"clang_include entry must be a path, got option-like value: {include_path!r}"
+                f"clang_include_directory entry must be a path, got option-like value: {include_path!r}"
             )
         if include_path not in normalized:
             normalized.append(include_path)
+    return normalized
+
+
+def _normalize_clang_include(includes: Sequence[str]) -> list[str]:
+    normalized: list[str] = []
+    for raw_include in includes:
+        if raw_include is None:
+            raise TypeError("clang_include entries must be non-empty include headers")
+
+        include = str(raw_include).strip()
+        if not include:
+            raise ValueError("clang_include entries must be non-empty include headers")
+        if include.startswith("-"):
+            raise ValueError(
+                f"clang_include entry must be a header, got option-like value: {include!r}"
+            )
+        if include not in normalized:
+            normalized.append(include)
     return normalized
 
 
@@ -66,6 +82,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pcstubgen2",
         description="Generate Python stubs for a module with pcstubgen2.",
+        allow_abbrev=False,
     )
     parser.add_argument("module_name", metavar="MODULE_NAME", help="module name")
     parser.add_argument(
@@ -114,7 +131,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--clang-include",
         action="append",
         default=[],
-        help="Additional clang include path (no -I prefix), can be repeated",
+        help="Additional clang include header, can be repeated",
+    )
+    parser.add_argument(
+        "--clang-include-directory",
+        action="append",
+        default=[],
+        help="Additional clang include directory path, can be repeated",
     )
     parser.add_argument(
         "--clang-c-std",
@@ -164,6 +187,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
     try:
         args.clang_include = _normalize_clang_include(args.clang_include)
+        args.clang_include_directory = _normalize_clang_include_directory(args.clang_include_directory)
     except (TypeError, ValueError) as ex:
         parser.error(str(ex))
 
@@ -183,6 +207,7 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
         clang_c_std=args.clang_c_std or default_options.clang_c_std,
         clang_cpp_std=args.clang_cpp_std or default_options.clang_cpp_std,
         clang_include=list(args.clang_include),
+        clang_include_directory=list(args.clang_include_directory),
         print_invalid_expressions_as_is=args.print_invalid_expressions_as_is,
         include_docstrings=args.include_docstrings,
         include_module_type_comment=args.include_module_type_comment,

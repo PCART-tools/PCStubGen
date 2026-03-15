@@ -89,6 +89,7 @@ def write_stubs(
                 error_collector=error_collector,
                 source_root=options.source_root,
                 clang_include=options.clang_include,
+                clang_include_directory=options.clang_include_directory,
                 clang_c_std=options.clang_c_std,
                 clang_cpp_std=options.clang_cpp_std,
             )

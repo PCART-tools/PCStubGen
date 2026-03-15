@@ -21,6 +21,7 @@ class StubGenerationOptions:
     clang_c_std: str = "c11"
     clang_cpp_std: str = "c++17"
     clang_include: list[str] = dataclasses.field(default_factory=list)
+    clang_include_directory: list[str] = dataclasses.field(default_factory=list)
 
     # 输出选项
     print_invalid_expressions_as_is: bool = False
