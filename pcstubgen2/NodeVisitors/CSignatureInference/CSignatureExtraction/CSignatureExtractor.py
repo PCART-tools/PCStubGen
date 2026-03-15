@@ -4,8 +4,9 @@ import logging
 import re
 import sysconfig
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TypeAlias
+from typing import TypeAlias, TypeVar
 
 import clang
 import clang.cindex
@@ -16,6 +17,7 @@ from clang.cindex import (
     Index,
     TokenKind,
     TranslationUnit,
+    Type,
     TypeKind
 )
 
@@ -31,7 +33,13 @@ from .Constants import (
     RETURN_TOKEN_TYPE_MAP,
     UNRELATED_TOKENS,
 )
-from .Models import ExtractedArgument, ExtractedFunction, ExtractedSignature
+from .Models import (
+    ExtractedArgument,
+    ExtractedClass,
+    ExtractedFunction,
+    ExtractedModule,
+    ExtractedSignature,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +50,51 @@ AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
 SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
 FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[SignatureKey, ...]]
+
+
+@dataclass
+class _DiscoveredMethodTable:
+    name: str
+    source_file: str | None
+    functions: list[ExtractedFunction] = field(default_factory=list)
+
+
+@dataclass
+class _DiscoveredModuleDef:
+    name: str
+    module_name: str | None
+    methods_table_name: str | None
+    source_file: str | None
+
+
+@dataclass
+class _DiscoveredTypeDef:
+    name: str
+    tp_name: str | None
+    methods_table_name: str | None
+    source_file: str | None
+
+
+@dataclass
+class _RegisteredTypeRef:
+    exported_name: str | None
+    type_name: str
+
+
+@dataclass
+class _DiscoveredInitBinding:
+    init_func_name: str
+    module_def_name: str
+    source_file: str | None
+    registered_types: list[_RegisteredTypeRef] = field(default_factory=list)
+
+
+DiscoveredSymbolT = TypeVar(
+    "DiscoveredSymbolT",
+    _DiscoveredMethodTable,
+    _DiscoveredModuleDef,
+    _DiscoveredTypeDef,
+)
 
 transparent_cursor_kinds = {
     # 没有暴露给python libclang的表达式
@@ -197,8 +250,8 @@ class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
 
-    该引擎会扫描源码中的 `PyMethodDef` 表，定位对应 C 函数，
-    再结合 `PyArg_*` 调用和格式串规则推断 Python 侧参数信息。
+    该引擎会先扫描源码中的 `PyModuleDef` / `PyTypeObject` / `PyMethodDef`，
+    构建模块级提取树，再结合 `PyArg_*` 调用和格式串规则推断 Python 侧参数信息。
     """
 
     def __init__(
@@ -216,33 +269,28 @@ class CSignatureExtractor:
         self._clang_include_directory = [str(include_path) for include_path in clang_include_directory]
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
-        self._cache_result: dict[str, list[ExtractedFunction]] | None = None
+        self._cache_modules: dict[str, ExtractedModule] | None = None
 
-    def extract(self) -> dict[str, list[ExtractedFunction]]:
-        """
-        执行签名提取主流程。
-
-        返回值按 Python 函数名聚合候选提取结果；失败时降级为 `{}`，
-        并缓存结果避免重复解析同一源码树。
-        """
-        if self._cache_result is not None:
-            return self._cache_result
+    def extract_modules(self) -> dict[str, ExtractedModule]:
+        """执行模块级签名提取主流程。"""
+        if self._cache_modules is not None:
+            return self._cache_modules
 
         if not self.source_root.exists():
             logger.warning("source_root does not exist: %s", self.source_root)
-            self._cache_result = {}
-            return self._cache_result
+            self._cache_modules = {}
+            return self._cache_modules
 
         if not self._ensure_clang_ready():
-            self._cache_result = {}
-            return self._cache_result
+            self._cache_modules = {}
+            return self._cache_modules
 
         self._clang_include_directory = self._inject_python_include_directories(self._clang_include_directory)
 
         source_files = self._find_candidate_files()
         if not source_files:
-            self._cache_result = {}
-            return self._cache_result
+            self._cache_modules = {}
+            return self._cache_modules
 
         index = Index.create()
 
@@ -253,16 +301,29 @@ class CSignatureExtractor:
                 continue
             translation_units.append(tu)
 
-        # 处理 PyMethodDef，拼装提取结果。
-        result: dict[str, list[ExtractedFunction]] = {}
+        method_tables: dict[str, _DiscoveredMethodTable] = {}
+        module_defs: dict[str, _DiscoveredModuleDef] = {}
+        type_defs: dict[str, _DiscoveredTypeDef] = {}
+        init_bindings: list[_DiscoveredInitBinding] = []
         for tu in translation_units:
             try:
-                self._collect_pymethod_defs(tu.cursor, result)
+                self._discover_translation_unit(
+                    tu.cursor,
+                    method_tables=method_tables,
+                    module_defs=module_defs,
+                    type_defs=type_defs,
+                    init_bindings=init_bindings,
+                )
             except AssertionError as ex:
                 logger.exception("AssertionError", exc_info=ex)
 
-        self._cache_result = self._deduplicate_result(result)
-        return self._cache_result
+        self._cache_modules = self._build_modules_from_discovery(
+            method_tables=method_tables,
+            module_defs=module_defs,
+            type_defs=type_defs,
+            init_bindings=init_bindings,
+        )
+        return self._cache_modules
 
     def _ensure_clang_ready(self) -> bool:
         """确保 clang 运行环境可用。"""
@@ -428,12 +489,21 @@ class CSignatureExtractor:
         return added
 
     def _find_candidate_files(self) -> list[Path]:
-        """查找可能包含 `PyMethodDef` 的 C/C++ 源文件。"""
+        """查找可能包含 CPython 扩展定义的 C/C++ 源文件。"""
+        candidate_markers = (
+            "PyModuleDef",
+            "PyMethodDef",
+            "PyTypeObject",
+            "PyInit_",
+            "PyModule_AddObject",
+            "PyModule_AddObjectRef",
+            "PyModule_AddType",
+        )
         result: list[Path] = []
         for path in self.source_root.rglob("*"):
             if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
                 text = path.read_text(encoding="utf-8", errors="ignore")
-                if "PyMethodDef" in text:
+                if any(marker in text for marker in candidate_markers):
                     result.append(path)
         result.sort()
         return result
@@ -501,6 +571,324 @@ class CSignatureExtractor:
         elif normalized.startswith("-std="):
             normalized = normalized.partition("=")[2]
         return normalized
+
+    def _discover_translation_unit(
+            self,
+            cursor: Cursor,
+            *,
+            method_tables: dict[str, list[_DiscoveredMethodTable]],
+            module_defs: dict[str, list[_DiscoveredModuleDef]],
+            type_defs: dict[str, list[_DiscoveredTypeDef]],
+            init_bindings: list[_DiscoveredInitBinding],
+    ) -> None:
+        """扫描单个 translation unit，收集模块树所需的中间符号。"""
+        nodes = list(self._walk(cursor))
+
+        for node in nodes:
+            if node.kind != CursorKind.VAR_DECL:
+                continue
+            if _is_PyMethodDef_array_definition(node):
+                discovered = self._extract_method_table(node)
+                if discovered is not None:
+                    self._append_discovered_symbol(method_tables, discovered.name, discovered)
+                continue
+            if self._is_PyModuleDef_definition(node):
+                discovered = self._extract_module_def(node)
+                if discovered is not None:
+                    self._append_discovered_symbol(module_defs, discovered.name, discovered)
+                continue
+            if self._is_PyTypeObject_definition(node):
+                discovered = self._extract_type_def(node)
+                if discovered is not None:
+                    self._append_discovered_symbol(type_defs, discovered.name, discovered)
+
+        for node in nodes:
+            if node.kind != CursorKind.FUNCTION_DECL:
+                continue
+            if not self._is_cursor_definition(node):
+                continue
+            if not str(node.spelling).startswith("PyInit_"):
+                continue
+            discovered = self._extract_init_binding(node, type_defs=type_defs)
+            if discovered is not None:
+                init_bindings.append(discovered)
+
+    def _append_discovered_symbol(
+            self,
+            store: dict[str, list[object]],
+            name: str,
+            item: object,
+    ) -> None:
+        store.setdefault(name, []).append(item)
+
+    def _resolve_discovered_symbol(
+            self,
+            store: dict[str, list[DiscoveredSymbolT]],
+            name: str | None,
+            preferred_source_file: str | None,
+    ) -> DiscoveredSymbolT | None:
+        if not name:
+            return None
+        candidates = store.get(name)
+        if not candidates:
+            return None
+        if preferred_source_file is not None:
+            same_file = [
+                item
+                for item in candidates
+                if item.source_file == preferred_source_file
+            ]
+            if len(same_file) == 1:
+                return same_file[0]
+        if len(candidates) == 1:
+            return candidates[0]
+        return None
+
+    def _is_cursor_definition(self, cursor: Cursor) -> bool:
+        return bool(cursor.is_definition())
+
+    def _get_type_spelling(self, type_obj: Type | None) -> str | None:
+        if type_obj is None:
+            return None
+        return str(type_obj.spelling)
+
+    def _get_canonical_type_spelling(self, type_obj: Type | None) -> str | None:
+        if type_obj is None:
+            return None
+        canonical = type_obj.get_canonical()
+        return self._get_type_spelling(canonical)
+
+    def _is_type_definition(self, cursor: Cursor, accepted_spellings: set[str]) -> bool:
+        if not self._is_cursor_definition(cursor):
+            return False
+        type_obj = cursor.type
+        spellings = {
+            spelling
+            for spelling in (
+                self._get_type_spelling(type_obj),
+                self._get_canonical_type_spelling(type_obj),
+            )
+            if spelling is not None
+        }
+        return bool(spellings & accepted_spellings)
+
+    def _is_PyModuleDef_definition(self, cursor: Cursor) -> bool:
+        return self._is_type_definition(
+            cursor,
+            {"PyModuleDef", "struct PyModuleDef"},
+        )
+
+    def _is_PyTypeObject_definition(self, cursor: Cursor) -> bool:
+        return self._is_type_definition(
+            cursor,
+            {"PyTypeObject", "struct PyTypeObject", "struct _typeobject"},
+        )
+
+    def _extract_method_table(self, cursor: Cursor) -> _DiscoveredMethodTable | None:
+        grouped: dict[str, list[ExtractedFunction]] = {}
+        init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(cursor)
+        self._process_PyMethodDef_array_INIT_LIST_EXPR(
+            cursor,
+            init_expr_node,
+            grouped,
+        )
+        deduped = self._deduplicate_result(grouped)
+        functions = [item for items in deduped.values() for item in items]
+        return _DiscoveredMethodTable(
+            name=cursor.spelling,
+            source_file=self._get_cursor_source_file(cursor),
+            functions=functions,
+        )
+
+    def _extract_module_def(self, cursor: Cursor) -> _DiscoveredModuleDef | None:
+        entries = self._extract_var_decl_initializer_entries(cursor)
+        if entries is None:
+            return None
+
+        designated = self._extract_designated_initializer_map(entries)
+        positional = [entry for entry in entries if self._extract_designated_field_name(entry) is None]
+
+        if designated:
+            module_name = self._extract_string_literal_from_tokens(designated.get("m_name", []))
+            methods_table_name = self._extract_reference_name(designated.get("m_methods", []))
+        else:
+            module_name = self._extract_string_literal_from_tokens(positional[1]) if len(positional) > 1 else None
+            methods_table_name = self._extract_reference_name(positional[4]) if len(positional) > 4 else None
+
+        return _DiscoveredModuleDef(
+            name=cursor.spelling,
+            module_name=module_name,
+            methods_table_name=methods_table_name,
+            source_file=self._get_cursor_source_file(cursor),
+        )
+
+    def _extract_type_def(self, cursor: Cursor) -> _DiscoveredTypeDef | None:
+        entries = self._extract_var_decl_initializer_entries(cursor)
+        if entries is None:
+            return None
+
+        designated = self._extract_designated_initializer_map(entries)
+        tp_name = self._extract_string_literal_from_tokens(designated.get("tp_name", []))
+        methods_table_name = self._extract_reference_name(designated.get("tp_methods", []))
+        return _DiscoveredTypeDef(
+            name=cursor.spelling,
+            tp_name=tp_name,
+            methods_table_name=methods_table_name,
+            source_file=self._get_cursor_source_file(cursor),
+        )
+
+    def _extract_init_binding(
+            self,
+            func_cursor: Cursor,
+            *,
+            type_defs: dict[str, list[_DiscoveredTypeDef]],
+    ) -> _DiscoveredInitBinding | None:
+        module_def_name: str | None = None
+        registered_types: list[_RegisteredTypeRef] = []
+        source_file = self._get_cursor_source_file(func_cursor)
+
+        for node in self._walk(func_cursor):
+            if node.kind != CursorKind.CALL_EXPR:
+                continue
+            call_name = self._get_call_name(node)
+            if call_name is None:
+                continue
+            arg_groups = self._extract_call_argument_groups(node)
+            if not arg_groups:
+                continue
+
+            if module_def_name is None and call_name.startswith("PyModule_Create"):
+                module_def_name = self._extract_reference_name(arg_groups[0], require_address_of=True)
+                continue
+
+            if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef"} and len(arg_groups) >= 3:
+                type_name = self._extract_reference_name(arg_groups[2], require_address_of=True)
+                if type_name is None or type_name not in type_defs:
+                    continue
+                registered_types.append(
+                    _RegisteredTypeRef(
+                        exported_name=self._extract_string_literal_from_tokens(arg_groups[1]),
+                        type_name=type_name,
+                    )
+                )
+                continue
+
+            if call_name == "PyModule_AddType" and len(arg_groups) >= 2:
+                type_name = self._extract_reference_name(arg_groups[1], require_address_of=True)
+                if type_name is None or type_name not in type_defs:
+                    continue
+                resolved = self._resolve_discovered_symbol(type_defs, type_name, source_file)
+                if resolved is None:
+                    continue
+                tp_name = resolved.tp_name
+                registered_types.append(
+                    _RegisteredTypeRef(
+                        exported_name=self._extract_type_leaf_name(tp_name),
+                        type_name=type_name,
+                    )
+                )
+
+        if module_def_name is None:
+            return None
+
+        return _DiscoveredInitBinding(
+            init_func_name=func_cursor.spelling,
+            module_def_name=module_def_name,
+            source_file=source_file,
+            registered_types=registered_types,
+        )
+
+    def _build_modules_from_discovery(
+            self,
+            *,
+            method_tables: dict[str, list[_DiscoveredMethodTable]],
+            module_defs: dict[str, list[_DiscoveredModuleDef]],
+            type_defs: dict[str, list[_DiscoveredTypeDef]],
+            init_bindings: list[_DiscoveredInitBinding],
+    ) -> dict[str, ExtractedModule]:
+        modules: dict[str, ExtractedModule] = {}
+        bindings_by_module: dict[tuple[str | None, str], list[_DiscoveredInitBinding]] = {}
+
+        for binding in init_bindings:
+            resolved = self._resolve_discovered_symbol(module_defs, binding.module_def_name, binding.source_file)
+            if resolved is None:
+                continue
+            module_def = resolved
+            bindings_by_module.setdefault((module_def.source_file, module_def.name), []).append(binding)
+
+        for discovered_list in module_defs.values():
+            for module_def in discovered_list:
+                binding_list = bindings_by_module.get((module_def.source_file, module_def.name), [])
+                init_func_name = binding_list[0].init_func_name if binding_list else None
+                module_name = module_def.module_name or self._module_name_from_init_func(init_func_name) or module_def.name
+                module = modules.get(module_name)
+                if module is None:
+                    module = ExtractedModule(name=module_name)
+                    modules[module_name] = module
+
+                module.module_def_name = module.module_def_name or module_def.name
+                module.init_func_name = module.init_func_name or init_func_name
+                module.lookup_names.update(self._build_module_lookup_names(module_name, init_func_name))
+                if module_def.source_file is not None:
+                    module.source_files.add(module_def.source_file)
+
+                method_table = self._resolve_discovered_symbol(
+                    method_tables,
+                    module_def.methods_table_name,
+                    module_def.source_file,
+                )
+                if method_table is not None:
+                    if method_table.source_file is not None:
+                        module.source_files.add(method_table.source_file)
+                    self._merge_discovered_functions(module.functions, method_table.functions)
+
+                for binding in binding_list:
+                    if binding.source_file is not None:
+                        module.source_files.add(binding.source_file)
+                    for registered in binding.registered_types:
+                        resolved_type = self._resolve_discovered_symbol(
+                            type_defs,
+                            registered.type_name,
+                            binding.source_file,
+                        )
+                        if resolved_type is None:
+                            continue
+                        class_name = (
+                            registered.exported_name
+                            or self._extract_type_leaf_name(resolved_type.tp_name)
+                            or resolved_type.name
+                        )
+                        extracted_class = module.classes.get(class_name)
+                        if extracted_class is None:
+                            extracted_class = ExtractedClass(name=class_name)
+                            module.classes[class_name] = extracted_class
+
+                        extracted_class.c_type_name = extracted_class.c_type_name or resolved_type.name
+                        extracted_class.tp_name = extracted_class.tp_name or resolved_type.tp_name
+                        extracted_class.source_file = extracted_class.source_file or resolved_type.source_file
+
+                        type_method_table = self._resolve_discovered_symbol(
+                            method_tables,
+                            resolved_type.methods_table_name,
+                            resolved_type.source_file,
+                        )
+                        if type_method_table is not None:
+                            if type_method_table.source_file is not None:
+                                module.source_files.add(type_method_table.source_file)
+                            self._merge_discovered_functions(
+                                extracted_class.methods,
+                                self._specialize_functions_for_class(
+                                    type_method_table.functions,
+                                    class_name=class_name,
+                                ),
+                            )
+
+        for module in modules.values():
+            module.functions = self._deduplicate_result(module.functions)
+            for extracted_class in module.classes.values():
+                extracted_class.methods = self._deduplicate_result(extracted_class.methods)
+
+        return modules
 
     def _collect_pymethod_defs(
             self,
@@ -1186,6 +1574,235 @@ class CSignatureExtractor:
             args[0].name = "self"
             args[0].type_name = "object"
         return ExtractedSignature(arguments=args, return_type_name=return_type_name)
+
+    def _specialize_functions_for_class(
+            self,
+            functions: list[ExtractedFunction],
+            *,
+            class_name: str,
+    ) -> list[ExtractedFunction]:
+        """将类方法候选的 `self` 标注专化为具体类名，避免统一降级成 `object`。"""
+        return [
+            ExtractedFunction(
+                py_name=function.py_name,
+                c_name=function.c_name,
+                method_flags=list(function.method_flags),
+                signatures=[
+                    self._specialize_signature_for_class(
+                        signature,
+                        meth_flags=function.method_flags,
+                        class_name=class_name,
+                    )
+                    for signature in function.signatures
+                ],
+                source_file=function.source_file,
+                method_table=function.method_table,
+            )
+            for function in functions
+        ]
+
+    def _specialize_signature_for_class(
+            self,
+            signature: ExtractedSignature,
+            *,
+            meth_flags: list[str],
+            class_name: str,
+    ) -> ExtractedSignature:
+        args = [
+            ExtractedArgument(
+                name=arg.name,
+                type_name=arg.type_name,
+                default_value=arg.default_value,
+                kind=arg.kind,
+            )
+            for arg in signature.arguments
+        ]
+        if "METH_STATIC" not in meth_flags and args and args[0].name == "self":
+            args[0].type_name = class_name
+        return ExtractedSignature(
+            arguments=args,
+            return_type_name=signature.return_type_name,
+        )
+
+    def _get_cursor_source_file(self, cursor: Cursor) -> str | None:
+        location = cursor.location
+        if location is None:
+            return None
+        file_obj = location.file
+        if file_obj is None:
+            return None
+        return str(file_obj)
+
+    def _get_token_spellings(self, node: Cursor) -> list[str]:
+        return [str(token.spelling) for token in node.get_tokens()]
+
+    def _extract_var_decl_initializer_entries(self, cursor: Cursor) -> list[list[str]] | None:
+        tokens = self._get_token_spellings(cursor)
+        if "{" not in tokens:
+            return None
+        start = tokens.index("{")
+        end = self._find_matching_token(tokens, start, "{", "}")
+        if end is None:
+            return None
+        inner = tokens[start + 1:end]
+        return self._split_top_level_tokens(inner, ",")
+
+    def _find_matching_token(
+            self,
+            tokens: list[str],
+            start: int,
+            opening: str,
+            closing: str,
+    ) -> int | None:
+        depth = 0
+        for index in range(start, len(tokens)):
+            token = tokens[index]
+            if token == opening:
+                depth += 1
+                continue
+            if token != closing:
+                continue
+            depth -= 1
+            if depth == 0:
+                return index
+        return None
+
+    def _split_top_level_tokens(self, tokens: list[str], delimiter: str) -> list[list[str]]:
+        groups: list[list[str]] = []
+        current: list[str] = []
+        brace_depth = 0
+        paren_depth = 0
+        bracket_depth = 0
+        for token in tokens:
+            if token == delimiter and brace_depth == 0 and paren_depth == 0 and bracket_depth == 0:
+                groups.append(current)
+                current = []
+                continue
+
+            current.append(token)
+            if token == "{":
+                brace_depth += 1
+            elif token == "}":
+                brace_depth = max(0, brace_depth - 1)
+            elif token == "(":
+                paren_depth += 1
+            elif token == ")":
+                paren_depth = max(0, paren_depth - 1)
+            elif token == "[":
+                bracket_depth += 1
+            elif token == "]":
+                bracket_depth = max(0, bracket_depth - 1)
+
+        groups.append(current)
+        return [group for group in groups if group]
+
+    def _extract_designated_field_name(self, tokens: list[str]) -> str | None:
+        if len(tokens) >= 3 and tokens[0] == "." and tokens[2] == "=":
+            return tokens[1]
+        if len(tokens) >= 2 and tokens[0].startswith(".") and tokens[1] == "=":
+            return tokens[0][1:]
+        return None
+
+    def _extract_designated_initializer_map(self, entries: list[list[str]]) -> dict[str, list[str]]:
+        result: dict[str, list[str]] = {}
+        for entry in entries:
+            field_name = self._extract_designated_field_name(entry)
+            if field_name is None:
+                continue
+            if entry[0] == ".":
+                result[field_name] = entry[3:]
+            else:
+                result[field_name] = entry[2:]
+        return result
+
+    def _extract_string_literal_from_tokens(self, tokens: list[str]) -> str | None:
+        for token in tokens:
+            if "\"" not in token:
+                continue
+            return self._strip_string_literal_quotes(token)
+        return None
+
+    def _extract_reference_name(
+            self,
+            tokens: list[str],
+            *,
+            require_address_of: bool = False,
+    ) -> str | None:
+        null_identifiers = {"NULL", "nullptr", "__null"}
+        if require_address_of:
+            for index in range(len(tokens) - 1, -1, -1):
+                if tokens[index] != "&":
+                    continue
+                for token in tokens[index + 1:]:
+                    if self._looks_like_identifier(token) and token not in null_identifiers:
+                        return token
+                return None
+            return None
+
+        if "&" in tokens:
+            resolved = self._extract_reference_name(tokens, require_address_of=True)
+            if resolved is not None:
+                return resolved
+
+        identifiers = [
+            token
+            for token in tokens
+            if self._looks_like_identifier(token) and token not in null_identifiers
+        ]
+        if not identifiers:
+            return None
+        if len(identifiers) == 1:
+            return identifiers[0]
+        return identifiers[-1]
+
+    def _extract_call_argument_groups(self, node: Cursor) -> list[list[str]]:
+        tokens = self._get_token_spellings(node)
+        if "(" not in tokens:
+            return []
+        start = tokens.index("(")
+        end = self._find_matching_token(tokens, start, "(", ")")
+        if end is None:
+            return []
+        inner = tokens[start + 1:end]
+        return self._split_top_level_tokens(inner, ",")
+
+    def _get_call_name(self, node: Cursor) -> str | None:
+        if node.spelling:
+            return str(node.spelling)
+        tokens = self._get_token_spellings(node)
+        for token in tokens:
+            if self._looks_like_identifier(token):
+                return token
+        return None
+
+    def _build_module_lookup_names(self, module_name: str, init_func_name: str | None) -> set[str]:
+        lookup_names = {module_name}
+        leaf_name = module_name.rsplit(".", 1)[-1]
+        lookup_names.add(leaf_name)
+        init_leaf = self._module_name_from_init_func(init_func_name)
+        if init_leaf is not None:
+            lookup_names.add(init_leaf)
+        return lookup_names
+
+    def _module_name_from_init_func(self, init_func_name: str | None) -> str | None:
+        if not init_func_name:
+            return None
+        if not init_func_name.startswith("PyInit_"):
+            return None
+        return init_func_name[len("PyInit_"):]
+
+    def _extract_type_leaf_name(self, tp_name: str | None) -> str | None:
+        if not tp_name:
+            return None
+        return tp_name.rsplit(".", 1)[-1]
+
+    def _merge_discovered_functions(
+            self,
+            target: dict[str, list[ExtractedFunction]],
+            functions: list[ExtractedFunction],
+    ) -> None:
+        for function in functions:
+            target.setdefault(function.py_name, []).append(function)
 
     def _get_init_value(self, name: str, func_cursor: Cursor) -> str | None:
         """从局部变量定义中提取默认值字面表达式。"""

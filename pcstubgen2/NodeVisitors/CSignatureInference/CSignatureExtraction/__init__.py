@@ -6,7 +6,9 @@ from .CSignatureExtractor import CSignatureExtractor
 from .Models import (
     ExtractedArgument,
     ExtractedArgumentKind,
+    ExtractedClass,
     ExtractedFunction,
+    ExtractedModule,
     ExtractedSignature,
 )
 
@@ -14,7 +16,9 @@ __all__ = [
     "CSignatureExtractor",
     "ExtractedArgument",
     "ExtractedArgumentKind",
+    "ExtractedClass",
     "ExtractedFunction",
+    "ExtractedModule",
     "ExtractedSignature",
 ]
 

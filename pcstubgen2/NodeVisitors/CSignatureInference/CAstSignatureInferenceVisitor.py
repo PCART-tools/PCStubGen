@@ -7,7 +7,12 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from .CSignatureExtraction import CSignatureExtractor, ExtractedArgument, ExtractedFunction
+from .CSignatureExtraction import (
+    CSignatureExtractor,
+    ExtractedArgument,
+    ExtractedFunction,
+    ExtractedModule,
+)
 from ..NodeVisitor import NodeVisitor
 from ...ErrorCollector import ErrorCollector
 from ...Errors import InvalidExpressionError
@@ -77,17 +82,18 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             clang_cpp_std=clang_cpp_std,
         )
         self._stats = _InferenceStats()
-        self._signatures: dict[str, list[ExtractedFunction]] | None = None
+        self._signature_modules: dict[str, ExtractedModule] | None = None
         self._signature_load_status: SignatureLoadStatus | None = None
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
 
         if node.module_type is IRModuleType.EXTENSION:
-            signatures, load_status = self._get_signatures()
+            modules, load_status = self._get_signature_modules()
+            extracted_module = self._match_extracted_module(node, modules)
             node.functions = self._rewrite_module_functions(
                 node.functions,
-                signatures,
+                extracted_module,
                 load_status=load_status,
             )
 
@@ -97,10 +103,12 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         """在模块启用时重写类方法签名。"""
 
         if module.module_type is IRModuleType.EXTENSION:
-            signatures, load_status = self._get_signatures()
+            modules, load_status = self._get_signature_modules()
+            extracted_module = self._match_extracted_module(module, modules)
             node.methods = self._rewrite_class_methods(
                 node.methods,
-                signatures,
+                extracted_module,
+                class_name=node.name,
                 load_status=load_status,
             )
 
@@ -130,7 +138,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     def _rewrite_module_functions(
         self,
         funcs: list[IRFunction],
-        signatures: dict[str, list[ExtractedFunction]],
+        extracted_module: ExtractedModule | None,
         *,
         load_status: SignatureLoadStatus,
     ) -> list[IRFunction]:
@@ -142,6 +150,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             )
             return funcs
 
+        signatures = extracted_module.functions if extracted_module is not None else {}
         new_funcs: list[IRFunction] = []
         for func in funcs:
             rewritten, outcome = self._rewrite_function_with_outcome(
@@ -156,8 +165,9 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
     def _rewrite_class_methods(
         self,
         methods: list[IRMethod],
-        signatures: dict[str, list[ExtractedFunction]],
+        extracted_module: ExtractedModule | None,
         *,
+        class_name: str,
         load_status: SignatureLoadStatus,
     ) -> list[IRMethod]:
         """批量重写类方法，并保留原有 decorator 封装。"""
@@ -167,6 +177,12 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
                 failure_key="empty_extract",
             )
             return methods
+
+        signatures: dict[str, list[ExtractedFunction]] = {}
+        if extracted_module is not None:
+            extracted_class = extracted_module.classes.get(class_name)
+            if extracted_class is not None:
+                signatures = extracted_class.methods
 
         new_methods: list[IRMethod] = []
         for method in methods:
@@ -388,18 +404,47 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
         return max(candidates, key=candidate_score)
 
-    def _get_signatures(self) -> tuple[dict[str, list[ExtractedFunction]], SignatureLoadStatus]:
+    def _match_extracted_module(
+        self,
+        node: IRModule,
+        modules: dict[str, ExtractedModule],
+    ) -> ExtractedModule | None:
+        if not modules:
+            return None
+
+        full_name = str(node.full_name)
+        exact_matches = [
+            module
+            for module in modules.values()
+            if full_name in module.lookup_names
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0]
+        if len(exact_matches) > 1:
+            return None
+
+        leaf_name = node.full_name.name
+        leaf_matches = [
+            module
+            for module in modules.values()
+            if leaf_name in module.lookup_names
+        ]
+        if len(leaf_matches) == 1:
+            return leaf_matches[0]
+        return None
+
+    def _get_signature_modules(self) -> tuple[dict[str, ExtractedModule], SignatureLoadStatus]:
         """
         按需提取 C AST 结果；缓存由 extraction engine 负责。
 
         提取失败时直接向上传播异常，由调用方决定是否中断主流程。
         """
-        if self._signatures is not None and self._signature_load_status is not None:
-            return self._signatures, self._signature_load_status
+        if self._signature_modules is not None and self._signature_load_status is not None:
+            return self._signature_modules, self._signature_load_status
 
-        self._signatures = self._extractor.extract()
-        self._signature_load_status = "nonempty" if self._signatures else "empty"
-        return self._signatures, self._signature_load_status
+        self._signature_modules = self._extractor.extract_modules()
+        self._signature_load_status = "nonempty" if self._signature_modules else "empty"
+        return self._signature_modules, self._signature_load_status
 
     def _record_outcome(self, *, func: IRFunction, outcome: RewriteOutcome | None) -> None:
         if not func.is_generic_signature() or outcome is None:

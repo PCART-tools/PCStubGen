@@ -21,7 +21,9 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignature
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
+    ExtractedClass,
     ExtractedFunction,
+    ExtractedModule,
     ExtractedSignature,
 )
 from pcstubgen2.ErrorCollector import ErrorCollector
@@ -54,24 +56,69 @@ def _generic_signature() -> list[IRArgument]:
     ]
 
 
-class _FakeExtractor:
-    def __init__(self, data: dict[str, list[ExtractedFunction]]) -> None:
-        self.data = data
-        self.called = 0
-        self._cached_result: dict[str, list[ExtractedFunction]] | None = None
+def _module_fixture(
+    *,
+    name: str = "pkg.mod",
+    functions: dict[str, list[ExtractedFunction]] | None = None,
+    classes: dict[str, ExtractedClass] | None = None,
+    lookup_names: set[str] | None = None,
+) -> dict[str, ExtractedModule]:
+    module_lookup_names = set(lookup_names or ())
+    module_lookup_names.add(name)
+    module_lookup_names.add(name.rsplit(".", 1)[-1])
+    return {
+        name: ExtractedModule(
+            name=name,
+            lookup_names=module_lookup_names,
+            functions=functions or {},
+            classes=classes or {},
+        )
+    }
 
-    def extract(self) -> dict[str, list[ExtractedFunction]]:
-        if self._cached_result is None:
-            self.called += 1
-            self._cached_result = self.data
-        return self._cached_result
+
+def _class_fixture(
+    name: str,
+    *,
+    methods: dict[str, list[ExtractedFunction]] | None = None,
+    c_type_name: str | None = None,
+    tp_name: str | None = None,
+    source_file: str | None = None,
+) -> ExtractedClass:
+    return ExtractedClass(
+        name=name,
+        c_type_name=c_type_name,
+        tp_name=tp_name,
+        source_file=source_file,
+        methods=methods or {},
+    )
+
+
+class _FakeExtractor:
+    def __init__(
+        self,
+        modules: dict[str, ExtractedModule] | None = None,
+    ) -> None:
+        self.modules = modules or {}
+        self.called = 0
+        self._cached_modules: dict[str, ExtractedModule] | None = None
+
+    def _ensure_loaded(self) -> None:
+        if self._cached_modules is not None:
+            return
+
+        self.called += 1
+        self._cached_modules = self.modules
+
+    def extract_modules(self) -> dict[str, ExtractedModule]:
+        self._ensure_loaded()
+        return self._cached_modules
 
 
 def _patch_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
-    data: dict[str, list[ExtractedFunction]],
+    modules: dict[str, ExtractedModule] | None = None,
 ) -> _FakeExtractor:
-    extractor = _FakeExtractor(data)
+    extractor = _FakeExtractor(modules=modules)
 
     class _PatchedExtractor:
         def __init__(
@@ -85,8 +132,8 @@ def _patch_c_signature_extractor(
         ) -> None:
             _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
 
-        def extract(self) -> dict[str, list[ExtractedFunction]]:
-            return extractor.extract()
+        def extract_modules(self) -> dict[str, ExtractedModule]:
+            return extractor.extract_modules()
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
@@ -110,7 +157,7 @@ def _patch_raising_c_signature_extractor(
         ) -> None:
             _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
 
-        def extract(self) -> dict[str, list[ExtractedFunction]]:
+        def extract_modules(self) -> dict[str, ExtractedModule]:
             raise error
 
     import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
@@ -255,25 +302,27 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="x", type_name="int"),
-                                ExtractedArgument(name="flag", type_name="bool", default_value="False"),
-                            ],
-                            return_type_name="int",
-                        )
-                    ],
-                )
-            ]
-        }
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        method_flags=["METH_VARARGS"],
+                        signatures=[
+                            ExtractedSignature(
+                                arguments=[
+                                    ExtractedArgument(name="self", type_name="object"),
+                                    ExtractedArgument(name="x", type_name="int"),
+                                    ExtractedArgument(name="flag", type_name="bool", default_value="False"),
+                                ],
+                                return_type_name="int",
+                            )
+                        ],
+                    )
+                ]
+            }
+        ),
     )
 
     visitor = CAstSignatureInferenceVisitor(
@@ -305,18 +354,20 @@ def test_c_ast_visitor_logs_successful_generic_rewrite(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[
-                        ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")]),
-                    ],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        method_flags=["METH_VARARGS"],
+                        signatures=[
+                            ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")]),
+                        ],
+                    )
+                ]
+            }
+        ),
     )
 
     visitor = CAstSignatureInferenceVisitor(
@@ -405,16 +456,18 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        method_flags=["METH_VARARGS"],
+                        signatures=[],
+                    )
+                ]
+            }
+        ),
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
@@ -473,23 +526,33 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
 ) -> None:
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            ],
-            "bar": [
-                ExtractedFunction(
-                    py_name="bar",
-                    c_name="c_bar",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
-                )
-            ],
+        modules={
+            **_module_fixture(
+                name="pkg.first",
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="c_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                        )
+                    ]
+                },
+            ),
+            **_module_fixture(
+                name="pkg.second",
+                functions={
+                    "bar": [
+                        ExtractedFunction(
+                            py_name="bar",
+                            c_name="c_bar",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
+                        )
+                    ]
+                },
+            ),
         },
     )
     visitor = CAstSignatureInferenceVisitor(
@@ -903,6 +966,274 @@ def test_c_signature_engine_maps_all_builtin_severity_names(tmp_path: Path) -> N
     assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Fatal) == "FATAL"
 
 
+def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules={
+            "pkg.first": ExtractedModule(
+                name="pkg.first",
+                lookup_names={"pkg.first", "first"},
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="first_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                        )
+                    ]
+                },
+            ),
+            "pkg.second": ExtractedModule(
+                name="pkg.second",
+                lookup_names={"pkg.second", "second"},
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="second_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="float")])],
+                        )
+                    ]
+                },
+            ),
+        },
+    )
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        source_root=tmp_path,
+    )
+    first_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.first"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+    second_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.second"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+
+    visitor.visit_module(first_module)
+    visitor.visit_module(second_module)
+
+    assert [arg.name for arg in first_module.functions[0].args] == ["x"]
+    assert str(first_module.functions[0].args[0].annotation) == "int"
+    assert [arg.name for arg in second_module.functions[0].args] == ["value"]
+    assert str(second_module.functions[0].args[0].annotation) == "float"
+
+
+def test_c_ast_visitor_keeps_module_function_and_class_method_candidates_isolated(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules={
+            "pkg.mod": ExtractedModule(
+                name="pkg.mod",
+                lookup_names={"pkg.mod", "mod"},
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="module_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="count", type_name="int")])],
+                        )
+                    ]
+                },
+                classes={
+                    "Builder": ExtractedClass(
+                        name="Builder",
+                        methods={
+                            "foo": [
+                                ExtractedFunction(
+                                    py_name="foo",
+                                    c_name="builder_foo",
+                                    method_flags=["METH_VARARGS"],
+                                    signatures=[
+                                        ExtractedSignature(
+                                            arguments=[
+                                                ExtractedArgument(name="self", type_name="Builder"),
+                                                ExtractedArgument(name="label", type_name="str"),
+                                            ]
+                                        )
+                                    ],
+                                )
+                            ]
+                        },
+                    )
+                },
+            )
+        },
+    )
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+        classes=[
+            IRClass(
+                name="Builder",
+                methods=[IRMethod(function=IRFunction(name="foo", args=_generic_signature()), decorator=None)],
+            )
+        ],
+    )
+
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        source_root=tmp_path,
+    )
+    visitor.visit_module(module)
+
+    assert [arg.name for arg in module.functions[0].args] == ["count"]
+    assert str(module.functions[0].args[0].annotation) == "int"
+    method_args = module.classes[0].methods[0].function.args
+    assert [arg.name for arg in method_args] == ["self", "label"]
+    assert str(method_args[0].annotation) == "Builder"
+    assert str(method_args[1].annotation) == "str"
+
+
+def test_c_ast_visitor_keeps_same_named_methods_isolated_per_class(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules={
+            "pkg.mod": ExtractedModule(
+                name="pkg.mod",
+                lookup_names={"pkg.mod", "mod"},
+                classes={
+                    "Alpha": ExtractedClass(
+                        name="Alpha",
+                        methods={
+                            "build": [
+                                ExtractedFunction(
+                                    py_name="build",
+                                    c_name="alpha_build",
+                                    method_flags=["METH_VARARGS"],
+                                    signatures=[
+                                        ExtractedSignature(
+                                            arguments=[
+                                                ExtractedArgument(name="self", type_name="Alpha"),
+                                                ExtractedArgument(name="count", type_name="int"),
+                                            ]
+                                        )
+                                    ],
+                                )
+                            ]
+                        },
+                    ),
+                    "Beta": ExtractedClass(
+                        name="Beta",
+                        methods={
+                            "build": [
+                                ExtractedFunction(
+                                    py_name="build",
+                                    c_name="beta_build",
+                                    method_flags=["METH_VARARGS"],
+                                    signatures=[
+                                        ExtractedSignature(
+                                            arguments=[
+                                                ExtractedArgument(name="self", type_name="Beta"),
+                                                ExtractedArgument(name="name", type_name="str"),
+                                            ]
+                                        )
+                                    ],
+                                )
+                            ]
+                        },
+                    ),
+                },
+            )
+        },
+    )
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        classes=[
+            IRClass(name="Alpha", methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)]),
+            IRClass(name="Beta", methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)]),
+        ],
+    )
+
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        source_root=tmp_path,
+    )
+    visitor.visit_module(module)
+
+    alpha_args = module.classes[0].methods[0].function.args
+    beta_args = module.classes[1].methods[0].function.args
+    assert [arg.name for arg in alpha_args] == ["self", "count"]
+    assert str(alpha_args[1].annotation) == "int"
+    assert [arg.name for arg in beta_args] == ["self", "name"]
+    assert str(beta_args[1].annotation) == "str"
+
+
+def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules={
+            "one": ExtractedModule(
+                name="one",
+                lookup_names={"mod"},
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="one_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                        )
+                    ]
+                },
+            ),
+            "two": ExtractedModule(
+                name="two",
+                lookup_names={"mod"},
+                functions={
+                    "foo": [
+                        ExtractedFunction(
+                            py_name="foo",
+                            c_name="two_foo",
+                            method_flags=["METH_VARARGS"],
+                            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="float")])],
+                        )
+                    ]
+                },
+            ),
+        },
+    )
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[IRFunction(name="foo", args=_generic_signature())],
+    )
+    visitor = CAstSignatureInferenceVisitor(
+        error_collector=ErrorCollector(),
+        source_root=tmp_path,
+    )
+
+    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+        visitor.visit_module(module)
+
+    assert module.functions[0].is_generic_signature()
+    assert (
+        "Failed to rewrite generic signature for foo (is_method=False): no C signature candidates found"
+        in caplog.text
+    )
+
+
 def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -918,21 +1249,23 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[ExtractedArgument(name="x", type_name="int")],
-                            return_type_name="typing.Optional[int]",
-                        )
-                    ],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        method_flags=["METH_VARARGS"],
+                        signatures=[
+                            ExtractedSignature(
+                                arguments=[ExtractedArgument(name="x", type_name="int")],
+                                return_type_name="typing.Optional[int]",
+                            )
+                        ],
+                    )
+                ]
+            }
+        ),
     )
 
     visitor = CAstSignatureInferenceVisitor(
@@ -956,30 +1289,37 @@ def test_c_ast_visitor_generates_overloads_for_methods(monkeypatch: pytest.Monke
 
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "build": [
-                ExtractedFunction(
-                    py_name="build",
-                    c_name="c_build",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="count", type_name="int"),
-                            ]
-                        ),
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="count", type_name="int"),
-                                ExtractedArgument(name="scale", type_name="float", default_value="1.0"),
-                            ]
-                        ),
-                    ],
+        modules=_module_fixture(
+            classes={
+                "C": _class_fixture(
+                    "C",
+                    methods={
+                        "build": [
+                            ExtractedFunction(
+                                py_name="build",
+                                c_name="c_build",
+                                method_flags=["METH_VARARGS"],
+                                signatures=[
+                                    ExtractedSignature(
+                                        arguments=[
+                                            ExtractedArgument(name="self", type_name="C"),
+                                            ExtractedArgument(name="count", type_name="int"),
+                                        ]
+                                    ),
+                                    ExtractedSignature(
+                                        arguments=[
+                                            ExtractedArgument(name="self", type_name="C"),
+                                            ExtractedArgument(name="count", type_name="int"),
+                                            ExtractedArgument(name="scale", type_name="float", default_value="1.0"),
+                                        ]
+                                    ),
+                                ],
+                            )
+                        ]
+                    },
                 )
-            ]
-        },
+            }
+        ),
     )
 
     visitor = CAstSignatureInferenceVisitor(
@@ -991,7 +1331,7 @@ def test_c_ast_visitor_generates_overloads_for_methods(monkeypatch: pytest.Monke
     methods = module.classes[0].methods
     assert len(methods) == 2
     assert [m.function.args[0].name for m in methods] == ["self", "self"]
-    assert [str(m.function.args[0].annotation) for m in methods] == ["object", "object"]
+    assert [str(m.function.args[0].annotation) for m in methods] == ["C", "C"]
     assert [str(m.function.args[1].annotation) for m in methods] == ["int", "int"]
     assert methods[1].function.args[2].annotation is not None
     assert str(methods[1].function.args[2].annotation) == "float"
@@ -1008,15 +1348,17 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
     )
     extractor = _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    )
+                ]
+            }
+        ),
     )
     visitor = CAstSignatureInferenceVisitor(
         error_collector=ErrorCollector(),
@@ -1286,16 +1628,19 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    method_flags=["METH_VARARGS"],
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            name="pkg",
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        method_flags=["METH_VARARGS"],
+                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    )
+                ]
+            }
+        ),
     )
 
     options = StubGenerationOptions(
@@ -1332,7 +1677,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
         ],
     )
     monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
-    _patch_c_signature_extractor(monkeypatch, {})
+    _patch_c_signature_extractor(monkeypatch, modules={})
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
@@ -1414,15 +1759,17 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     )
     extractor = _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "foo": [
-                ExtractedFunction(
-                    py_name="foo",
-                    c_name="c_foo",
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            ]
-        },
+        modules=_module_fixture(
+            functions={
+                "foo": [
+                    ExtractedFunction(
+                        py_name="foo",
+                        c_name="c_foo",
+                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    )
+                ]
+            }
+        ),
     )
     pipeline = Pipeline(
         [
@@ -1460,7 +1807,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
             )
         ],
     )
-    extractor = _patch_c_signature_extractor(monkeypatch, {})
+    extractor = _patch_c_signature_extractor(monkeypatch, modules={})
 
     with caplog.at_level(
         logging.WARNING,
@@ -1495,23 +1842,30 @@ def test_infer_method_modifier_after_c_ast_visitor(monkeypatch: pytest.MonkeyPat
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "make": [
-                ExtractedFunction(
-                    py_name="make",
-                    c_name="c_make",
-                    method_flags=["METH_CLASS"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="cls", type_name="type"),
-                                ExtractedArgument(name="n", type_name="int"),
-                            ]
-                        )
-                    ],
+        modules=_module_fixture(
+            classes={
+                "Builder": _class_fixture(
+                    "Builder",
+                    methods={
+                        "make": [
+                            ExtractedFunction(
+                                py_name="make",
+                                c_name="c_make",
+                                method_flags=["METH_CLASS"],
+                                signatures=[
+                                    ExtractedSignature(
+                                        arguments=[
+                                            ExtractedArgument(name="cls", type_name="type"),
+                                            ExtractedArgument(name="n", type_name="int"),
+                                        ]
+                                    )
+                                ],
+                            )
+                        ]
+                    },
                 )
-            ]
-        },
+            }
+        ),
     )
 
     Pipeline(
@@ -1546,6 +1900,18 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
                 "    int ml_flags;",
                 "    const char* ml_doc;",
                 "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
                 "static PyObject* add_impl(PyObject* self, PyObject* args) {",
@@ -1560,6 +1926,14 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
                 "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
                 "    {0, 0, 0, 0}",
                 "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"mini_ext\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
             ]
         ),
         encoding="utf-8",
@@ -1569,11 +1943,10 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    extracted = engine.extract()
+    extracted = engine.extract_modules()
 
-    assert "add" in extracted
-    add_candidates = extracted["add"]
-    assert add_candidates
+    assert "mini_ext" in extracted
+    add_candidates = extracted["mini_ext"].functions["add"]
     first = add_candidates[0]
     assert first.py_name == "add"
     assert first.signatures
@@ -1599,6 +1972,18 @@ def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(t
                 "    int ml_flags;",
                 "    const char* ml_doc;",
                 "};",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
                 "static PyObject* add_impl(PyObject* self, PyObject* args) {",
@@ -1613,6 +1998,14 @@ def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(t
                 "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
                 "    {0, 0, 0, 0}",
                 "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"mini_struct_typedef_ext\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
             ]
         ),
         encoding="utf-8",
@@ -1622,16 +2015,244 @@ def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(t
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    extracted = engine.extract()
+    extracted = engine.extract_modules()
 
-    assert "add" in extracted
-    add_candidates = extracted["add"]
-    assert add_candidates
+    assert "mini_struct_typedef_ext" in extracted
+    add_candidates = extracted["mini_struct_typedef_ext"].functions["add"]
     first = add_candidates[0]
     assert first.py_name == "add"
     assert first.signatures
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
+
+
+def test_c_signature_extraction_engine_extract_modules_isolates_same_named_functions_per_module(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    first_source = tmp_path / "first.c"
+    second_source = tmp_path / "second.c"
+    for source, module_name, c_name in [
+        (first_source, "first", "first_foo_impl"),
+        (second_source, "second", "second_foo_impl"),
+    ]:
+        source.write_text(
+            "\n".join(
+                [
+                    "typedef struct _object PyObject;",
+                    "typedef struct PyMethodDef {",
+                    "    const char* ml_name;",
+                    "    void* ml_meth;",
+                    "    int ml_flags;",
+                    "    const char* ml_doc;",
+                    "} PyMethodDef;",
+                    "typedef struct PyModuleDef {",
+                    "    int m_base;",
+                    "    const char* m_name;",
+                    "    const char* m_doc;",
+                    "    int m_size;",
+                    "    PyMethodDef* m_methods;",
+                    "    void* m_slots;",
+                    "    void* m_traverse;",
+                    "    void* m_clear;",
+                    "    void* m_free;",
+                    "} PyModuleDef;",
+                    "#define PyModuleDef_HEAD_INIT 0",
+                    "#define METH_VARARGS 1",
+                    "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                    f"static PyObject* {c_name}(PyObject* self, PyObject* args) {{",
+                    "    int value = 0;",
+                    "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                    "        return (PyObject*)0;",
+                    "    }",
+                    "    return (PyObject*)0;",
+                    "}",
+                    "static PyMethodDef Methods[] = {",
+                    f"    {{\"foo\", {c_name}, METH_VARARGS, \"doc\"}},",
+                    "    {0, 0, 0, 0}",
+                    "};",
+                    "static PyModuleDef moduledef = {",
+                    "    PyModuleDef_HEAD_INIT,",
+                    f"    \"{module_name}\",",
+                    "    0,",
+                    "    -1,",
+                    "    Methods,",
+                    "    0, 0, 0, 0",
+                    "};",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert set(extracted) == {"first", "second"}
+    assert extracted["first"].functions["foo"][0].c_name == "first_foo_impl"
+    assert extracted["second"].functions["foo"][0].c_name == "second_foo_impl"
+
+
+def test_c_signature_extraction_engine_extract_modules_separates_module_and_class_methods(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "module_with_type.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "typedef struct PyTypeObject {",
+                "    const char* tp_name;",
+                "    PyMethodDef* tp_methods;",
+                "} PyTypeObject;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyObject* PyModule_Create(PyModuleDef* def);",
+                "int PyModule_AddObject(PyObject* module, const char* name, PyObject* value);",
+                "static PyObject* module_foo(PyObject* self, PyObject* args) {",
+                "    int count = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &count)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyObject* point_foo(PyObject* self, PyObject* args) {",
+                "    const char* label = 0;",
+                "    if (!PyArg_ParseTuple(args, \"s\", &label)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef ModuleMethods[] = {",
+                "    {\"foo\", module_foo, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyMethodDef PointMethods[] = {",
+                "    {\"foo\", point_foo, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyTypeObject PointType = {",
+                "    .tp_name = \"pkg.mod.Point\",",
+                "    .tp_methods = PointMethods,",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"pkg.mod\",",
+                "    0,",
+                "    -1,",
+                "    ModuleMethods,",
+                "    0, 0, 0, 0",
+                "};",
+                "PyObject* PyInit_mod(void) {",
+                "    PyObject* m = PyModule_Create(&moduledef);",
+                "    PyModule_AddObject(m, \"Point\", (PyObject*)&PointType);",
+                "    return m;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    module = extracted["pkg.mod"]
+    assert module.functions["foo"][0].c_name == "module_foo"
+    assert module.classes["Point"].methods["foo"][0].c_name == "point_foo"
+    assert module.classes["Point"].methods["foo"][0].signatures[0].arguments[0].type_name == "Point"
+
+
+def test_c_signature_extraction_engine_extract_modules_supports_designated_moduledef_initializer(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "designated_module.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    .m_name = \"designated.mod\",",
+                "    .m_doc = 0,",
+                "    .m_size = -1,",
+                "    .m_methods = Methods,",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert "designated.mod" in extracted
+    assert extracted["designated.mod"].functions["foo"][0].c_name == "foo_impl"
 
 
 def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
@@ -1734,7 +2355,7 @@ def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_
         source_root=tmp_path,
         clang_cpp_std="c++17",
     )
-    extracted = engine.extract()
+    extracted = engine.extract_modules()
 
     assert extracted == {}
 
@@ -1755,6 +2376,18 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
                 "    int ml_flags;",
                 "    const char* ml_doc;",
                 "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
                 "PyObject* Py_BuildValue(const char* fmt, ...);",
@@ -1769,6 +2402,14 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
                 "    {\"make\", make_impl, METH_VARARGS, \"doc\"},",
                 "    {0, 0, 0, 0}",
                 "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"mini_buildvalue_ext\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
             ]
         ),
         encoding="utf-8",
@@ -1778,10 +2419,10 @@ def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    extracted = engine.extract()
+    extracted = engine.extract_modules()
 
-    assert "make" in extracted
-    first = extracted["make"][0]
+    assert "mini_buildvalue_ext" in extracted
+    first = extracted["mini_buildvalue_ext"].functions["make"][0]
     assert first.signatures
     assert first.signatures[0].return_type_name == "int"
 
@@ -1802,6 +2443,18 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
                 "    int ml_flags;",
                 "    const char* ml_doc;",
                 "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
                 "PyObject* PyLong_FromLong(long v);",
@@ -1820,6 +2473,14 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
                 "    {\"pick\", pick_impl, METH_VARARGS, \"doc\"},",
                 "    {0, 0, 0, 0}",
                 "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"mini_conflict_return_ext\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
             ]
         ),
         encoding="utf-8",
@@ -1829,10 +2490,10 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    extracted = engine.extract()
+    extracted = engine.extract_modules()
 
-    assert "pick" in extracted
-    first = extracted["pick"][0]
+    assert "mini_conflict_return_ext" in extracted
+    first = extracted["mini_conflict_return_ext"].functions["pick"][0]
     assert first.signatures
     assert first.signatures[0].return_type_name == "object"
 
@@ -1840,7 +2501,7 @@ def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp
 def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {
         "init_calls": 0,
-        "extract_calls": 0,
+        "extract_modules_calls": 0,
         "clang_include": None,
     }
 
@@ -1860,11 +2521,11 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
             captured["clang_include_directory"] = list(clang_include_directory)
             captured["clang_c_std"] = clang_c_std
             captured["clang_cpp_std"] = clang_cpp_std
-            self._cached_result: dict[str, list[ExtractedFunction]] | None = None
+            self._cached_result: dict[str, ExtractedModule] | None = None
 
-        def extract(self) -> dict[str, list[ExtractedFunction]]:
+        def extract_modules(self) -> dict[str, ExtractedModule]:
             if self._cached_result is None:
-                captured["extract_calls"] = int(captured["extract_calls"]) + 1
+                captured["extract_modules_calls"] = int(captured["extract_modules_calls"]) + 1
                 self._cached_result = {}
             return self._cached_result
 
@@ -1882,7 +2543,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     )
 
     assert captured["init_calls"] == 1
-    assert captured["extract_calls"] == 0
+    assert captured["extract_modules_calls"] == 0
     assert captured["source_root"] == tmp_path
     assert captured["clang_include"] == ["Python.h"]
     assert captured["clang_include_directory"] == ["C:/MyInclude"]
@@ -1896,7 +2557,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor.visit_module(module)
     visitor.visit_module(module)
 
-    assert captured["extract_calls"] == 1
+    assert captured["extract_modules_calls"] == 1
 
 
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
@@ -1967,7 +2628,7 @@ def test_c_signature_engine_ensure_clang_ready_does_not_mutate_parse_args(tmp_pa
     assert engine._clang_include_directory == ["C:/MyInclude"]
 
 
-def test_c_signature_engine_extract_keeps_external_include_options_and_injects_python_include_dirs(
+def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(
     tmp_path: Path,
 ) -> None:
     engine = CSignatureExtractor(
@@ -1978,7 +2639,7 @@ def test_c_signature_engine_extract_keeps_external_include_options_and_injects_p
     engine._ensure_clang_ready = lambda: True
     engine._find_candidate_files = lambda: []
 
-    assert engine.extract() == {}
+    assert engine.extract_modules() == {}
     expected_include_dirs = ["C:/MyInclude"]
     for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
         if not include_dir:
@@ -2088,23 +2749,30 @@ def test_c_ast_visitor_drops_leading_self_for_static_method(monkeypatch: pytest.
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "build": [
-                ExtractedFunction(
-                    py_name="build",
-                    c_name="c_build",
-                    method_flags=["METH_STATIC"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="count", type_name="int"),
-                            ]
-                        )
-                    ],
+        modules=_module_fixture(
+            classes={
+                "Builder": _class_fixture(
+                    "Builder",
+                    methods={
+                        "build": [
+                            ExtractedFunction(
+                                py_name="build",
+                                c_name="c_build",
+                                method_flags=["METH_STATIC"],
+                                signatures=[
+                                    ExtractedSignature(
+                                        arguments=[
+                                            ExtractedArgument(name="self", type_name="object"),
+                                            ExtractedArgument(name="count", type_name="int"),
+                                        ]
+                                    )
+                                ],
+                            )
+                        ]
+                    },
                 )
-            ]
-        },
+            }
+        ),
     )
 
     Pipeline(
@@ -2150,23 +2818,30 @@ def test_c_ast_visitor_visit_class_uses_explicit_module_context_for_nested_class
     )
     extractor = _patch_c_signature_extractor(
         monkeypatch,
-        {
-            "build": [
-                ExtractedFunction(
-                    py_name="build",
-                    c_name="c_build",
-                    method_flags=["METH_STATIC"],
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="count", type_name="int"),
-                            ]
-                        )
-                    ],
+        modules=_module_fixture(
+            classes={
+                "Inner": _class_fixture(
+                    "Inner",
+                    methods={
+                        "build": [
+                            ExtractedFunction(
+                                py_name="build",
+                                c_name="c_build",
+                                method_flags=["METH_STATIC"],
+                                signatures=[
+                                    ExtractedSignature(
+                                        arguments=[
+                                            ExtractedArgument(name="self", type_name="object"),
+                                            ExtractedArgument(name="count", type_name="int"),
+                                        ]
+                                    )
+                                ],
+                            )
+                        ]
+                    },
                 )
-            ]
-        },
+            }
+        ),
     )
 
     visitor = CAstSignatureInferenceVisitor(
@@ -2215,12 +2890,16 @@ class _FakeNode:
         self.spelling = spelling
         self.location = location if location is not None else _FakeCursorLocation()
         self.referenced = referenced
+        self.type = None
 
     def get_tokens(self) -> list[_FakeToken]:
         return self._tokens
 
     def get_children(self) -> Iterable[object]:
         return iter(self._children)
+
+    def is_definition(self) -> bool:
+        return False
 
 
 def _int_literal(value: str = "0") -> _FakeNode:
