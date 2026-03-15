@@ -2837,8 +2837,8 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
     assert engine._ensure_clang_ready() is True
     assert engine._clang_include_directory is not None
     assert "-std=c11" not in engine._clang_include_directory
-    assert engine._build_std_value_for_file(tmp_path / "module.c") == "c11"
-    assert engine._build_std_value_for_file(tmp_path / "module.cxx") == "c++17"
+    assert engine._get_std_value_for_file(tmp_path / "module.c") == "c11"
+    assert engine._get_std_value_for_file(tmp_path / "module.cxx") == "c++17"
 
 
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
@@ -2849,9 +2849,9 @@ def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path:
         clang_cpp_std="--std=c++20",
     )
 
-    assert engine._build_std_value_for_file(tmp_path / "module.c") == "c99"
-    assert engine._build_std_value_for_file(tmp_path / "module.cxx") == "c++20"
-    assert engine._build_std_value_for_file(tmp_path / "module.hpp") == "c99"
+    assert engine._get_std_value_for_file(tmp_path / "module.c") == "-std=c99"
+    assert engine._get_std_value_for_file(tmp_path / "module.cxx") == "--std=c++20"
+    assert engine._get_std_value_for_file(tmp_path / "module.hpp") == "-std=c99"
 
 
 def test_c_signature_engine_configures_packaged_libclang_when_available(

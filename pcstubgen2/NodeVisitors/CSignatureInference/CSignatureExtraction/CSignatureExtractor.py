@@ -237,6 +237,9 @@ def _is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
             return True
     return False
 
+def check(condition: bool, message: str="check failed!") -> None:
+    if not condition:
+        raise RuntimeError(message)
 
 class CSignatureExtractor:
     """
@@ -269,10 +272,7 @@ class CSignatureExtractor:
         if self._cache_modules is not None:
             return self._cache_modules
 
-        if not self.source_root.exists():
-            logger.warning("source_root does not exist: %s", self.source_root)
-            self._cache_modules = {}
-            return self._cache_modules
+        check(self.source_root.exists())
 
         if not self._ensure_clang_ready():
             self._cache_modules = {}
@@ -289,7 +289,7 @@ class CSignatureExtractor:
 
         translation_units: list[TranslationUnit] = []
         for file_path in source_files:
-            tu = self._parse_translation_unit(index=index, file_path=file_path)
+            tu = self._parse_translation_unit(index, file_path)
             if tu is None:
                 continue
             translation_units.append(tu)
@@ -480,35 +480,26 @@ class CSignatureExtractor:
         return added
 
     def _find_candidate_files(self) -> list[Path]:
-        """查找可能包含 CPython 扩展定义的 C/C++ 源文件。"""
-        candidate_markers = (
-            "PyModuleDef",
-            "PyMethodDef",
-            "PyTypeObject",
-            "PyInit_",
-            "PyModule_AddObject",
-            "PyModule_AddObjectRef",
-            "PyModule_AddType",
-        )
+        """查找包含 `PyInit_*` 模块入口的 C/C++ 源文件。"""
         result: list[Path] = []
         for path in self.source_root.rglob("*"):
             if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
                 text = path.read_text(encoding="utf-8", errors="ignore")
-                if any(marker in text for marker in candidate_markers):
+                if "PyInit_" in text:
                     result.append(path)
         result.sort()
         return result
 
-    def _build_std_value_for_file(self, file_path: Path) -> str:
+    def _get_std_value_for_file(self, file_path: Path) -> str:
         """按后缀为源码文件选择 C 或 C++ 标准值。"""
         suffix = file_path.suffix.lower()
         if suffix in CPP_SOURCE_SUFFIXES:
-            return self._normalize_std_value(self._clang_cpp_std, default_std="c++17")
-        return self._normalize_std_value(self._clang_c_std, default_std="c11")
+            return self._clang_cpp_std
+        return self._clang_c_std
 
     def _build_clang_parse_args(self, file_path: Path) -> list[str]:
         parse_args = []
-        std_value = self._build_std_value_for_file(file_path)
+        std_value = self._get_std_value_for_file(file_path)
         parse_args.extend(["--std", std_value])
         for include_value in self._clang_include:
             parse_args.extend(["--include", include_value])
@@ -520,11 +511,10 @@ class CSignatureExtractor:
         """解析单个源码文件为 clang translation unit。"""
         translation_unit: TranslationUnit | None = None
         diagnostics: list[Diagnostic] = []
-        retry_limit = 10
-        for _ in range(retry_limit):
+        for _ in range(10):
             parse_args = self._build_clang_parse_args(file_path)
             translation_unit = index.parse(str(file_path), args=parse_args)
-            diagnostics = list(translation_unit.diagnostics)
+            diagnostics = translation_unit.diagnostics
             added = self._discover_missing_include_args(
                 file_path=file_path,
                 diagnostics=diagnostics,
@@ -552,16 +542,6 @@ class CSignatureExtractor:
                 return True
         return False
 
-    def _normalize_std_value(self, std_value: str, *, default_std: str) -> str:
-        """将标准配置统一为纯标准值（如 `c11`、`c++17`）。"""
-        normalized = std_value.strip()
-        if not normalized:
-            normalized = default_std
-        if normalized.startswith("--std="):
-            normalized = normalized.partition("=")[2]
-        elif normalized.startswith("-std="):
-            normalized = normalized.partition("=")[2]
-        return normalized
 
     def _discover_translation_unit(
             self,
@@ -577,7 +557,7 @@ class CSignatureExtractor:
                 continue
             if not str(node.spelling).startswith("PyInit_"):
                 continue
-            extracted = self._extract_module_from_init(
+            extracted = self._extract_module_from_PyInit(
                 node,
                 method_table_cache=method_table_cache,
             )
@@ -585,7 +565,7 @@ class CSignatureExtractor:
                 discovered.append(extracted)
         return discovered
 
-    def _extract_module_from_init(
+    def _extract_module_from_PyInit(
             self,
             func_cursor: Cursor,
             *,
@@ -598,7 +578,7 @@ class CSignatureExtractor:
             if node.kind != CursorKind.CALL_EXPR:
                 continue
 
-            call_name = self._get_call_target_name(node)
+            call_name = node.spelling
             if call_name is None:
                 continue
 
@@ -845,12 +825,6 @@ class CSignatureExtractor:
             )
 
         return None
-
-    def _get_call_target_name(self, node: Cursor) -> str | None:
-        referenced = node.referenced
-        if referenced is not None and referenced.spelling:
-            return str(referenced.spelling)
-        return self._get_call_name(node)
 
     def _extract_call_argument_nodes(self, node: Cursor) -> list[Cursor]:
         children = list(node.get_children())
@@ -1862,15 +1836,6 @@ class CSignatureExtractor:
             return []
         inner = tokens[start + 1:end]
         return self._split_top_level_tokens(inner, ",")
-
-    def _get_call_name(self, node: Cursor) -> str | None:
-        if node.spelling:
-            return str(node.spelling)
-        tokens = self._get_token_spellings(node)
-        for token in tokens:
-            if self._looks_like_identifier(token):
-                return token
-        return None
 
     def _build_module_lookup_names(self, module_name: str, init_func_name: str | None) -> set[str]:
         lookup_names = {module_name}

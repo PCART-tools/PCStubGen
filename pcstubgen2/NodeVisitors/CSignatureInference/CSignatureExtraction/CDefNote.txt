@@ -47,3 +47,8 @@ typedef PyObject *(*PyCMethod)(
 #define METH_FASTCALL  0x0080
 
 #define METH_METHOD    0x0200
+
+
+#define PyModule_Create(module) \
+        PyModule_Create2(module, PYTHON_API_VERSION)
+PyObject* PyModule_Create2(PyModuleDef *module, int apiver)
