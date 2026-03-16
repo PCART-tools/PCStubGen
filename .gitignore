@@ -221,4 +221,4 @@ __marimo__/
 /.cursor/rules/
 /test/output/
 AGENTS.md
-/tool/output/
+/tool/clang_ast_output

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
@@ -14,10 +16,19 @@ import clang.cindex as clang_cindex
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
-DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
-DEFAULT_OUTPUT_EXTENSION = ".ast.txt"
+DEFAULT_OUTPUT_DIR = SCRIPT_DIR / f"{SCRIPT_PATH.stem}_output"
+LIBCLANG_OUTPUT_EXTENSION = ".libclang.txt"
+CLANG_OUTPUT_EXTENSION = ".clang.txt"
 
 EXIT_OK = 0
+EXIT_ERROR = 1
+
+
+@dataclass(frozen=True)
+class ClangAstDumpResult:
+    stdout: str
+    stderr: str
+    returncode: int
 
 
 def configure_output_encoding() -> None:
@@ -59,14 +70,10 @@ def _normalize_clang_include_directory_tokens(argv: Sequence[str] | None) -> lis
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="使用 libclang 解析单个 C/C++ 源文件，并将完整 AST 导出为树状文本。",
+        description="使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。",
         allow_abbrev=False,
     )
     parser.add_argument("source_path", help="待解析的 C/C++ 源文件路径。")
-    parser.add_argument(
-        "--output",
-        help="输出 AST 树文本路径；若传入目录，则自动生成 `<source_stem>.ast.txt`。",
-    )
     parser.add_argument(
         "--clang-include",
         action="append",
@@ -195,16 +202,11 @@ def _build_parse_args(
     return parse_args
 
 
-def resolve_output_path(source_path: Path, output_arg: str | None) -> Path:
-    if output_arg is None:
-        return DEFAULT_OUTPUT_DIR / f"{source_path.stem}{DEFAULT_OUTPUT_EXTENSION}"
-
-    output_path = Path(output_arg)
-    if output_path.exists() and output_path.is_dir():
-        return output_path / f"{source_path.stem}{DEFAULT_OUTPUT_EXTENSION}"
-    if output_path.suffix:
-        return output_path
-    return output_path / f"{source_path.stem}{DEFAULT_OUTPUT_EXTENSION}"
+def resolve_output_paths(source_path: Path) -> tuple[Path, Path]:
+    return (
+        DEFAULT_OUTPUT_DIR / f"{source_path.stem}{LIBCLANG_OUTPUT_EXTENSION}",
+        DEFAULT_OUTPUT_DIR / f"{source_path.stem}{CLANG_OUTPUT_EXTENSION}",
+    )
 
 
 def _diagnostic_severity_name(severity: int) -> str:
@@ -387,6 +389,52 @@ def build_ast_payload(
     return "\n".join(lines)
 
 
+def build_clang_ast_dump_command(*, source_path: Path, clang_args: Sequence[str]) -> list[str]:
+    return [
+        "clang",
+        "-Xclang",
+        "-ast-dump-all",
+        "-fsyntax-only",
+        *clang_args,
+        str(source_path),
+    ]
+
+
+def run_clang_ast_dump(*, source_path: Path, clang_args: Sequence[str]) -> ClangAstDumpResult:
+    command = build_clang_ast_dump_command(source_path=source_path, clang_args=clang_args)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return ClangAstDumpResult(
+        stdout=result.stdout,
+        stderr=result.stderr,
+        returncode=result.returncode,
+    )
+
+
+def _write_output(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload + "\n", encoding="utf-8")
+
+
+def _report_failure(label: str, error: Exception) -> None:
+    print(f"{label} failed: {error}", file=sys.stderr)
+
+
+def _build_clang_failure(result: ClangAstDumpResult) -> RuntimeError | None:
+    if result.returncode == 0:
+        return None
+    stderr_text = result.stderr.strip()
+    stdout_text = result.stdout.strip()
+    details = stderr_text or stdout_text or f"clang exited with code {result.returncode}"
+    return RuntimeError(details)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     configure_output_encoding()
     args = parse_args(argv)
@@ -395,7 +443,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not source_path.is_file():
         raise FileNotFoundError(f"Source file not found: {source_path}")
 
-    output_path = resolve_output_path(source_path, args.output).resolve()
+    libclang_output_path, clang_output_path = resolve_output_paths(source_path)
     library_path: str | None = _safe_str(args.clang_library_path)
     clang_include = _normalize_include_headers([str(header) for header in args.clang_include])
     clang_include_directory = _normalize_include_paths([str(path) for path in args.clang_include_directory])
@@ -413,23 +461,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         clang_cpp_std=clang_cpp_std,
     )
 
-    initialize_clang(library_path)
-    translation_unit = parse_translation_unit(
-        source_path,
-        library_path=library_path,
-        parse_args=clang_parse_args,
-    )
+    errors: list[Exception] = []
 
-    payload = build_ast_payload(
-        translation_unit,
-        source_path=source_path,
-        output_path=output_path,
-        clang_args=clang_parse_args,
-    )
+    try:
+        translation_unit = parse_translation_unit(
+            source_path,
+            library_path=library_path,
+            parse_args=clang_parse_args,
+        )
+        libclang_payload = build_ast_payload(
+            translation_unit,
+            source_path=source_path,
+            output_path=libclang_output_path,
+            clang_args=clang_parse_args,
+        )
+        _write_output(libclang_output_path, libclang_payload)
+    except Exception as error:
+        errors.append(error)
+        _report_failure("libclang AST export", error)
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(payload + "\n", encoding="utf-8")
-    return EXIT_OK
+    try:
+        clang_result = run_clang_ast_dump(
+            source_path=source_path,
+            clang_args=clang_parse_args,
+        )
+        if clang_result.stdout:
+            _write_output(clang_output_path, clang_result.stdout.rstrip("\n"))
+        clang_error = _build_clang_failure(clang_result)
+        if clang_error is not None:
+            errors.append(clang_error)
+            _report_failure("clang AST export", clang_error)
+    except Exception as error:
+        errors.append(error)
+        _report_failure("clang AST export", error)
+
+    return EXIT_OK if not errors else EXIT_ERROR
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,11 +12,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from tool import libclang_ast
+from tool import clang_ast
 
 
 def test_parse_args_accepts_clang_include_and_include_directory() -> None:
-    args = libclang_ast.parse_args(
+    args = clang_ast.parse_args(
         [
             "sample.c",
             "--clang-include",
@@ -31,8 +32,13 @@ def test_parse_args_accepts_clang_include_and_include_directory() -> None:
     assert args.clang_include_directory == ["C:/IncludeA", "C:/IncludeB"]
 
 
+def test_parse_args_rejects_removed_output_option() -> None:
+    with pytest.raises(SystemExit):
+        clang_ast.parse_args(["sample.c", "--output", "out.txt"])
+
+
 def test_build_parse_args_places_include_before_include_directory() -> None:
-    parse_args = libclang_ast._build_parse_args(
+    parse_args = clang_ast._build_parse_args(
         source_path=Path("sample.c"),
         clang_args=[],
         include_headers=["Python.h", "numpy/arrayobject.h"],
@@ -55,7 +61,7 @@ def test_build_parse_args_places_include_before_include_directory() -> None:
 
 def test_normalize_include_headers_rejects_option_like_values() -> None:
     with pytest.raises(ValueError, match="option-like"):
-        libclang_ast._normalize_include_headers(["-Winvalid"])
+        clang_ast._normalize_include_headers(["-Winvalid"])
 
 
 class _FakeLocation:
@@ -118,14 +124,18 @@ class _FakeDiagnostic:
         self.location = _FakeLocation(file=file, line=line, column=column)
 
 
-def test_resolve_output_path_defaults_to_ast_txt() -> None:
-    output_path = libclang_ast.resolve_output_path(Path("sample.c"), None)
-    assert output_path == libclang_ast.DEFAULT_OUTPUT_DIR / "sample.ast.txt"
+def test_resolve_output_paths_follow_dynamic_script_name() -> None:
+    source_path = Path("sample.c")
+    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path)
+
+    assert clang_ast.DEFAULT_OUTPUT_DIR == clang_ast.SCRIPT_DIR / f"{clang_ast.SCRIPT_PATH.stem}_output"
+    assert libclang_path == clang_ast.DEFAULT_OUTPUT_DIR / "sample.libclang.txt"
+    assert clang_path == clang_ast.DEFAULT_OUTPUT_DIR / "sample.clang.txt"
 
 
 def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
     source_path = Path("C:/project/sample.c").resolve()
-    output_path = Path("C:/project/out/sample.ast.txt").resolve()
+    output_path = Path("C:/project/out/sample.libclang.txt").resolve()
     literal_token = _FakeToken(kind=clang.cindex.TokenKind.LITERAL, spelling="3")
     external_child = _FakeCursor(
         kind=clang.cindex.CursorKind.DECL_REF_EXPR,
@@ -189,7 +199,7 @@ def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
     )
     translation_unit = SimpleNamespace(cursor=root, diagnostics=[])
 
-    output = libclang_ast.build_ast_payload(
+    output = clang_ast.build_ast_payload(
         translation_unit,
         source_path=source_path,
         output_path=output_path,
@@ -213,7 +223,7 @@ def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
 
 def test_build_ast_payload_formats_diagnostics() -> None:
     source_path = Path("C:/project/sample.c").resolve()
-    output_path = Path("C:/project/out/sample.ast.txt").resolve()
+    output_path = Path("C:/project/out/sample.libclang.txt").resolve()
     root = _FakeCursor(
         kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
         spelling=str(source_path),
@@ -227,7 +237,7 @@ def test_build_ast_payload_formats_diagnostics() -> None:
     )
     translation_unit = SimpleNamespace(cursor=root, diagnostics=[diagnostic])
 
-    output = libclang_ast.build_ast_payload(
+    output = clang_ast.build_ast_payload(
         translation_unit,
         source_path=source_path,
         output_path=output_path,
@@ -235,3 +245,158 @@ def test_build_ast_payload_formats_diagnostics() -> None:
     )
 
     assert f"- [WARNING] {source_path}:12:8: unused value" in output
+
+
+def test_build_clang_ast_dump_command_uses_expected_flags() -> None:
+    source_path = Path("C:/project/sample.c")
+    command = clang_ast.build_clang_ast_dump_command(
+        source_path=source_path,
+        clang_args=["--std", "c11", "--include", "Python.h"],
+    )
+
+    assert command == [
+        "clang",
+        "-Xclang",
+        "-ast-dump-all",
+        "-fsyntax-only",
+        "--std",
+        "c11",
+        "--include",
+        "Python.h",
+        str(source_path),
+    ]
+
+
+def test_run_clang_ast_dump_returns_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured_command: list[str] = []
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured_command.extend(command)
+        assert kwargs["capture_output"] is True
+        assert kwargs["text"] is True
+        return subprocess.CompletedProcess(command, 0, stdout="AST\n", stderr="")
+
+    monkeypatch.setattr(clang_ast.subprocess, "run", fake_run)
+
+    output = clang_ast.run_clang_ast_dump(
+        source_path=Path("C:/project/sample.c"),
+        clang_args=["--std", "c11"],
+    )
+
+    assert output == clang_ast.ClangAstDumpResult(stdout="AST\n", stderr="", returncode=0)
+    assert captured_command[:4] == ["clang", "-Xclang", "-ast-dump-all", "-fsyntax-only"]
+
+
+def test_main_writes_clang_stdout_even_when_clang_returns_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_path = tmp_path / "sample.c"
+    output_dir = tmp_path / "ast_output"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
+    monkeypatch.setattr(clang_ast, "parse_translation_unit", lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]))
+    monkeypatch.setattr(clang_ast, "build_ast_payload", lambda *args, **kwargs: "libclang payload")
+    monkeypatch.setattr(
+        clang_ast,
+        "run_clang_ast_dump",
+        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(
+            stdout="partial ast\n",
+            stderr="syntax error",
+            returncode=1,
+        ),
+    )
+
+    exit_code = clang_ast.main([str(source_path)])
+    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+    captured = capsys.readouterr()
+
+    assert exit_code == clang_ast.EXIT_ERROR
+    assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
+    assert clang_path.read_text(encoding="utf-8") == "partial ast\n"
+    assert "clang AST export failed: syntax error" in captured.err
+
+
+def test_main_partial_success_when_clang_export_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_path = tmp_path / "sample.c"
+    output_dir = tmp_path / "ast_output"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
+    monkeypatch.setattr(clang_ast, "parse_translation_unit", lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]))
+    monkeypatch.setattr(clang_ast, "build_ast_payload", lambda *args, **kwargs: "libclang payload")
+
+    def raise_clang_failure(*args: object, **kwargs: object) -> clang_ast.ClangAstDumpResult:
+        raise RuntimeError("clang missing")
+
+    monkeypatch.setattr(clang_ast, "run_clang_ast_dump", raise_clang_failure)
+
+    exit_code = clang_ast.main([str(source_path)])
+    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+    captured = capsys.readouterr()
+
+    assert exit_code == clang_ast.EXIT_ERROR
+    assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
+    assert not clang_path.exists()
+    assert "clang AST export failed: clang missing" in captured.err
+
+
+def test_main_partial_success_when_libclang_export_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source_path = tmp_path / "sample.c"
+    output_dir = tmp_path / "ast_output"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
+    def raise_libclang_failure(*args: object, **kwargs: object) -> SimpleNamespace:
+        raise RuntimeError("libclang unavailable")
+
+    monkeypatch.setattr(clang_ast, "parse_translation_unit", raise_libclang_failure)
+    monkeypatch.setattr(
+        clang_ast,
+        "run_clang_ast_dump",
+        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload", stderr="", returncode=0),
+    )
+
+    exit_code = clang_ast.main([str(source_path)])
+    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+    captured = capsys.readouterr()
+
+    assert exit_code == clang_ast.EXIT_ERROR
+    assert not libclang_path.exists()
+    assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
+    assert "libclang AST export failed: libclang unavailable" in captured.err
+
+
+def test_main_writes_both_outputs_when_exports_succeed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_path = tmp_path / "sample.c"
+    output_dir = tmp_path / "ast_output"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
+    monkeypatch.setattr(clang_ast, "parse_translation_unit", lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]))
+    monkeypatch.setattr(clang_ast, "build_ast_payload", lambda *args, **kwargs: "libclang payload")
+    monkeypatch.setattr(
+        clang_ast,
+        "run_clang_ast_dump",
+        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
+    )
+
+    exit_code = clang_ast.main([str(source_path)])
+    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+
+    assert exit_code == clang_ast.EXIT_OK
+    assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
+    assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
