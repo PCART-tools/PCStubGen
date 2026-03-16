@@ -1908,7 +1908,6 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
                 "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
                 "static PyObject* add_impl(PyObject* self, PyObject* args) {",
                 "    int a = 0;",
                 "    int b = 0;",
@@ -2005,9 +2004,6 @@ def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(t
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
-                "PyObject* PyInit_mini_struct_typedef_ext(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
             ]
         ),
         encoding="utf-8",
@@ -2065,7 +2061,6 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
                     "#define PyModuleDef_HEAD_INIT 0",
                     "#define METH_VARARGS 1",
                     "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                    "PyObject* PyModule_Create(PyModuleDef* def);",
                     f"static PyObject* {c_name}(PyObject* self, PyObject* args) {{",
                     "    int value = 0;",
                     "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
@@ -2085,9 +2080,6 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
                     "    Methods,",
                     "    0, 0, 0, 0",
                     "};",
-                    f"PyObject* PyInit_{module_name}(void) {{",
-                    "    return PyModule_Create(&moduledef);",
-                    "}",
                 ]
             ),
             encoding="utf-8",
@@ -2104,7 +2096,7 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
     assert extracted["second"].functions["foo"][0].c_name == "second_foo_impl"
 
 
-def test_c_signature_extraction_engine_extract_modules_handles_multiple_pyinit_functions_in_one_file(
+def test_c_signature_extraction_engine_extract_modules_handles_multiple_moduledefs_in_one_file(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -2136,7 +2128,6 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_pyinit_f
                 "#define PyModuleDef_HEAD_INIT 0",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
                 "static PyObject* first_foo_impl(PyObject* self, PyObject* args) {",
                 "    int value = 0;",
                 "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
@@ -2175,12 +2166,6 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_pyinit_f
                 "    SecondMethods,",
                 "    0, 0, 0, 0",
                 "};",
-                "PyObject* PyInit_first(void) {",
-                "    return PyModule_Create(&first_moduledef);",
-                "}",
-                "PyObject* PyInit_second(void) {",
-                "    return PyModule_Create(&second_moduledef);",
-                "}",
             ]
         ),
         encoding="utf-8",
@@ -2197,7 +2182,7 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_pyinit_f
     assert extracted["second"].functions["foo"][0].c_name == "second_foo_impl"
 
 
-def test_c_signature_extraction_engine_extract_modules_separates_module_and_class_methods(
+def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_from_pymodule_addobject(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -2287,8 +2272,7 @@ def test_c_signature_extraction_engine_extract_modules_separates_module_and_clas
 
     module = extracted["pkg.mod"]
     assert module.functions["foo"][0].c_name == "module_foo"
-    assert module.classes["Point"].methods["foo"][0].c_name == "point_foo"
-    assert module.classes["Point"].methods["foo"][0].signatures[0].arguments[0].type_name == "Point"
+    assert module.classes == {}
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addobjectref(
@@ -2371,9 +2355,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addobje
     )
     extracted = engine.extract_modules()
 
-    point_class = extracted["pkg.mod"].classes["Point"]
-    assert point_class.methods["foo"][0].c_name == "point_foo"
-    assert point_class.methods["foo"][0].signatures[0].arguments[0].type_name == "Point"
+    assert extracted["pkg.mod"].classes == {}
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addtype(
@@ -2456,9 +2438,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addtype
     )
     extracted = engine.extract_modules()
 
-    point_class = extracted["pkg.mod"].classes["Point"]
-    assert point_class.methods["foo"][0].c_name == "point_foo"
-    assert point_class.methods["foo"][0].signatures[0].arguments[0].type_name == "Point"
+    assert extracted["pkg.mod"].classes == {}
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_designated_moduledef_initializer(
@@ -2492,7 +2472,6 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
                 "} PyModuleDef;",
                 "#define METH_VARARGS 1",
                 "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
                 "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
                 "    int value = 0;",
                 "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
@@ -2510,9 +2489,6 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
                 "    .m_size = -1,",
                 "    .m_methods = Methods,",
                 "};",
-                "PyObject* PyInit_designated_mod(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
             ]
         ),
         encoding="utf-8",
@@ -2528,7 +2504,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
     assert extracted["designated.mod"].functions["foo"][0].c_name == "foo_impl"
 
 
-def test_c_signature_extraction_engine_extract_modules_ignores_unreachable_moduledefs(
+def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_without_pyinit(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -2578,6 +2554,121 @@ def test_c_signature_extraction_engine_extract_modules_ignores_unreachable_modul
                 "    -1,",
                 "    Methods,",
                 "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert extracted["orphan.mod"].functions["foo"][0].c_name == "foo_impl"
+
+
+def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_without_methods(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "module_without_methods.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"empty.mod\",",
+                "    0,",
+                "    -1,",
+                "    0,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert "empty.mod" in extracted
+    assert extracted["empty.mod"].functions == {}
+    assert extracted["empty.mod"].classes == {}
+
+
+def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_without_m_name(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "nameless_module.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    .m_doc = 0,",
+                "    .m_size = -1,",
+                "    .m_methods = Methods,",
                 "};",
             ]
         ),
