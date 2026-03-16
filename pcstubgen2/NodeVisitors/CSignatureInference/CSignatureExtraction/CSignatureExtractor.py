@@ -5,7 +5,6 @@ import posixpath
 import re
 import sysconfig
 from collections.abc import Iterable
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeAlias
 
@@ -50,23 +49,6 @@ SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
 FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[SignatureKey, ...]]
 
-
-@dataclass
-class _DiscoveredMethodTable:
-    cursor: Cursor
-    name: str
-    source_file: str | None
-    functions: list[ExtractedFunction] = field(default_factory=list)
-
-
-@dataclass
-class _DiscoveredModuleDef:
-    cursor: Cursor
-    name: str
-    module_name: str | None
-    methods_table_cursor: Cursor | None
-    source_file: str | None
-
 transparent_cursor_kinds = {
     # 没有暴露给python libclang的表达式
     # 比如ImplicitCastExpr、RecoveryExpr（解析错误的时候产生）
@@ -97,12 +79,6 @@ array_type_kinds = {
 cpp_nullptr_literal_cursor_kinds = {
     CursorKind.CXX_NULL_PTR_LITERAL_EXPR,  # nullptr
     CursorKind.GNU_NULL_EXPR,  # GNU 扩展 __null
-}
-
-record_cursor_kinds = {
-    CursorKind.STRUCT_DECL,
-    CursorKind.UNION_DECL,
-    CursorKind.CLASS_DECL,
 }
 
 _CPP_STRING_LITERAL_RE = re.compile(r'^(?:u8|u|U|L)?"(.*)"$', re.DOTALL)
@@ -238,6 +214,23 @@ def check(condition: bool, message: str="check failed!") -> None:
         raise RuntimeError(message)
 
 
+def _VAR_DECL_to_INIT_LIST_EXPR(cursor: Cursor) -> Cursor | None:
+    """从变量声明直接找出其初始化列表节点。"""
+    assert cursor.kind == CursorKind.VAR_DECL
+    for child in cursor.get_children():
+        if child.kind == CursorKind.INIT_LIST_EXPR:
+            return child
+    return None
+
+
+def _strip_string_literal_quotes(literal: str) -> str:
+    """移除 C/C++ 字符串字面量前缀与外围引号。"""
+    string_match = _CPP_STRING_LITERAL_RE.match(literal)
+    if string_match is not None:
+        return string_match.group(1)
+    return literal.strip('"')
+
+
 class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
@@ -289,7 +282,7 @@ class CSignatureExtractor:
         discovered_modules: dict[str, ExtractedModule] = {}
         for tu in translation_units:
             try:
-                modules = self._discover_translation_unit(tu.cursor)
+                modules = self._process_translation_unit(tu.cursor)
             except AssertionError as ex:
                 logger.exception("AssertionError", exc_info=ex)
                 continue
@@ -302,19 +295,16 @@ class CSignatureExtractor:
 
         for module in discovered_modules.values():
             module.functions = self._deduplicate_result(module.functions)
-            for extracted_class in module.classes.values():
-                extracted_class.methods = self._deduplicate_result(extracted_class.methods)
 
         self._cache_modules = discovered_modules
         return self._cache_modules
 
-    def _ensure_clang_ready(self) -> bool:
+    def _ensure_clang_ready(self) -> None:
         """确保 clang 运行环境可用。"""
         if not clang.cindex.Config.loaded:
             packaged_libclang_path = _get_packaged_libclang_path()
             if packaged_libclang_path:
                 clang.cindex.Config.set_library_file(packaged_libclang_path)
-        return True
 
     def _inject_python_include_directories(self, include_directories: list[str]) -> list[str]:
         """向 include 目录列表注入当前 Python 头文件目录。"""
@@ -486,13 +476,13 @@ class CSignatureExtractor:
         return False
 
 
-    def _discover_translation_unit(
+    def _process_translation_unit(
             self,
             cursor: Cursor,
     ) -> list[ExtractedModule]:
         """从单个 translation unit 的 `PyModuleDef` 变量定义提取模块。"""
         discovered: list[ExtractedModule] = []
-        # PyModuleDef可能定义为PyInit局部变量
+        # PyModuleDef可能定义为PyInit_函数内的局部变量
         for node in _walk_cursor(cursor):
             if node.kind != CursorKind.VAR_DECL:
                 continue
@@ -515,27 +505,51 @@ class CSignatureExtractor:
         模块名只认 `m_name`，方法只认 `m_methods`；若缺少 `m_name`，
         直接忽略该定义，避免把局部模板或未导出的占位结构误当成模块。
         """
-        module_def = self._extract_module_def(module_def_cursor)
-        if module_def is None:
+        init_list_expr = _VAR_DECL_to_INIT_LIST_EXPR(module_def_cursor)
+        assert init_list_expr is not None
+
+        PyModuleDef_field_names = (
+            "m_base",
+            "m_name",
+            "m_doc",
+            "m_size",
+            "m_methods",
+            "m_slots",
+            "m_traverse",
+            "m_clear",
+            "m_free",
+        )
+        field_values = self._resolve_INIT_LIST_EXPR(init_list_expr, PyModuleDef_field_names)
+
+        # 模块名
+        m_name_cursor = field_values.get("m_name")
+        if m_name_cursor is None:
             return None
+        assert m_name_cursor.kind == CursorKind.STRING_LITERAL
 
-        module_name = module_def.module_name
-        if module_name is None or not module_name.strip():
-            return None
+        m_name = m_name_cursor.spelling.strip('"')
 
-        module = ExtractedModule(name=module_name)
-        module.module_def_name = module_def.name
-        module.lookup_names.update(self._build_module_lookup_names(module_name))
+        module = ExtractedModule(name=m_name)
+        module.lookup_names.update(self._build_module_lookup_names(m_name))
 
-        for source_file in {module_def.source_file}:
-            if source_file is not None:
-                module.source_files.add(source_file)
-
-        module_method_table = self._extract_method_table(module_def.methods_table_cursor)
-        if module_method_table is not None:
-            if module_method_table.source_file is not None:
-                module.source_files.add(module_method_table.source_file)
-            self._merge_discovered_functions(module.functions, module_method_table.functions)
+        # 方法表
+        m_methods_cursor = field_values.get("m_methods")
+        if m_methods_cursor is None:
+            module.functions = self._deduplicate_result(module.functions)
+            return module
+        if m_methods_cursor.kind == CursorKind.DECL_REF_EXPR:
+            method_list_cursor = m_methods_cursor.referenced
+            assert _is_PyMethodDef_array_definition(method_list_cursor)
+            self._merge_discovered_functions(
+                module.functions,
+                self._extract_method_table(method_list_cursor),
+            )
+        else:
+            assert (
+                m_methods_cursor.kind in cpp_nullptr_literal_cursor_kinds
+                or _is_integer_literal_value(m_methods_cursor, 0)
+                or any(str(token.spelling) == "NULL" for token in m_methods_cursor.get_tokens())
+            )
 
         module.functions = self._deduplicate_result(module.functions)
         return module
@@ -543,41 +557,16 @@ class CSignatureExtractor:
     def _merge_extracted_module(self, target: ExtractedModule, incoming: ExtractedModule) -> None:
         """合并两个同名模块的提取结果，保留已有信息并追加新发现。"""
         target.lookup_names.update(incoming.lookup_names)
-        target.source_files.update(incoming.source_files)
-        target.module_def_name = target.module_def_name or incoming.module_def_name
-        target.init_func_name = target.init_func_name or incoming.init_func_name
         for functions in incoming.functions.values():
             self._merge_discovered_functions(target.functions, functions)
 
-    def _is_type_definition(self, cursor: Cursor, accepted_spellings: set[str]) -> bool:
-        """判断声明是否为目标 C 类型的定义，兼容 canonical spelling。"""
-        if not cursor.is_definition():
-            return False
-        type_obj = cursor.type
-        spellings: set[str] = set()
-        if type_obj is not None:
-            spellings.add(str(type_obj.spelling))
-            canonical = type_obj.get_canonical()
-            if canonical is not None:
-                spellings.add(str(canonical.spelling))
-        return bool(spellings & accepted_spellings)
-
-    def _is_PyModuleDef_definition(self, cursor: Cursor) -> bool:
-        """判断变量声明是否为 `PyModuleDef` 定义。"""
-        return self._is_type_definition(
-            cursor,
-            {"PyModuleDef", "struct PyModuleDef"},
-        )
-
     def _extract_method_table(
             self,
-            cursor: Cursor | None,
-    ) -> _DiscoveredMethodTable | None:
+            cursor: Cursor,
+    ) -> list[ExtractedFunction]:
         """解析 `PyMethodDef[]` 变量。"""
-        if cursor is None or cursor.kind != CursorKind.VAR_DECL:
-            return None
-        if not _is_PyMethodDef_array_definition(cursor):
-            return None
+        assert cursor.kind == CursorKind.VAR_DECL
+        assert _is_PyMethodDef_array_definition(cursor)
 
         grouped: dict[str, list[ExtractedFunction]] = {}
         # 方法表本质上是数组初始化列表，逐项还原即可。
@@ -588,174 +577,50 @@ class CSignatureExtractor:
             grouped,
         )
         deduped = self._deduplicate_result(grouped)
-        functions = [item for items in deduped.values() for item in items]
-        discovered = _DiscoveredMethodTable(
-            cursor=cursor,
-            name=cursor.spelling,
-            source_file=self._get_cursor_source_file(cursor),
-            functions=functions,
-        )
-        return discovered
+        return [item for items in deduped.values() for item in items]
 
-    def _extract_module_def(self, cursor: Cursor) -> _DiscoveredModuleDef | None:
-        """从 `PyModuleDef` 变量声明中提取模块名和方法表引用。"""
-
-        field_values = self._extract_struct_initializer_fields(cursor)
-        return _DiscoveredModuleDef(
-            cursor=cursor,
-            name=cursor.spelling,
-            module_name=self._extract_string_literal_from_cursor(field_values.get("m_name")),
-            methods_table_cursor=self._resolve_method_table_cursor(field_values.get("m_methods")),
-            source_file=self._get_cursor_source_file(cursor),
-        )
-
-    def _resolve_method_table_cursor(self, cursor: Cursor | None) -> Cursor | None:
-        """把字段值解析为 `PyMethodDef[]` 变量声明。"""
-        referenced = self._resolve_referenced_var_decl(cursor)
-        if referenced is None or not _is_PyMethodDef_array_definition(referenced):
-            return None
-        return referenced
-
-    def _resolve_referenced_var_decl(self, cursor: Cursor | None) -> Cursor | None:
-        """解析表达式最终引用到的变量声明。"""
-        return self._resolve_referenced_cursor(cursor, {CursorKind.VAR_DECL})
-
-    def _resolve_referenced_cursor(
+    def _resolve_INIT_LIST_EXPR(
             self,
-            cursor: Cursor | None,
-            accepted_kinds: set[CursorKind],
-    ) -> Cursor | None:
-        """沿表达式子树查找第一个满足 kind 条件的 `referenced` 声明。"""
-        if cursor is None:
-            return None
-        for node in _walk_cursor(_unwrap_transparent(cursor)):
-            referenced = node.referenced
-            if referenced is None:
-                continue
-            if referenced.kind not in accepted_kinds:
-                continue
-            return referenced
-        return None
+            cursor: Cursor,
+            field_names: tuple[str, ...] | list[str],
+    ) -> dict[str, Cursor]:
+        """解析顶层初始化列表，支持位置初始化与 designated initializer 混用。"""
+        assert cursor.kind == CursorKind.INIT_LIST_EXPR
 
-    def _extract_struct_initializer_fields(self, cursor: Cursor) -> dict[str, Cursor]:
-        """
-        将结构体初始化列表还原成“字段名 -> 值节点”映射。
-
-        同时兼容位置初始化和 designated initializer；后一种场景下，
-        会根据字段下标推进 `positional_index`，保证两种写法可混用。
-        """
-        init_list_expr = self._var_decl_to_init_list_expr(cursor)
-        if init_list_expr is None:
-            return {}
-
-        field_names = self._get_record_field_names(cursor)
-        if not field_names:
-            return {}
-
-        field_name_to_index = {field_name: index for index, field_name in enumerate(field_names)}
-        values: dict[str, Cursor] = {}
+        field_name_to_index = {
+            field_name: index
+            for index, field_name in enumerate(field_names)
+        }
+        field_values: dict[str, Cursor] = {}
         positional_index = 0
 
-        for entry in init_list_expr.get_children():
-            designated_name, value_cursor = self._extract_initializer_entry(entry)
-            if value_cursor is None:
-                continue
+        for entry in cursor.get_children():
+            entry_children = list(entry.get_children())
 
-            if designated_name is None:
-                # 普通位置初始化按声明顺序消耗字段名。
+            if len(entry_children) >= 2 and entry_children[0].kind == CursorKind.MEMBER_REF:
+                # 指定初始化
+                field_name = entry_children[0].spelling
+                value_cursor = _unwrap_transparent(entry_children[1])
+                designated_index = field_name_to_index.get(field_name)
+                if designated_index is None:
+                    continue
+                positional_index = designated_index + 1
+            else:
+                # 位置初始化
                 if positional_index >= len(field_names):
                     continue
                 field_name = field_names[positional_index]
+                value_cursor = _unwrap_transparent(entry)
                 positional_index += 1
-            else:
-                field_name = designated_name
-                # designated initializer 出现后，同步游标到对应字段之后。
-                designated_index = field_name_to_index.get(field_name)
-                if designated_index is not None:
-                    positional_index = designated_index + 1
 
-            values[field_name] = value_cursor
+            field_values[field_name] = value_cursor
 
-        return values
-
-    def _extract_initializer_entry(self, entry: Cursor) -> tuple[str | None, Cursor | None]:
-        """从初始化项中拆出字段名和实际值，兼容 designated initializer。"""
-        children = list(entry.get_children())
-        if len(children) >= 2 and children[0].kind == CursorKind.MEMBER_REF:
-            member_ref = children[0]
-            field_name = str(member_ref.spelling) or None
-            referenced = member_ref.referenced
-            if referenced is not None and referenced.spelling:
-                field_name = str(referenced.spelling)
-            return field_name, _unwrap_transparent(children[-1])
-        return None, _unwrap_transparent(entry)
-
-    def _get_record_field_names(self, cursor: Cursor) -> list[str]:
-        """解析结构体/联合/类声明中的字段顺序，用于位置初始化对齐。"""
-        type_obj = cursor.type
-        candidate_types = [type_obj]
-        canonical = type_obj.get_canonical()
-        if canonical is not None and canonical.spelling != type_obj.spelling:
-            candidate_types.append(canonical)
-
-        for candidate in candidate_types:
-            record_decl = self._resolve_record_decl(candidate.get_declaration())
-            if record_decl is None:
-                continue
-            field_names = [
-                str(child.spelling)
-                for child in record_decl.get_children()
-                if child.kind == CursorKind.FIELD_DECL and child.spelling
-            ]
-            if field_names:
-                return field_names
-        return []
-
-    def _resolve_record_decl(self, cursor: Cursor | None) -> Cursor | None:
-        """将 typedef 或前向声明追溯到可遍历字段的 record 定义。"""
-        if cursor is None:
-            return None
-
-        if cursor.kind in record_cursor_kinds:
-            if cursor.is_definition():
-                return cursor
-            definition = cursor.get_definition()
-            if definition is not None:
-                return definition
-            return None
-
-        if cursor.kind != CursorKind.TYPEDEF_DECL:
-            return None
-
-        for child in cursor.get_children():
-            if child.kind not in record_cursor_kinds:
-                continue
-            if child.is_definition():
-                return child
-            definition = child.get_definition()
-            if definition is not None:
-                return definition
-
-        underlying = cursor.underlying_typedef_type
-        if underlying is None:
-            return None
-        underlying_decl = underlying.get_declaration()
-        if underlying_decl == cursor:
-            return None
-        return self._resolve_record_decl(underlying_decl)
-
-    def _var_decl_to_init_list_expr(self, cursor: Cursor) -> Cursor | None:
-        """从变量声明直接找出其初始化列表节点。"""
-        for child in cursor.get_children():
-            target = _unwrap_transparent(child)
-            if target.kind == CursorKind.INIT_LIST_EXPR:
-                return target
-        return None
+        return field_values
 
     def _array_VAR_DECL_to_INIT_LIST_EXPR(self, cursor: Cursor) -> Cursor:
         """断言变量声明是数组初始化，并返回对应 `INIT_LIST_EXPR`。"""
         assert cursor.kind == CursorKind.VAR_DECL
-        init_list_expr = self._var_decl_to_init_list_expr(cursor)
+        init_list_expr = _VAR_DECL_to_INIT_LIST_EXPR(cursor)
         assert init_list_expr is not None
         assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
         return init_list_expr
@@ -811,7 +676,7 @@ class CSignatureExtractor:
 
         ml_name_cursor = _unwrap_transparent(fields[0])
         assert ml_name_cursor.kind == CursorKind.STRING_LITERAL
-        ml_name = self._strip_string_literal_quotes(ml_name_cursor.spelling)
+        ml_name = _strip_string_literal_quotes(ml_name_cursor.spelling)
 
         ml_meth_cursor = _unwrap_transparent(fields[1])
         assert ml_meth_cursor.kind == CursorKind.DECL_REF_EXPR
@@ -991,7 +856,7 @@ class CSignatureExtractor:
     def _resolve_buildvalue_format_token(self, *, func_cursor: Cursor, token: str) -> str | None:
         """解析 `Py_BuildValue` 的格式串 token。"""
         if '"' in token:
-            return self._strip_string_literal_quotes(token)
+            return _strip_string_literal_quotes(token)
         if self._looks_like_identifier(token):
             return self._find_format_string(func_cursor=func_cursor, format_var_name=token)
         return None
@@ -1093,7 +958,7 @@ class CSignatureExtractor:
         for token in node.get_tokens():
             if token.kind != TokenKind.LITERAL:
                 continue
-            text = self._strip_string_literal_quotes(str(token.spelling))
+            text = _strip_string_literal_quotes(str(token.spelling))
             if "(" in text and ")" in text:
                 literals.append(text)
         for text in literals:
@@ -1293,7 +1158,7 @@ class CSignatureExtractor:
         if token == "F_INT_PYFMT":
             return ["F_INT_PYFMT"]
         if '"' in token:
-            text = self._strip_string_literal_quotes(token)
+            text = _strip_string_literal_quotes(token)
             return self._explode_format_string(text)
         if self._looks_like_identifier(token):
             text = self._find_format_string(func_cursor=func_cursor, format_var_name=token)
@@ -1430,59 +1295,6 @@ class CSignatureExtractor:
             return None
         return str(file_obj)
 
-    def _get_token_spellings(self, node: Cursor) -> list[str]:
-        """提取节点 token 的原始 spelling 列表。"""
-        return [str(token.spelling) for token in node.get_tokens()]
-
-    def _extract_string_literal_from_cursor(self, cursor: Cursor | None) -> str | None:
-        """在节点子树中查找首个字符串字面量并去掉外围引号。"""
-        if cursor is None:
-            return None
-        for node in _walk_cursor(_unwrap_transparent(cursor)):
-            if node.kind != CursorKind.STRING_LITERAL:
-                continue
-            return self._strip_string_literal_quotes(str(node.spelling))
-        return None
-
-    def _extract_reference_name(
-            self,
-            tokens: list[str],
-            *,
-            require_address_of: bool = False,
-    ) -> str | None:
-        """
-        从 token 列表中提取最可能的变量引用名。
-
-        若存在取地址运算符，优先取 `&name` 后的标识符；否则退回到最后一个
-        看起来像普通标识符且不是空指针字面量的 token。
-        """
-        null_identifiers = {"NULL", "nullptr", "__null"}
-        if require_address_of:
-            for index in range(len(tokens) - 1, -1, -1):
-                if tokens[index] != "&":
-                    continue
-                for token in tokens[index + 1:]:
-                    if self._looks_like_identifier(token) and token not in null_identifiers:
-                        return token
-                return None
-            return None
-
-        if "&" in tokens:
-            resolved = self._extract_reference_name(tokens, require_address_of=True)
-            if resolved is not None:
-                return resolved
-
-        identifiers = [
-            token
-            for token in tokens
-            if self._looks_like_identifier(token) and token not in null_identifiers
-        ]
-        if not identifiers:
-            return None
-        if len(identifiers) == 1:
-            return identifiers[0]
-        return identifiers[-1]
-
     def _build_module_lookup_names(self, module_name: str) -> set[str]:
         """构建模块别名集合，仅保留完整名与叶子名。"""
         lookup_names = {module_name}
@@ -1520,7 +1332,7 @@ class CSignatureExtractor:
                 continue
             for child in _walk_cursor(node):
                 if child.kind == CursorKind.STRING_LITERAL:
-                    return self._strip_string_literal_quotes(str(child.spelling))
+                    return _strip_string_literal_quotes(str(child.spelling))
         return None
 
     def _split_top_level(self, text: str, delim: str) -> list[str]:
@@ -1593,13 +1405,6 @@ class CSignatureExtractor:
         if any(token in lower for token in ("int", "long", "short", "size_t", "ssize")):
             return "int"
         return "object"
-
-    def _strip_string_literal_quotes(self, literal: str) -> str:
-        """移除 C/C++ 字符串字面量前缀与外围引号。"""
-        string_match = _CPP_STRING_LITERAL_RE.match(literal)
-        if string_match is not None:
-            return string_match.group(1)
-        return literal.strip('"')
 
     def _looks_like_identifier(self, value: str) -> bool:
         """判断文本是否符合标识符命名规则。"""

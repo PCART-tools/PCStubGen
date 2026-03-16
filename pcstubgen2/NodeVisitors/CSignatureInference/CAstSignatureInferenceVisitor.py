@@ -19,10 +19,8 @@ from ...Errors import InvalidExpressionError
 from ...IR import (
     IRArgument,
     IRArgumentKind,
-    IRClass,
     IRFunction,
     InvalidExpression,
-    IRMethod,
     IRModule,
     IRModuleType,
     IRValue,
@@ -99,21 +97,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
         super().visit_module(node)
 
-    def visit_class(self, node: IRClass, module: IRModule) -> None:
-        """在模块启用时重写类方法签名。"""
-
-        if module.module_type is IRModuleType.EXTENSION:
-            modules, load_status = self._get_signature_modules()
-            extracted_module = self._match_extracted_module(module, modules)
-            node.methods = self._rewrite_class_methods(
-                node.methods,
-                extracted_module,
-                class_name=node.name,
-                load_status=load_status,
-            )
-
-        super().visit_class(node, module)
-
     def log_summary(self, project_name: str) -> None:
         if self._stats.total_generic <= 0:
             self._reset_stats()
@@ -161,44 +144,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             self._record_outcome(func=func, outcome=outcome)
             new_funcs.extend(rewritten)
         return new_funcs
-
-    def _rewrite_class_methods(
-        self,
-        methods: list[IRMethod],
-        extracted_module: ExtractedModule | None,
-        *,
-        class_name: str,
-        load_status: SignatureLoadStatus,
-    ) -> list[IRMethod]:
-        """批量重写类方法，并保留原有 decorator 封装。"""
-        if load_status != "nonempty":
-            self._record_unavailable_extract(
-                funcs=[(method.function, True) for method in methods],
-                failure_key="empty_extract",
-            )
-            return methods
-
-        signatures: dict[str, list[ExtractedFunction]] = {}
-        if extracted_module is not None:
-            extracted_class = extracted_module.classes.get(class_name)
-            if extracted_class is not None:
-                signatures = extracted_class.methods
-
-        new_methods: list[IRMethod] = []
-        for method in methods:
-            rewritten, outcome = self._rewrite_function_with_outcome(
-                func=method.function,
-                signatures=signatures,
-                is_method=True,
-            )
-            self._record_outcome(func=method.function, outcome=outcome)
-            if len(rewritten) == 1 and rewritten[0] is method.function:
-                # 未发生替换时直接复用原对象，减少不必要重建。
-                new_methods.append(method)
-                continue
-            for func in rewritten:
-                new_methods.append(IRMethod(function=func, decorator=method.decorator))
-        return new_methods
 
     def _rewrite_function(
         self,

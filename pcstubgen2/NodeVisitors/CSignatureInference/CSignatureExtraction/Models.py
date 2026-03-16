@@ -45,25 +45,9 @@ class ExtractedFunction:
 
 
 @dataclass
-class ExtractedClass:
-    """模块中导出的类型及其方法提取结果。"""
-
-    name: str
-    c_type_name: str | None = None
-    tp_name: str | None = None
-    source_file: str | None = None
-    methods: dict[str, list[ExtractedFunction]] = field(default_factory=dict)
-
-
-@dataclass
 class ExtractedModule:
     """按 PyModuleDef 聚合的模块级提取结果。"""
 
     name: str
     lookup_names: set[str] = field(default_factory=set)
-    module_def_name: str | None = None
-    init_func_name: str | None = None
-    source_files: set[str] = field(default_factory=set)
     functions: dict[str, list[ExtractedFunction]] = field(default_factory=dict)
-    classes: dict[str, ExtractedClass] = field(default_factory=dict)
-
