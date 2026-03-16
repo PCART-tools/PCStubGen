@@ -50,4 +50,4 @@ class ExtractedModule:
 
     name: str
     lookup_names: set[str] = field(default_factory=set)
-    functions: dict[str, list[ExtractedFunction]] = field(default_factory=dict)
+    functions: dict[str, ExtractedFunction] = field(default_factory=dict)

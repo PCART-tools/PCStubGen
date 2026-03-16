@@ -47,7 +47,6 @@ AUTO_INCLUDE_MISSING_HEADER_RE = re.compile(r"'([^']+)' file not found")
 
 SignatureArgumentKey: TypeAlias = tuple[str, str | None, str | None, str]
 SignatureKey: TypeAlias = tuple[str | None, tuple[SignatureArgumentKey, ...]]
-FunctionDedupKey: TypeAlias = tuple[str, str | None, str | None, tuple[SignatureKey, ...]]
 
 transparent_cursor_kinds = {
     # 没有暴露给python libclang的表达式
@@ -293,9 +292,6 @@ class CSignatureExtractor:
                     continue
                 self._merge_extracted_module(existing, module)
 
-        for module in discovered_modules.values():
-            module.functions = self._deduplicate_result(module.functions)
-
         self._cache_modules = discovered_modules
         return self._cache_modules
 
@@ -535,14 +531,14 @@ class CSignatureExtractor:
         # 方法表
         m_methods_cursor = field_values.get("m_methods")
         if m_methods_cursor is None:
-            module.functions = self._deduplicate_result(module.functions)
             return module
         if m_methods_cursor.kind == CursorKind.DECL_REF_EXPR:
             method_list_cursor = m_methods_cursor.referenced
             assert _is_PyMethodDef_array_definition(method_list_cursor)
             self._merge_discovered_functions(
                 module.functions,
-                self._extract_method_table(method_list_cursor),
+                self._extract_method_table(method_list_cursor, module_name=m_name).values(),
+                module_name=m_name,
             )
         else:
             assert (
@@ -551,33 +547,37 @@ class CSignatureExtractor:
                 or any(str(token.spelling) == "NULL" for token in m_methods_cursor.get_tokens())
             )
 
-        module.functions = self._deduplicate_result(module.functions)
         return module
 
     def _merge_extracted_module(self, target: ExtractedModule, incoming: ExtractedModule) -> None:
         """合并两个同名模块的提取结果，保留已有信息并追加新发现。"""
         target.lookup_names.update(incoming.lookup_names)
-        for functions in incoming.functions.values():
-            self._merge_discovered_functions(target.functions, functions)
+        self._merge_discovered_functions(
+            target.functions,
+            incoming.functions.values(),
+            module_name=target.name,
+        )
 
     def _extract_method_table(
             self,
             cursor: Cursor,
-    ) -> list[ExtractedFunction]:
+            *,
+            module_name: str,
+    ) -> dict[str, ExtractedFunction]:
         """解析 `PyMethodDef[]` 变量。"""
         assert cursor.kind == CursorKind.VAR_DECL
         assert _is_PyMethodDef_array_definition(cursor)
 
-        grouped: dict[str, list[ExtractedFunction]] = {}
+        grouped: dict[str, ExtractedFunction] = {}
         # 方法表本质上是数组初始化列表，逐项还原即可。
         init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(cursor)
         self._process_PyMethodDef_array_INIT_LIST_EXPR(
             cursor,
             init_expr_node,
             grouped,
+            module_name=module_name,
         )
-        deduped = self._deduplicate_result(grouped)
-        return [item for items in deduped.values() for item in items]
+        return grouped
 
     def _resolve_INIT_LIST_EXPR(
             self,
@@ -629,7 +629,9 @@ class CSignatureExtractor:
             self,
             var_decl_node: Cursor,
             init_list_expr_node: Cursor,
-            output: dict[str, list[ExtractedFunction]],
+            output: dict[str, ExtractedFunction],
+            *,
+            module_name: str,
     ) -> None:
         """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
         assert init_list_expr_node.kind == CursorKind.INIT_LIST_EXPR
@@ -647,7 +649,7 @@ class CSignatureExtractor:
             )
             if extracted is None:
                 continue
-            output.setdefault(extracted.py_name, []).append(extracted)
+            self._add_discovered_function(output, extracted, module_name=module_name)
 
     def _extract_PyMethodDef_INIT_LIST_EXPR(
             self,
@@ -1304,12 +1306,48 @@ class CSignatureExtractor:
 
     def _merge_discovered_functions(
             self,
-            target: dict[str, list[ExtractedFunction]],
-            functions: list[ExtractedFunction],
+            target: dict[str, ExtractedFunction],
+            functions: Iterable[ExtractedFunction],
+            *,
+            module_name: str,
     ) -> None:
-        """把函数候选按 Python 名聚合到目标映射中。"""
+        """把函数按 Python 名聚合到目标映射中，重复名时保留旧值。"""
         for function in functions:
-            target.setdefault(function.py_name, []).append(function)
+            self._add_discovered_function(target, function, module_name=module_name)
+
+    def _add_discovered_function(
+            self,
+            target: dict[str, ExtractedFunction],
+            function: ExtractedFunction,
+            *,
+            module_name: str,
+    ) -> None:
+        """向模块函数映射写入函数；若 Python 名重复则告警并保留旧值。"""
+        existing = target.get(function.py_name)
+        if existing is None:
+            target[function.py_name] = function
+            return
+        logger.warning(
+            "Discarded duplicate extracted function in module %s for Python name %s: "
+            "kept c_name=%s%s, dropped c_name=%s%s",
+            module_name,
+            function.py_name,
+            existing.c_name,
+            self._format_function_origin(existing),
+            function.c_name,
+            self._format_function_origin(function),
+        )
+
+    def _format_function_origin(self, function: ExtractedFunction) -> str:
+        """格式化函数来源上下文，便于重复名告警定位。"""
+        details: list[str] = []
+        if function.source_file is not None:
+            details.append(f"source_file={function.source_file}")
+        if function.method_table is not None:
+            details.append(f"method_table={function.method_table}")
+        if not details:
+            return ""
+        return f" ({', '.join(details)})"
 
     def _get_init_value(self, name: str, func_cursor: Cursor) -> str | None:
         """从局部变量定义中提取默认值字面表达式。"""
@@ -1446,23 +1484,3 @@ class CSignatureExtractor:
             result.append(signature)
         return result
 
-    def _deduplicate_result(self, raw: dict[str, list[ExtractedFunction]]) -> dict[str, list[ExtractedFunction]]:
-        """
-        对同名 Python 函数的候选提取结果做稳定去重。
-
-        去重键包含 C 名、方法表、来源文件和完整签名，避免跨表误合并。
-        """
-        result: dict[str, list[ExtractedFunction]] = {}
-        for py_name, funcs in raw.items():
-            seen: set[FunctionDedupKey] = set()
-            deduped: list[ExtractedFunction] = []
-            for item in funcs:
-                signature_key = tuple(self._signature_key(sig) for sig in item.signatures)
-                # 同一 Python 名下，只有来源与签名都一致才视为重复。
-                key = (item.c_name, item.method_table, item.source_file, signature_key)
-                if key in seen:
-                    continue
-                seen.add(key)
-                deduped.append(item)
-            result[py_name] = deduped
-        return result

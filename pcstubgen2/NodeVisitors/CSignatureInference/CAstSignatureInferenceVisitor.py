@@ -34,7 +34,6 @@ SignatureLoadStatus = Literal["nonempty", "empty"]
 RewriteOutcome = Literal[
     "success",
     "no_candidates",
-    "candidate_selection_failed",
     "empty_selected_signatures",
 ]
 
@@ -45,7 +44,6 @@ class _InferenceStats:
     success: int = 0
     failed: int = 0
     no_candidates: int = 0
-    candidate_selection_failed: int = 0
     empty_selected_signatures: int = 0
     empty_extract: int = 0
 
@@ -105,14 +103,12 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         logger.info(
             "C AST signature inference summary for %s: "
             "total_generic=%d, success=%d, failed=%d, no_candidates=%d, "
-            "candidate_selection_failed=%d, empty_selected_signatures=%d, "
-            "empty_extract=%d",
+            "empty_selected_signatures=%d, empty_extract=%d",
             project_name,
             self._stats.total_generic,
             self._stats.success,
             self._stats.failed,
             self._stats.no_candidates,
-            self._stats.candidate_selection_failed,
             self._stats.empty_selected_signatures,
             self._stats.empty_extract,
         )
@@ -149,7 +145,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self,
         *,
         func: IRFunction,
-        signatures: dict[str, list[ExtractedFunction]],
+        signatures: dict[str, ExtractedFunction],
         is_method: bool,
     ) -> list[IRFunction]:
         rewritten, _ = self._rewrite_function_with_outcome(
@@ -163,7 +159,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         self,
         *,
         func: IRFunction,
-        signatures: dict[str, list[ExtractedFunction]],
+        signatures: dict[str, ExtractedFunction],
         is_method: bool,
     ) -> tuple[list[IRFunction], RewriteOutcome | None]:
         """
@@ -174,23 +170,14 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         if not func.is_generic_signature():
             return [func], None
 
-        candidates = signatures.get(func.name)
-        if not candidates:
+        selected = signatures.get(func.name)
+        if selected is None:
             logger.warning(
                 "Failed to rewrite generic signature for %s (is_method=%s): no C signature candidates found",
                 func.name,
                 is_method,
             )
             return [func], "no_candidates"
-
-        selected = self._select_candidate(candidates, is_method=is_method)
-        if selected is None:
-            logger.warning(
-                "Failed to rewrite generic signature for %s (is_method=%s): candidate selection failed",
-                func.name,
-                is_method,
-            )
-            return [func], "candidate_selection_failed"
 
         if not selected.signatures:
             logger.warning(
@@ -222,10 +209,9 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             )
         if rewritten:
             logger.info(
-                "Rewrote generic signature for %s (is_method=%s): selected_candidates=%d, generated_signatures=%d",
+                "Rewrote generic signature for %s (is_method=%s): generated_signatures=%d",
                 func.name,
                 is_method,
-                len(candidates),
                 len(rewritten),
             )
         return (rewritten if rewritten else [func]), "success"
@@ -310,44 +296,6 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
             pass
         return IRValue(repr=expr, is_print_safe=is_print_safe)
-
-    def _select_candidate(
-        self,
-        candidates: list[ExtractedFunction],
-        *,
-        is_method: bool,
-    ) -> ExtractedFunction | None:
-        """
-        从同名候选中选择最匹配的提取结果。
-
-        评分策略为启发式：优先匹配方法/函数首参特征，再结合方法标志与重载数量。
-        """
-        if not candidates:
-            return None
-
-        def candidate_score(item: ExtractedFunction) -> int:
-            first_arg = None
-            if item.signatures and item.signatures[0].arguments:
-                first_arg = item.signatures[0].arguments[0].name
-
-            score = 0
-            if is_method:
-                if first_arg in {"self", "cls"}:
-                    score += 3
-                if "METH_CLASS" in item.method_flags:
-                    score += 1
-            else:
-                if first_arg in {"self", "cls"}:
-                    score -= 3
-                else:
-                    score += 1
-                if "METH_STATIC" in item.method_flags:
-                    score += 1
-
-            score += len(item.signatures)
-            return score
-
-        return max(candidates, key=candidate_score)
 
     def _match_extracted_module(
         self,
