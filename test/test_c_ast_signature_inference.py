@@ -730,8 +730,6 @@ def test_c_signature_engine_resolves_missing_include_with_literal_rglob(
     tmp_path: Path,
 ) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "src" / "module.c"
-    source.parent.mkdir(parents=True, exist_ok=True)
     header_path = tmp_path / "vendor" / "include" / "numpy" / "npy_common.h"
     header_path.parent.mkdir(parents=True, exist_ok=True)
     header_path.write_text("/* header */", encoding="utf-8")
@@ -745,10 +743,7 @@ def test_c_signature_engine_resolves_missing_include_with_literal_rglob(
 
     monkeypatch.setattr(Path, "rglob", _record_rglob)
 
-    include_dir = engine._resolve_missing_include_dir(
-        include_literal="numpy/npy_common.h",
-        source_file=source,
-    )
+    include_dir = engine._resolve_missing_include_dir(include_literal="numpy/npy_common.h")
 
     assert include_dir == header_path.parents[1]
     assert rglob_patterns == ["numpy/npy_common.h"]
@@ -873,7 +868,7 @@ def test_c_signature_engine_matches_full_include_literal_without_filename_fallba
     assert str(decoy_header.parent) not in engine._clang_include_directory
 
 
-def test_c_signature_engine_selects_nearest_header_match_for_ambiguous_include(tmp_path: Path) -> None:
+def test_c_signature_engine_accepts_any_full_literal_match_for_ambiguous_include(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "workspace" / "feature" / "src" / "module.c"
 
@@ -901,8 +896,7 @@ def test_c_signature_engine_selects_nearest_header_match_for_ambiguous_include(t
     result = engine._parse_translation_unit(index=index, file_path=source)
 
     assert result is second
-    assert str(near_include) in engine._clang_include_directory
-    assert str(far_include) not in engine._clang_include_directory
+    assert engine._clang_include_directory in ([str(near_include)], [str(far_include)])
 
 
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
@@ -2895,10 +2889,18 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
         clang_include=["Python.h"],
         clang_include_directory=["C:/MyInclude"],
     )
-    engine._ensure_clang_ready = lambda: True
+    ready_calls = 0
+
+    def fake_ensure_clang_ready() -> bool:
+        nonlocal ready_calls
+        ready_calls += 1
+        return True
+
+    engine._ensure_clang_ready = fake_ensure_clang_ready
     engine._find_candidate_files = lambda: []
 
     assert engine.extract_modules() == {}
+    assert ready_calls == 1
     expected_include_dirs = ["C:/MyInclude"]
     for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
         if not include_dir:
@@ -3494,57 +3496,6 @@ def test_c_signature_engine_process_init_list_expr_uses_var_decl_metadata_and_se
     assert {call[1] for call in calls} == {"Methods"}
     assert {call[2] for call in calls} == {owner_file}
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
-
-
-def test_c_signature_engine_collects_array_method_table_from_init_list_child(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    class _FakeCanonicalElementType:
-        spelling = "struct PyMethodDef"
-
-    class _FakeElementType:
-        spelling = "PyMethodDef"
-
-        def get_canonical(self) -> _FakeCanonicalElementType:
-            return _FakeCanonicalElementType()
-
-    class _FakeArrayType:
-        kind = clang.cindex.TypeKind.CONSTANTARRAY
-
-        def get_array_element_type(self) -> _FakeElementType:
-            return _FakeElementType()
-
-    target_init_expr = _init_list(_identifier_node("entry"))
-    var_decl_node = _FakeNode(
-        kind=clang.cindex.CursorKind.VAR_DECL,
-        spelling="Methods",
-        children=[
-            _FakeNode(kind=clang.cindex.CursorKind.TYPE_REF, spelling="PyMethodDef"),
-            target_init_expr,
-        ],
-    )
-    var_decl_node.type = _FakeArrayType()
-    var_decl_node.is_definition = lambda: True
-    root = _FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT, children=[var_decl_node])
-    captured: list[_FakeNode] = []
-
-    def fake_process(
-        var_decl_node: _FakeNode,
-        init_expr_node: _FakeNode,
-        output: dict[str, list[object]],
-    ) -> None:
-        _ = (var_decl_node, output)
-        captured.append(init_expr_node)
-
-    monkeypatch.setattr(engine, "_process_PyMethodDef_array_INIT_LIST_EXPR", fake_process)
-
-    engine._collect_pymethod_defs(root, {})
-
-    assert captured == [target_init_expr]
-
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)

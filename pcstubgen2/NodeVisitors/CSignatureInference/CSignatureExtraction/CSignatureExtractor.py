@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import posixpath
 import re
 import sysconfig
 from collections.abc import Iterable
@@ -267,9 +268,9 @@ class CSignatureExtractor:
             clang_cpp_std: str = "c++17",
     ) -> None:
         """初始化提取器、clang 参数和模块级缓存。"""
-        self.source_root = source_root
-        self._clang_include = [str(include_value) for include_value in clang_include]
-        self._clang_include_directory = [str(include_path) for include_path in clang_include_directory]
+        self._source_root = source_root
+        self._clang_include = list(clang_include)
+        self._clang_include_directory = list(clang_include_directory)
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
         self._cache_modules: dict[str, ExtractedModule] | None = None
@@ -279,11 +280,8 @@ class CSignatureExtractor:
         if self._cache_modules is not None:
             return self._cache_modules
 
-        check(self.source_root.exists())
-
-        if not self._ensure_clang_ready():
-            self._cache_modules = {}
-            return self._cache_modules
+        check(self._source_root.exists())
+        self._ensure_clang_ready()
 
         self._clang_include_directory = self._inject_python_include_directories(self._clang_include_directory)
 
@@ -325,13 +323,10 @@ class CSignatureExtractor:
 
     def _ensure_clang_ready(self) -> bool:
         """确保 clang 运行环境可用。"""
-        try:
-            if not clang.cindex.Config.loaded:
-                packaged_libclang_path = _get_packaged_libclang_path()
-                if packaged_libclang_path:
-                    clang.cindex.Config.set_library_file(packaged_libclang_path)
-        except Exception as ex:  # pragma: no cover
-            logger.warning("Failed to configure packaged libclang: %s", ex)
+        if not clang.cindex.Config.loaded:
+            packaged_libclang_path = _get_packaged_libclang_path()
+            if packaged_libclang_path:
+                clang.cindex.Config.set_library_file(packaged_libclang_path)
         return True
 
     def _inject_python_include_directories(self, include_directories: list[str]) -> list[str]:
@@ -352,10 +347,11 @@ class CSignatureExtractor:
     def _normalize_include_literal(self, include_literal: str) -> str:
         """规范化报错里的头文件字面量，便于后续路径匹配。"""
         normalized = include_literal.replace("\\", "/").strip()
-        while "//" in normalized:
-            normalized = normalized.replace("//", "/")
-        if normalized.startswith("./"):
-            normalized = normalized[2:]
+        if not normalized:
+            return ""
+        normalized = posixpath.normpath(normalized)
+        if normalized == ".":
+            return ""
         return normalized
 
     def _split_include_literal_parts(self, include_literal: str) -> tuple[str, ...]:
@@ -379,75 +375,24 @@ class CSignatureExtractor:
             missing.add(include_literal)
         return sorted(missing)
 
-    def _match_include_to_include_dir(
-            self,
-            *,
-            header_path: Path,
-            include_parts: tuple[str, ...],
-    ) -> Path | None:
-        """根据头文件实际路径反推出可加入 clang 的 include 根目录。"""
-        if not include_parts:
-            return None
-        header_parts = header_path.parts
-        if len(include_parts) > len(header_parts):
-            return None
-        suffix_parts = header_parts[-len(include_parts):]
-        if any(left.casefold() != right.casefold() for left, right in zip(suffix_parts, include_parts)):
-            return None
-        include_root_depth = len(include_parts) - 1
-        if include_root_depth >= len(header_path.parents):
-            return None
-        return header_path.parents[include_root_depth]
-
-    def _build_include_candidate_rank(
-            self,
-            *,
-            source_dir: Path,
-            header_dir: Path,
-            include_dir: Path,
-    ) -> tuple[int, int, str, str]:
-        """为候选 include 目录构建排序键，优先选择与源文件距离更近者。"""
-        source_parts = source_dir.resolve().parts
-        header_parts = header_dir.resolve().parts
-        common_prefix = 0
-        for left, right in zip(source_parts, header_parts):
-            if left.casefold() != right.casefold():
-                break
-            common_prefix += 1
-        distance = (len(source_parts) - common_prefix) + (len(header_parts) - common_prefix)
-        include_dir_posix = include_dir.as_posix()
-        return distance, -common_prefix, include_dir_posix.casefold(), include_dir_posix
-
-    def _resolve_missing_include_dir(self, *, include_literal: str, source_file: Path) -> Path | None:
-        """在源码树内搜索缺失头文件，并推导最合适的 include 目录。"""
+    def _resolve_missing_include_dir(self, *, include_literal: str) -> Path | None:
+        """在源码树内搜索缺失头文件，找到首个匹配的 include 目录后立即返回。"""
         include_literal = self._normalize_include_literal(include_literal)
         include_parts = self._split_include_literal_parts(include_literal)
         if not include_parts:
             return None
 
-        if not self.source_root.exists():
+        if not self._source_root.exists():
             return None
 
-        best_rank: tuple[int, int, str, str] | None = None
-        best_include_dir: Path | None = None
-        for header_path in self.source_root.rglob(include_literal):
+        for header_path in self._source_root.rglob(include_literal):
             if not header_path.is_file():
                 continue
-            include_dir = self._match_include_to_include_dir(
-                header_path=header_path,
-                include_parts=include_parts,
-            )
-            if include_dir is None:
+            include_root_depth = len(include_parts) - 1
+            if include_root_depth >= len(header_path.parents):
                 continue
-            rank = self._build_include_candidate_rank(
-                source_dir=source_file.parent,
-                header_dir=header_path.parent,
-                include_dir=include_dir,
-            )
-            if best_rank is None or rank < best_rank:
-                best_rank = rank
-                best_include_dir = include_dir
-        return best_include_dir
+            return header_path.parents[include_root_depth]
+        return None
 
     def _append_include_args(self, include_args: Iterable[str]) -> list[str]:
         """将新发现的 include 目录追加到 clang 参数中，并返回实际新增项。"""
@@ -471,10 +416,7 @@ class CSignatureExtractor:
         resolved_pairs: list[tuple[str, str]] = []
         missing_literals = self._extract_missing_include_literals(diagnostics)
         for include_literal in missing_literals:
-            include_dir = self._resolve_missing_include_dir(
-                include_literal=include_literal,
-                source_file=file_path,
-            )
+            include_dir = self._resolve_missing_include_dir(include_literal=include_literal)
             if include_dir is None:
                 continue
             resolved_pairs.append((include_literal, str(include_dir)))
@@ -497,7 +439,7 @@ class CSignatureExtractor:
     def _find_candidate_files(self) -> list[Path]:
         """查找包含 `PyInit_*` 模块入口的 C/C++ 源文件。"""
         result: list[Path] = []
-        for path in self.source_root.rglob("*"):
+        for path in self._source_root.rglob("*"):
             if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
                 text = path.read_text(encoding="utf-8", errors="ignore")
                 if "PyInit_" in text:
@@ -1013,22 +955,6 @@ class CSignatureExtractor:
             if target.kind == CursorKind.INIT_LIST_EXPR:
                 return target
         return None
-
-    def _collect_pymethod_defs(
-            self,
-            cursor: Cursor,
-            output: dict[str, list[ExtractedFunction]],
-    ) -> None:
-        """在 AST 中定位 `PyMethodDef` 表并提取条目。"""
-        for child in cursor.get_children():
-            if child.kind == CursorKind.VAR_DECL:
-                if _is_PyMethodDef_array_definition(child):
-                    init_expr_node = self._array_VAR_DECL_to_INIT_LIST_EXPR(child)
-                    self._process_PyMethodDef_array_INIT_LIST_EXPR(
-                        child,
-                        init_expr_node,
-                        output,
-                    )
 
     def _array_VAR_DECL_to_INIT_LIST_EXPR(self, cursor: Cursor) -> Cursor:
         """断言变量声明是数组初始化，并返回对应 `INIT_LIST_EXPR`。"""
@@ -1762,90 +1688,6 @@ class CSignatureExtractor:
         """提取节点 token 的原始 spelling 列表。"""
         return [str(token.spelling) for token in node.get_tokens()]
 
-    def _extract_var_decl_initializer_entries(self, cursor: Cursor) -> list[list[str]] | None:
-        """按顶层逗号切分变量初始化列表的 token 片段。"""
-        tokens = self._get_token_spellings(cursor)
-        if "{" not in tokens:
-            return None
-        start = tokens.index("{")
-        end = self._find_matching_token(tokens, start, "{", "}")
-        if end is None:
-            return None
-        inner = tokens[start + 1:end]
-        return self._split_top_level_tokens(inner, ",")
-
-    def _find_matching_token(
-            self,
-            tokens: list[str],
-            start: int,
-            opening: str,
-            closing: str,
-    ) -> int | None:
-        """在 token 序列中查找与起始括号匹配的闭合位置。"""
-        depth = 0
-        for index in range(start, len(tokens)):
-            token = tokens[index]
-            if token == opening:
-                depth += 1
-                continue
-            if token != closing:
-                continue
-            depth -= 1
-            if depth == 0:
-                return index
-        return None
-
-    def _split_top_level_tokens(self, tokens: list[str], delimiter: str) -> list[list[str]]:
-        """仅在顶层括号深度为 0 时按分隔符拆分 token 列表。"""
-        groups: list[list[str]] = []
-        current: list[str] = []
-        brace_depth = 0
-        paren_depth = 0
-        bracket_depth = 0
-        for token in tokens:
-            if token == delimiter and brace_depth == 0 and paren_depth == 0 and bracket_depth == 0:
-                groups.append(current)
-                current = []
-                continue
-
-            current.append(token)
-            if token == "{":
-                brace_depth += 1
-            elif token == "}":
-                brace_depth = max(0, brace_depth - 1)
-            elif token == "(":
-                paren_depth += 1
-            elif token == ")":
-                paren_depth = max(0, paren_depth - 1)
-            elif token == "[":
-                bracket_depth += 1
-            elif token == "]":
-                bracket_depth = max(0, bracket_depth - 1)
-
-        groups.append(current)
-        return [group for group in groups if group]
-
-    def _extract_designated_field_name(self, tokens: list[str]) -> str | None:
-        """从 token 片段中识别 `.field = value` 的字段名。"""
-        if len(tokens) >= 3 and tokens[0] == "." and tokens[2] == "=":
-            return tokens[1]
-        if len(tokens) >= 2 and tokens[0].startswith(".") and tokens[1] == "=":
-            return tokens[0][1:]
-        return None
-
-    def _extract_designated_initializer_map(self, entries: list[list[str]]) -> dict[str, list[str]]:
-        """把 designated initializer 片段整理成字段到值 token 的映射。"""
-        result: dict[str, list[str]] = {}
-        for entry in entries:
-            field_name = self._extract_designated_field_name(entry)
-            if field_name is None:
-                continue
-            if entry[0] == ".":
-                result[field_name] = entry[3:]
-            else:
-                result[field_name] = entry[2:]
-        return result
-
     def _extract_string_literal_from_cursor(self, cursor: Cursor | None) -> str | None:
         """在节点子树中查找首个字符串字面量并去掉外围引号。"""
         if cursor is None:
@@ -1854,14 +1696,6 @@ class CSignatureExtractor:
             if node.kind != CursorKind.STRING_LITERAL:
                 continue
             return self._strip_string_literal_quotes(str(node.spelling))
-        return None
-
-    def _extract_string_literal_from_tokens(self, tokens: list[str]) -> str | None:
-        """从 token 列表里提取首个字符串字面量文本。"""
-        for token in tokens:
-            if "\"" not in token:
-                continue
-            return self._strip_string_literal_quotes(token)
         return None
 
     def _extract_reference_name(
@@ -1902,18 +1736,6 @@ class CSignatureExtractor:
         if len(identifiers) == 1:
             return identifiers[0]
         return identifiers[-1]
-
-    def _extract_call_argument_groups(self, node: Cursor) -> list[list[str]]:
-        """按顶层逗号拆分调用表达式的实参 token 组。"""
-        tokens = self._get_token_spellings(node)
-        if "(" not in tokens:
-            return []
-        start = tokens.index("(")
-        end = self._find_matching_token(tokens, start, "(", ")")
-        if end is None:
-            return []
-        inner = tokens[start + 1:end]
-        return self._split_top_level_tokens(inner, ",")
 
     def _build_module_lookup_names(self, module_name: str, init_func_name: str | None) -> set[str]:
         """构建模块别名集合，兼容完整名、叶子名和 `PyInit_*` 名。"""
