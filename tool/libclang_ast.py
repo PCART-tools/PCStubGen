@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 from types import ModuleType
-from typing import TypedDict
 
 from clang.cindex import Cursor, CursorKind, Diagnostic, TranslationUnit
 
@@ -16,31 +15,9 @@ import clang.cindex as clang_cindex
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
-DEFAULT_OUTPUT_EXTENSION = ".ast.json"
+DEFAULT_OUTPUT_EXTENSION = ".ast.txt"
 
 EXIT_OK = 0
-
-
-class SerializedDiagnostic(TypedDict):
-    severity: int
-    severity_name: str | None
-    spelling: str | None
-
-
-class SerializedCursor(TypedDict):
-    kind: str
-    spelling: str | None
-    displayname: str | None
-    type_spelling: str | None
-    children: list[SerializedCursor]
-
-
-class AstPayload(TypedDict):
-    source_file: str
-    output_file: str
-    parse_args: list[str]
-    diagnostics: list[SerializedDiagnostic]
-    ast: SerializedCursor
 
 
 def configure_output_encoding() -> None:
@@ -82,13 +59,13 @@ def _normalize_clang_include_directory_tokens(argv: Sequence[str] | None) -> lis
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="使用 libclang 解析单个 C/C++ 源文件，并将完整 AST 导出为 JSON。",
+        description="使用 libclang 解析单个 C/C++ 源文件，并将完整 AST 导出为树状文本。",
         allow_abbrev=False,
     )
     parser.add_argument("source_path", help="待解析的 C/C++ 源文件路径。")
     parser.add_argument(
         "--output",
-        help="输出 JSON 文件路径；若传入目录，则自动生成 `<source_stem>.ast.json`。",
+        help="输出 AST 树文本路径；若传入目录，则自动生成 `<source_stem>.ast.txt`。",
     )
     parser.add_argument(
         "--clang-include",
@@ -124,16 +101,8 @@ def _kind_name(kind: CursorKind) -> str:
     return text.rsplit(".", 1)[-1]
 
 
-def _cursor_file_path(cursor: Cursor) -> Path | None:
-    location = getattr(cursor, "location", None)
-    file = getattr(location, "file", None)
-    if file is None:
-        return None
-
-    try:
-        return Path(str(file)).resolve()
-    except OSError:
-        return Path(str(file))
+def _normalize_path_for_compare(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path))
 
 
 CPP_SOURCE_SUFFIXES = {".cc", ".cpp", ".cxx", ".c++", ".hpp", ".hh", ".hxx"}
@@ -233,37 +202,9 @@ def resolve_output_path(source_path: Path, output_arg: str | None) -> Path:
     output_path = Path(output_arg)
     if output_path.exists() and output_path.is_dir():
         return output_path / f"{source_path.stem}{DEFAULT_OUTPUT_EXTENSION}"
-    if output_path.suffix.lower() == ".json":
+    if output_path.suffix:
         return output_path
     return output_path / f"{source_path.stem}{DEFAULT_OUTPUT_EXTENSION}"
-
-def _serialize_diagnostic(diagnostic: Diagnostic) -> SerializedDiagnostic:
-    return {
-        "severity": diagnostic.severity,
-        "severity_name": _diagnostic_severity_name(diagnostic.severity),
-        "spelling": _safe_str(diagnostic.spelling),
-    }
-
-
-def _serialize_cursor(cursor: Cursor, *, source_path: Path) -> SerializedCursor | None:
-    cursor_path = _cursor_file_path(cursor)
-    if cursor_path is not None and cursor_path != source_path:
-        return None
-
-    type_spelling = _safe_str(cursor.type.spelling)
-    children = [
-        serialized_child
-        for child in cursor.get_children()
-        if (serialized_child := _serialize_cursor(child, source_path=source_path)) is not None
-    ]
-    serialized: SerializedCursor = {
-        "kind": _kind_name(cursor.kind),
-        "spelling": _safe_str(cursor.spelling),
-        "displayname": _safe_str(cursor.displayname),
-        "type_spelling": type_spelling,
-        "children": children,
-    }
-    return serialized
 
 
 def _diagnostic_severity_name(severity: int) -> str:
@@ -276,6 +217,129 @@ def _diagnostic_severity_name(severity: int) -> str:
         diagnostic_type.Fatal: "FATAL",
     }
     return mapping.get(severity, str(severity))
+
+
+def _format_string_list(values: Sequence[str]) -> str:
+    escaped_values = [str(value).replace("\\", "\\\\").replace('"', '\\"') for value in values]
+    return "[" + ", ".join(f'"{value}"' for value in escaped_values) + "]"
+
+
+def _format_diagnostic(diagnostic: Diagnostic) -> str:
+    severity_name = _diagnostic_severity_name(diagnostic.severity)
+    message = _safe_str(diagnostic.spelling) or "<unknown>"
+    location = diagnostic.location
+    file = location.file
+    if file is None:
+        return f"[{severity_name}] {message}"
+    return f"[{severity_name}] {file}:{location.line}:{location.column}: {message}"
+
+
+def _is_cursor_from_source(cursor: Cursor, *, normalized_source_path: str) -> bool:
+    location = getattr(cursor, "location", None)
+    file = getattr(location, "file", None)
+    if file is None:
+        return True
+    cursor_path = str(file)
+    if not cursor_path:
+        return True
+    return _normalize_path_for_compare(cursor_path) == normalized_source_path
+
+
+def _cursor_type_spelling(cursor: Cursor) -> str | None:
+    cursor_type = cursor.type
+    if cursor_type is None:
+        return None
+    return _safe_str(cursor_type.spelling)
+
+
+def _cursor_spelling_for_display(cursor: Cursor) -> str | None:
+    spelling = _safe_str(cursor.spelling)
+    if spelling is not None:
+        return spelling
+    return _safe_str(cursor.displayname)
+
+
+def _cursor_literal_text(cursor: Cursor) -> str | None:
+    kind_name = _kind_name(cursor.kind)
+    if kind_name not in {"INTEGER_LITERAL", "STRING_LITERAL"}:
+        return None
+    if _safe_str(cursor.spelling) is not None:
+        return None
+
+    literal_kind = clang_cindex.TokenKind.LITERAL
+    literal_tokens = [str(token.spelling) for token in cursor.get_tokens() if token.kind == literal_kind]
+    if not literal_tokens:
+        return None
+    if kind_name == "INTEGER_LITERAL":
+        return literal_tokens[0]
+    return " ".join(literal_tokens)
+
+
+def _format_cursor_line(cursor: Cursor) -> str:
+    parts = [_kind_name(cursor.kind)]
+    spelling = _cursor_spelling_for_display(cursor)
+    if spelling is not None:
+        parts.append(f"spelling={spelling}")
+    type_spelling = _cursor_type_spelling(cursor)
+    if type_spelling is not None:
+        parts.append(f"type={type_spelling}")
+    literal = _cursor_literal_text(cursor)
+    if literal is not None:
+        parts.append(f"literal={literal}")
+    return " ".join(parts)
+
+
+def _render_cursor_subtree(
+    cursor: Cursor,
+    *,
+    normalized_source_path: str,
+    prefix: str,
+    is_last: bool,
+) -> list[str]:
+    if not _is_cursor_from_source(cursor, normalized_source_path=normalized_source_path):
+        return []
+
+    connector = "└─ " if is_last else "├─ "
+    child_prefix = prefix + ("   " if is_last else "│  ")
+    lines = [f"{prefix}{connector}{_format_cursor_line(cursor)}"]
+    children = [
+        child
+        for child in cursor.get_children()
+        if _is_cursor_from_source(child, normalized_source_path=normalized_source_path)
+    ]
+    for index, child in enumerate(children):
+        lines.extend(
+            _render_cursor_subtree(
+                child,
+                normalized_source_path=normalized_source_path,
+                prefix=child_prefix,
+                is_last=index == len(children) - 1,
+            )
+        )
+    return lines
+
+
+def _render_cursor_tree(cursor: Cursor, *, source_path: Path) -> list[str]:
+    normalized_source_path = _normalize_path_for_compare(str(source_path))
+    if not _is_cursor_from_source(cursor, normalized_source_path=normalized_source_path):
+        return []
+
+    lines = [_format_cursor_line(cursor)]
+    children = [
+        child
+        for child in cursor.get_children()
+        if _is_cursor_from_source(child, normalized_source_path=normalized_source_path)
+    ]
+    for index, child in enumerate(children):
+        lines.extend(
+            _render_cursor_subtree(
+                child,
+                normalized_source_path=normalized_source_path,
+                prefix="",
+                is_last=index == len(children) - 1,
+            )
+        )
+    return lines
 
 
 def initialize_clang(library_path: str | None) -> ModuleType:
@@ -301,18 +365,26 @@ def build_ast_payload(
     source_path: Path,
     output_path: Path,
     clang_args: Sequence[str],
-) -> AstPayload:
-    diagnostics = [_serialize_diagnostic(diagnostic) for diagnostic in translation_unit.diagnostics]
-    ast = _serialize_cursor(translation_unit.cursor, source_path=source_path)
-    if ast is None:
+) -> str:
+    ast_lines = _render_cursor_tree(
+        translation_unit.cursor,
+        source_path=source_path,
+    )
+    if not ast_lines:
         raise RuntimeError(f"Failed to serialize root cursor for source file: {source_path}")
-    return {
-        "source_file": str(source_path.resolve()),
-        "output_file": str(output_path.resolve()),
-        "parse_args": [str(arg) for arg in clang_args],
-        "diagnostics": diagnostics,
-        "ast": ast,
-    }
+    diagnostic_lines = [_format_diagnostic(diagnostic) for diagnostic in translation_unit.diagnostics]
+    if not diagnostic_lines:
+        diagnostic_lines = ["<none>"]
+    lines = [
+        f"source_file: {source_path.resolve()}",
+        f"output_file: {output_path.resolve()}",
+        f"parse_args: {_format_string_list([str(arg) for arg in clang_args])}",
+        "diagnostics:",
+    ]
+    lines.extend(f"- {line}" for line in diagnostic_lines)
+    lines.append("ast:")
+    lines.extend(ast_lines)
+    return "\n".join(lines)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -354,10 +426,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path=output_path,
         clang_args=clang_parse_args,
     )
-    json_text = json.dumps(payload, ensure_ascii=False, indent=2)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json_text + "\n", encoding="utf-8")
+    output_path.write_text(payload + "\n", encoding="utf-8")
     return EXIT_OK
 
 
