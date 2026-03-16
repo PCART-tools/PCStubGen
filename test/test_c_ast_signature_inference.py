@@ -2104,6 +2104,99 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
     assert extracted["second"].functions["foo"][0].c_name == "second_foo_impl"
 
 
+def test_c_signature_extraction_engine_extract_modules_handles_multiple_pyinit_functions_in_one_file(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "multi_init_module.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyObject* PyModule_Create(PyModuleDef* def);",
+                "static PyObject* first_foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyObject* second_foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef FirstMethods[] = {",
+                "    {\"foo\", first_foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyMethodDef SecondMethods[] = {",
+                "    {\"foo\", second_foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef first_moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"first\",",
+                "    0,",
+                "    -1,",
+                "    FirstMethods,",
+                "    0, 0, 0, 0",
+                "};",
+                "static PyModuleDef second_moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"second\",",
+                "    0,",
+                "    -1,",
+                "    SecondMethods,",
+                "    0, 0, 0, 0",
+                "};",
+                "PyObject* PyInit_first(void) {",
+                "    return PyModule_Create(&first_moduledef);",
+                "}",
+                "PyObject* PyInit_second(void) {",
+                "    return PyModule_Create(&second_moduledef);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert set(extracted) == {"first", "second"}
+    assert extracted["first"].functions["foo"][0].c_name == "first_foo_impl"
+    assert extracted["second"].functions["foo"][0].c_name == "second_foo_impl"
+
+
 def test_c_signature_extraction_engine_extract_modules_separates_module_and_class_methods(
     tmp_path: Path,
 ) -> None:

@@ -295,8 +295,6 @@ class CSignatureExtractor:
         translation_units: list[TranslationUnit] = []
         for file_path in source_files:
             tu = self._parse_translation_unit(index, file_path)
-            if tu is None:
-                continue
             translation_units.append(tu)
 
         discovered_modules: dict[str, ExtractedModule] = {}
@@ -465,7 +463,7 @@ class CSignatureExtractor:
             parse_args.extend(["--include-directory", include_dir])
         return parse_args
 
-    def _parse_translation_unit(self, index: Index, file_path: Path) -> TranslationUnit | None:
+    def _parse_translation_unit(self, index: Index, file_path: Path) -> TranslationUnit:
         """解析单个源码文件为 clang translation unit。"""
         translation_unit: TranslationUnit | None = None
         diagnostics: list[Diagnostic] = []
@@ -480,9 +478,6 @@ class CSignatureExtractor:
             if not added:
                 break
 
-        if translation_unit is None:
-            return None
-
         if self._has_error_diagnostics(diagnostics):
             logger.warning(
                 _format_diagnostics_message(
@@ -491,6 +486,7 @@ class CSignatureExtractor:
                     diagnostics=diagnostics,
                 )
             )
+        check(translation_unit is not None, f"Failed to parse translation unit: {file_path}")
         return translation_unit
 
     def _has_error_diagnostics(self, diagnostics: list[Diagnostic]) -> bool:
@@ -508,12 +504,12 @@ class CSignatureExtractor:
         """从单个 translation unit 的 `PyInit_*` 根节点提取模块。"""
         discovered: list[ExtractedModule] = []
         method_table_cache: dict[tuple[str | None, int, int, str, str], _DiscoveredMethodTable] = {}
-        for node in self._walk(cursor):
+        for node in cursor.get_children():
             if node.kind != CursorKind.FUNCTION_DECL:
                 continue
             if not node.is_definition():
                 continue
-            if not str(node.spelling).startswith("PyInit_"):
+            if not node.spelling.startswith("PyInit_"):
                 continue
             extracted = self._extract_module_from_PyInit(
                 node,
@@ -544,17 +540,12 @@ class CSignatureExtractor:
                 continue
 
             call_name = node.spelling
-            if call_name is None:
-                continue
-
-            arg_nodes = self._extract_call_argument_nodes(node)
-            if not arg_nodes:
+            if not call_name:
                 continue
 
             if call_name.startswith("PyModule_Create"):
                 # `PyModule_Create*(&module_def)` 是模块定义的主入口。
-                referenced_var = self._resolve_referenced_var_decl(arg_nodes[0])
-                candidate_module_def = self._extract_module_def(referenced_var)
+                candidate_module_def = self._extract_module_def_from_create_call(node)
                 if candidate_module_def is None:
                     continue
                 if module_def is None:
@@ -568,10 +559,29 @@ class CSignatureExtractor:
                     )
                 continue
 
-            # 其余命中点主要是类型注册，把类型对象挂回模块命名空间。
-            registered = self._extract_registered_type_ref(call_name, arg_nodes)
-            if registered is not None:
-                registered_types.append(registered)
+            if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef", "PyModule_AddType"}:
+                # 其余命中点主要是类型注册，把类型对象挂回模块命名空间。
+                # int PyModule_AddObject(PyObject *module, const char *name, PyObject *value)
+                # int PyModule_AddObjectRef(PyObject *module, const char *name, PyObject *value)
+                # int PyModule_AddType(PyObject *module, PyTypeObject *type)
+                arg_nodes = self._extract_call_argument_nodes(node)
+                registered: _RegisteredTypeRef | None = None
+                if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef"} and len(arg_nodes) >= 3:
+                    type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[2]))
+                    if type_def is not None:
+                        registered = _RegisteredTypeRef(
+                            exported_name=self._extract_string_literal_from_cursor(arg_nodes[1]),
+                            type_def=type_def,
+                        )
+                elif call_name == "PyModule_AddType" and len(arg_nodes) >= 2:
+                    type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[1]))
+                    if type_def is not None:
+                        registered = _RegisteredTypeRef(
+                            exported_name=self._extract_type_leaf_name(type_def.tp_name),
+                            type_def=type_def,
+                        )
+                if registered is not None:
+                    registered_types.append(registered)
 
         if module_def is None:
             return None
@@ -748,12 +758,8 @@ class CSignatureExtractor:
             method_table_cache[cache_key] = discovered
         return discovered
 
-    def _extract_module_def(self, cursor: Cursor | None) -> _DiscoveredModuleDef | None:
+    def _extract_module_def(self, cursor: Cursor) -> _DiscoveredModuleDef | None:
         """从 `PyModuleDef` 变量声明中提取模块名和方法表引用。"""
-        if cursor is None or cursor.kind != CursorKind.VAR_DECL:
-            return None
-        if not self._is_PyModuleDef_definition(cursor):
-            return None
 
         field_values = self._extract_struct_initializer_fields(cursor)
         return _DiscoveredModuleDef(
@@ -763,6 +769,17 @@ class CSignatureExtractor:
             methods_table_cursor=self._resolve_method_table_cursor(field_values.get("m_methods")),
             source_file=self._get_cursor_source_file(cursor),
         )
+
+    def _extract_module_def_from_create_call(self, call_node: Cursor) -> _DiscoveredModuleDef | None:
+        """按 `PyModule_Create*` 的参数结构解析模块定义引用。"""
+        arg_nodes = self._extract_call_argument_nodes(call_node)
+        if not arg_nodes:
+            return None
+
+        referenced_var = self._resolve_referenced_var_decl(arg_nodes[0])
+        if referenced_var is None or not self._is_PyModuleDef_definition(referenced_var):
+            return None
+        return self._extract_module_def(referenced_var)
 
     def _extract_type_def(self, cursor: Cursor | None) -> _DiscoveredTypeDef | None:
         """从 `PyTypeObject` 变量声明中提取 `tp_name` 与 `tp_methods`。"""
@@ -779,32 +796,6 @@ class CSignatureExtractor:
             methods_table_cursor=self._resolve_method_table_cursor(field_values.get("tp_methods")),
             source_file=self._get_cursor_source_file(cursor),
         )
-
-    def _extract_registered_type_ref(
-            self,
-            call_name: str,
-            arg_nodes: list[Cursor],
-    ) -> _RegisteredTypeRef | None:
-        """识别模块中注册到 Python 命名空间的类型对象引用。"""
-        if call_name in {"PyModule_AddObject", "PyModule_AddObjectRef"} and len(arg_nodes) >= 3:
-            type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[2]))
-            if type_def is None:
-                return None
-            return _RegisteredTypeRef(
-                exported_name=self._extract_string_literal_from_cursor(arg_nodes[1]),
-                type_def=type_def,
-            )
-
-        if call_name == "PyModule_AddType" and len(arg_nodes) >= 2:
-            type_def = self._extract_type_def(self._resolve_referenced_var_decl(arg_nodes[1]))
-            if type_def is None:
-                return None
-            return _RegisteredTypeRef(
-                exported_name=self._extract_type_leaf_name(type_def.tp_name),
-                type_def=type_def,
-            )
-
-        return None
 
     def _extract_call_argument_nodes(self, node: Cursor) -> list[Cursor]:
         """返回调用表达式的实参数节点，跳过第一个 callee 子节点。"""

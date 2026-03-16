@@ -52,3 +52,30 @@ typedef PyObject *(*PyCMethod)(
 #define PyModule_Create(module) \
         PyModule_Create2(module, PYTHON_API_VERSION)
 PyObject* PyModule_Create2(PyModuleDef *module, int apiver)
+
+struct PyModuleDef {
+  PyModuleDef_Base m_base;
+  const char* m_name;
+  const char* m_doc;
+  Py_ssize_t m_size;
+  PyMethodDef *m_methods;
+  PyModuleDef_Slot *m_slots;
+  traverseproc m_traverse;
+  inquiry m_clear;
+  freefunc m_free;
+};
+
+PyMODINIT_FUNC PyInit__simd(void) 只是最后短名，函数名不可能带点号
+{
+    static struct PyModuleDef defs = {
+        .m_base = PyModuleDef_HEAD_INIT,
+        .m_name = "numpy._core._simd",
+        .m_size = -1,
+        .m_methods = _simd_methods
+    };
+    if (npy_cpu_init() < 0) {
+        return NULL;
+    }
+
+int PyModule_AddObject(PyObject *module, const char *name, PyObject *value)
+添加变量、类、对象
