@@ -36,12 +36,8 @@ class ExtractedFunction:
     """按 PyMethodDef 条目聚合的函数提取结果。"""
 
     py_name: str
-    c_name: str
-    method_flags: list[str] = field(default_factory=list)
+    ml_flags: list[str] = field(default_factory=list)
     signatures: list[ExtractedSignature] = field(default_factory=list)
-    # 记录来源，便于调试与去重。
-    source_file: str | None = None
-    method_table: str | None = None
 
 
 @dataclass

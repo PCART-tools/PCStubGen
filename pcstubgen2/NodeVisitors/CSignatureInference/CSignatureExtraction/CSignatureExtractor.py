@@ -6,7 +6,7 @@ import re
 import sysconfig
 from collections.abc import Iterable
 from pathlib import Path
-from typing import TypeAlias
+from typing import TypeAlias, Sequence
 
 import clang
 import clang.cindex
@@ -230,6 +230,58 @@ def _strip_string_literal_quotes(literal: str) -> str:
     return literal.strip('"')
 
 
+def _normalize_include_literal(include_literal: str) -> str:
+    """规范化报错里的头文件字面量，便于后续路径匹配。"""
+    normalized = include_literal.replace("\\", "/").strip()
+    if not normalized:
+        return ""
+    normalized = posixpath.normpath(normalized)
+    if normalized == ".":
+        return ""
+    return normalized
+
+
+def _extract_missing_include_literals(diagnostics: list[Diagnostic]) -> list[str]:
+    """从 clang 错误诊断中提取缺失头文件名。"""
+    missing: set[str] = set()
+    for diagnostic in diagnostics:
+        if diagnostic.severity < clang.cindex.Diagnostic.Error:
+            continue
+        message = str(diagnostic.spelling)
+        match = AUTO_INCLUDE_MISSING_HEADER_RE.search(message)
+        if match is None:
+            continue
+        include_literal = _normalize_include_literal(match.group(1))
+        if not include_literal:
+            continue
+        missing.add(include_literal)
+    return sorted(missing)
+
+
+def _inject_python_include_directories(include_directories: list[str]) -> list[str]:
+    """向 include 目录列表注入当前 Python 头文件目录。"""
+    directories = list(include_directories)
+    include_candidates = [
+        sysconfig.get_path("include"),
+        sysconfig.get_path("platinclude"),
+    ]
+    for include_dir in include_candidates:
+        if not include_dir:
+            continue
+        if include_dir in directories:
+            continue
+        directories.append(include_dir)
+    return directories
+
+
+def _ensure_clang_ready() -> None:
+    """确保 clang 运行环境可用。"""
+    if not clang.cindex.Config.loaded:
+        packaged_libclang_path = _get_packaged_libclang_path()
+        if packaged_libclang_path:
+            clang.cindex.Config.set_library_file(packaged_libclang_path)
+
+
 class CSignatureExtractor:
     """
     基于 libclang 的 C 签名提取引擎。
@@ -254,22 +306,22 @@ class CSignatureExtractor:
         self._clang_include_directory = list(clang_include_directory)
         self._clang_c_std = clang_c_std
         self._clang_cpp_std = clang_cpp_std
-        self._cache_modules: dict[str, ExtractedModule] | None = None
+        self._cache_result: dict[str, ExtractedModule] | None = None
 
     def extract_modules(self) -> dict[str, ExtractedModule]:
         """执行模块级签名提取主流程。"""
-        if self._cache_modules is not None:
-            return self._cache_modules
+        if self._cache_result is not None:
+            return self._cache_result
 
         check(self._source_root.exists())
-        self._ensure_clang_ready()
+        _ensure_clang_ready()
 
-        self._clang_include_directory = self._inject_python_include_directories(self._clang_include_directory)
+        self._clang_include_directory = _inject_python_include_directories(self._clang_include_directory)
 
         source_files = self._find_candidate_files()
         if not source_files:
-            self._cache_modules = {}
-            return self._cache_modules
+            self._cache_result = {}
+            return self._cache_result
 
         index = Index.create()
 
@@ -278,7 +330,7 @@ class CSignatureExtractor:
             tu = self._parse_translation_unit(index, file_path)
             translation_units.append(tu)
 
-        discovered_modules: dict[str, ExtractedModule] = {}
+        result: dict[str, ExtractedModule] = {}
         for tu in translation_units:
             try:
                 modules = self._process_translation_unit(tu.cursor)
@@ -286,85 +338,28 @@ class CSignatureExtractor:
                 logger.exception("AssertionError", exc_info=ex)
                 continue
             for module in modules:
-                existing = discovered_modules.get(module.name)
-                if existing is None:
-                    discovered_modules[module.name] = module
+                existing = result.get(module.name)
+                if existing is not None:
+                    logger.warning(
+                        "Discarded duplicate extracted module %s: kept existing module, discarded incoming module",
+                        existing.name,
+                    )
                     continue
-                logger.warning(
-                    "Discarded duplicate extracted module %s: kept existing module, discarded incoming module",
-                    existing.name,
-                )
+                result[module.name] = module
 
-        self._cache_modules = discovered_modules
-        return self._cache_modules
-
-    def _ensure_clang_ready(self) -> None:
-        """确保 clang 运行环境可用。"""
-        if not clang.cindex.Config.loaded:
-            packaged_libclang_path = _get_packaged_libclang_path()
-            if packaged_libclang_path:
-                clang.cindex.Config.set_library_file(packaged_libclang_path)
-
-    def _inject_python_include_directories(self, include_directories: list[str]) -> list[str]:
-        """向 include 目录列表注入当前 Python 头文件目录。"""
-        directories = list(include_directories)
-        include_candidates = [
-            sysconfig.get_path("include"),
-            sysconfig.get_path("platinclude"),
-        ]
-        for include_dir in include_candidates:
-            if not include_dir:
-                continue
-            if include_dir in directories:
-                continue
-            directories.append(include_dir)
-        return directories
-
-    def _normalize_include_literal(self, include_literal: str) -> str:
-        """规范化报错里的头文件字面量，便于后续路径匹配。"""
-        normalized = include_literal.replace("\\", "/").strip()
-        if not normalized:
-            return ""
-        normalized = posixpath.normpath(normalized)
-        if normalized == ".":
-            return ""
-        return normalized
-
-    def _split_include_literal_parts(self, include_literal: str) -> tuple[str, ...]:
-        """将 include 字面量拆成稳定的路径片段元组。"""
-        normalized = self._normalize_include_literal(include_literal)
-        return tuple(part for part in normalized.split("/") if part and part != ".")
-
-    def _extract_missing_include_literals(self, diagnostics: list[Diagnostic]) -> list[str]:
-        """从 clang 错误诊断中提取缺失头文件名。"""
-        missing: set[str] = set()
-        for diagnostic in diagnostics:
-            if diagnostic.severity < clang.cindex.Diagnostic.Error:
-                continue
-            message = str(diagnostic.spelling)
-            match = AUTO_INCLUDE_MISSING_HEADER_RE.search(message)
-            if match is None:
-                continue
-            include_literal = self._normalize_include_literal(match.group(1))
-            if not include_literal:
-                continue
-            missing.add(include_literal)
-        return sorted(missing)
+        self._cache_result = result
+        return self._cache_result
 
     def _resolve_missing_include_dir(self, *, include_literal: str) -> Path | None:
         """在源码树内搜索缺失头文件，找到首个匹配的 include 目录后立即返回。"""
-        include_literal = self._normalize_include_literal(include_literal)
-        include_parts = self._split_include_literal_parts(include_literal)
-        if not include_parts:
+        include_literal = _normalize_include_literal(include_literal)
+        if not include_literal:
             return None
-
-        if not self._source_root.exists():
-            return None
+        include_root_depth = len(tuple(part for part in include_literal.split("/") if part)) - 1
 
         for header_path in self._source_root.rglob(include_literal):
             if not header_path.is_file():
                 continue
-            include_root_depth = len(include_parts) - 1
             if include_root_depth >= len(header_path.parents):
                 continue
             return header_path.parents[include_root_depth]
@@ -390,7 +385,7 @@ class CSignatureExtractor:
     ) -> list[str]:
         """基于缺失头文件诊断自动补全 clang include 目录。"""
         resolved_pairs: list[tuple[str, str]] = []
-        missing_literals = self._extract_missing_include_literals(diagnostics)
+        missing_literals = _extract_missing_include_literals(diagnostics)
         for include_literal in missing_literals:
             include_dir = self._resolve_missing_include_dir(include_literal=include_literal)
             if include_dir is None:
@@ -476,23 +471,22 @@ class CSignatureExtractor:
 
 
     def _process_translation_unit(
-            self,
-            cursor: Cursor,
+        self,
+        cursor: Cursor,
     ) -> list[ExtractedModule]:
         """从单个 translation unit 的 `PyModuleDef` 变量定义提取模块。"""
-        discovered: list[ExtractedModule] = []
-        # PyModuleDef可能定义为PyInit_函数内的局部变量
+        modules: list[ExtractedModule] = []
+        # 找 `PyModuleDef`。它可能定义为 `PyInit_` 函数内的局部变量。
         for node in _walk_cursor(cursor):
-            if node.kind != CursorKind.VAR_DECL:
-                continue
-            if not node.is_definition():
-                continue
-            if node.type.spelling not in {"PyModuleDef", "struct PyModuleDef"}:
-                continue
-            extracted = self._extract_module_from_PyModuleDef(node)
-            if extracted is not None:
-                discovered.append(extracted)
-        return discovered
+            if (
+                node.kind == CursorKind.VAR_DECL
+                and node.is_definition()
+                and node.type.spelling in {"PyModuleDef", "struct PyModuleDef"}
+            ):
+                extracted = self._extract_module_from_PyModuleDef(node)
+                if extracted is not None:
+                    modules.append(extracted)
+        return modules
 
     def _extract_module_from_PyModuleDef(
             self,
@@ -501,8 +495,7 @@ class CSignatureExtractor:
         """
         从单个 `PyModuleDef` 变量中提取模块定义与模块方法。
 
-        模块名只认 `m_name`，方法只认 `m_methods`；若缺少 `m_name`，
-        直接忽略该定义，避免把局部模板或未导出的占位结构误当成模块。
+        模块名认 `m_name`，方法认 `m_methods`；
         """
         init_list_expr = _VAR_DECL_to_INIT_LIST_EXPR(module_def_cursor)
         assert init_list_expr is not None
@@ -522,8 +515,7 @@ class CSignatureExtractor:
 
         # 模块名
         m_name_cursor = field_values.get("m_name")
-        if m_name_cursor is None:
-            return None
+        assert m_name_cursor is not None
         assert m_name_cursor.kind == CursorKind.STRING_LITERAL
 
         m_name = m_name_cursor.spelling.strip('"')
@@ -535,20 +527,18 @@ class CSignatureExtractor:
         m_methods_cursor = field_values.get("m_methods")
         if m_methods_cursor is None:
             return module
-        if m_methods_cursor.kind == CursorKind.DECL_REF_EXPR:
-            method_list_cursor = m_methods_cursor.referenced
-            assert _is_PyMethodDef_array_definition(method_list_cursor)
-            self._merge_discovered_functions(
-                module.functions,
-                self._extract_method_table(method_list_cursor, module_name=m_name).values(),
-                module_name=m_name,
-            )
-        else:
+        if m_methods_cursor.kind != CursorKind.DECL_REF_EXPR:
             assert (
                 m_methods_cursor.kind in cpp_nullptr_literal_cursor_kinds
                 or _is_integer_literal_value(m_methods_cursor, 0)
                 or any(str(token.spelling) == "NULL" for token in m_methods_cursor.get_tokens())
             )
+            return module
+
+        method_list_cursor = m_methods_cursor.referenced
+        assert _is_PyMethodDef_array_definition(method_list_cursor)
+
+        module.functions = self._extract_method_table(method_list_cursor, module_name=m_name)
 
         return module
 
@@ -576,7 +566,7 @@ class CSignatureExtractor:
     def _resolve_INIT_LIST_EXPR(
             self,
             cursor: Cursor,
-            field_names: tuple[str, ...] | list[str],
+            field_names: Sequence[str],
     ) -> dict[str, Cursor]:
         """解析顶层初始化列表，支持位置初始化与 designated initializer 混用。"""
         assert cursor.kind == CursorKind.INIT_LIST_EXPR
@@ -630,16 +620,11 @@ class CSignatureExtractor:
         """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
         assert init_list_expr_node.kind == CursorKind.INIT_LIST_EXPR
 
-        table_name = var_decl_node.spelling
-        location = var_decl_node.location
-        source_file = str(location.file)
         for element in init_list_expr_node.get_children():
             if _is_PyMethodDef_array_sentinel(element):
                 break
             extracted = self._extract_PyMethodDef_INIT_LIST_EXPR(
                 init_list_expr=element,
-                method_table=table_name,
-                source_file=source_file,
             )
             if extracted is None:
                 continue
@@ -648,8 +633,6 @@ class CSignatureExtractor:
     def _extract_PyMethodDef_INIT_LIST_EXPR(
             self,
             init_list_expr: Cursor,
-            method_table: str,
-            source_file: str | None,
     ) -> ExtractedFunction | None:
         """
         从 `PyMethodDef` 的单个初始化项提取函数元数据和签名。
@@ -667,18 +650,32 @@ class CSignatureExtractor:
         #   INTEGER_LITERAL
         assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
 
-        fields = list(init_list_expr.get_children())
-        assert len(fields) >= 3
+        PyMethodDef_field_names = (
+            "ml_name",
+            "ml_meth",
+            "ml_flags",
+            "ml_doc",
+        )
 
-        ml_name_cursor = _unwrap_transparent(fields[0])
+        fields = self._resolve_INIT_LIST_EXPR(init_list_expr, PyMethodDef_field_names)
+
+        # Python侧方法名
+        ml_name_cursor = fields.get("ml_name")
+        assert ml_name_cursor is not None
         assert ml_name_cursor.kind == CursorKind.STRING_LITERAL
-        ml_name = _strip_string_literal_quotes(ml_name_cursor.spelling)
 
-        ml_meth_cursor = _unwrap_transparent(fields[1])
+        ml_name = ml_name_cursor.spelling.strip('"')
+
+        # 函数指针
+        ml_meth_cursor = fields.get("ml_meth")
+        assert ml_meth_cursor is not None
         assert ml_meth_cursor.kind == CursorKind.DECL_REF_EXPR
         ml_meth = ml_meth_cursor.spelling
 
-        ml_flags = self._extract_PyMethodDef_ml_flags(fields[2])
+        # flags
+        ml_flags_cursor = fields.get("ml_flags")
+        assert ml_flags_cursor is not None
+        ml_flags = self._extract_PyMethodDef_ml_flags(ml_flags_cursor)
 
         function_cursor = ml_meth_cursor.referenced
         if function_cursor is None:
@@ -703,11 +700,8 @@ class CSignatureExtractor:
         signatures = self._deduplicate_signatures(signatures)
         return ExtractedFunction(
             py_name=ml_name,
-            c_name=ml_meth,
-            method_flags=ml_flags,
+            ml_flags=ml_flags,
             signatures=signatures,
-            source_file=source_file,
-            method_table=method_table,
         )
 
 
@@ -1281,16 +1275,6 @@ class CSignatureExtractor:
             args[0].type_name = "object"
         return ExtractedSignature(arguments=args, return_type_name=return_type_name)
 
-    def _get_cursor_source_file(self, cursor: Cursor) -> str | None:
-        """读取 cursor 所在源文件路径；无位置信息时返回 `None`。"""
-        location = cursor.location
-        if location is None:
-            return None
-        file_obj = location.file
-        if file_obj is None:
-            return None
-        return str(file_obj)
-
     def _build_module_lookup_names(self, module_name: str) -> set[str]:
         """构建模块别名集合，仅保留完整名与叶子名。"""
         lookup_names = {module_name}
@@ -1322,26 +1306,10 @@ class CSignatureExtractor:
             target[function.py_name] = function
             return
         logger.warning(
-            "Discarded duplicate extracted function in module %s for Python name %s: "
-            "kept c_name=%s%s, dropped c_name=%s%s",
+            "Discarded duplicate extracted function in module %s for Python name %s: kept existing function, discarded incoming function",
             module_name,
             function.py_name,
-            existing.c_name,
-            self._format_function_origin(existing),
-            function.c_name,
-            self._format_function_origin(function),
         )
-
-    def _format_function_origin(self, function: ExtractedFunction) -> str:
-        """格式化函数来源上下文，便于重复名告警定位。"""
-        details: list[str] = []
-        if function.source_file is not None:
-            details.append(f"source_file={function.source_file}")
-        if function.method_table is not None:
-            details.append(f"method_table={function.method_table}")
-        if not details:
-            return ""
-        return f" ({', '.join(details)})"
 
     def _get_init_value(self, name: str, func_cursor: Cursor) -> str | None:
         """从局部变量定义中提取默认值字面表达式。"""

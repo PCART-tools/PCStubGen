@@ -193,7 +193,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             args = self._build_ir_arguments(
                 arguments=sig.arguments,
                 is_method=is_method,
-                method_flags=selected.method_flags,
+                method_flags=selected.ml_flags,
             )
             inferred_return = self._build_annotation(sig.return_type_name)
             return_annotation = inferred_return if inferred_return is not None else func.return_annotation
