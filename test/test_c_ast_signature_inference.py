@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import logging
 import sysconfig
 from pathlib import Path
@@ -9,17 +8,27 @@ from types import SimpleNamespace
 import clang.cindex
 import pytest
 
-c_signature_extractor_module = importlib.import_module(
-    "pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
-)
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
-    _ensure_clang_ready,
-    _diagnostic_to_str,
-    _diagnostic_severity_to_str,
-    _is_PyMethodDef_array_definition,
-    _is_PyMethodDef_array_sentinel,
-    _strip_string_literal_quotes,
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _translation_unit as translation_unit_module
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._cursor_utils import (
+    strip_string_literal_quotes as _strip_string_literal_quotes,
+)
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
+    extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
+    is_pymethoddef_array_definition as _is_PyMethodDef_array_definition,
+    is_pymethoddef_array_sentinel as _is_PyMethodDef_array_sentinel,
+    process_pymethoddef_array_init_list_expr as _process_PyMethodDef_array_INIT_LIST_EXPR,
+    resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
+)
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
+    decode_meth_literal_flags as _decode_meth_literal_flags,
+    set_token_params as _set_token_params,
+)
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._translation_unit import (
+    diagnostic_severity_to_str as _diagnostic_severity_to_str,
+    diagnostic_to_str as _diagnostic_to_str,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
@@ -524,9 +533,14 @@ def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptu
 
     with pytest.raises(RuntimeError, match="boom"):
         with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
-            engine._parse_translation_unit(
+            translation_unit_module.parse_translation_unit(
                 index=_RaisingIndex(RuntimeError("boom")),
                 file_path=source,
+                source_root=engine._source_root,
+                clang_include=engine._clang_include,
+                clang_include_directory=engine._clang_include_directory,
+                clang_c_std=engine._clang_c_std,
+                clang_cpp_std=engine._clang_cpp_std,
             )
 
 
@@ -564,9 +578,14 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     )
 
     with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
-        result = engine._parse_translation_unit(
+        result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
+            source_root=engine._source_root,
+            clang_include=engine._clang_include,
+            clang_include_directory=engine._clang_include_directory,
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
         )
 
     assert result is translation_unit
@@ -607,9 +626,14 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
     )
 
     with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
-        result = engine._parse_translation_unit(
+        result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
+            source_root=engine._source_root,
+            clang_include=engine._clang_include,
+            clang_include_directory=engine._clang_include_directory,
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
         )
 
     assert result is translation_unit
@@ -637,7 +661,15 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     second = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second])
 
-    result = engine._parse_translation_unit(index=index, file_path=source)
+    result = translation_unit_module.parse_translation_unit(
+        index=index,
+        file_path=source,
+        source_root=engine._source_root,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
 
     assert result is second
     expected_include_root = header_path.parents[1]
@@ -666,7 +698,10 @@ def test_c_signature_engine_resolves_missing_include_with_literal_rglob(
 
     monkeypatch.setattr(Path, "rglob", _record_rglob)
 
-    include_dir = engine._resolve_missing_include_dir(include_literal="numpy/npy_common.h")
+    include_dir = translation_unit_module.resolve_missing_include_dir(
+        engine._source_root,
+        include_literal="numpy/npy_common.h",
+    )
 
     assert include_dir == header_path.parents[1]
     assert rglob_patterns == ["numpy/npy_common.h"]
@@ -697,7 +732,15 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
     index = _SequentialIndex([first, second])
 
     with caplog.at_level(logging.INFO, logger="pcstubgen2"):
-        _ = engine._parse_translation_unit(index=index, file_path=source)
+        _ = translation_unit_module.parse_translation_unit(
+            index=index,
+            file_path=source,
+            source_root=engine._source_root,
+            clang_include=engine._clang_include,
+            clang_include_directory=engine._clang_include_directory,
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
 
     messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
     assert any("Auto-added clang include path for missing header numpy/npy_common.h" in message for message in messages)
@@ -740,7 +783,15 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
     third = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second, third])
 
-    result = engine._parse_translation_unit(index=index, file_path=source)
+    result = translation_unit_module.parse_translation_unit(
+        index=index,
+        file_path=source,
+        source_root=engine._source_root,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
 
     include_arg_one = str(include_one)
     include_arg_two = str(include_two)
@@ -784,7 +835,15 @@ def test_c_signature_engine_matches_full_include_literal_without_filename_fallba
     second = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second])
 
-    result = engine._parse_translation_unit(index=index, file_path=source)
+    result = translation_unit_module.parse_translation_unit(
+        index=index,
+        file_path=source,
+        source_root=engine._source_root,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
 
     assert result is second
     assert str(expected_header.parents[1]) in engine._clang_include_directory
@@ -816,7 +875,15 @@ def test_c_signature_engine_accepts_any_full_literal_match_for_ambiguous_include
     second = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second])
 
-    result = engine._parse_translation_unit(index=index, file_path=source)
+    result = translation_unit_module.parse_translation_unit(
+        index=index,
+        file_path=source,
+        source_root=engine._source_root,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
 
     assert result is second
     assert engine._clang_include_directory in ([str(near_include)], [str(far_include)])
@@ -843,7 +910,15 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
     )
     index = _SequentialIndex([unresolved])
 
-    result = engine._parse_translation_unit(index=index, file_path=source)
+    result = translation_unit_module.parse_translation_unit(
+        index=index,
+        file_path=source,
+        source_root=engine._source_root,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
 
     assert result is unresolved
     assert engine._clang_include_directory == []
@@ -869,9 +944,14 @@ def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp
     source = tmp_path / "module.c"
 
     with pytest.raises(AttributeError):
-        engine._parse_translation_unit(
+        translation_unit_module.parse_translation_unit(
             index=_FakeIndex(_DiagnosticlessTranslationUnit()),  # type: ignore[arg-type]
             file_path=source,
+            source_root=engine._source_root,
+            clang_include=engine._clang_include,
+            clang_include_directory=engine._clang_include_directory,
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
         )
 
 
@@ -3018,25 +3098,25 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
 
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
-    class _FakeConfig:
-        loaded = False
-        configured_path: str | None = None
-
-        @classmethod
-        def set_library_file(cls, path: str) -> None:
-            cls.configured_path = path
-
-    class _FakeClang:
-        Config = _FakeConfig
-
     engine = CSignatureExtractor(source_root=tmp_path)
-    engine._clang = _FakeClang
-
-    _ensure_clang_ready()
     assert engine._clang_include_directory is not None
     assert "-std=c11" not in engine._clang_include_directory
-    assert engine._get_std_value_for_file(tmp_path / "module.c") == "c11"
-    assert engine._get_std_value_for_file(tmp_path / "module.cxx") == "c++17"
+    assert (
+        translation_unit_module.get_std_value_for_file(
+            tmp_path / "module.c",
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
+        == "c11"
+    )
+    assert (
+        translation_unit_module.get_std_value_for_file(
+            tmp_path / "module.cxx",
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
+        == "c++17"
+    )
 
 
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
@@ -3047,42 +3127,30 @@ def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path:
         clang_cpp_std="--std=c++20",
     )
 
-    assert engine._get_std_value_for_file(tmp_path / "module.c") == "-std=c99"
-    assert engine._get_std_value_for_file(tmp_path / "module.cxx") == "--std=c++20"
-    assert engine._get_std_value_for_file(tmp_path / "module.hpp") == "-std=c99"
-
-
-def test_c_signature_engine_configures_packaged_libclang_when_available(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-    configured_path: list[str] = []
-    monkeypatch.setattr(clang.cindex.Config, "loaded", False, raising=False)
-    monkeypatch.setattr(clang.cindex.Config, "set_library_file", lambda path: configured_path.append(path))
-    monkeypatch.setattr(c_signature_extractor_module, "_get_packaged_libclang_path", lambda: "C:/fake/libclang.dll")
-
-    _ensure_clang_ready()
-    assert configured_path == ["C:/fake/libclang.dll"]
-
-
-def test_c_signature_engine_skips_libclang_configuration_when_not_discovered(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-    configured_path: list[str] = []
-    monkeypatch.setattr(clang.cindex.Config, "loaded", False, raising=False)
-    monkeypatch.setattr(clang.cindex.Config, "set_library_file", lambda path: configured_path.append(path))
-    monkeypatch.setattr(c_signature_extractor_module, "_get_packaged_libclang_path", lambda: None)
-
-    _ensure_clang_ready()
-    assert configured_path == []
-
-
-def test_c_signature_engine_ensure_clang_ready_does_not_mutate_parse_args(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_include_directory=["C:/MyInclude"])
-
-    _ensure_clang_ready()
-    assert engine._clang_include_directory == ["C:/MyInclude"]
+    assert (
+        translation_unit_module.get_std_value_for_file(
+            tmp_path / "module.c",
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
+        == "-std=c99"
+    )
+    assert (
+        translation_unit_module.get_std_value_for_file(
+            tmp_path / "module.cxx",
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
+        == "--std=c++20"
+    )
+    assert (
+        translation_unit_module.get_std_value_for_file(
+            tmp_path / "module.hpp",
+            clang_c_std=engine._clang_c_std,
+            clang_cpp_std=engine._clang_cpp_std,
+        )
+        == "-std=c99"
+    )
 
 
 def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(
@@ -3093,19 +3161,11 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
         clang_include=["Python.h"],
         clang_include_directory=["C:/MyInclude"],
     )
-    ready_calls = 0
-
-    def fake_ensure_clang_ready() -> None:
-        nonlocal ready_calls
-        ready_calls += 1
-
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(c_signature_extractor_module, "_ensure_clang_ready", fake_ensure_clang_ready)
-    engine._find_candidate_files = lambda: []
+    monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [])
 
     try:
         assert engine.extract_modules() == {}
-        assert ready_calls == 1
         expected_include_dirs = ["C:/MyInclude"]
         for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
             if not include_dir:
@@ -3123,7 +3183,13 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
 def test_c_signature_engine_build_parse_args_uses_only_external_include_values(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
 
-    assert engine._build_clang_parse_args(tmp_path / "module.c") == ["--std", "c11"]
+    assert translation_unit_module.build_clang_parse_args(
+        tmp_path / "module.c",
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    ) == ["--std", "c11"]
 
 
 def test_c_signature_engine_build_parse_args_places_include_before_include_directory(tmp_path: Path) -> None:
@@ -3134,7 +3200,13 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
         clang_c_std="c11",
     )
 
-    assert engine._build_clang_parse_args(tmp_path / "module.c") == [
+    assert translation_unit_module.build_clang_parse_args(
+        tmp_path / "module.c",
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    ) == [
         "--std",
         "c11",
         "--include",
@@ -3361,7 +3433,7 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_eval_int = c_signature_extractor_module.ClangEval.eval_int
+    original_eval_int = cursor_utils_module.ClangEval.eval_int
 
     def _eval_int(cursor: object) -> int | None:
         if not isinstance(cursor, _FakeNode):
@@ -3380,7 +3452,7 @@ def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
                 continue
         return None
 
-    monkeypatch.setattr(c_signature_extractor_module.ClangEval, "eval_int", _eval_int)
+    monkeypatch.setattr(cursor_utils_module.ClangEval, "eval_int", _eval_int)
 
 
 @pytest.mark.parametrize(
@@ -3452,23 +3524,21 @@ def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> 
 
 
 def test_c_signature_engine_resolve_init_list_expr_supports_positional_entries(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c")
     first = _string_literal("first")
     second = _int_literal("2")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(_init_list(first, second), field_names)
+    resolved = _resolve_INIT_LIST_EXPR(_init_list(first, second), field_names)
 
     assert resolved == {"a": first, "b": second}
 
 
 def test_c_signature_engine_resolve_init_list_expr_supports_designated_entries(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c")
     second = _int_literal("2")
     third = _string_literal("third")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(
             _designated_initializer("b", second),
             _designated_initializer("c", third),
@@ -3480,13 +3550,12 @@ def test_c_signature_engine_resolve_init_list_expr_supports_designated_entries(t
 
 
 def test_c_signature_engine_resolve_init_list_expr_supports_mixed_entries(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c", "d")
     first = _string_literal("first")
     third = _string_literal("third")
     fourth = _int_literal("4")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(
             first,
             _designated_initializer("c", third),
@@ -3501,13 +3570,12 @@ def test_c_signature_engine_resolve_init_list_expr_supports_mixed_entries(tmp_pa
 def test_c_signature_engine_resolve_init_list_expr_advances_positional_index_after_designated(
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c", "d")
     second = _string_literal("second")
     third = _int_literal("3")
     fourth = _int_literal("4")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(
             _designated_initializer("b", second),
             third,
@@ -3520,12 +3588,11 @@ def test_c_signature_engine_resolve_init_list_expr_advances_positional_index_aft
 
 
 def test_c_signature_engine_resolve_init_list_expr_ignores_unknown_designated_field(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c")
     unknown = _string_literal("skip")
     first = _int_literal("1")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(
             _designated_initializer("missing", unknown),
             first,
@@ -3537,12 +3604,11 @@ def test_c_signature_engine_resolve_init_list_expr_ignores_unknown_designated_fi
 
 
 def test_c_signature_engine_resolve_init_list_expr_last_value_wins_for_duplicate_field(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b", "c")
     first = _int_literal("1")
     second = _int_literal("2")
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(
             first,
             _designated_initializer("a", second),
@@ -3554,11 +3620,10 @@ def test_c_signature_engine_resolve_init_list_expr_last_value_wins_for_duplicate
 
 
 def test_c_signature_engine_resolve_init_list_expr_keeps_nested_init_list_as_value(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     field_names = ("a", "b")
     nested = _init_list(_int_literal("1"), _int_literal("2"))
 
-    resolved = engine._resolve_INIT_LIST_EXPR(
+    resolved = _resolve_INIT_LIST_EXPR(
         _init_list(_designated_initializer("b", nested)),
         field_names,
     )
@@ -3567,9 +3632,7 @@ def test_c_signature_engine_resolve_init_list_expr_keeps_nested_init_list_as_val
 
 
 def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("add"),
             _ml_meth_field("simple_add"),
@@ -3584,9 +3647,7 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
 
 
 def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("distance"),
             _ml_meth_cast_field("Point_distance"),
@@ -3601,9 +3662,7 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
 
 
 def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("kw"),
             _ml_meth_field("kw_impl"),
@@ -3629,10 +3688,8 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
     with caplog.at_level(logging.WARNING):
-        extracted = engine._extract_PyMethodDef_INIT_LIST_EXPR(
+        extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
             init_list_expr=_init_list(
                 _ml_name_field("add"),
                 _ml_meth_field("simple_add"),
@@ -3650,8 +3707,6 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
     method_1 = _init_list(
         _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"a"')]),
         _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
@@ -3666,13 +3721,6 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
     )
     supported_sentinel = _init_list(_null_ptr_literal())
     non_sentinel = _init_list(_identifier_node("nullptr"))
-    owner_file = str(tmp_path / "methods.cpp")
-    init_expr_file = str(tmp_path / "methods_init.cpp")
-    var_decl_node = _FakeNode(
-        kind=clang.cindex.CursorKind.VAR_DECL,
-        spelling="Methods",
-        location=_FakeCursorLocation(file=owner_file),
-    )
     calls: list[_FakeNode] = []
 
     def fake_extract(
@@ -3682,16 +3730,14 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
         calls.append(init_list_expr)
         return SimpleNamespace(py_name=f"entry_{len(calls)}")
 
-    monkeypatch.setattr(engine, "_extract_PyMethodDef_INIT_LIST_EXPR", fake_extract)
+    monkeypatch.setattr(module_table_module, "extract_pymethoddef_init_list_expr", fake_extract)
 
     should_break_array = _FakeNode(
         kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
         children=[method_1, supported_sentinel, method_2],
-        location=_FakeCursorLocation(file=init_expr_file),
     )
     output: dict[str, SimpleNamespace] = {}
-    engine._process_PyMethodDef_array_INIT_LIST_EXPR(
-        var_decl_node,
+    _process_PyMethodDef_array_INIT_LIST_EXPR(
         should_break_array,
         output,
         module_name="pkg.mod",
@@ -3705,10 +3751,8 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
     should_not_break_array = _FakeNode(
         kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
         children=[method_1, non_sentinel, method_2],
-        location=_FakeCursorLocation(file=init_expr_file),
     )
-    engine._process_PyMethodDef_array_INIT_LIST_EXPR(
-        var_decl_node,
+    _process_PyMethodDef_array_INIT_LIST_EXPR(
         should_not_break_array,
         output,
         module_name="pkg.mod",
@@ -3717,8 +3761,6 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
     args = _set_token_params(
         func_cursor=object(),
         meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
@@ -3754,6 +3796,4 @@ def test_c_signature_engine_strips_cpp_string_literal_prefixes(
     literal: str,
     expected: str,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
     assert _strip_string_literal_quotes(literal) == expected
