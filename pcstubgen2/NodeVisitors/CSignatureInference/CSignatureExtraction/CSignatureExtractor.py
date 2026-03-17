@@ -290,7 +290,10 @@ class CSignatureExtractor:
                 if existing is None:
                     discovered_modules[module.name] = module
                     continue
-                self._merge_extracted_module(existing, module)
+                logger.warning(
+                    "Discarded duplicate extracted module %s: kept existing module, discarded incoming module",
+                    existing.name,
+                )
 
         self._cache_modules = discovered_modules
         return self._cache_modules
@@ -548,15 +551,6 @@ class CSignatureExtractor:
             )
 
         return module
-
-    def _merge_extracted_module(self, target: ExtractedModule, incoming: ExtractedModule) -> None:
-        """合并两个同名模块的提取结果，保留已有信息并追加新发现。"""
-        target.lookup_names.update(incoming.lookup_names)
-        self._merge_discovered_functions(
-            target.functions,
-            incoming.functions.values(),
-            module_name=target.name,
-        )
 
     def _extract_method_table(
             self,
