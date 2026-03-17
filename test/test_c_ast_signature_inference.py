@@ -15,8 +15,8 @@ c_signature_extractor_module = importlib.import_module(
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor import (
     _ensure_clang_ready,
-    _format_single_diagnostic,
-    _get_diagnostic_severity_name,
+    _diagnostic_to_str,
+    _diagnostic_severity_to_str,
     _is_PyMethodDef_array_definition,
     _is_PyMethodDef_array_sentinel,
     _strip_string_literal_quotes,
@@ -861,7 +861,7 @@ def test_c_signature_engine_raises_when_diagnostic_missing_required_field(tmp_pa
             )
 
     with pytest.raises(AttributeError):
-        _format_single_diagnostic(_MissingSeverityDiagnostic())  # type: ignore[arg-type]
+        _diagnostic_to_str(_MissingSeverityDiagnostic())  # type: ignore[arg-type]
 
 
 def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp_path: Path) -> None:
@@ -876,11 +876,11 @@ def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp
 
 
 def test_c_signature_engine_maps_all_builtin_severity_names(tmp_path: Path) -> None:
-    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Ignored) == "IGNORED"
-    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Note) == "NOTE"
-    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Warning) == "WARNING"
-    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Error) == "ERROR"
-    assert _get_diagnostic_severity_name(clang.cindex.Diagnostic.Fatal) == "FATAL"
+    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Ignored) == "IGNORED"
+    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Note) == "NOTE"
+    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Warning) == "WARNING"
+    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Error) == "ERROR"
+    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Fatal) == "FATAL"
 
 
 def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
@@ -3150,7 +3150,7 @@ def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Pat
     engine = CSignatureExtractor(source_root=tmp_path)
 
     assert (
-        engine._set_token_params(
+        _set_token_params(
             func_cursor=object(),
             meth_flags=["METH_VARARGS"],
             token_list=["Py_BuildValue", '"i"', "value"],
@@ -3158,7 +3158,7 @@ def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Pat
         is None
     )
     assert (
-        engine._set_token_params(
+        _set_token_params(
             func_cursor=object(),
             meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
             token_list=["PyArg_NoKeywords", "kwargs"],
@@ -3211,8 +3211,8 @@ def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name(
 def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    assert engine._decode_meth_literal_flags("3") == ["METH_VARARGS", "METH_KEYWORDS"]
-    assert engine._decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
+    assert _decode_meth_literal_flags("3") == ["METH_VARARGS", "METH_KEYWORDS"]
+    assert _decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
 
 
 class _FakeToken:
@@ -3719,7 +3719,7 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
-    args = engine._set_token_params(
+    args = _set_token_params(
         func_cursor=object(),
         meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
         token_list=[
