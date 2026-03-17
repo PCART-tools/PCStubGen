@@ -32,7 +32,7 @@ _ARRAY_TYPE_KINDS = {
     TypeKind.DEPENDENTSIZEDARRAY,
 }
 
-_PY_METHODDEF_TYPE_NAMES = {"PyMethodDef", "struct PyMethodDef"}
+_PY_METHOD_DEF_TYPE_NAMES = {"PyMethodDef", "struct PyMethodDef"}
 
 _PY_MODULE_DEF_FIELD_NAMES = (
     "m_base",
@@ -56,18 +56,14 @@ _PY_METHOD_DEF_FIELD_NAMES = (
 
 def is_pymethoddef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
-    if cursor.type.kind not in _ARRAY_TYPE_KINDS or not cursor.is_definition():
-        return False
-
-    elem_type = cursor.type.get_array_element_type()
-    if elem_type.spelling in _PY_METHODDEF_TYPE_NAMES:
-        return True
-
-    get_canonical = getattr(elem_type, "get_canonical", None)
-    if not callable(get_canonical):
-        return False
-    canonical_type = get_canonical()
-    return getattr(canonical_type, "spelling", None) in _PY_METHODDEF_TYPE_NAMES
+    if (cursor.kind == CursorKind.VAR_DECL
+        and cursor.type.kind in _ARRAY_TYPE_KINDS
+        and cursor.is_definition()
+    ):
+        elem_type = cursor.type.get_array_element_type()
+        if elem_type.spelling in _PY_METHOD_DEF_TYPE_NAMES:
+            return True
+    return False
 
 
 def build_module_lookup_names(module_name: str) -> set[str]:
@@ -109,27 +105,6 @@ def extract_pymethoddef_ml_flags(field_cursor: Cursor) -> list[str]:
     return unique_keep_order(flags)
 
 
-def is_pymethoddef_array_sentinel(init_list_expr: Cursor) -> bool:
-    """判断 `PyMethodDef` 数组项是否为结尾哨兵。"""
-    if init_list_expr.kind != CursorKind.INIT_LIST_EXPR:
-        return False
-
-    children = list(init_list_expr.get_children())
-    if not children:
-        return True
-
-    first = unwrap_transparent(children[0])
-    if first.kind == CursorKind.MEMBER_REF:
-        return False
-    if is_nullptr_or_zero(first):
-        return True
-
-    for token in first.get_tokens():
-        if token.kind == TokenKind.IDENTIFIER and str(token.spelling) == "NULL":
-            return True
-    return False
-
-
 def resolve_init_list_expr(
     cursor: Cursor,
     field_names: tuple[str, ...] | list[str],
@@ -141,7 +116,7 @@ def resolve_init_list_expr(
         field_name: index
         for index, field_name in enumerate(field_names)
     }
-    field_values: dict[str, Cursor] = {}
+    values: dict[str, Cursor] = {}
     positional_index = 0
 
     for entry in cursor.get_children():
@@ -150,10 +125,7 @@ def resolve_init_list_expr(
         if len(entry_children) >= 2 and entry_children[0].kind == CursorKind.MEMBER_REF:
             field_name = entry_children[0].spelling
             value_cursor = unwrap_transparent(entry_children[1])
-            designated_index = field_name_to_index.get(field_name)
-            if designated_index is None:
-                continue
-            positional_index = designated_index + 1
+            positional_index = field_name_to_index[field_name] + 1
         else:
             if positional_index >= len(field_names):
                 continue
@@ -161,18 +133,9 @@ def resolve_init_list_expr(
             value_cursor = unwrap_transparent(entry)
             positional_index += 1
 
-        field_values[field_name] = value_cursor
+        values[field_name] = value_cursor
 
-    return field_values
-
-
-def array_var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
-    """断言变量声明是数组初始化，并返回对应 `INIT_LIST_EXPR`。"""
-    assert cursor.kind == CursorKind.VAR_DECL
-    init_list_expr = var_decl_to_init_list_expr(cursor)
-    assert init_list_expr is not None
-    assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
-    return init_list_expr
+    return values
 
 
 def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunction | None:
@@ -188,6 +151,7 @@ def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunct
 
     ml_name_cursor = fields.get("ml_name")
     if ml_name_cursor is None or is_nullptr_or_zero(ml_name_cursor):
+        # 判断哨兵
         return None
     assert ml_name_cursor.kind == CursorKind.STRING_LITERAL
     ml_name = strip_string_literal_quotes(str(ml_name_cursor.spelling))
@@ -225,40 +189,24 @@ def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunct
     )
 
 
-def process_pymethoddef_array_init_list_expr(
-    init_list_expr_node: Cursor,
-    output: dict[str, ExtractedFunction],
-    *,
-    module_name: str,
-) -> None:
-    """处理单个方法表的 `INIT_LIST_EXPR` 并写入输出。"""
-    assert init_list_expr_node.kind == CursorKind.INIT_LIST_EXPR
-
-    for element in init_list_expr_node.get_children():
-        if is_pymethoddef_array_sentinel(element):
-            break
-        extracted = extract_pymethoddef_init_list_expr(init_list_expr=element)
-        if extracted is None:
-            continue
-        add_discovered_function(output, extracted, module_name=module_name)
-
-
 def extract_method_table(
     cursor: Cursor,
     *,
     module_name: str,
 ) -> dict[str, ExtractedFunction]:
     """解析 `PyMethodDef[]` 变量。"""
-    assert cursor.kind == CursorKind.VAR_DECL
     assert is_pymethoddef_array_definition(cursor)
 
+    init_expr_node = var_decl_to_init_list_expr(cursor)
+    assert init_expr_node is not None
+
     grouped: dict[str, ExtractedFunction] = {}
-    init_expr_node = array_var_decl_to_init_list_expr(cursor)
-    process_pymethoddef_array_init_list_expr(
-        init_expr_node,
-        grouped,
-        module_name=module_name,
-    )
+
+    for element in init_expr_node.get_children():
+        extracted = extract_pymethoddef_init_list_expr(init_list_expr=element)
+        if extracted is None:
+            continue
+        add_discovered_function(grouped, extracted, module_name=module_name)
     return grouped
 
 
@@ -271,9 +219,9 @@ def extract_module_from_pymoduledef(module_def_cursor: Cursor) -> ExtractedModul
     init_list_expr = var_decl_to_init_list_expr(module_def_cursor)
     assert init_list_expr is not None
 
-    field_values = resolve_init_list_expr(init_list_expr, _PY_MODULE_DEF_FIELD_NAMES)
+    values = resolve_init_list_expr(init_list_expr, _PY_MODULE_DEF_FIELD_NAMES)
 
-    m_name_cursor = field_values.get("m_name")
+    m_name_cursor = values.get("m_name")
     assert m_name_cursor is not None
     assert m_name_cursor.kind == CursorKind.STRING_LITERAL
     m_name = strip_string_literal_quotes(str(m_name_cursor.spelling))
@@ -281,7 +229,7 @@ def extract_module_from_pymoduledef(module_def_cursor: Cursor) -> ExtractedModul
     module = ExtractedModule(name=m_name)
     module.lookup_names.update(build_module_lookup_names(m_name))
 
-    m_methods_cursor = field_values.get("m_methods")
+    m_methods_cursor = values.get("m_methods")
     if m_methods_cursor is None:
         return module
 

@@ -16,10 +16,10 @@ from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._cursor_ut
     strip_string_literal_quotes as _strip_string_literal_quotes,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
+    extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
     is_pymethoddef_array_definition as _is_PyMethodDef_array_definition,
     is_pymethoddef_array_sentinel as _is_PyMethodDef_array_sentinel,
-    process_pymethoddef_array_init_list_expr as _process_PyMethodDef_array_INIT_LIST_EXPR,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
@@ -3703,7 +3703,7 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
     assert caplog.records == []
 
 
-def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
+def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -3731,15 +3731,19 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
         return SimpleNamespace(py_name=f"entry_{len(calls)}")
 
     monkeypatch.setattr(module_table_module, "extract_pymethoddef_init_list_expr", fake_extract)
+    monkeypatch.setattr(module_table_module, "is_pymethoddef_array_definition", lambda cursor: True)
 
     should_break_array = _FakeNode(
-        kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
-        children=[method_1, supported_sentinel, method_2],
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        children=[
+            _FakeNode(
+                kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
+                children=[method_1, supported_sentinel, method_2],
+            ),
+        ],
     )
-    output: dict[str, SimpleNamespace] = {}
-    _process_PyMethodDef_array_INIT_LIST_EXPR(
+    output = _extract_method_table(
         should_break_array,
-        output,
         module_name="pkg.mod",
     )
     assert calls == [method_1]
@@ -3749,12 +3753,16 @@ def test_c_signature_engine_process_init_list_expr_stops_at_sentinel(
     output.clear()
 
     should_not_break_array = _FakeNode(
-        kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
-        children=[method_1, non_sentinel, method_2],
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        children=[
+            _FakeNode(
+                kind=clang.cindex.CursorKind.INIT_LIST_EXPR,
+                children=[method_1, non_sentinel, method_2],
+            ),
+        ],
     )
-    _process_PyMethodDef_array_INIT_LIST_EXPR(
+    output = _extract_method_table(
         should_not_break_array,
-        output,
         module_name="pkg.mod",
     )
     assert calls == [method_1, non_sentinel, method_2]

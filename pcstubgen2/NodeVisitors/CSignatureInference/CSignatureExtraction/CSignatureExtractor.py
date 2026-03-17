@@ -73,9 +73,9 @@ class CSignatureExtractor:
         ]
 
         result: dict[str, ExtractedModule] = {}
-        for unit in translation_units:
+        for tu in translation_units:
             try:
-                modules = module_table.process_translation_unit(unit.cursor)
+                modules = module_table.process_translation_unit(tu.cursor)
             except AssertionError as ex:
                 logger.exception("AssertionError", exc_info=ex)
                 continue

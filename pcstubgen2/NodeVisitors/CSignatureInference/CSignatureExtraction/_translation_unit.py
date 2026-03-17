@@ -106,9 +106,6 @@ def inject_python_include_directories(include_directories: list[str]) -> list[st
 
 def resolve_missing_include_dir(source_root: Path, *, include_literal: str) -> Path | None:
     """在源码树内搜索缺失头文件，找到首个匹配的 include 目录后立即返回。"""
-    include_literal = normalize_include_literal(include_literal)
-    if not include_literal:
-        return None
     include_root_depth = len(tuple(part for part in include_literal.split("/") if part)) - 1
 
     for header_path in source_root.rglob(include_literal):
@@ -244,7 +241,7 @@ def parse_translation_unit(
             clang_cpp_std=clang_cpp_std,
         )
         translation_unit = index.parse(str(file_path), args=parse_args)
-        diagnostics = list(translation_unit.diagnostics)
+        diagnostics = translation_unit.diagnostics
         added = discover_missing_include_args(
             file_path=file_path,
             diagnostics=diagnostics,
