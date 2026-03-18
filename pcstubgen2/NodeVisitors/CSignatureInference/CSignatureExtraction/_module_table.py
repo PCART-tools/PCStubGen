@@ -53,7 +53,11 @@ def is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
         and cursor.is_definition()
     ):
         elem_type = cursor.type.get_array_element_type()
-        if elem_type.spelling in _PY_METHOD_DEF_TYPE_NAMES:
+        canonical_type = elem_type.get_canonical()
+        if (
+            elem_type.spelling in _PY_METHOD_DEF_TYPE_NAMES
+            or canonical_type.spelling in _PY_METHOD_DEF_TYPE_NAMES
+        ):
             return True
     return False
 
@@ -155,12 +159,15 @@ def _is_null_like_cursor(cursor: Cursor) -> bool:
     return is_nullptr_or_zero(unwrapped) or _is_null_identifier(unwrapped)
 
 
-def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunction | None:
+def extract_pymethoddef_init_list_expr(
+    init_list_expr: Cursor,
+) -> tuple[bool, ExtractedFunction | None]:
     """
     从 `PyMethodDef` 的单个初始化项提取函数骨架数据。
 
-    若关键字段（Python 名、C 函数名）缺失则返回 `None`，
-    保持提取过程对异常样本的容错性。
+    返回 `(is_sentinel, extracted)`：
+    若首字段是哨兵，则返回 `(True, None)` 供外层停止遍历；
+    若不是哨兵但当前项无法提取，则返回 `(False, None)`。
     """
     assert init_list_expr.kind == CursorKind.INIT_LIST_EXPR
 
@@ -169,9 +176,9 @@ def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunct
     ml_name_cursor = values.get("ml_name")
     if ml_name_cursor is None or is_nullptr_or_zero(ml_name_cursor):
         # 判断哨兵
-        return None
+        return True, None
     assert ml_name_cursor.kind == CursorKind.STRING_LITERAL
-    ml_name = str(ml_name_cursor.spelling).strip('"')
+    ml_name = ml_name_cursor.spelling.strip('"')
 
     ml_meth_cursor = values.get("ml_meth")
     assert ml_meth_cursor is not None
@@ -184,10 +191,10 @@ def extract_pymethoddef_init_list_expr(init_list_expr: Cursor) -> ExtractedFunct
     function_cursor = ml_meth_cursor.referenced
     if function_cursor is None:
         logger.warning("cant find function cursor, location: %s", ml_meth_cursor.location)
-        return None
+        return False, None
 
-    return ExtractedFunction(
-        py_name=ml_name,
+    return False, ExtractedFunction(
+        ml_name=ml_name,
         ml_flags=ml_flags,
         function_cursor=function_cursor,
     )
@@ -203,36 +210,23 @@ def extract_method_table(
     init_expr_node = var_decl_to_init_list_expr(cursor)
     assert init_expr_node is not None
 
-    grouped: dict[str, ExtractedFunction] = {}
+    result: dict[str, ExtractedFunction] = {}
 
     for element in init_expr_node.get_children():
-        element_children = list(element.get_children())
-        if element.kind == CursorKind.INIT_LIST_EXPR:
-            if not element_children:
-                break
-            if len(element_children) == 1 and _is_null_like_cursor(element_children[0]):
-                break
-            if len(element_children) == len(_PY_METHOD_DEF_FIELD_NAMES):
-                ml_name_cursor, ml_meth_cursor, ml_flags_cursor, ml_doc_cursor = element_children
-                if (
-                    _is_null_like_cursor(ml_name_cursor)
-                    and _is_null_like_cursor(ml_meth_cursor)
-                    and _is_null_like_cursor(ml_doc_cursor)
-                    and unwrap_transparent(ml_flags_cursor).kind == CursorKind.INTEGER_LITERAL
-                ):
-                    break
-        extracted = extract_pymethoddef_init_list_expr(init_list_expr=element)
+        is_sentinel, extracted = extract_pymethoddef_init_list_expr(init_list_expr=element)
+        if is_sentinel:
+            break
         if extracted is None:
             continue
-        if extracted.py_name in grouped:
+        if extracted.ml_name in result:
             logger.warning(
                 "Discarded duplicate extracted function in module %s for Python name %s: kept existing function, discarded incoming function",
                 module_name,
-                extracted.py_name,
+                extracted.ml_name,
             )
             continue
-        grouped[extracted.py_name] = extracted
-    return grouped
+        result[extracted.ml_name] = extracted
+    return result
 
 
 def extract_module_from_pymoduledef(module_def_cursor: Cursor) -> ExtractedModule | None:

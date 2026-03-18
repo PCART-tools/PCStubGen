@@ -293,7 +293,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     ml_flags=["METH_VARARGS"],
                     signatures=[
                         ExtractedSignature(
@@ -342,7 +342,7 @@ def test_c_ast_visitor_logs_successful_generic_rewrite(
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     ml_flags=["METH_VARARGS"],
                     signatures=[
                         ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")]),
@@ -403,7 +403,7 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     ml_flags=["METH_VARARGS"],
                     signatures=[],
                 )
@@ -443,7 +443,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     func = IRFunction(name="foo", args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])
     signatures = {
         "foo": ExtractedFunction(
-            py_name="foo",
+            ml_name="foo",
             ml_flags=["METH_VARARGS"],
             signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
         )
@@ -468,7 +468,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 name="pkg.first",
                 functions={
                     "foo": ExtractedFunction(
-                        py_name="foo",
+                        ml_name="foo",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -478,7 +478,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 name="pkg.second",
                 functions={
                     "bar": ExtractedFunction(
-                        py_name="bar",
+                        ml_name="bar",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
                     )
@@ -984,7 +984,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 lookup_names={"pkg.first", "first"},
                 functions={
                     "foo": ExtractedFunction(
-                        py_name="foo",
+                        ml_name="foo",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -995,7 +995,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 lookup_names={"pkg.second", "second"},
                 functions={
                     "foo": ExtractedFunction(
-                        py_name="foo",
+                        ml_name="foo",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="float")])],
                     )
@@ -1040,7 +1040,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 lookup_names={"mod"},
                 functions={
                     "foo": ExtractedFunction(
-                        py_name="foo",
+                        ml_name="foo",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -1051,7 +1051,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 lookup_names={"mod"},
                 functions={
                     "foo": ExtractedFunction(
-                        py_name="foo",
+                        ml_name="foo",
                         ml_flags=["METH_VARARGS"],
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="float")])],
                     )
@@ -1097,7 +1097,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     ml_flags=["METH_VARARGS"],
                     signatures=[
                         ExtractedSignature(
@@ -1132,7 +1132,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             }
@@ -1410,7 +1410,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
             name="pkg",
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     ml_flags=["METH_VARARGS"],
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
@@ -1531,7 +1531,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
         modules=_module_fixture(
             functions={
                 "foo": ExtractedFunction(
-                    py_name="foo",
+                    ml_name="foo",
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             }
@@ -1662,7 +1662,7 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
 
     assert "mini_ext" in extracted
     first = extracted["mini_ext"].functions["add"]
-    assert first.py_name == "add"
+    assert first.ml_name == "add"
     assert first.signatures
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
@@ -1734,7 +1734,7 @@ def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(t
 
     assert "mini_struct_typedef_ext" in extracted
     first = extracted["mini_struct_typedef_ext"].functions["add"]
-    assert first.py_name == "add"
+    assert first.ml_name == "add"
     assert first.signatures
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
@@ -2318,7 +2318,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_
     extracted = engine.extract_modules()
 
     module = extracted["pkg.mod"]
-    assert module.functions["foo"].py_name == "foo"
+    assert module.functions["foo"].ml_name == "foo"
     assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
 
 
@@ -2542,7 +2542,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
     extracted = engine.extract_modules()
 
     assert "designated.mod" in extracted
-    assert extracted["designated.mod"].functions["foo"].py_name == "foo"
+    assert extracted["designated.mod"].functions["foo"].ml_name == "foo"
     assert extracted["designated.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
 
 
@@ -2609,7 +2609,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
     extracted = engine.extract_modules()
 
     assert "mixed.mod" in extracted
-    assert extracted["mixed.mod"].functions["foo"].py_name == "foo"
+    assert extracted["mixed.mod"].functions["foo"].ml_name == "foo"
     assert extracted["mixed.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
 
 
@@ -2675,7 +2675,7 @@ def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_withou
     )
     extracted = engine.extract_modules()
 
-    assert extracted["orphan.mod"].functions["foo"].py_name == "foo"
+    assert extracted["orphan.mod"].functions["foo"].ml_name == "foo"
     assert extracted["orphan.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
 
 
@@ -3117,7 +3117,7 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
         "pkg.mod": ExtractedModule(
             name="pkg.mod",
             functions={
-                "foo": ExtractedFunction(py_name="foo"),
+                "foo": ExtractedFunction(ml_name="foo"),
             },
         )
     }
@@ -3365,6 +3365,7 @@ def test_c_signature_engine_skips_non_array_types_before_reading_array_element()
             raise AssertionError("non-array type should not read array element type")
 
     class _FakeNode:
+        kind = clang.cindex.CursorKind.VAR_DECL
         type = _FakeType()
 
         def is_definition(self) -> bool:
@@ -3390,6 +3391,7 @@ def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name(
             return _FakeElementType()
 
     class _FakeNode:
+        kind = clang.cindex.CursorKind.VAR_DECL
         type = _FakeArrayType()
 
         def is_definition(self) -> bool:
@@ -3681,7 +3683,7 @@ def test_c_signature_engine_resolve_init_list_expr_keeps_nested_init_list_as_val
 
 
 def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: Path) -> None:
-    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("add"),
             _ml_meth_field("simple_add"),
@@ -3690,15 +3692,16 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
         ),
     )
 
+    assert is_sentinel is False
     assert extracted is not None
-    assert extracted.py_name == "add"
+    assert extracted.ml_name == "add"
     assert extracted.ml_flags == ["METH_VARARGS"]
     assert extracted.function_cursor is not None
     assert extracted.signatures == []
 
 
 def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
-    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("distance"),
             _ml_meth_cast_field("Point_distance"),
@@ -3707,14 +3710,15 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
         ),
     )
 
+    assert is_sentinel is False
     assert extracted is not None
-    assert extracted.py_name == "distance"
+    assert extracted.ml_name == "distance"
     assert extracted.ml_flags == ["METH_VARARGS"]
     assert extracted.function_cursor is not None
 
 
 def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
-    extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("kw"),
             _ml_meth_field("kw_impl"),
@@ -3732,6 +3736,7 @@ def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Pat
         ),
     )
 
+    assert is_sentinel is False
     assert extracted is not None
     assert extracted.ml_flags == ["METH_VARARGS", "METH_KEYWORDS"]
 
@@ -3741,7 +3746,7 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
     tmp_path: Path,
 ) -> None:
     with caplog.at_level(logging.WARNING):
-        extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+        is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
             init_list_expr=_init_list(
                 _ml_name_field("add"),
                 _ml_meth_field("simple_add"),
@@ -3750,15 +3755,25 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
             ),
         )
 
+    assert is_sentinel is False
     assert extracted is not None
     assert extracted.ml_flags == []
     assert caplog.records == []
 
 
+def test_c_signature_engine_extract_pymethoddef_init_list_expr_marks_sentinel(tmp_path: Path) -> None:
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(_null_ptr_literal()),
+    )
+
+    assert is_sentinel is True
+    assert extracted is None
+
+
 def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> None:
     function_cursor = object()
     extracted = ExtractedFunction(
-        py_name="add",
+        ml_name="add",
         ml_flags=["METH_VARARGS"],
         function_cursor=function_cursor,
     )
@@ -3821,9 +3836,11 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     def fake_extract(
         *,
         init_list_expr: _FakeNode,
-    ) -> SimpleNamespace:
+    ) -> tuple[bool, SimpleNamespace | None]:
         calls.append(init_list_expr)
-        return SimpleNamespace(py_name=f"entry_{len(calls)}")
+        if init_list_expr is supported_sentinel:
+            return True, None
+        return False, SimpleNamespace(ml_name=f"entry_{len(calls)}")
 
     monkeypatch.setattr(module_table_module, "extract_pymethoddef_init_list_expr", fake_extract)
     monkeypatch.setattr(module_table_module, "is_PyMethodDef_array_definition", lambda cursor: True)
@@ -3841,7 +3858,7 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
         should_break_array,
         module_name="pkg.mod",
     )
-    assert calls == [method_1]
+    assert calls == [method_1, supported_sentinel]
     assert list(output) == ["entry_1"]
 
     calls.clear()

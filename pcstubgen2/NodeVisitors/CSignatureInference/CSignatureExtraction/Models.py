@@ -38,7 +38,7 @@ class ExtractedSignature:
 class ExtractedFunction:
     """按 PyMethodDef 条目聚合的函数提取结果。"""
 
-    py_name: str
+    ml_name: str
     ml_flags: list[str] = field(default_factory=list)
     function_cursor: Cursor | None = field(default=None, repr=False, compare=False)
     signatures: list[ExtractedSignature] = field(default_factory=list)
