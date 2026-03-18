@@ -222,3 +222,4 @@ __marimo__/
 /test/output/
 AGENTS.md
 /tool/clang_ast_output
+/doc/
