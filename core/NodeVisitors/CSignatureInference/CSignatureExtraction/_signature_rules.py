@@ -99,9 +99,11 @@ def infer_return_type_from_py_buildvalue_format(format_text: str) -> str:
 
 def is_parameter_parser_call(call_name: str) -> bool:
     """判断调用名是否属于可提取参数签名的 `PyArg_*` 解析 API。"""
-    if call_name.startswith("PyArg_Parse"):
-        return True
-    return call_name in {"PyArg_UnpackTuple"}
+    return call_name in {
+        "PyArg_ParseTuple",
+        "PyArg_ParseTupleAndKeywords",
+        "PyArg_UnpackTuple",
+    }
 
 
 def resolve_format_index(call_name: str, meth_flags: list[str]) -> tuple[int, int]:
@@ -424,21 +426,6 @@ def parse_format_arg(func_cursor: Cursor, arg_cursor: Cursor) -> list[str] | Non
     return explode_format_string(format_text)
 
 
-def extract_call_name(call_cursor: Cursor) -> str | None:
-    """从 `CALL_EXPR` 提取调用名。"""
-    if call_cursor.kind != CursorKind.CALL_EXPR:
-        return None
-    if call_cursor.spelling:
-        return str(call_cursor.spelling)
-    children = list(call_cursor.get_children())
-    if not children:
-        return None
-    callee = unwrap_transparent(children[0])
-    if callee.spelling:
-        return str(callee.spelling)
-    return None
-
-
 def extract_call_arguments(call_cursor: Cursor) -> list[Cursor]:
     """按调用顺序返回 `CALL_EXPR` 的实参列表。"""
     children = list(call_cursor.get_children())
@@ -495,8 +482,7 @@ def find_py_buildvalue_call(return_stmt: Cursor) -> Cursor | None:
     for node in walk_cursor(return_stmt):
         if node.kind != CursorKind.CALL_EXPR:
             continue
-        call_name = extract_call_name(node)
-        if call_name == "Py_BuildValue":
+        if str(node.spelling) == "Py_BuildValue":
             return node
     return None
 
@@ -543,9 +529,7 @@ def infer_return_type_from_call(
     优先处理 `Py_BuildValue`、`Py_NewRef` 这类需要额外上下文的调用，
     其余再按前缀表或兜底规则映射。
     """
-    call_name = extract_call_name(call_cursor)
-    if call_name is None:
-        return None
+    call_name = str(call_cursor.spelling)
 
     if call_name == "Py_BuildValue":
         return infer_return_type_from_py_buildvalue(return_stmt=return_stmt, func_cursor=func_cursor)
@@ -596,8 +580,8 @@ def set_call_params(
 
     返回 `None` 表示无法可靠解析该调用；返回空列表表示明确无参数。
     """
-    call_name = extract_call_name(call_cursor)
-    if call_name is None or not is_parameter_parser_call(call_name):
+    call_name = str(call_cursor.spelling)
+    if not is_parameter_parser_call(call_name):
         return None
 
     format_idx, offset = resolve_format_index(call_name=call_name, meth_flags=meth_flags)
@@ -790,8 +774,7 @@ def collect_pyarg_calls(node: Cursor) -> list[Cursor]:
     for child in walk_cursor(node):
         if child.kind != CursorKind.CALL_EXPR:
             continue
-        call_name = extract_call_name(child)
-        if call_name is None or not is_parameter_parser_call(call_name):
+        if not is_parameter_parser_call(str(child.spelling)):
             continue
         result.append(child)
     return result
