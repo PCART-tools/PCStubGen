@@ -3009,7 +3009,6 @@ def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path
     assert (
         _set_call_params(
             func_cursor=object(),
-            meth_flags=METH_VARARGS,
             call_cursor=_call_expr("Py_BuildValue", _string_literal("i"), _identifier_node("value")),
         )
         is None
@@ -3017,8 +3016,44 @@ def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path
     assert (
         _set_call_params(
             func_cursor=object(),
-            meth_flags=METH_VARARGS | METH_KEYWORDS,
             call_cursor=_call_expr("PyArg_NoKeywords", _identifier_node("kwargs")),
+        )
+        is None
+    )
+    assert (
+        _set_call_params(
+            func_cursor=object(),
+            call_cursor=_call_expr(
+                "PyArg_UnpackTuple",
+                _identifier_node("args"),
+                _string_literal("demo"),
+                _int_literal("1"),
+                _int_literal("1"),
+                _identifier_node("value"),
+            ),
+        )
+        is None
+    )
+
+
+def test_c_signature_engine_requires_format_at_declared_slot(tmp_path: Path) -> None:
+    count_decl = _var_decl("count", _int_literal("1"))
+    func_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="demo",
+        children=[count_decl],
+    )
+
+    assert (
+        _set_call_params(
+            func_cursor=func_cursor,
+            call_cursor=_call_expr(
+                "PyArg_ParseTuple",
+                _identifier_node("args"),
+                _identifier_node("fmt"),
+                _string_literal("i"),
+                _address_of("count", referenced=count_decl),
+            ),
         )
         is None
     )
@@ -3449,7 +3484,7 @@ def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> N
     monkeypatch.setattr(
         signature_rules_module,
         "extract_signatures_from_function",
-        lambda func_cursor, meth_flags: [
+        lambda func_cursor: [
             ExtractedSignature(
                 arguments=[
                     ExtractedArgument(name="a", type_name="int"),
@@ -3457,7 +3492,7 @@ def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> N
                 ]
             )
         ]
-        if func_cursor is function_cursor and meth_flags == METH_VARARGS
+        if func_cursor is function_cursor
         else [],
     )
     monkeypatch.setattr(
@@ -3568,7 +3603,6 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
 
     args = _set_call_params(
         func_cursor=func_cursor,
-        meth_flags=METH_VARARGS | METH_KEYWORDS,
         call_cursor=_call_expr(
             "PyArg_ParseTupleAndKeywords",
             _identifier_node("args"),

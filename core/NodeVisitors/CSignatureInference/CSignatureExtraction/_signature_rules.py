@@ -7,12 +7,8 @@ from . import ClangEval
 from .Constants import (
     FORMAT_TYPE_MAP,
     METH_CLASS,
-    METH_FASTCALL,
-    METH_KEYWORDS,
     METH_NOARGS,
-    METH_O,
     METH_STATIC,
-    METH_VARARGS,
     PY_BUILDVALUE_SINGLE_MARKER_TYPE_MAP,
     RETURN_CALL_PREFIX_TYPE_MAP,
     RETURN_MACRO_TYPE_MAP,
@@ -100,38 +96,26 @@ def infer_return_type_from_py_buildvalue_format(format_text: str) -> str:
 
 
 def is_parameter_parser_call(call_name: str) -> bool:
-    """判断调用名是否属于可提取参数签名的 `PyArg_*` 解析 API。"""
+    """判断调用名是否属于当前支持的基于格式串的 `PyArg_*` 解析 API。"""
     return call_name in {
         "PyArg_ParseTuple",
         "PyArg_ParseTupleAndKeywords",
-        "PyArg_UnpackTuple",
     }
 
 
-def resolve_format_index(call_name: str, meth_flags: int) -> tuple[int, int]:
+def resolve_format_index(call_name: str) -> tuple[int, int] | None:
     """
-    按 `METH_*` 约定推导格式串索引与参数偏移量。
+    按 parser API 布局推导格式串下标与首个输出参数下标。
 
-    不同 `PyArg_*` API 的实参布局不同，这里统一归一化为
-    `(format_idx, offset)` 供后续解析复用。
+    当前仅支持基于格式串的 `PyArg_ParseTuple` / `PyArg_ParseTupleAndKeywords`，
+    这里统一归一化为
+    `(format_arg_index, first_output_arg_index)` 供后续解析复用。
     """
-    has_keywords = bool(meth_flags & METH_KEYWORDS)
-    has_varargs = bool(meth_flags & (METH_VARARGS | METH_FASTCALL))
-    if has_keywords and has_varargs:
-        if call_name == "PyArg_ParseTupleAndKeywords":
-            return 3, 2
-        if call_name == "PyArg_ParseTuple":
-            return 2, 1
-        if call_name == "PyArg_NoKeywords":
-            return -1, 0
-        return 3, 2
-    if meth_flags & (METH_VARARGS | METH_O | METH_FASTCALL):
-        return 2, 1
-    if has_keywords:
-        return 3, 2
-    if meth_flags & METH_NOARGS:
-        return -1, 0
-    return 2, 1
+    if call_name == "PyArg_ParseTuple":
+        return 1, 2
+    if call_name == "PyArg_ParseTupleAndKeywords":
+        return 2, 4
+    return None
 
 
 def explode_format_string(format_text: str) -> list[str]:
@@ -185,21 +169,21 @@ def split_required_optional(markers: list[str]) -> tuple[list[str], list[str]]:
     return required, optional
 
 
-def apply_method_flags(signature: ExtractedSignature, meth_flags: int) -> ExtractedSignature:
+def apply_ml_flags(signature: ExtractedSignature, ml_flags: int) -> ExtractedSignature:
     """
-    根据 `METH_*` 规则修正首参语义。
+    根据 `PyMethodDef.ml_flags` 对应的 `METH_*` 规则修正首参语义。
 
     该步骤负责统一 `self`/`cls` 行为，避免来源差异导致的方法签名不一致。
     """
     args = list(signature.arguments)
     return_type_name = signature.return_type_name
-    if meth_flags & METH_STATIC:
+    if ml_flags & METH_STATIC:
         while args and args[0].name in {"self", "cls"}:
             args.pop(0)
-        if meth_flags & METH_NOARGS:
+        if ml_flags & METH_NOARGS:
             return ExtractedSignature(arguments=[], return_type_name=return_type_name)
         return ExtractedSignature(arguments=args, return_type_name=return_type_name)
-    if meth_flags & METH_CLASS:
+    if ml_flags & METH_CLASS:
         if not args or args[0].name not in {"cls", "self"}:
             args.insert(0, ExtractedArgument(name="cls", type_name="type"))
         else:
@@ -484,41 +468,33 @@ def infer_return_type_from_call(
 
 def set_call_params(
     func_cursor: Cursor,
-    meth_flags: int,
     call_cursor: Cursor,
 ) -> list[ExtractedArgument] | None:
     """
-    基于调用 AST 与方法标志推断参数名、类型和默认值。
+    基于调用 AST 推断参数名、类型和默认值。
 
+    当前仅支持基于格式串的 `PyArg_ParseTuple` / `PyArg_ParseTupleAndKeywords`。
     返回 `None` 表示无法可靠解析该调用；返回空列表表示明确无参数。
     """
     call_name = str(call_cursor.spelling)
     if not is_parameter_parser_call(call_name):
         return None
 
-    format_idx, offset = resolve_format_index(call_name=call_name, meth_flags=meth_flags)
-    if format_idx <= 0:
+    layout = resolve_format_index(call_name=call_name)
+    if layout is None:
         return None
+    format_arg_index, first_output_arg_index = layout
 
     call_args = extract_call_arguments(call_cursor)
-    format_arg_index = format_idx - 1
     if format_arg_index >= len(call_args):
         return None
 
-    format_markers: list[str] | None = None
-    format_token_index = format_arg_index
-    for index in range(format_arg_index, len(call_args)):
-        parsed = parse_format_arg(func_cursor, call_args[index])
-        if parsed is None:
-            continue
-        format_markers = parsed
-        format_token_index = index
-        break
+    format_markers = parse_format_arg(func_cursor, call_args[format_arg_index])
     if format_markers is None:
         return None
 
     required, optional = split_required_optional(format_markers)
-    param_cursor = format_token_index + offset
+    param_cursor = first_output_arg_index
     if param_cursor < len(call_args):
         if extract_keyword_names(func_cursor, call_args[param_cursor]) is not None:
             param_cursor += 1
@@ -584,7 +560,7 @@ def infer_function_signature(function: ExtractedFunction) -> None:
     if func_cursor is None:
         return
 
-    signatures = extract_signatures_from_function(func_cursor, function.ml_flags)
+    signatures = extract_signatures_from_function(func_cursor)
     return_type_name = infer_return_type_from_function(func_cursor)
     if not signatures:
         fallback = signature_from_param_decls(func_cursor)
@@ -595,7 +571,7 @@ def infer_function_signature(function: ExtractedFunction) -> None:
         signatures = [ExtractedSignature(arguments=[], return_type_name=return_type_name)]
 
     signatures = [merge_signature_return_type(sig, return_type_name) for sig in signatures]
-    signatures = [apply_method_flags(sig, function.ml_flags) for sig in signatures]
+    signatures = [apply_ml_flags(sig, function.ml_flags) for sig in signatures]
     function.signatures = deduplicate_signatures(signatures)
 
 
@@ -656,23 +632,15 @@ def infer_return_type_from_function(func_cursor: Cursor) -> str | None:
     return "object"
 
 
-def collect_pyarg_calls(node: Cursor) -> list[Cursor]:
-    """递归收集参数解析调用（`PyArg_*`）的 `CALL_EXPR`。"""
-    result: list[Cursor] = []
-    for child in walk_cursor(node):
-        if child.kind != CursorKind.CALL_EXPR:
-            continue
-        if not is_parameter_parser_call(str(child.spelling)):
-            continue
-        result.append(child)
-    return result
-
-
-def extract_signatures_from_function(func_cursor: Cursor, meth_flags: int) -> list[ExtractedSignature]:
+def extract_signatures_from_function(func_cursor: Cursor) -> list[ExtractedSignature]:
     """从函数体中提取候选签名，并在末尾做去重。"""
     signatures: list[ExtractedSignature] = []
-    for call_cursor in collect_pyarg_calls(func_cursor):
-        args = set_call_params(func_cursor, meth_flags, call_cursor)
+    for call_cursor in walk_cursor(func_cursor):
+        if call_cursor.kind != CursorKind.CALL_EXPR:
+            continue
+        if not is_parameter_parser_call(str(call_cursor.spelling)):
+            continue
+        args = set_call_params(func_cursor, call_cursor)
         if args is not None:
             signatures.append(ExtractedSignature(arguments=args))
     return deduplicate_signatures(signatures)

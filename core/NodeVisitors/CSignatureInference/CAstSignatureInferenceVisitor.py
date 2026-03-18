@@ -194,7 +194,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
             args = self._build_ir_arguments(
                 arguments=sig.arguments,
                 is_method=is_method,
-                method_flags=selected.ml_flags,
+                ml_flags=selected.ml_flags,
             )
             inferred_return = self._build_annotation(sig.return_type_name)
             return_annotation = inferred_return if inferred_return is not None else func.return_annotation
@@ -222,7 +222,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         arguments: list[ExtractedArgument],
         is_method: bool,
-        method_flags: int,
+        ml_flags: int,
     ) -> list[IRArgument]:
         """
         将提取参数转换为 IR 参数，并修正方法首参语义。
@@ -232,13 +232,13 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         normalized = list(arguments)
 
         if is_method:
-            if method_flags & METH_STATIC:
+            if ml_flags & METH_STATIC:
                 while normalized and normalized[0].name in {"self", "cls"}:
                     normalized.pop(0)
             if not normalized:
-                if method_flags & METH_STATIC:
+                if ml_flags & METH_STATIC:
                     normalized = []
-                elif method_flags & METH_CLASS:
+                elif ml_flags & METH_CLASS:
                     normalized = [ExtractedArgument(name="cls", type_name="type")]
                 else:
                     normalized = [ExtractedArgument(name="self", type_name="object")]
