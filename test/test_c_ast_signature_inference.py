@@ -11,6 +11,10 @@ import clang.cindex
 import pytest
 
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction.Constants import (
+    METH_KEYWORDS,
+    METH_VARARGS,
+)
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _signature_rules as signature_rules_module
@@ -266,7 +270,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
-                    ml_flags=["METH_VARARGS"],
+                    ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
                             arguments=[
@@ -310,7 +314,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     signatures = {
         "foo": ExtractedFunction(
             ml_name="foo",
-            ml_flags=["METH_VARARGS"],
+            ml_flags=METH_VARARGS,
             signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
         )
     }
@@ -335,7 +339,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
                 },
@@ -345,7 +349,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 functions={
                     "bar": ExtractedFunction(
                         ml_name="bar",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
                     )
                 },
@@ -683,7 +687,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
                 },
@@ -694,7 +698,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="float")])],
                     )
                 },
@@ -739,7 +743,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
                 },
@@ -750,7 +754,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
-                        ml_flags=["METH_VARARGS"],
+                        ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="float")])],
                     )
                 },
@@ -796,7 +800,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
-                    ml_flags=["METH_VARARGS"],
+                    ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
                             arguments=[ExtractedArgument(name="x", type_name="int")],
@@ -1001,7 +1005,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
-                    ml_flags=["METH_VARARGS"],
+                    ml_flags=METH_VARARGS,
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             }
@@ -1469,8 +1473,8 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
     assert set(extracted) == {"first", "second"}
     assert set(extracted["first"].functions) == {"foo"}
     assert set(extracted["second"].functions) == {"foo"}
-    assert extracted["first"].functions["foo"].ml_flags == ["METH_VARARGS"]
-    assert extracted["second"].functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert extracted["first"].functions["foo"].ml_flags == METH_VARARGS
+    assert extracted["second"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_handles_multiple_moduledefs_in_one_file(
@@ -1557,8 +1561,8 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_modulede
     assert set(extracted) == {"first", "second"}
     assert set(extracted["first"].functions) == {"foo"}
     assert set(extracted["second"].functions) == {"foo"}
-    assert extracted["first"].functions["foo"].ml_flags == ["METH_VARARGS"]
-    assert extracted["second"].functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert extracted["first"].functions["foo"].ml_flags == METH_VARARGS
+    assert extracted["second"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
@@ -1632,7 +1636,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
 
     module = extracted["dup.shared"]
     assert set(module.functions) == {"foo"}
-    assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
         "Discarded duplicate extracted module dup.shared: "
         "kept existing module, discarded incoming module"
@@ -1724,7 +1728,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
 
     module = extracted["dup.same_file"]
     assert set(module.functions) == {"foo"}
-    assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
         "Discarded duplicate extracted module dup.same_file: "
         "kept existing module, discarded incoming module"
@@ -1804,7 +1808,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
         extracted = engine.extract_modules()
 
     module = extracted["dup.mod"]
-    assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
         "Discarded duplicate extracted function in module dup.mod for Python name foo: "
         "kept existing function, discarded incoming function"
@@ -1881,7 +1885,7 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
         extracted = engine.extract_modules()
 
     module = extracted["dup.shared"]
-    assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
         "Discarded duplicate extracted module dup.shared: "
         "kept existing module, discarded incoming module"
@@ -1978,7 +1982,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_
 
     module = extracted["pkg.mod"]
     assert module.functions["foo"].ml_name == "foo"
-    assert module.functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert module.functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addobjectref(
@@ -2202,7 +2206,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
 
     assert "designated.mod" in extracted
     assert extracted["designated.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["designated.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert extracted["designated.mod"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_initializer_styles(
@@ -2269,7 +2273,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
 
     assert "mixed.mod" in extracted
     assert extracted["mixed.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["mixed.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert extracted["mixed.mod"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_without_pyinit(
@@ -2335,7 +2339,7 @@ def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_withou
     extracted = engine.extract_modules()
 
     assert extracted["orphan.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["orphan.mod"].functions["foo"].ml_flags == ["METH_VARARGS"]
+    assert extracted["orphan.mod"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_without_methods(
@@ -3005,7 +3009,7 @@ def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path
     assert (
         _set_call_params(
             func_cursor=object(),
-            meth_flags=["METH_VARARGS"],
+            meth_flags=METH_VARARGS,
             call_cursor=_call_expr("Py_BuildValue", _string_literal("i"), _identifier_node("value")),
         )
         is None
@@ -3013,7 +3017,7 @@ def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path
     assert (
         _set_call_params(
             func_cursor=object(),
-            meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
+            meth_flags=METH_VARARGS | METH_KEYWORDS,
             call_cursor=_call_expr("PyArg_NoKeywords", _identifier_node("kwargs")),
         )
         is None
@@ -3198,22 +3202,36 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
     original_eval_int = cursor_utils_module.ClangEval.eval_int
+    method_flag_values = {
+        "METH_VARARGS": METH_VARARGS,
+        "METH_KEYWORDS": METH_KEYWORDS,
+    }
 
     def _eval_int(cursor: object) -> int | None:
         if not isinstance(cursor, _FakeNode):
             return original_eval_int(cursor)
-        if cursor.kind != clang.cindex.CursorKind.INTEGER_LITERAL:
+        if cursor.kind == clang.cindex.CursorKind.INTEGER_LITERAL:
+            for token in cursor.get_tokens():
+                if token.kind != clang.cindex.TokenKind.LITERAL:
+                    continue
+                text = str(token.spelling).strip()
+                if not text:
+                    continue
+                try:
+                    return int(text, 0)
+                except ValueError:
+                    continue
             return None
-        for token in cursor.get_tokens():
-            if token.kind != clang.cindex.TokenKind.LITERAL:
-                continue
-            text = str(token.spelling).strip()
-            if not text:
-                continue
-            try:
-                return int(text, 0)
-            except ValueError:
-                continue
+        if cursor.kind == clang.cindex.CursorKind.DECL_REF_EXPR:
+            return method_flag_values.get(cursor.spelling)
+        if cursor.kind == clang.cindex.CursorKind.BINARY_OPERATOR:
+            value = 0
+            for child in cursor.get_children():
+                child_value = _eval_int(child)
+                if child_value is None:
+                    return None
+                value |= child_value
+            return value
         return None
 
     monkeypatch.setattr(cursor_utils_module.ClangEval, "eval_int", _eval_int)
@@ -3326,7 +3344,11 @@ def test_c_signature_engine_resolve_init_list_expr_keeps_nested_init_list_as_val
     assert resolved == {"b": nested}
 
 
-def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: Path) -> None:
+def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_fake_eval_int(monkeypatch)
     is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("add"),
@@ -3339,12 +3361,16 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
     assert is_sentinel is False
     assert extracted is not None
     assert extracted.ml_name == "add"
-    assert extracted.ml_flags == ["METH_VARARGS"]
+    assert extracted.ml_flags == METH_VARARGS
     assert extracted.function_cursor is not None
     assert extracted.signatures == []
 
 
-def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
+def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_fake_eval_int(monkeypatch)
     is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("distance"),
@@ -3357,38 +3383,35 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
     assert is_sentinel is False
     assert extracted is not None
     assert extracted.ml_name == "distance"
-    assert extracted.ml_flags == ["METH_VARARGS"]
+    assert extracted.ml_flags == METH_VARARGS
     assert extracted.function_cursor is not None
 
 
-def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
+def test_c_signature_engine_extracts_combined_flags_from_ast_field(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_fake_eval_int(monkeypatch)
     is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
         init_list_expr=_init_list(
             _ml_name_field("kw"),
             _ml_meth_field("kw_impl"),
-            _FakeNode(
-                kind=clang.cindex.CursorKind.BINARY_OPERATOR,
-                tokens=[
-                    _FakeToken(clang.cindex.TokenKind.IDENTIFIER, "METH_VARARGS"),
-                    _FakeToken(clang.cindex.TokenKind.PUNCTUATION, "|"),
-                    _FakeToken(clang.cindex.TokenKind.LITERAL, "2"),
-                    _FakeToken(clang.cindex.TokenKind.PUNCTUATION, "|"),
-                    _FakeToken(clang.cindex.TokenKind.IDENTIFIER, "METH_VARARGS"),
-                ],
-            ),
+            _ml_flags_identifier_field("METH_VARARGS", "METH_KEYWORDS"),
             _string_literal("doc"),
         ),
     )
 
     assert is_sentinel is False
     assert extracted is not None
-    assert extracted.ml_flags == ["METH_VARARGS", "METH_KEYWORDS"]
+    assert extracted.ml_flags == (METH_VARARGS | METH_KEYWORDS)
 
 
 def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unparseable(
+    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
+    _patch_fake_eval_int(monkeypatch)
     with caplog.at_level(logging.WARNING):
         is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
             init_list_expr=_init_list(
@@ -3401,7 +3424,7 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
 
     assert is_sentinel is False
     assert extracted is not None
-    assert extracted.ml_flags == []
+    assert extracted.ml_flags == 0
     assert caplog.records == []
 
 
@@ -3418,7 +3441,7 @@ def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> N
     function_cursor = object()
     extracted = ExtractedFunction(
         ml_name="add",
-        ml_flags=["METH_VARARGS"],
+        ml_flags=METH_VARARGS,
         function_cursor=function_cursor,
     )
 
@@ -3434,7 +3457,7 @@ def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> N
                 ]
             )
         ]
-        if func_cursor is function_cursor and meth_flags == ["METH_VARARGS"]
+        if func_cursor is function_cursor and meth_flags == METH_VARARGS
         else [],
     )
     monkeypatch.setattr(
@@ -3545,7 +3568,7 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
 
     args = _set_call_params(
         func_cursor=func_cursor,
-        meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
+        meth_flags=METH_VARARGS | METH_KEYWORDS,
         call_cursor=_call_expr(
             "PyArg_ParseTupleAndKeywords",
             _identifier_node("args"),

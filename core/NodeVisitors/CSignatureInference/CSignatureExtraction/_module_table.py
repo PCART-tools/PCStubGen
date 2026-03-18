@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from clang.cindex import Cursor, CursorKind, TokenKind, TypeKind
 
-from .Constants import METH_TYPE_LITERAL_MAP
+from . import ClangEval
 from .Models import ExtractedFunction, ExtractedModule
 from ._cursor_utils import (
     is_nullptr_or_zero,
-    unique_keep_order,
     unwrap_transparent,
     var_decl_to_init_list_expr,
     walk_cursor,
@@ -67,44 +65,6 @@ def build_module_lookup_names(module_name: str) -> set[str]:
     lookup_names = {module_name}
     lookup_names.add(module_name.rsplit(".", 1)[-1])
     return lookup_names
-
-
-def _decode_meth_literal_flags(literal: str) -> list[str]:
-    """把数字字面量（含位掩码组合）解析为 `METH_*` 列表。"""
-    text = literal.strip()
-    if not text:
-        return []
-    text = re.sub(r"[uUlL]+$", "", text)
-    try:
-        mask = int(text, 0)
-    except ValueError:
-        return []
-    if mask <= 0:
-        return []
-
-    result: list[str] = []
-    for raw_bit, flag_name in METH_TYPE_LITERAL_MAP.items():
-        try:
-            bit = int(raw_bit, 0)
-        except ValueError:
-            continue
-        if bit and (mask & bit) == bit:
-            result.append(flag_name)
-    return unique_keep_order(result)
-
-
-def extract_pymethoddef_ml_flags(field_cursor: Cursor) -> list[str]:
-    """从 `ml_flags` 字段 AST 子树中提取 `METH_*` 列表。"""
-    flags: list[str] = []
-    for node in walk_cursor(field_cursor):
-        for token in node.get_tokens():
-            spelling = str(token.spelling)
-            if token.kind == TokenKind.IDENTIFIER and spelling.startswith("METH_"):
-                flags.append(spelling)
-                continue
-            if token.kind == TokenKind.LITERAL:
-                flags.extend(_decode_meth_literal_flags(spelling))
-    return unique_keep_order(flags)
 
 
 def resolve_init_list_expr(
@@ -186,7 +146,9 @@ def extract_pymethoddef_init_list_expr(
 
     ml_flags_cursor = values.get("ml_flags")
     assert ml_flags_cursor is not None
-    ml_flags = extract_pymethoddef_ml_flags(ml_flags_cursor)
+    ml_flags = ClangEval.eval_int(ml_flags_cursor)
+    if ml_flags is None:
+        ml_flags = 0
 
     function_cursor = ml_meth_cursor.referenced
     if function_cursor is None:

@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-import re
 from typing import TypeAlias
 
 from clang.cindex import Cursor, CursorKind
@@ -8,7 +6,13 @@ from clang.cindex import Cursor, CursorKind
 from . import ClangEval
 from .Constants import (
     FORMAT_TYPE_MAP,
-    METH_TYPE_LITERAL_MAP,
+    METH_CLASS,
+    METH_FASTCALL,
+    METH_KEYWORDS,
+    METH_NOARGS,
+    METH_O,
+    METH_STATIC,
+    METH_VARARGS,
     PY_BUILDVALUE_SINGLE_MARKER_TYPE_MAP,
     RETURN_CALL_PREFIX_TYPE_MAP,
     RETURN_MACRO_TYPE_MAP,
@@ -23,7 +27,6 @@ from .Models import (
 from ._cursor_utils import (
     is_nullptr_or_zero,
     looks_like_identifier,
-    unique_keep_order,
     unwrap_transparent,
     var_decl_to_init_list_expr,
     walk_cursor,
@@ -105,15 +108,15 @@ def is_parameter_parser_call(call_name: str) -> bool:
     }
 
 
-def resolve_format_index(call_name: str, meth_flags: list[str]) -> tuple[int, int]:
+def resolve_format_index(call_name: str, meth_flags: int) -> tuple[int, int]:
     """
     按 `METH_*` 约定推导格式串索引与参数偏移量。
 
     不同 `PyArg_*` API 的实参布局不同，这里统一归一化为
     `(format_idx, offset)` 供后续解析复用。
     """
-    has_keywords = "METH_KEYWORDS" in meth_flags
-    has_varargs = "METH_VARARGS" in meth_flags or "METH_FASTCALL" in meth_flags
+    has_keywords = bool(meth_flags & METH_KEYWORDS)
+    has_varargs = bool(meth_flags & (METH_VARARGS | METH_FASTCALL))
     if has_keywords and has_varargs:
         if call_name == "PyArg_ParseTupleAndKeywords":
             return 3, 2
@@ -122,11 +125,11 @@ def resolve_format_index(call_name: str, meth_flags: list[str]) -> tuple[int, in
         if call_name == "PyArg_NoKeywords":
             return -1, 0
         return 3, 2
-    if "METH_VARARGS" in meth_flags or "METH_O" in meth_flags or "METH_FASTCALL" in meth_flags:
+    if meth_flags & (METH_VARARGS | METH_O | METH_FASTCALL):
         return 2, 1
     if has_keywords:
         return 3, 2
-    if "METH_NOARGS" in meth_flags:
+    if meth_flags & METH_NOARGS:
         return -1, 0
     return 2, 1
 
@@ -182,7 +185,7 @@ def split_required_optional(markers: list[str]) -> tuple[list[str], list[str]]:
     return required, optional
 
 
-def apply_method_flags(signature: ExtractedSignature, meth_flags: list[str]) -> ExtractedSignature:
+def apply_method_flags(signature: ExtractedSignature, meth_flags: int) -> ExtractedSignature:
     """
     根据 `METH_*` 规则修正首参语义。
 
@@ -190,13 +193,13 @@ def apply_method_flags(signature: ExtractedSignature, meth_flags: list[str]) -> 
     """
     args = list(signature.arguments)
     return_type_name = signature.return_type_name
-    if "METH_STATIC" in meth_flags:
+    if meth_flags & METH_STATIC:
         while args and args[0].name in {"self", "cls"}:
             args.pop(0)
-        if "METH_NOARGS" in meth_flags:
+        if meth_flags & METH_NOARGS:
             return ExtractedSignature(arguments=[], return_type_name=return_type_name)
         return ExtractedSignature(arguments=args, return_type_name=return_type_name)
-    if "METH_CLASS" in meth_flags:
+    if meth_flags & METH_CLASS:
         if not args or args[0].name not in {"cls", "self"}:
             args.insert(0, ExtractedArgument(name="cls", type_name="type"))
         else:
@@ -481,7 +484,7 @@ def infer_return_type_from_call(
 
 def set_call_params(
     func_cursor: Cursor,
-    meth_flags: list[str],
+    meth_flags: int,
     call_cursor: Cursor,
 ) -> list[ExtractedArgument] | None:
     """
@@ -575,30 +578,6 @@ def infer_return_type_from_return_stmt(return_stmt: Cursor, func_cursor: Cursor)
     return None
 
 
-def decode_meth_literal_flags(literal: str) -> list[str]:
-    """把数字字面量（含位掩码组合）解析为 `METH_*` 列表。"""
-    text = literal.strip()
-    if not text:
-        return []
-    text = re.sub(r"[uUlL]+$", "", text)
-    try:
-        mask = int(text, 0)
-    except ValueError:
-        return []
-    if mask <= 0:
-        return []
-
-    result: list[str] = []
-    for raw_bit, flag_name in METH_TYPE_LITERAL_MAP.items():
-        try:
-            bit = int(raw_bit, 0)
-        except ValueError:
-            continue
-        if bit and (mask & bit) == bit:
-            result.append(flag_name)
-    return unique_keep_order(result)
-
-
 def infer_function_signature(function: ExtractedFunction) -> None:
     """基于已收集的函数骨架原地补全签名。"""
     func_cursor = function.function_cursor
@@ -689,7 +668,7 @@ def collect_pyarg_calls(node: Cursor) -> list[Cursor]:
     return result
 
 
-def extract_signatures_from_function(func_cursor: Cursor, meth_flags: list[str]) -> list[ExtractedSignature]:
+def extract_signatures_from_function(func_cursor: Cursor, meth_flags: int) -> list[ExtractedSignature]:
     """从函数体中提取候选签名，并在末尾做去重。"""
     signatures: list[ExtractedSignature] = []
     for call_cursor in collect_pyarg_calls(func_cursor):

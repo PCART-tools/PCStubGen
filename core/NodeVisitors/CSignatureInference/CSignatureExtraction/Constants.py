@@ -4,18 +4,16 @@ from __future__ import annotations
 # - 本文件集中维护 C 签名提取所依赖的映射与过滤规则。
 # - 常量尽量按“用途分组”维护，方便和解析逻辑（CSignatureExtractor）对照更新。
 
-# PyMethodDef.flags 中常见数字字面量到 METH_* 的映射。
-METH_TYPE_LITERAL_MAP: dict[str, str] = {
-    "1": "METH_VARARGS",
-    "2": "METH_KEYWORDS",
-    "4": "METH_NOARGS",
-    "8": "METH_O",
-    "16": "METH_CLASS",
-    "32": "METH_STATIC",
-    "64": "METH_COEXIST",
-    "128": "METH_FASTCALL",
-    "512": "METH_METHOD",
-}
+# PyMethodDef.flags 常量值，和 CPython 侧 bitmask 语义保持一致。
+METH_VARARGS = 1
+METH_KEYWORDS = 2
+METH_NOARGS = 4
+METH_O = 8
+METH_CLASS = 16
+METH_STATIC = 32
+METH_COEXIST = 64
+METH_FASTCALL = 128
+METH_METHOD = 512
 
 # PyArg_* 格式串 marker 到 Python 类型的近似映射。
 # 注意：带序号的 key（如 y#1 / y#2）表示“同一格式符展开出的第 1/2 个 C 参数”。

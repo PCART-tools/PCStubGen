@@ -13,6 +13,7 @@ from .CSignatureExtraction import (
     ExtractedFunction,
     ExtractedModule,
 )
+from .CSignatureExtraction.Constants import METH_CLASS, METH_STATIC
 from ..NodeVisitor import NodeVisitor
 from ...ErrorCollector import ErrorCollector
 from ...Errors import InvalidExpressionError
@@ -221,7 +222,7 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         *,
         arguments: list[ExtractedArgument],
         is_method: bool,
-        method_flags: list[str],
+        method_flags: int,
     ) -> list[IRArgument]:
         """
         将提取参数转换为 IR 参数，并修正方法首参语义。
@@ -231,13 +232,13 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         normalized = list(arguments)
 
         if is_method:
-            if "METH_STATIC" in method_flags:
+            if method_flags & METH_STATIC:
                 while normalized and normalized[0].name in {"self", "cls"}:
                     normalized.pop(0)
             if not normalized:
-                if "METH_STATIC" in method_flags:
+                if method_flags & METH_STATIC:
                     normalized = []
-                elif "METH_CLASS" in method_flags:
+                elif method_flags & METH_CLASS:
                     normalized = [ExtractedArgument(name="cls", type_name="type")]
                 else:
                     normalized = [ExtractedArgument(name="self", type_name="object")]
