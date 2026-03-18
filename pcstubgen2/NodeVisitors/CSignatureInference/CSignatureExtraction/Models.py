@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from clang.cindex import Cursor
 
 # 提取参数在 Python 函数签名中的位置语义。
 ExtractedArgumentKind = Literal[
@@ -37,6 +40,7 @@ class ExtractedFunction:
 
     py_name: str
     ml_flags: list[str] = field(default_factory=list)
+    function_cursor: Cursor | None = field(default=None, repr=False, compare=False)
     signatures: list[ExtractedSignature] = field(default_factory=list)
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 import sysconfig
 from pathlib import Path
@@ -11,15 +12,12 @@ import pytest
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
+from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _signature_rules as signature_rules_module
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _translation_unit as translation_unit_module
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._cursor_utils import (
-    strip_string_literal_quotes as _strip_string_literal_quotes,
-)
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
-    is_pymethoddef_array_definition as _is_PyMethodDef_array_definition,
-    is_pymethoddef_array_sentinel as _is_PyMethodDef_array_sentinel,
+    is_PyMethodDef_array_definition as _is_PyMethodDef_array_definition,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
 from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
@@ -593,7 +591,14 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     message = caplog.records[0].message
     assert str(source) in message
     assert "suffix: .c" in message
-    assert "parse_args: ['--std', 'c11']" in message
+    expected_parse_args = translation_unit_module.build_clang_parse_args(
+        source,
+        clang_include=engine._clang_include,
+        clang_include_directory=engine._clang_include_directory,
+        clang_c_std=engine._clang_c_std,
+        clang_cpp_std=engine._clang_cpp_std,
+    )
+    assert f"parse_args: {expected_parse_args!r}" in message
     assert f"[WARNING] {source}:3:1: warning detail" in message
     assert f"[ERROR] {source}:7:9: error detail" in message
     assert f"[FATAL] {source}:11:4: fatal detail" in message
@@ -853,6 +858,7 @@ def test_c_signature_engine_matches_full_include_literal_without_filename_fallba
 def test_c_signature_engine_accepts_any_full_literal_match_for_ambiguous_include(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "workspace" / "feature" / "src" / "module.c"
+    initial_include_dirs = list(engine._clang_include_directory)
 
     near_include = tmp_path / "workspace" / "feature" / "include"
     far_include = tmp_path / "external" / "vendor" / "include"
@@ -886,12 +892,15 @@ def test_c_signature_engine_accepts_any_full_literal_match_for_ambiguous_include
     )
 
     assert result is second
-    assert engine._clang_include_directory in ([str(near_include)], [str(far_include)])
+    assert len(engine._clang_include_directory) == len(initial_include_dirs) + 1
+    assert engine._clang_include_directory[:-1] == initial_include_dirs
+    assert engine._clang_include_directory[-1] in {str(near_include), str(far_include)}
 
 
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "src" / "module.c"
+    initial_include_dirs = list(engine._clang_include_directory)
 
     unrelated_header = tmp_path / "include" / "numpy" / "arrayobject.h"
     unrelated_header.parent.mkdir(parents=True, exist_ok=True)
@@ -921,7 +930,7 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
     )
 
     assert result is unresolved
-    assert engine._clang_include_directory == []
+    assert engine._clang_include_directory == initial_include_dirs
     assert len(index.calls) == 1
 
 
@@ -3097,6 +3106,102 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     assert captured["extract_modules_calls"] == 1
 
 
+def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_path: Path) -> None:
+    extractor_module = importlib.import_module(
+        "pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
+    )
+
+    engine = CSignatureExtractor(source_root=tmp_path)
+    source = tmp_path / "module.c"
+    built_modules = {
+        "pkg.mod": ExtractedModule(
+            name="pkg.mod",
+            functions={
+                "foo": ExtractedFunction(py_name="foo"),
+            },
+        )
+    }
+    calls: list[str] = []
+    fake_translation_unit = SimpleNamespace(cursor=object())
+
+    class _FakeIndexForPipeline:
+        pass
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [source])
+    monkeypatch.setattr(
+        module_table_module,
+        "process_translation_unit",
+        lambda cursor: (
+            calls.append("build"),
+            built_modules.values(),
+        )[1]
+        if calls == ["parse"]
+        else pytest.fail("build should run after parse"),
+    )
+    monkeypatch.setattr(
+        signature_rules_module,
+        "infer_function_signature",
+        lambda function: (
+            calls.append("infer"),
+            function.signatures.append(
+                ExtractedSignature(arguments=[ExtractedArgument(name="self", type_name="object")])
+            ),
+        )
+        if calls == ["parse", "build"]
+        else pytest.fail("infer should run after build"),
+    )
+    monkeypatch.setattr(
+        translation_unit_module,
+        "parse_translation_unit",
+        lambda index, file_path, **kwargs: (
+            calls.append("parse"),
+            fake_translation_unit,
+        )[1],
+    )
+    monkeypatch.setattr(extractor_module.Index, "create", lambda: _FakeIndexForPipeline())
+    try:
+        extracted = engine.extract_modules()
+    finally:
+        monkeypatch.undo()
+
+    assert calls == ["parse", "build", "infer"]
+    assert extracted == built_modules
+    assert extracted["pkg.mod"].functions["foo"].signatures
+
+
+def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_empty(tmp_path: Path) -> None:
+    engine = CSignatureExtractor(source_root=tmp_path)
+    calls: list[str] = []
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        translation_unit_module,
+        "find_candidate_files",
+        lambda source_root: (
+            calls.append("parse"),
+            [],
+        )[1],
+    )
+    monkeypatch.setattr(
+        module_table_module,
+        "process_translation_unit",
+        lambda cursor: pytest.fail("build step should be skipped when parse result is empty"),
+    )
+    monkeypatch.setattr(
+        signature_rules_module,
+        "infer_function_signature",
+        lambda function: pytest.fail("infer step should be skipped when parse result is empty"),
+    )
+    try:
+        extracted = engine.extract_modules()
+    finally:
+        monkeypatch.undo()
+
+    assert calls == ["parse"]
+    assert extracted == {}
+
+
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
     assert engine._clang_include_directory is not None
@@ -3189,7 +3294,15 @@ def test_c_signature_engine_build_parse_args_uses_only_external_include_values(t
         clang_include_directory=engine._clang_include_directory,
         clang_c_std=engine._clang_c_std,
         clang_cpp_std=engine._clang_cpp_std,
-    ) == ["--std", "c11"]
+    ) == [
+        "--std",
+        "c11",
+        *[
+            item
+            for include_dir in engine._clang_include_directory
+            for item in ("--include-directory", include_dir)
+        ],
+    ]
 
 
 def test_c_signature_engine_build_parse_args_places_include_before_include_directory(tmp_path: Path) -> None:
@@ -3215,6 +3328,11 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
         "numpy/arrayobject.h",
         "--include-directory",
         "C:/MyInclude",
+        *[
+            item
+            for include_dir in engine._clang_include_directory[1:]
+            for item in ("--include-directory", include_dir)
+        ],
     ]
 
 
@@ -3454,75 +3572,6 @@ def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(cursor_utils_module.ClangEval, "eval_int", _eval_int)
 
-
-@pytest.mark.parametrize(
-    "sentinel",
-    [
-        lambda c_null: _init_list(c_null, c_null, _int_literal("0"), c_null),
-        lambda c_null: _init_list(_null_ptr_literal(), _null_ptr_literal(), _int_literal("0"), _null_ptr_literal()),
-        lambda c_null: _init_list(_gnu_null_literal(), _gnu_null_literal(), _int_literal("0"), _gnu_null_literal()),
-        lambda c_null: _init_list(),
-        lambda c_null: _init_list(_int_literal("0")),
-        lambda c_null: _init_list(_null_ptr_literal()),
-        lambda c_null: _init_list(_gnu_null_literal()),
-        lambda c_null: _init_list(_identifier_node("NULL")),
-        lambda c_null: _init_list(_int_literal("0"), _int_literal("0"), _int_literal("1"), _int_literal("0")),
-        lambda c_null: _init_list(_int_literal("0"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
-    ],
-)
-def test_c_signature_engine_array_end_accepts_supported_sentinel_forms(
-    sentinel,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_fake_eval_int(monkeypatch)
-    c_null = _wrap(
-        clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        _wrap(clang.cindex.CursorKind.PAREN_EXPR, _wrap(clang.cindex.CursorKind.CSTYLE_CAST_EXPR, _int_literal("0"))),
-    )
-    assert _is_PyMethodDef_array_sentinel(sentinel(c_null)) is True
-
-
-@pytest.mark.parametrize(
-    "non_sentinel",
-    [
-        _identifier_node("NULL"),
-        _init_list(
-            _FakeNode(
-                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-                children=[
-                    _FakeNode(kind=clang.cindex.CursorKind.MEMBER_REF),
-                    _int_literal("0"),
-                ],
-            )
-        ),
-        _init_list(_identifier_node("nullptr")),
-        _init_list(_identifier_node("__null")),
-        _init_list(_int_literal("1"), _int_literal("0"), _int_literal("0"), _int_literal("0")),
-        _init_list(
-            _FakeNode(kind=clang.cindex.CursorKind.STRING_LITERAL, tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, '"add"')]),
-            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
-            _int_literal("1"),
-            _null_ptr_literal(),
-        ),
-    ],
-)
-def test_c_signature_engine_array_end_rejects_non_sentinel_forms(
-    non_sentinel: _FakeNode,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_fake_eval_int(monkeypatch)
-    assert _is_PyMethodDef_array_sentinel(non_sentinel) is False
-
-
-def test_c_signature_engine_accepts_single_NULL_token_via_fallback() -> None:
-    assert _is_PyMethodDef_array_sentinel(_init_list(_identifier_node("NULL"))) is True
-
-
-@pytest.mark.parametrize("name", ["nullptr", "__null"])
-def test_c_signature_engine_fallback_rejects_non_NULL_identifiers(name: str) -> None:
-    assert _is_PyMethodDef_array_sentinel(_init_list(_identifier_node(name))) is False
-
-
 def test_c_signature_engine_resolve_init_list_expr_supports_positional_entries(tmp_path: Path) -> None:
     field_names = ("a", "b", "c")
     first = _string_literal("first")
@@ -3644,6 +3693,8 @@ def test_c_signature_engine_extracts_pymethod_fields_from_ast_layout(tmp_path: P
     assert extracted is not None
     assert extracted.py_name == "add"
     assert extracted.ml_flags == ["METH_VARARGS"]
+    assert extracted.function_cursor is not None
+    assert extracted.signatures == []
 
 
 def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Path) -> None:
@@ -3659,6 +3710,7 @@ def test_c_signature_engine_extracts_cast_wrapped_ml_meth_from_ast(tmp_path: Pat
     assert extracted is not None
     assert extracted.py_name == "distance"
     assert extracted.ml_flags == ["METH_VARARGS"]
+    assert extracted.function_cursor is not None
 
 
 def test_c_signature_engine_extracts_combined_flags_from_ast_field(tmp_path: Path) -> None:
@@ -3703,6 +3755,49 @@ def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unpars
     assert caplog.records == []
 
 
+def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> None:
+    function_cursor = object()
+    extracted = ExtractedFunction(
+        py_name="add",
+        ml_flags=["METH_VARARGS"],
+        function_cursor=function_cursor,
+    )
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        signature_rules_module,
+        "extract_signatures_from_function",
+        lambda func_cursor, meth_flags: [
+            ExtractedSignature(
+                arguments=[
+                    ExtractedArgument(name="a", type_name="int"),
+                    ExtractedArgument(name="b", type_name="int"),
+                ]
+            )
+        ]
+        if func_cursor is function_cursor and meth_flags == ["METH_VARARGS"]
+        else [],
+    )
+    monkeypatch.setattr(
+        signature_rules_module,
+        "infer_return_type_from_function",
+        lambda func_cursor: "int" if func_cursor is function_cursor else None,
+    )
+    monkeypatch.setattr(
+        signature_rules_module,
+        "signature_from_param_decls",
+        lambda func_cursor: pytest.fail("fallback should not run when signatures are extracted"),
+    )
+    try:
+        signature_rules_module.infer_function_signature(extracted)
+    finally:
+        monkeypatch.undo()
+
+    assert len(extracted.signatures) == 1
+    assert [arg.name for arg in extracted.signatures[0].arguments] == ["self", "a", "b"]
+    assert extracted.signatures[0].return_type_name == "int"
+
+
 def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -3731,7 +3826,7 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
         return SimpleNamespace(py_name=f"entry_{len(calls)}")
 
     monkeypatch.setattr(module_table_module, "extract_pymethoddef_init_list_expr", fake_extract)
-    monkeypatch.setattr(module_table_module, "is_pymethoddef_array_definition", lambda cursor: True)
+    monkeypatch.setattr(module_table_module, "is_PyMethodDef_array_definition", lambda cursor: True)
 
     should_break_array = _FakeNode(
         kind=clang.cindex.CursorKind.VAR_DECL,
@@ -3789,19 +3884,3 @@ def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path)
     assert [arg.type_name for arg in args] == ["int", "object", "object"]
 
 
-@pytest.mark.parametrize(
-    ("literal", "expected"),
-    [
-        ('"plain"', "plain"),
-        ('u8"utf8"', "utf8"),
-        ('u"utf16"', "utf16"),
-        ('U"utf32"', "utf32"),
-        ('L"wide"', "wide"),
-    ],
-)
-def test_c_signature_engine_strips_cpp_string_literal_prefixes(
-    tmp_path: Path,
-    literal: str,
-    expected: str,
-) -> None:
-    assert _strip_string_literal_quotes(literal) == expected

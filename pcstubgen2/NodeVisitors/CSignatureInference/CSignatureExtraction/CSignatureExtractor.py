@@ -7,6 +7,7 @@ from clang.cindex import Index
 
 from .Models import ExtractedModule
 from . import _module_table as module_table
+from . import _signature_rules as signature_rules
 from . import _translation_unit as translation_unit
 
 logger = logging.getLogger(__name__)
@@ -53,14 +54,16 @@ class CSignatureExtractor:
 
         _check(self._source_root.exists())
 
+        # parse 文件
         source_files = translation_unit.find_candidate_files(self._source_root)
         if not source_files:
             self._cache_result = {}
             return self._cache_result
 
         index = Index.create()
-        translation_units = [
-            translation_unit.parse_translation_unit(
+        translation_units = []
+        for file_path in source_files:
+            tu = translation_unit.parse_translation_unit(
                 index,
                 file_path,
                 source_root=self._source_root,
@@ -69,9 +72,9 @@ class CSignatureExtractor:
                 clang_c_std=self._clang_c_std,
                 clang_cpp_std=self._clang_cpp_std,
             )
-            for file_path in source_files
-        ]
+            translation_units.append(tu)
 
+        # 构建数据结构
         result: dict[str, ExtractedModule] = {}
         for tu in translation_units:
             try:
@@ -88,6 +91,11 @@ class CSignatureExtractor:
                     )
                     continue
                 result[module.name] = module
+
+        # 推断签名
+        for module in result.values():
+            for function in module.functions.values():
+                signature_rules.infer_function_signature(function)
 
         self._cache_result = result
         return self._cache_result

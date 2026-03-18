@@ -14,13 +14,16 @@ from .Constants import (
     RETURN_TOKEN_TYPE_MAP,
     UNRELATED_TOKENS,
 )
-from .Models import ExtractedArgument, ExtractedSignature
+from .Models import (
+    ExtractedArgument,
+    ExtractedFunction,
+    ExtractedSignature,
+)
 from ._cursor_utils import (
     collect_identifier_literal_tokens,
     find_first_call_name,
     looks_like_identifier,
     split_top_level,
-    strip_string_literal_quotes,
     unique_keep_order,
     walk_cursor,
 )
@@ -253,7 +256,7 @@ def find_format_string(func_cursor: Cursor, format_var_name: str) -> str | None:
             continue
         for child in walk_cursor(node):
             if child.kind == CursorKind.STRING_LITERAL:
-                return strip_string_literal_quotes(str(child.spelling))
+                return str(child.spelling).strip('"')
     return None
 
 
@@ -301,7 +304,7 @@ def signature_key(signature: ExtractedSignature) -> SignatureKey:
 def resolve_py_buildvalue_format_token(*, func_cursor: Cursor, token: str) -> str | None:
     """解析 `Py_BuildValue` 的格式串 token。"""
     if '"' in token:
-        return strip_string_literal_quotes(token)
+        return token.strip('"')
     if looks_like_identifier(token):
         return find_format_string(func_cursor=func_cursor, format_var_name=token)
     return None
@@ -370,7 +373,7 @@ def parse_format_token(func_cursor: Cursor, token: str) -> list[str] | None:
     if token == "F_INT_PYFMT":
         return ["F_INT_PYFMT"]
     if '"' in token:
-        text = strip_string_literal_quotes(token)
+        text = token.strip('"')
         return explode_format_string(text)
     if looks_like_identifier(token):
         text = find_format_string(func_cursor=func_cursor, format_var_name=token)
@@ -433,7 +436,7 @@ def extract_parser_signatures(node: Cursor) -> list[ExtractedSignature]:
     for token in node.get_tokens():
         if token.kind != TokenKind.LITERAL:
             continue
-        text = strip_string_literal_quotes(str(token.spelling))
+        text = str(token.spelling).strip('"')
         if "(" in text and ")" in text:
             literals.append(text)
     for text in literals:
@@ -562,6 +565,25 @@ def decode_meth_literal_flags(literal: str) -> list[str]:
     return unique_keep_order(result)
 
 
+def infer_function_signature(function: ExtractedFunction) -> None:
+    """基于已收集的函数骨架原地补全签名。"""
+    func_cursor = function.function_cursor
+    if func_cursor is None:
+        return
+
+    signatures = extract_signatures_from_function(func_cursor, function.ml_flags)
+    return_type_name = infer_return_type_from_function(func_cursor)
+    if not signatures:
+        fallback = signature_from_param_decls(func_cursor)
+        if fallback.arguments:
+            signatures = [fallback]
+
+    if not signatures:
+        signatures = [ExtractedSignature(arguments=[], return_type_name=return_type_name)]
+
+    signatures = [merge_signature_return_type(sig, return_type_name) for sig in signatures]
+    signatures = [apply_method_flags(sig, function.ml_flags) for sig in signatures]
+    function.signatures = deduplicate_signatures(signatures)
 def signature_from_param_decls(func_cursor: Cursor) -> ExtractedSignature:
     """回退方案：直接从 C 形参声明推断签名。"""
     args: list[ExtractedArgument] = []

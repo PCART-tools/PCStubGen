@@ -23,8 +23,6 @@ _CAST_CURSOR_KINDS = {
 
 _TRANSPARENT_CURSOR_KINDS = _SINGLE_TRANSPARENT_CURSOR_KINDS | _CAST_CURSOR_KINDS
 
-_CPP_STRING_LITERAL_RE = re.compile(r'^(?:u8|u|U|L)?"(.*)"$', re.DOTALL)
-
 _NULLPTR_CURSOR_KINDS = {
     CursorKind.CXX_NULL_PTR_LITERAL_EXPR,
     CursorKind.GNU_NULL_EXPR,
@@ -75,14 +73,6 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor | None:
         if child.kind == CursorKind.INIT_LIST_EXPR:
             return child
     return None
-
-
-def strip_string_literal_quotes(literal: str) -> str:
-    """移除 C/C++ 字符串字面量前缀与外围引号。"""
-    string_match = _CPP_STRING_LITERAL_RE.match(literal)
-    if string_match is not None:
-        return string_match.group(1)
-    return literal.strip('"')
 
 
 def collect_identifier_literal_tokens(node: Cursor) -> list[str]:
