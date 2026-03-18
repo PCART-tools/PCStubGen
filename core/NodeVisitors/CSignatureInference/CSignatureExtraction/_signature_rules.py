@@ -23,7 +23,6 @@ from .Models import (
 from ._cursor_utils import (
     is_nullptr_or_zero,
     looks_like_identifier,
-    split_top_level,
     unique_keep_order,
     unwrap_transparent,
     var_decl_to_init_list_expr,
@@ -317,22 +316,6 @@ def get_init_value(name: str, func_cursor: Cursor) -> str | None:
     return stringify_literal_cursor(init_cursor)
 
 
-def normalize_parser_type(raw_type: str) -> str:
-    """将 parser 文本中的类型描述归一化为 Python 基础类型名。"""
-    normalized = raw_type.replace("const", "").replace("&", "").replace("*", "").strip()
-    normalized = normalized.replace("std::", "")
-    lower = normalized.lower()
-    if any(token in lower for token in ("str", "string", "unicode")):
-        return "str"
-    if "bool" in lower:
-        return "bool"
-    if any(token in lower for token in ("double", "float")):
-        return "float"
-    if any(token in lower for token in ("int", "long", "size_t", "ssize")):
-        return "int"
-    return "object"
-
-
 def normalize_c_type(raw_type: str) -> str:
     """将 C 类型拼写映射到简化 Python 类型。"""
     lower = raw_type.lower()
@@ -356,64 +339,6 @@ def signature_key(signature: ExtractedSignature) -> SignatureKey:
             for arg in signature.arguments
         ),
     )
-
-
-def parse_parser_args(args_text: str) -> list[ExtractedArgument]:
-    """
-    解析 parser 风格的参数文本。
-
-    支持默认值、`*`/`$`、`*args`/`**kwargs`，并在信息不足时生成占位参数名。
-    """
-    parts = split_top_level(args_text, ",")
-    result: list[ExtractedArgument] = []
-    kw_only = False
-    for raw_part in parts:
-        part = raw_part.strip()
-        if not part:
-            continue
-        if part in {"*", "$"}:
-            kw_only = True
-            continue
-
-        default: str | None = None
-        if "=" in part:
-            before_default, default = part.split("=", 1)
-        else:
-            before_default = part
-        before_default = before_default.strip()
-
-        type_name = "object"
-        if " " in before_default:
-            type_candidate, name_candidate = before_default.rsplit(" ", 1)
-            if looks_like_identifier(name_candidate):
-                name = name_candidate
-                type_name = normalize_parser_type(type_candidate)
-            else:
-                name = f"arg{len(result) + 1}"
-                type_name = normalize_parser_type(before_default)
-        else:
-            name = before_default if looks_like_identifier(before_default) else f"arg{len(result) + 1}"
-            if name != before_default:
-                type_name = normalize_parser_type(before_default)
-
-        kind = "keyword_only" if kw_only else "positional_or_keyword"
-        if name.startswith("**"):
-            kind = "var_keyword"
-            name = name[2:]
-        elif name.startswith("*"):
-            kind = "var_positional"
-            name = name[1:]
-            kw_only = True
-
-        result.append(
-            ExtractedArgument(
-                name=name,
-                type_name=type_name,
-                default_value=default.strip() if default else None,
-                kind=kind,
-            )
-        )
-    return result
 
 
 def parse_format_arg(func_cursor: Cursor, arg_cursor: Cursor) -> list[str] | None:
@@ -552,22 +477,6 @@ def infer_return_type_from_call(
     if call_name.startswith("PyObject_Call"):
         return "object"
     return None
-
-
-def extract_parser_signatures(node: Cursor) -> list[ExtractedSignature]:
-    """从声明语句中的 `\"func(type name, ...)\"` 文本签名提取参数。"""
-    signatures: list[ExtractedSignature] = []
-    for child in walk_cursor(node):
-        if child.kind != CursorKind.STRING_LITERAL:
-            continue
-        text = str(child.spelling).strip('"')
-        if "(" not in text or ")" not in text:
-            continue
-        args_part = text[text.find("(") + 1 : text.rfind(")")]
-        args = parse_parser_args(args_part)
-        if args:
-            signatures.append(ExtractedSignature(arguments=args))
-    return signatures
 
 
 def set_call_params(
@@ -787,8 +696,4 @@ def extract_signatures_from_function(func_cursor: Cursor, meth_flags: list[str])
         args = set_call_params(func_cursor, meth_flags, call_cursor)
         if args is not None:
             signatures.append(ExtractedSignature(arguments=args))
-
-    for node in walk_cursor(func_cursor):
-        if node.kind == CursorKind.DECL_STMT:
-            signatures.extend(extract_parser_signatures(node))
     return deduplicate_signatures(signatures)

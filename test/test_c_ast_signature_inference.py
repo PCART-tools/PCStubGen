@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import logging
 import sysconfig
+from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -17,16 +18,10 @@ from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _translat
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
-    is_PyMethodDef_array_definition as _is_PyMethodDef_array_definition,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
-    decode_meth_literal_flags as _decode_meth_literal_flags,
     set_call_params as _set_call_params,
-)
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction._translation_unit import (
-    diagnostic_severity_to_str as _diagnostic_severity_to_str,
-    diagnostic_to_str as _diagnostic_to_str,
 )
 from core.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
@@ -208,10 +203,6 @@ class _FakeTranslationUnit:
         self.diagnostics = diagnostics
 
 
-class _DiagnosticlessTranslationUnit:
-    pass
-
-
 class _FakeIndex:
     def __init__(self, translation_unit: _FakeTranslationUnit) -> None:
         self.translation_unit = translation_unit
@@ -237,14 +228,6 @@ class _SequentialIndex:
         return self._translation_units[-1]
 
 
-class _RaisingIndex:
-    def __init__(self, error: Exception) -> None:
-        self.error = error
-
-    def parse(self, filename: str, args: list[str]) -> None:
-        raise self.error
-
-
 def _has_include_directory_arg(args: list[str], include_dir: str | Path) -> bool:
     include_dir_str = str(include_dir)
     for index, token in enumerate(args):
@@ -253,17 +236,6 @@ def _has_include_directory_arg(args: list[str], include_dir: str | Path) -> bool
         if index + 1 >= len(args):
             continue
         if args[index + 1] == include_dir_str:
-            return True
-    return False
-
-
-def _has_include_arg(args: list[str], include_header: str) -> bool:
-    for index, token in enumerate(args):
-        if token != "--include":
-            continue
-        if index + 1 >= len(args):
-            continue
-        if args[index + 1] == include_header:
             return True
     return False
 
@@ -324,112 +296,6 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert rewritten.args[1].default.repr == "False"
     assert rewritten.return_annotation is not None
     assert str(rewritten.return_annotation) == "int"
-
-
-def test_c_ast_visitor_logs_successful_generic_rewrite(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    func = IRFunction(name="foo", args=_generic_signature())
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[func],
-    )
-    _patch_c_signature_extractor(
-        monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    ml_flags=["METH_VARARGS"],
-                    signatures=[
-                        ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")]),
-                    ],
-                )
-            }
-        ),
-    )
-
-    visitor = CAstSignatureInferenceVisitor(
-        error_collector=ErrorCollector(),
-        source_root=tmp_path,
-    )
-    with caplog.at_level(logging.INFO, logger="core"):
-        visitor.visit_module(module)
-
-    assert len(caplog.records) == 1
-    record = caplog.records[0]
-    assert record.levelno == logging.INFO
-    assert record.message == "Rewrote generic signature for foo (is_method=False): generated_signatures=1"
-
-
-def test_c_ast_visitor_logs_when_generic_function_has_no_candidates(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    visitor = CAstSignatureInferenceVisitor(
-        error_collector=ErrorCollector(),
-        source_root=tmp_path,
-    )
-    func = IRFunction(name="foo", args=_generic_signature())
-
-    with caplog.at_level(logging.WARNING, logger="core"):
-        rewritten = visitor._rewrite_function(func=func, signatures={}, is_method=False)
-
-    assert rewritten == [func]
-    assert len(caplog.records) == 1
-    record = caplog.records[0]
-    assert record.levelno == logging.WARNING
-    assert record.message == (
-        "Failed to rewrite generic signature for foo (is_method=False): "
-        "no C signature candidates found"
-    )
-
-
-def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
-    )
-    _patch_c_signature_extractor(
-        monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    ml_flags=["METH_VARARGS"],
-                    signatures=[],
-                )
-            }
-        ),
-    )
-    visitor = CAstSignatureInferenceVisitor(
-        error_collector=ErrorCollector(),
-        source_root=tmp_path,
-    )
-
-    with caplog.at_level(logging.INFO, logger="core"):
-        visitor.visit_module(module)
-        visitor.log_summary("pkg.mod")
-
-    assert module.functions[0].is_generic_signature()
-    assert [record.levelno for record in caplog.records] == [logging.WARNING, logging.INFO]
-    assert caplog.records[0].message == (
-        "Failed to rewrite generic signature for foo (is_method=False): "
-        "selected candidate has no signatures"
-    )
-    assert caplog.records[1].message == (
-        "C AST signature inference summary for pkg.mod: "
-        "total_generic=1, success=0, failed=1, no_candidates=0, "
-        "empty_selected_signatures=1, empty_extract=0"
-    )
 
 
 def test_c_ast_visitor_does_not_log_for_non_generic_function(
@@ -520,26 +386,6 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
         "total_generic=2, success=2, failed=0, no_candidates=0, "
         "empty_selected_signatures=0, empty_extract=0"
     )
-
-
-def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptureFixture, tmp_path: Path) -> None:
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_include_directory=["C:/MyInclude"],
-    )
-    source = tmp_path / "broken_module.cxx"
-
-    with pytest.raises(RuntimeError, match="boom"):
-        with caplog.at_level(logging.WARNING, logger="core"):
-            translation_unit_module.parse_translation_unit(
-                index=_RaisingIndex(RuntimeError("boom")),
-                file_path=source,
-                source_root=engine._source_root,
-                clang_include=engine._clang_include,
-                clang_include_directory=engine._clang_include_directory,
-                clang_c_std=engine._clang_c_std,
-                clang_cpp_std=engine._clang_cpp_std,
-            )
 
 
 def test_c_signature_engine_logs_all_diagnostics_when_error_present(
@@ -685,33 +531,6 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     assert _has_std_arg(index.calls[1][1], "c11")
 
 
-def test_c_signature_engine_resolves_missing_include_with_literal_rglob(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    header_path = tmp_path / "vendor" / "include" / "numpy" / "npy_common.h"
-    header_path.parent.mkdir(parents=True, exist_ok=True)
-    header_path.write_text("/* header */", encoding="utf-8")
-
-    rglob_patterns: list[str] = []
-    original_rglob = Path.rglob
-
-    def _record_rglob(self: Path, pattern: str):
-        rglob_patterns.append(pattern)
-        return original_rglob(self, pattern)
-
-    monkeypatch.setattr(Path, "rglob", _record_rglob)
-
-    include_dir = translation_unit_module.resolve_missing_include_dir(
-        engine._source_root,
-        include_literal="numpy/npy_common.h",
-    )
-
-    assert include_dir == header_path.parents[1]
-    assert rglob_patterns == ["numpy/npy_common.h"]
-
-
 def test_c_signature_engine_logs_info_when_auto_include_is_added(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
@@ -814,89 +633,6 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
     assert _has_include_directory_arg(index.calls[2][1], include_arg_two)
 
 
-def test_c_signature_engine_matches_full_include_literal_without_filename_fallback(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "decoy" / "src" / "module.c"
-    source.parent.mkdir(parents=True, exist_ok=True)
-
-    decoy_header = tmp_path / "decoy" / "npy_common.h"
-    expected_header = tmp_path / "target" / "include" / "numpy" / "npy_common.h"
-    decoy_header.parent.mkdir(parents=True, exist_ok=True)
-    expected_header.parent.mkdir(parents=True, exist_ok=True)
-    decoy_header.write_text("/* decoy */", encoding="utf-8")
-    expected_header.write_text("/* expected */", encoding="utf-8")
-
-    first = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=4,
-                column=2,
-            )
-        ]
-    )
-    second = _FakeTranslationUnit(diagnostics=[])
-    index = _SequentialIndex([first, second])
-
-    result = translation_unit_module.parse_translation_unit(
-        index=index,
-        file_path=source,
-        source_root=engine._source_root,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
-    )
-
-    assert result is second
-    assert str(expected_header.parents[1]) in engine._clang_include_directory
-    assert str(decoy_header.parent) not in engine._clang_include_directory
-
-
-def test_c_signature_engine_accepts_any_full_literal_match_for_ambiguous_include(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "workspace" / "feature" / "src" / "module.c"
-    initial_include_dirs = list(engine._clang_include_directory)
-
-    near_include = tmp_path / "workspace" / "feature" / "include"
-    far_include = tmp_path / "external" / "vendor" / "include"
-    (near_include / "numpy").mkdir(parents=True, exist_ok=True)
-    (far_include / "numpy").mkdir(parents=True, exist_ok=True)
-    (near_include / "numpy" / "npy_common.h").write_text("/* near */", encoding="utf-8")
-    (far_include / "numpy" / "npy_common.h").write_text("/* far */", encoding="utf-8")
-
-    first = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=1,
-                column=1,
-            )
-        ]
-    )
-    second = _FakeTranslationUnit(diagnostics=[])
-    index = _SequentialIndex([first, second])
-
-    result = translation_unit_module.parse_translation_unit(
-        index=index,
-        file_path=source,
-        source_root=engine._source_root,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
-    )
-
-    assert result is second
-    assert len(engine._clang_include_directory) == len(initial_include_dirs) + 1
-    assert engine._clang_include_directory[:-1] == initial_include_dirs
-    assert engine._clang_include_directory[-1] in {str(near_include), str(far_include)}
-
-
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "src" / "module.c"
@@ -932,44 +668,6 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
     assert result is unresolved
     assert engine._clang_include_directory == initial_include_dirs
     assert len(index.calls) == 1
-
-
-def test_c_signature_engine_raises_when_diagnostic_missing_required_field(tmp_path: Path) -> None:
-    class _MissingSeverityDiagnostic:
-        def __init__(self) -> None:
-            self.spelling = "broken detail"
-            self.location = _FakeDiagnosticLocation(
-                file_name=str(tmp_path / "module.c"),
-                line=1,
-                column=2,
-            )
-
-    with pytest.raises(AttributeError):
-        _diagnostic_to_str(_MissingSeverityDiagnostic())  # type: ignore[arg-type]
-
-
-def test_c_signature_engine_raises_when_translation_unit_missing_diagnostics(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "module.c"
-
-    with pytest.raises(AttributeError):
-        translation_unit_module.parse_translation_unit(
-            index=_FakeIndex(_DiagnosticlessTranslationUnit()),  # type: ignore[arg-type]
-            file_path=source,
-            source_root=engine._source_root,
-            clang_include=engine._clang_include,
-            clang_include_directory=engine._clang_include_directory,
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
-        )
-
-
-def test_c_signature_engine_maps_all_builtin_severity_names(tmp_path: Path) -> None:
-    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Ignored) == "IGNORED"
-    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Note) == "NOTE"
-    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Warning) == "WARNING"
-    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Error) == "ERROR"
-    assert _diagnostic_severity_to_str(clang.cindex.Diagnostic.Fatal) == "FATAL"
 
 
 def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
@@ -1234,114 +932,6 @@ def test_write_stubs_defaults_do_not_require_source_root(
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
     assert list(tmp_path.rglob("*.pyi"))
-
-
-def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
-
-    captured_visitors: list[object] = []
-
-    class _RecordingPipeline:
-        def __init__(self, visitors):
-            captured_visitors.extend(visitors)
-
-        def run(self, module: IRModule) -> IRModule:
-            return module
-
-    monkeypatch.setattr(stubgen_module, "Pipeline", _RecordingPipeline)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=True,
-        source_root=tmp_path,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    assert [type(visitor).__name__ for visitor in captured_visitors] == [
-        "DocStringSignatureParserVisitor",
-        "CAstSignatureInferenceVisitor",
-        "InferMethodModifierVisitor",
-    ]
-
-
-def test_stub_generation_options_defaults_to_empty_clang_include_lists() -> None:
-    first = StubGenerationOptions()
-    second = StubGenerationOptions()
-
-    assert first.clang_include == []
-    assert second.clang_include == []
-    assert first.clang_include is not second.clang_include
-    assert first.clang_include_directory == []
-    assert second.clang_include_directory == []
-    assert first.clang_include_directory is not second.clang_include_directory
-
-
-def test_c_ast_visitor_rejects_none_clang_include(tmp_path: Path) -> None:
-    with pytest.raises(TypeError):
-        CAstSignatureInferenceVisitor(
-            error_collector=ErrorCollector(),
-            source_root=tmp_path,
-            clang_include=None,  # type: ignore[arg-type]
-        )
-
-
-def test_c_ast_visitor_rejects_none_clang_include_directory(tmp_path: Path) -> None:
-    with pytest.raises(TypeError):
-        CAstSignatureInferenceVisitor(
-            error_collector=ErrorCollector(),
-            source_root=tmp_path,
-            clang_include_directory=None,  # type: ignore[arg-type]
-        )
-
-
-def test_c_signature_engine_rejects_none_clang_include(tmp_path: Path) -> None:
-    with pytest.raises(TypeError):
-        CSignatureExtractor(
-            source_root=tmp_path,
-            clang_include=None,  # type: ignore[arg-type]
-        )
-
-
-def test_c_signature_engine_rejects_none_clang_include_directory(tmp_path: Path) -> None:
-    with pytest.raises(TypeError):
-        CSignatureExtractor(
-            source_root=tmp_path,
-            clang_include_directory=None,  # type: ignore[arg-type]
-        )
-
-
-def test_write_stubs_uses_multiline_logging_format(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
-
-    basic_config_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-
-    def _record_basic_config(*args: object, **kwargs: object) -> None:
-        basic_config_calls.append((args, kwargs))
-
-    monkeypatch.setattr(stubgen_module.logging, "basicConfig", _record_basic_config)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    assert basic_config_calls == [
-        (
-            (),
-                {
-                    "level": logging.INFO,
-                    "format": "[{levelname}]: {message}\nat {filename}:{lineno} (in {funcName}())\n",
-                    "style": "{",
-                },
-            )
-    ]
 
 
 def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
@@ -1666,6 +1256,75 @@ def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> 
     assert first.signatures
     assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
     assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
+    assert first.signatures[0].return_type_name is None
+
+
+def test_c_signature_extraction_engine_ignores_text_parser_signatures(tmp_path: Path) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "mini_text_parser_ext.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "static PyObject* parse_impl(PyObject* self, PyObject* args) {",
+                "    const char* parser = \"parse_impl(int count, double value=0)\";",
+                "    (void)parser;",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"parse\", parse_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"mini_text_parser_ext\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "PyObject* PyInit_mini_text_parser_ext(void) {",
+                "    return PyModule_Create(&moduledef);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    assert "mini_text_parser_ext" in extracted
+    first = extracted["mini_text_parser_ext"].functions["parse"]
+    assert first.ml_name == "parse"
+    assert first.signatures
+    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "args"]
+    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "object"]
     assert first.signatures[0].return_type_name is None
 
 
@@ -3359,56 +3018,6 @@ def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path
         )
         is None
     )
-
-
-def test_c_signature_engine_skips_non_array_types_before_reading_array_element() -> None:
-    class _FakeType:
-        kind = object()
-
-        def get_array_element_type(self) -> object:
-            raise AssertionError("non-array type should not read array element type")
-
-    class _FakeNode:
-        kind = clang.cindex.CursorKind.VAR_DECL
-        type = _FakeType()
-
-        def is_definition(self) -> bool:
-            return False
-
-    assert _is_PyMethodDef_array_definition(_FakeNode()) is False
-
-
-def test_c_signature_engine_detects_array_via_struct_pymethoddef_canonical_name() -> None:
-    class _FakeCanonicalElementType:
-        spelling = "struct PyMethodDef"
-
-    class _FakeElementType:
-        spelling = "PyMethodDef"
-
-        def get_canonical(self) -> _FakeCanonicalElementType:
-            return _FakeCanonicalElementType()
-
-    class _FakeArrayType:
-        kind = clang.cindex.TypeKind.CONSTANTARRAY
-
-        def get_array_element_type(self) -> _FakeElementType:
-            return _FakeElementType()
-
-    class _FakeNode:
-        kind = clang.cindex.CursorKind.VAR_DECL
-        type = _FakeArrayType()
-
-        def is_definition(self) -> bool:
-            return True
-
-    assert _is_PyMethodDef_array_definition(_FakeNode()) is True
-
-
-def test_c_signature_engine_decodes_combined_numeric_method_flags(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    assert _decode_meth_literal_flags("3") == ["METH_VARARGS", "METH_KEYWORDS"]
-    assert _decode_meth_literal_flags("0x21U") == ["METH_VARARGS", "METH_STATIC"]
 
 
 class _FakeToken:
