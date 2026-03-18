@@ -28,9 +28,9 @@ if hasattr(sys.stderr, "reconfigure"):
         pass
 
 # Import new implementation (write_stubs API)
-from pcstubgen2 import write_stubs
-from pcstubgen2.StubGenerationOptions import StubGenerationOptions
-from pcstubgen2.Writer import Writer as NewWriter
+from core import write_stubs
+from core.StubGenerationOptions import StubGenerationOptions
+from core.Writer import Writer as NewWriter
 
 # Import old implementation parts
 # We need to hack a bit because the old one is designed as CLI

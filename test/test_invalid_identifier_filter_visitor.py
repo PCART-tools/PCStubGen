@@ -5,11 +5,11 @@ import sys
 import types
 from pathlib import Path
 
-from pcstubgen2 import write_stubs
-from pcstubgen2.ErrorCollector import ErrorCollector
-from pcstubgen2.IR import QualifiedName
-from pcstubgen2.ModuleBuilder import ModuleBuilder
-from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+from core import write_stubs
+from core.ErrorCollector import ErrorCollector
+from core.IR import QualifiedName
+from core.ModuleBuilder import ModuleBuilder
+from core.StubGenerationOptions import StubGenerationOptions
 
 
 def test_module_builder_keeps_only_tree_functions_and_methods() -> None:

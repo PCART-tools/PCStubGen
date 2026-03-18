@@ -14,8 +14,8 @@ PROJECT_ROOT = SCRIPT_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from pcstubgen2 import write_stubs
-from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+from core import write_stubs
+from core.StubGenerationOptions import StubGenerationOptions
 
 DEFAULT_MODULE = "numpy"
 DEFAULT_SOURCE_ROOT = Path(r"C:/Things/third_package_source/numpy_numpy/numpy")

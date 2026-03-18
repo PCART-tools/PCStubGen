@@ -9,33 +9,33 @@ from types import SimpleNamespace
 import clang.cindex
 import pytest
 
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _signature_rules as signature_rules_module
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction import _translation_unit as translation_unit_module
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _signature_rules as signature_rules_module
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _translation_unit as translation_unit_module
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
     is_PyMethodDef_array_definition as _is_PyMethodDef_array_definition,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
     decode_meth_literal_flags as _decode_meth_literal_flags,
-    set_token_params as _set_token_params,
+    set_call_params as _set_call_params,
 )
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction._translation_unit import (
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction._translation_unit import (
     diagnostic_severity_to_str as _diagnostic_severity_to_str,
     diagnostic_to_str as _diagnostic_to_str,
 )
-from pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
+from core.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
     ExtractedSignature,
 )
-from pcstubgen2.ErrorCollector import ErrorCollector
-from pcstubgen2.IR import (
+from core.ErrorCollector import ErrorCollector
+from core.IR import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -46,14 +46,14 @@ from pcstubgen2.IR import (
     QualifiedName,
     ResolvedType,
 )
-from pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import (
+from core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import (
     CAstSignatureInferenceVisitor,
 )
-from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
+from core.NodeVisitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
-from pcstubgen2.Pipeline import Pipeline
-from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+from core.Pipeline import Pipeline
+from core.StubGenerationOptions import StubGenerationOptions
 
 
 def _generic_signature() -> list[IRArgument]:
@@ -123,7 +123,7 @@ def _patch_c_signature_extractor(
         def extract_modules(self) -> dict[str, ExtractedModule]:
             return extractor.extract_modules()
 
-    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
     return extractor
@@ -148,7 +148,7 @@ def _patch_raising_c_signature_extractor(
         def extract_modules(self) -> dict[str, ExtractedModule]:
             raise error
 
-    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
 
@@ -356,7 +356,7 @@ def test_c_ast_visitor_logs_successful_generic_rewrite(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
-    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+    with caplog.at_level(logging.INFO, logger="core"):
         visitor.visit_module(module)
 
     assert len(caplog.records) == 1
@@ -375,7 +375,7 @@ def test_c_ast_visitor_logs_when_generic_function_has_no_candidates(
     )
     func = IRFunction(name="foo", args=_generic_signature())
 
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         rewritten = visitor._rewrite_function(func=func, signatures={}, is_method=False)
 
     assert rewritten == [func]
@@ -415,7 +415,7 @@ def test_c_ast_visitor_logs_empty_selected_candidate_and_summary(
         source_root=tmp_path,
     )
 
-    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+    with caplog.at_level(logging.INFO, logger="core"):
         visitor.visit_module(module)
         visitor.log_summary("pkg.mod")
 
@@ -449,7 +449,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
         )
     }
 
-    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+    with caplog.at_level(logging.INFO, logger="core"):
         rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
 
     assert rewritten == [func]
@@ -501,7 +501,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
         functions=[IRFunction(name="bar", args=_generic_signature())],
     )
 
-    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+    with caplog.at_level(logging.INFO, logger="core"):
         visitor.visit_module(first_module)
         visitor.visit_module(second_module)
         visitor.log_summary("pkg")
@@ -530,7 +530,7 @@ def test_c_signature_engine_logs_parse_exception_details(caplog: pytest.LogCaptu
     source = tmp_path / "broken_module.cxx"
 
     with pytest.raises(RuntimeError, match="boom"):
-        with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+        with caplog.at_level(logging.WARNING, logger="core"):
             translation_unit_module.parse_translation_unit(
                 index=_RaisingIndex(RuntimeError("boom")),
                 file_path=source,
@@ -575,7 +575,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
@@ -630,7 +630,7 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
@@ -736,7 +736,7 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
     second = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second])
 
-    with caplog.at_level(logging.INFO, logger="pcstubgen2"):
+    with caplog.at_level(logging.INFO, logger="core"):
         _ = translation_unit_module.parse_translation_unit(
             index=index,
             file_path=source,
@@ -1069,7 +1069,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         source_root=tmp_path,
     )
 
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         visitor.visit_module(module)
 
     assert module.functions[0].is_generic_signature()
@@ -1172,8 +1172,8 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     captured_output_dirs: list[Path] = []
 
@@ -1202,8 +1202,8 @@ def test_write_stubs_skips_c_inference_when_source_root_not_set(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
         raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when source_root is not set")
@@ -1221,8 +1221,8 @@ def test_write_stubs_defaults_do_not_require_source_root(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
         raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated by default")
@@ -1240,8 +1240,8 @@ def test_write_stubs_adds_doc_parser_before_c_ast_when_enabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     captured_visitors: list[object] = []
 
@@ -1317,8 +1317,8 @@ def test_write_stubs_uses_multiline_logging_format(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     basic_config_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
 
@@ -1348,12 +1348,12 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     def _emit_warning(self: Pipeline, module: IRModule) -> None:
         _ = (self, module)
-        logging.getLogger("pcstubgen2.tests").warning("file log works")
+        logging.getLogger("core.tests").warning("file log works")
 
     monkeypatch.setattr(stubgen_module.Pipeline, "run", _emit_warning)
 
@@ -1362,15 +1362,15 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
-    log_file = tmp_path / "pcstubgen2.log"
+    log_file = tmp_path / "pcstubgen.log"
     assert log_file.exists()
     assert log_file.read_text(encoding="utf-8") == (
-        "[WARNING] - pcstubgen2.tests\n"
+        "[WARNING] - core.tests\n"
         "file log works\n"
         "\n"
     )
 
-    package_logger = logging.getLogger("pcstubgen2")
+    package_logger = logging.getLogger("core")
     assert all(
         not isinstance(handler, logging.FileHandler)
         or Path(handler.baseFilename) != log_file
@@ -1382,8 +1382,8 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1424,7 +1424,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
-    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
         "C AST signature inference summary for pkg: "
         "total_generic=2, success=1, failed=1, no_candidates=1, "
@@ -1436,8 +1436,8 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1459,7 +1459,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     )
     stubgen_module.write_stubs("math", tmp_path, options=options)
 
-    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
         "Failed to rewrite generic signature for foo (is_method=False): "
         "C signature extraction returned no results"
@@ -1475,8 +1475,8 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen2 as stubgen_module
-    from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+    import core as stubgen_module
+    from core.StubGenerationOptions import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1506,7 +1506,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
 
-    log_text = (tmp_path / "pcstubgen2.log").read_text(encoding="utf-8")
+    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert "Failed to extract C signatures: boom" not in log_text
     assert "C signature extraction failed" not in log_text
     assert "C AST signature inference summary for pkg:" not in log_text
@@ -1577,7 +1577,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
 
     with caplog.at_level(
         logging.WARNING,
-        logger="pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor",
+        logger="core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor",
     ):
         Pipeline(
             [
@@ -1968,7 +1968,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         extracted = engine.extract_modules()
 
     module = extracted["dup.shared"]
@@ -2060,7 +2060,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         extracted = engine.extract_modules()
 
     module = extracted["dup.same_file"]
@@ -2141,7 +2141,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         extracted = engine.extract_modules()
 
     module = extracted["dup.mod"]
@@ -2218,7 +2218,7 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="pcstubgen2"):
+    with caplog.at_level(logging.WARNING, logger="core"):
         extracted = engine.extract_modules()
 
     module = extracted["dup.shared"]
@@ -2797,12 +2797,13 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("scipy.spatial._distance_pybind")
+    numpy = pytest.importorskip("numpy")
 
     spatial_src_root = Path(r"C:\Things\third_package_source\scipy_scipy\scipy\spatial\src")
     if not spatial_src_root.exists():
         pytest.skip("SciPy spatial source tree is not available")
 
-    import pcstubgen2 as stubgen_module
+    import core as stubgen_module
 
     python_include_dirs: list[str] = []
     for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
@@ -2811,6 +2812,9 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
         if include_dir in python_include_dirs:
             continue
         python_include_dirs.append(include_dir)
+    numpy_include_dir = getattr(numpy, "get_include", lambda: None)()
+    if numpy_include_dir and numpy_include_dir not in python_include_dirs:
+        python_include_dirs.append(numpy_include_dir)
 
     pybind_output_dir = tmp_path / "pybind_stubs"
     wrap_output_dir = tmp_path / "wrap_stubs"
@@ -2827,7 +2831,7 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
 
     pybind_stub = (pybind_output_dir / "_distance_pybind.pyi").read_text(encoding="utf-8")
     wrap_stub = (wrap_output_dir / "_distance_wrap.pyi").read_text(encoding="utf-8")
-    pybind_log_text = (pybind_output_dir / "pcstubgen2.log").read_text(encoding="utf-8")
+    pybind_log_text = (pybind_output_dir / "pcstubgen.log").read_text(encoding="utf-8")
 
     assert (
         "def cdist_minkowski(x: object, y: object, w: object = None, "
@@ -2838,7 +2842,7 @@ def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
         "p: typing.SupportsFloat = 2.0) -> numpy.ndarray:"
     ) in pybind_stub
     assert (
-        "def cdist_minkowski_double_wrap(XA_: object, XB_: object, dm_: object, p: object) -> float:"
+        "def cdist_minkowski_double_wrap(XA_: object, XB_: object, dm_: object, p: float) -> float:"
     ) in wrap_stub
     assert "Failed to rewrite generic signature for cdist_minkowski" not in pybind_log_text
     assert "Failed to rewrite generic signature for pdist_minkowski" not in pybind_log_text
@@ -3075,7 +3079,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
                 self._cached_result = {}
             return self._cached_result
 
-    import pcstubgen2.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "CSignatureExtractor", _RecorderExtractor)
 
@@ -3108,7 +3112,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
 def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_path: Path) -> None:
     extractor_module = importlib.import_module(
-        "pcstubgen2.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
+        "core.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
     )
 
     engine = CSignatureExtractor(source_root=tmp_path)
@@ -3336,22 +3340,22 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
     ]
 
 
-def test_c_signature_engine_skips_non_parser_calls_in_token_params(tmp_path: Path) -> None:
+def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
 
     assert (
-        _set_token_params(
+        _set_call_params(
             func_cursor=object(),
             meth_flags=["METH_VARARGS"],
-            token_list=["Py_BuildValue", '"i"', "value"],
+            call_cursor=_call_expr("Py_BuildValue", _string_literal("i"), _identifier_node("value")),
         )
         is None
     )
     assert (
-        _set_token_params(
+        _set_call_params(
             func_cursor=object(),
             meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
-            token_list=["PyArg_NoKeywords", "kwargs"],
+            call_cursor=_call_expr("PyArg_NoKeywords", _identifier_node("kwargs")),
         )
         is None
     )
@@ -3511,6 +3515,37 @@ def _token_identifier_node(
         spelling=name,
         tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
         referenced=referenced,
+    )
+
+
+def _var_decl(name: str, initializer: _FakeNode | None = None) -> _FakeNode:
+    children = [initializer] if initializer is not None else []
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        spelling=name,
+        children=children,
+    )
+
+
+def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        children=[_token_identifier_node(name, referenced=referenced)],
+    )
+
+
+def _call_expr(name: str, *args: _FakeNode) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.CALL_EXPR,
+        spelling=name,
+        children=[
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+                spelling=name,
+                children=[_token_identifier_node(name)],
+            ),
+            *args,
+        ],
     )
 
 
@@ -3881,19 +3916,37 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
 
 def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
-    args = _set_token_params(
-        func_cursor=object(),
+    count_decl = _var_decl("count", _int_literal("1"))
+    expected_type_decl = _var_decl("expected_type", _null_ptr_literal())
+    value_decl = _var_decl("value", _null_ptr_literal())
+    keywords_decl = _var_decl(
+        "keywords",
+        _init_list(
+            _string_literal("count"),
+            _string_literal("expected_type"),
+            _string_literal("value"),
+            _int_literal("0"),
+        ),
+    )
+    func_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="demo",
+        children=[count_decl, expected_type_decl, value_decl, keywords_decl],
+    )
+
+    args = _set_call_params(
+        func_cursor=func_cursor,
         meth_flags=["METH_VARARGS", "METH_KEYWORDS"],
-        token_list=[
+        call_cursor=_call_expr(
             "PyArg_ParseTupleAndKeywords",
-            "args",
-            "kwargs",
-            '"iO!"',
-            "keywords",
-            "count",
-            "expected_type",
-            "value",
-        ],
+            _identifier_node("args"),
+            _identifier_node("kwargs"),
+            _string_literal("iO!"),
+            _token_identifier_node("keywords", referenced=keywords_decl),
+            _address_of("count", referenced=count_decl),
+            _address_of("expected_type", referenced=expected_type_decl),
+            _address_of("value", referenced=value_decl),
+        ),
     )
 
     assert args is not None

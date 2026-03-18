@@ -1,5 +1,5 @@
 """
-独立测试 pcstubgen2（单模块）。
+独立测试 pcstubgen（单模块）。
 
 示例:
     python test/<当前脚本>.py
@@ -17,8 +17,8 @@ ROOT_DIR = SCRIPT_PATH.parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from pcstubgen2 import write_stubs
-from pcstubgen2.StubGenerationOptions import StubGenerationOptions
+from core import write_stubs
+from core.StubGenerationOptions import StubGenerationOptions
 
 DEFAULT_MODULE = "scipy"
 OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
@@ -51,7 +51,7 @@ def collect_stub_files(output_dir: Path) -> list[Path]:
 
 
 def run_single_module(module_name: str) -> int:
-    print(f"开始测试 pcstubgen2，目标模块: {module_name}")
+    print(f"开始测试 pcstubgen，目标模块: {module_name}")
     output_dir = prepare_output_dir(OUTPUT_DIR)
     print(f"输出目录: {output_dir}")
 

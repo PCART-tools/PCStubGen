@@ -3,8 +3,9 @@ from __future__ import annotations
 import re
 from typing import TypeAlias
 
-from clang.cindex import Cursor, CursorKind, TokenKind
+from clang.cindex import Cursor, CursorKind
 
+from . import ClangEval
 from .Constants import (
     FORMAT_TYPE_MAP,
     METH_TYPE_LITERAL_MAP,
@@ -20,11 +21,12 @@ from .Models import (
     ExtractedSignature,
 )
 from ._cursor_utils import (
-    collect_identifier_literal_tokens,
-    find_first_call_name,
+    is_nullptr_or_zero,
     looks_like_identifier,
     split_top_level,
     unique_keep_order,
+    unwrap_transparent,
+    var_decl_to_init_list_expr,
     walk_cursor,
 )
 
@@ -179,32 +181,6 @@ def split_required_optional(markers: list[str]) -> tuple[list[str], list[str]]:
     return required, optional
 
 
-def collect_call_tokens(call_node: Cursor) -> list[str]:
-    """
-    从调用表达式提取与参数解析相关的 token。
-
-    该步骤会过滤大量无关转换器/宏标识，降低误判概率。
-    """
-    result: list[str] = []
-    started = False
-    for token in call_node.get_tokens():
-        if token.kind not in {TokenKind.IDENTIFIER, TokenKind.LITERAL}:
-            continue
-        spelling = str(token.spelling)
-        if not started:
-            if spelling.startswith("PyArg_") or spelling == "Py_BuildValue":
-                result.append(spelling)
-                started = True
-            continue
-
-        if spelling in {"NULL", "return"}:
-            break
-        if spelling in UNRELATED_TOKENS or spelling in {"if"}:
-            continue
-        result.append(spelling)
-    return result
-
-
 def apply_method_flags(signature: ExtractedSignature, meth_flags: list[str]) -> ExtractedSignature:
     """
     根据 `METH_*` 规则修正首参语义。
@@ -234,30 +210,109 @@ def apply_method_flags(signature: ExtractedSignature, meth_flags: list[str]) -> 
     return ExtractedSignature(arguments=args, return_type_name=return_type_name)
 
 
+def iter_effective_children(cursor: Cursor) -> list[Cursor]:
+    """返回剥离透明节点后的直接子节点。"""
+    return list(unwrap_transparent(cursor).get_children())
+
+
+def find_var_decl(func_cursor: Cursor, name: str) -> Cursor | None:
+    """按名字在当前函数内回溯变量声明。"""
+    for node in walk_cursor(func_cursor):
+        if node.kind == CursorKind.VAR_DECL and node.spelling == name:
+            return node
+    return None
+
+
+def get_initializer_cursor(var_decl: Cursor) -> Cursor | None:
+    """提取变量声明的初始化表达式节点。"""
+    init_candidate: Cursor | None = None
+    for child in var_decl.get_children():
+        if child.kind == CursorKind.TYPE_REF:
+            continue
+        init_candidate = child
+    if init_candidate is None:
+        return None
+    return unwrap_transparent(init_candidate)
+
+
+def resolve_decl_ref_target(func_cursor: Cursor, cursor: Cursor) -> Cursor | None:
+    """从引用表达式解析出被引用的声明节点。"""
+    node = unwrap_transparent(cursor)
+    if node.kind != CursorKind.DECL_REF_EXPR:
+        return None
+    referenced = node.referenced
+    if referenced is not None:
+        return referenced
+    if not node.spelling:
+        return None
+    return find_var_decl(func_cursor, node.spelling)
+
+
+def extract_string_literal(cursor: Cursor) -> str | None:
+    """从表达式节点提取字符串字面量文本。"""
+    node = unwrap_transparent(cursor)
+    if node.kind != CursorKind.STRING_LITERAL:
+        return None
+    return str(node.spelling).strip('"')
+
+
+def resolve_string_argument(func_cursor: Cursor, arg_cursor: Cursor) -> str | None:
+    """解析字符串形态的调用实参，支持字面量与变量引用。"""
+    literal = extract_string_literal(arg_cursor)
+    if literal is not None:
+        return literal
+
+    node = unwrap_transparent(arg_cursor)
+    if node.kind != CursorKind.DECL_REF_EXPR:
+        return None
+    if node.spelling == "F_INT_PYFMT":
+        return "F_INT_PYFMT"
+
+    target = resolve_decl_ref_target(func_cursor, node)
+    if target is None or target.kind != CursorKind.VAR_DECL:
+        return None
+    init_cursor = get_initializer_cursor(target)
+    if init_cursor is None:
+        return None
+    return extract_string_literal(init_cursor)
+
+
+def stringify_literal_cursor(cursor: Cursor) -> str | None:
+    """尽量从 AST 节点稳定还原简单字面量文本。"""
+    node = unwrap_transparent(cursor)
+    if node.kind == CursorKind.STRING_LITERAL:
+        return str(node.spelling)
+    if node.kind == CursorKind.DECL_REF_EXPR and node.spelling:
+        return str(node.spelling)
+    if is_nullptr_or_zero(node):
+        return "0"
+    if node.kind == CursorKind.INTEGER_LITERAL:
+        value = ClangEval.eval_int(node)
+        if value is not None:
+            return str(value)
+    if node.kind == CursorKind.UNARY_OPERATOR:
+        children = iter_effective_children(node)
+        if len(children) != 1:
+            return None
+        inner_text = stringify_literal_cursor(children[0])
+        if inner_text is None:
+            return None
+        inner_value = ClangEval.eval_int(node)
+        if inner_value is not None:
+            return str(inner_value)
+        return inner_text
+    return None
+
+
 def get_init_value(name: str, func_cursor: Cursor) -> str | None:
     """从局部变量定义中提取默认值字面表达式。"""
-    for node in walk_cursor(func_cursor):
-        if node.kind != CursorKind.VAR_DECL or node.spelling != name:
-            continue
-        tokens = [str(token.spelling) for token in node.get_tokens()]
-        if "=" not in tokens:
-            continue
-        eq_idx = tokens.index("=")
-        value = "".join(tokens[eq_idx + 1:]).strip()
-        if value:
-            return value
-    return None
-
-
-def find_format_string(func_cursor: Cursor, format_var_name: str) -> str | None:
-    """回溯查找格式串变量对应的字符串字面量。"""
-    for node in walk_cursor(func_cursor):
-        if node.kind != CursorKind.VAR_DECL or node.spelling != format_var_name:
-            continue
-        for child in walk_cursor(node):
-            if child.kind == CursorKind.STRING_LITERAL:
-                return str(child.spelling).strip('"')
-    return None
+    var_decl = find_var_decl(func_cursor, name)
+    if var_decl is None:
+        return None
+    init_cursor = get_initializer_cursor(var_decl)
+    if init_cursor is None:
+        return None
+    return stringify_literal_cursor(init_cursor)
 
 
 def normalize_parser_type(raw_type: str) -> str:
@@ -299,15 +354,6 @@ def signature_key(signature: ExtractedSignature) -> SignatureKey:
             for arg in signature.arguments
         ),
     )
-
-
-def resolve_py_buildvalue_format_token(*, func_cursor: Cursor, token: str) -> str | None:
-    """解析 `Py_BuildValue` 的格式串 token。"""
-    if '"' in token:
-        return token.strip('"')
-    if looks_like_identifier(token):
-        return find_format_string(func_cursor=func_cursor, format_var_name=token)
-    return None
 
 
 def parse_parser_args(args_text: str) -> list[ExtractedArgument]:
@@ -368,38 +414,126 @@ def parse_parser_args(args_text: str) -> list[ExtractedArgument]:
     return result
 
 
-def parse_format_token(func_cursor: Cursor, token: str) -> list[str] | None:
-    """将格式串 token 解析为 marker 列表，支持字面量与变量两种来源。"""
-    if token == "F_INT_PYFMT":
+def parse_format_arg(func_cursor: Cursor, arg_cursor: Cursor) -> list[str] | None:
+    """将格式串实参解析为 marker 列表，支持字面量与变量两种来源。"""
+    format_text = resolve_string_argument(func_cursor, arg_cursor)
+    if format_text is None:
+        return None
+    if format_text == "F_INT_PYFMT":
         return ["F_INT_PYFMT"]
-    if '"' in token:
-        text = token.strip('"')
-        return explode_format_string(text)
-    if looks_like_identifier(token):
-        text = find_format_string(func_cursor=func_cursor, format_var_name=token)
-        if text:
-            return explode_format_string(text)
+    return explode_format_string(format_text)
+
+
+def extract_call_name(call_cursor: Cursor) -> str | None:
+    """从 `CALL_EXPR` 提取调用名。"""
+    if call_cursor.kind != CursorKind.CALL_EXPR:
+        return None
+    if call_cursor.spelling:
+        return str(call_cursor.spelling)
+    children = list(call_cursor.get_children())
+    if not children:
+        return None
+    callee = unwrap_transparent(children[0])
+    if callee.spelling:
+        return str(callee.spelling)
+    return None
+
+
+def extract_call_arguments(call_cursor: Cursor) -> list[Cursor]:
+    """按调用顺序返回 `CALL_EXPR` 的实参列表。"""
+    children = list(call_cursor.get_children())
+    if not children:
+        return []
+    return [unwrap_transparent(child) for child in children[1:]]
+
+
+def extract_output_argument_name(arg_cursor: Cursor) -> str | None:
+    """从输出参数实参中提取目标变量名。"""
+    node = unwrap_transparent(arg_cursor)
+    if node.kind == CursorKind.DECL_REF_EXPR and node.spelling:
+        name = str(node.spelling)
+        if name in UNRELATED_TOKENS:
+            return None
+        return name
+    if node.kind != CursorKind.UNARY_OPERATOR:
+        return None
+    children = iter_effective_children(node)
+    if len(children) != 1:
+        return None
+    target = unwrap_transparent(children[0])
+    if target.kind != CursorKind.DECL_REF_EXPR or not target.spelling:
+        return None
+    name = str(target.spelling)
+    if name in UNRELATED_TOKENS:
+        return None
+    return name
+
+
+def extract_keyword_names(func_cursor: Cursor, arg_cursor: Cursor) -> list[str] | None:
+    """从 `kwlist` 风格字符串数组变量提取关键字参数名。"""
+    target = resolve_decl_ref_target(func_cursor, arg_cursor)
+    if target is None or target.kind != CursorKind.VAR_DECL:
+        return None
+    init_list_expr = var_decl_to_init_list_expr(target)
+    if init_list_expr is None:
+        return None
+
+    names: list[str] = []
+    for entry in init_list_expr.get_children():
+        value_cursor = unwrap_transparent(entry)
+        if is_nullptr_or_zero(value_cursor):
+            break
+        literal = extract_string_literal(value_cursor)
+        if literal is None or not looks_like_identifier(literal):
+            return None
+        names.append(literal)
+    return names
+
+
+def find_py_buildvalue_call(return_stmt: Cursor) -> Cursor | None:
+    """在 `return` 子树中定位 `Py_BuildValue` 调用。"""
+    for node in walk_cursor(return_stmt):
+        if node.kind != CursorKind.CALL_EXPR:
+            continue
+        call_name = extract_call_name(node)
+        if call_name == "Py_BuildValue":
+            return node
     return None
 
 
 def infer_return_type_from_py_buildvalue(return_stmt: Cursor, func_cursor: Cursor) -> str:
     """从 `Py_BuildValue` 的格式串推断返回类型。"""
-    tokens = collect_identifier_literal_tokens(return_stmt)
-    if "Py_BuildValue" not in tokens:
+    call_cursor = find_py_buildvalue_call(return_stmt)
+    if call_cursor is None:
         return "object"
+    call_args = extract_call_arguments(call_cursor)
+    if not call_args:
+        return "object"
+    format_text = resolve_string_argument(func_cursor, call_args[0])
+    if format_text is None:
+        return "object"
+    return infer_return_type_from_py_buildvalue_format(format_text)
 
-    call_idx = tokens.index("Py_BuildValue")
-    for token in tokens[call_idx + 1:]:
-        format_text = resolve_py_buildvalue_format_token(func_cursor=func_cursor, token=token)
-        if format_text is None:
-            continue
-        return infer_return_type_from_py_buildvalue_format(format_text)
-    return "object"
+
+def has_named_reference(node: Cursor, names: set[str]) -> bool:
+    """判断子树中是否存在指定名字的引用或调用。"""
+    for cursor in walk_cursor(node):
+        if cursor.spelling in names:
+            return True
+    return False
+
+
+def find_first_call_expr(node: Cursor) -> Cursor | None:
+    """在子树中查找首个 `CALL_EXPR`。"""
+    for child in walk_cursor(node):
+        if child.kind == CursorKind.CALL_EXPR:
+            return child
+    return None
 
 
 def infer_return_type_from_call(
     *,
-    call_name: str,
+    call_cursor: Cursor,
     return_stmt: Cursor,
     func_cursor: Cursor,
 ) -> str | None:
@@ -409,14 +543,21 @@ def infer_return_type_from_call(
     优先处理 `Py_BuildValue`、`Py_NewRef` 这类需要额外上下文的调用，
     其余再按前缀表或兜底规则映射。
     """
+    call_name = extract_call_name(call_cursor)
+    if call_name is None:
+        return None
+
     if call_name == "Py_BuildValue":
         return infer_return_type_from_py_buildvalue(return_stmt=return_stmt, func_cursor=func_cursor)
 
     if call_name == "Py_NewRef":
-        token_set = set(collect_identifier_literal_tokens(return_stmt))
-        if "Py_None" in token_set:
+        call_args = extract_call_arguments(call_cursor)
+        if not call_args:
+            return "object"
+        target = unwrap_transparent(call_args[0])
+        if target.spelling == "Py_None":
             return "None"
-        if "Py_True" in token_set or "Py_False" in token_set:
+        if target.spelling in {"Py_True", "Py_False"}:
             return "bool"
         return "object"
 
@@ -432,14 +573,12 @@ def infer_return_type_from_call(
 def extract_parser_signatures(node: Cursor) -> list[ExtractedSignature]:
     """从声明语句中的 `\"func(type name, ...)\"` 文本签名提取参数。"""
     signatures: list[ExtractedSignature] = []
-    literals: list[str] = []
-    for token in node.get_tokens():
-        if token.kind != TokenKind.LITERAL:
+    for child in walk_cursor(node):
+        if child.kind != CursorKind.STRING_LITERAL:
             continue
-        text = str(token.spelling).strip('"')
-        if "(" in text and ")" in text:
-            literals.append(text)
-    for text in literals:
+        text = str(child.spelling).strip('"')
+        if "(" not in text or ")" not in text:
+            continue
         args_part = text[text.find("(") + 1 : text.rfind(")")]
         args = parse_parser_args(args_part)
         if args:
@@ -447,44 +586,46 @@ def extract_parser_signatures(node: Cursor) -> list[ExtractedSignature]:
     return signatures
 
 
-def set_token_params(
+def set_call_params(
     func_cursor: Cursor,
     meth_flags: list[str],
-    token_list: list[str],
+    call_cursor: Cursor,
 ) -> list[ExtractedArgument] | None:
     """
-    基于调用 token 与方法标志推断参数名、类型和默认值。
+    基于调用 AST 与方法标志推断参数名、类型和默认值。
 
     返回 `None` 表示无法可靠解析该调用；返回空列表表示明确无参数。
     """
-    if not token_list:
-        return None
-
-    call_name = token_list[0]
-    if not is_parameter_parser_call(call_name):
+    call_name = extract_call_name(call_cursor)
+    if call_name is None or not is_parameter_parser_call(call_name):
         return None
 
     format_idx, offset = resolve_format_index(call_name=call_name, meth_flags=meth_flags)
-    if format_idx < 0 or format_idx >= len(token_list):
+    if format_idx <= 0:
+        return None
+
+    call_args = extract_call_arguments(call_cursor)
+    format_arg_index = format_idx - 1
+    if format_arg_index >= len(call_args):
         return None
 
     format_markers: list[str] | None = None
-    format_token_index = format_idx
-    for idx in range(format_idx, len(token_list)):
-        parsed = parse_format_token(func_cursor, token_list[idx])
+    format_token_index = format_arg_index
+    for index in range(format_arg_index, len(call_args)):
+        parsed = parse_format_arg(func_cursor, call_args[index])
         if parsed is None:
             continue
         format_markers = parsed
-        format_token_index = idx
+        format_token_index = index
         break
-
     if format_markers is None:
         return None
 
     required, optional = split_required_optional(format_markers)
     param_cursor = format_token_index + offset
-    if param_cursor < len(token_list) and token_list[param_cursor] == "kwlist":
-        param_cursor += 1
+    if param_cursor < len(call_args):
+        if extract_keyword_names(func_cursor, call_args[param_cursor]) is not None:
+            param_cursor += 1
 
     result: list[ExtractedArgument] = []
     kw_only = False
@@ -494,12 +635,12 @@ def set_token_params(
             continue
         if marker == ":":
             break
-        if param_cursor >= len(token_list):
+        if param_cursor >= len(call_args):
             break
 
-        name = token_list[param_cursor].strip('"')
+        name = extract_output_argument_name(call_args[param_cursor])
         param_cursor += 1
-        if not looks_like_identifier(name):
+        if name is None or not looks_like_identifier(name):
             continue
 
         type_name = FORMAT_TYPE_MAP.get(marker, "object")
@@ -519,26 +660,26 @@ def set_token_params(
 
 def infer_return_type_from_return_stmt(return_stmt: Cursor, func_cursor: Cursor) -> str | None:
     """从单条 `return` 语句中提取可识别的返回类型。"""
-    tokens = collect_identifier_literal_tokens(return_stmt)
-    if not tokens:
-        return None
-    token_set = set(tokens)
-
+    macro_names = set(RETURN_MACRO_TYPE_MAP)
     for macro_name, type_name in RETURN_MACRO_TYPE_MAP.items():
-        if macro_name in token_set:
-            return type_name
-    for token_name, type_name in RETURN_TOKEN_TYPE_MAP.items():
-        if token_name in token_set:
+        if has_named_reference(return_stmt, {macro_name}):
             return type_name
 
-    call_name = find_first_call_name(return_stmt)
-    if call_name is None:
-        return None
-    return infer_return_type_from_call(
-        call_name=call_name,
-        return_stmt=return_stmt,
-        func_cursor=func_cursor,
-    )
+    token_names = set(RETURN_TOKEN_TYPE_MAP)
+    for token_name, type_name in RETURN_TOKEN_TYPE_MAP.items():
+        if has_named_reference(return_stmt, {token_name}):
+            return type_name
+
+    if not has_named_reference(return_stmt, macro_names | token_names):
+        call_cursor = find_first_call_expr(return_stmt)
+        if call_cursor is None:
+            return None
+        return infer_return_type_from_call(
+            call_cursor=call_cursor,
+            return_stmt=return_stmt,
+            func_cursor=func_cursor,
+        )
+    return None
 
 
 def decode_meth_literal_flags(literal: str) -> list[str]:
@@ -584,6 +725,8 @@ def infer_function_signature(function: ExtractedFunction) -> None:
     signatures = [merge_signature_return_type(sig, return_type_name) for sig in signatures]
     signatures = [apply_method_flags(sig, function.ml_flags) for sig in signatures]
     function.signatures = deduplicate_signatures(signatures)
+
+
 def signature_from_param_decls(func_cursor: Cursor) -> ExtractedSignature:
     """回退方案：直接从 C 形参声明推断签名。"""
     args: list[ExtractedArgument] = []
@@ -623,9 +766,8 @@ def infer_return_type_from_function(func_cursor: Cursor) -> str | None:
     """
     inferred_types: set[str] = set()
 
-    all_tokens = set(collect_identifier_literal_tokens(func_cursor))
     for macro_name, type_name in RETURN_MACRO_TYPE_MAP.items():
-        if macro_name in all_tokens:
+        if has_named_reference(func_cursor, {macro_name}):
             inferred_types.add(type_name)
 
     for node in walk_cursor(func_cursor):
@@ -642,39 +784,24 @@ def infer_return_type_from_function(func_cursor: Cursor) -> str | None:
     return "object"
 
 
-def collect_pyarg_token_lists(node: Cursor) -> list[list[str]]:
-    """
-    递归收集参数解析调用（`PyArg_*`）的 token 序列。
-
-    `IF_STMT` 与 `UNEXPOSED_EXPR` 在不同编译单元下结构可能不同，
-    因此这里采用保守递归策略统一处理。
-    """
-    result: list[list[str]] = []
-
-    for child in node.get_children():
-        token_list: list[str] | None = None
-        if child.kind == CursorKind.CALL_EXPR:
-            token_list = collect_call_tokens(child)
-        elif child.kind == CursorKind.IF_STMT:
-            first_child = next(child.get_children(), None)
-            if first_child is not None and first_child.kind == CursorKind.UNEXPOSED_EXPR:
-                token_list = collect_call_tokens(first_child)
-            else:
-                token_list = collect_call_tokens(child)
-
-        if token_list and is_parameter_parser_call(token_list[0]):
-            result.append(token_list)
+def collect_pyarg_calls(node: Cursor) -> list[Cursor]:
+    """递归收集参数解析调用（`PyArg_*`）的 `CALL_EXPR`。"""
+    result: list[Cursor] = []
+    for child in walk_cursor(node):
+        if child.kind != CursorKind.CALL_EXPR:
             continue
-
-        result.extend(collect_pyarg_token_lists(child))
+        call_name = extract_call_name(child)
+        if call_name is None or not is_parameter_parser_call(call_name):
+            continue
+        result.append(child)
     return result
 
 
 def extract_signatures_from_function(func_cursor: Cursor, meth_flags: list[str]) -> list[ExtractedSignature]:
     """从函数体中提取候选签名，并在末尾做去重。"""
     signatures: list[ExtractedSignature] = []
-    for token_list in collect_pyarg_token_lists(func_cursor):
-        args = set_token_params(func_cursor, meth_flags, token_list)
+    for call_cursor in collect_pyarg_calls(func_cursor):
+        args = set_call_params(func_cursor, meth_flags, call_cursor)
         if args is not None:
             signatures.append(ExtractedSignature(arguments=args))
 

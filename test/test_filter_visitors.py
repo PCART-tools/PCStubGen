@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pcstubgen2.ErrorCollector import ErrorCollector
-from pcstubgen2.IR import (
+from core.ErrorCollector import ErrorCollector
+from core.IR import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -11,11 +11,11 @@ from pcstubgen2.IR import (
     QualifiedName,
     ResolvedType,
 )
-from pcstubgen2.NodeVisitors.DocStringSignatureParserVisitor import (
+from core.NodeVisitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
-from pcstubgen2.NodeVisitors.NodeVisitor import NodeVisitor
-from pcstubgen2.NodeVisitors.Fixes import (
+from core.NodeVisitors.NodeVisitor import NodeVisitor
+from core.NodeVisitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixCurrentModulePrefixInTypeNamesVisitor,
     InferMethodModifierVisitor,

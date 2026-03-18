@@ -80,8 +80,8 @@ def _normalize_source_root(raw_source_root: str | None) -> Path | None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pcstubgen2",
-        description="Generate Python stubs for a module with pcstubgen2.",
+        prog="pcstubgen",
+        description="Generate Python stubs for a module with pcstubgen.",
         allow_abbrev=False,
     )
     parser.add_argument("module_name", metavar="MODULE_NAME", help="module name")

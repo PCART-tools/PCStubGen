@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from pcstubgen2.ErrorCollector import ErrorCollector
-from pcstubgen2.IR import IRModule, IRModuleType, QualifiedName
-from pcstubgen2.ModuleBuilder import ModuleBuilder
+from core.ErrorCollector import ErrorCollector
+from core.IR import IRModule, IRModuleType, QualifiedName
+from core.ModuleBuilder import ModuleBuilder
 
 
 def _module_with_loader(

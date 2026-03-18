@@ -48,7 +48,7 @@ def write_stubs(
         style="{",
     )
 
-    file_handler = logging.FileHandler(output_dir / "pcstubgen2.log", mode="w", encoding="utf-8")
+    file_handler = logging.FileHandler(output_dir / "pcstubgen.log", mode="w", encoding="utf-8")
     file_handler.setFormatter(logging.Formatter("[{levelname}] - {name}\n{message}\n", style="{"))
     package_logger = logging.getLogger(__name__)
     previous_package_logger_level = package_logger.level
