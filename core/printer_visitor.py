@@ -93,10 +93,10 @@ class PrinterVisitor:
         if arg.kind is IRArgumentKind.VAR_KEYWORD:
             parts.append("**")
         parts.append(f"{arg.name}")
-        if arg.annotation is not None:
-            parts.append(f": {arg.annotation}")
-        if arg.default is not None:
-            parts.append(f" = {arg.default}")
+        if arg.type_name is not None:
+            parts.append(f": {arg.type_name}")
+        if arg.default_value is not None:
+            parts.append(f" = {arg.default_value}")
 
         return "".join(parts)
 
@@ -155,8 +155,8 @@ class PrinterVisitor:
             args.append("/")
 
         signature = [f"def {func.name}(", ", ".join(args), ")"]
-        if func.return_annotation is not None:
-            signature.append(f" -> {func.return_annotation}")
+        if func.return_type_name is not None:
+            signature.append(f" -> {func.return_type_name}")
         signature.append(":")
 
         result: list[str] = [

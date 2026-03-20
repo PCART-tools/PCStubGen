@@ -15,9 +15,9 @@ class IRArgumentKind(Enum):
 @dataclass
 class IRArgument:
     name: str | None
+    type_name: str | None = field(default=None)
+    default_value: str | None = field(default=None)
     kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
-    default: str | None = field(default=None)
-    annotation: str | None = field(default=None)
 
     def __str__(self) -> str:
         result = []
@@ -27,9 +27,9 @@ class IRArgument:
             result.append("**")
 
         result.append(f"{self.name}")
-        if self.annotation:
-            result.append(f": {self.annotation}")
-        if self.default is not None:
-            result.append(f" = {self.default}")
+        if self.type_name:
+            result.append(f": {self.type_name}")
+        if self.default_value is not None:
+            result.append(f" = {self.default_value}")
 
         return "".join(result)

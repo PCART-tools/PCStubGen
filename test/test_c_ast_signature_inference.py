@@ -5,6 +5,7 @@ import sysconfig
 from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import clang.cindex
 import pytest
@@ -298,6 +299,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
@@ -321,12 +323,12 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
 
     rewritten = module.functions[0]
     assert [arg.name for arg in rewritten.args] == ["x", "flag"]
-    assert rewritten.args[0].annotation == "int"
-    assert rewritten.args[1].annotation == "bool"
-    assert rewritten.args[1].default is not None
-    assert rewritten.args[1].default == "False"
-    assert rewritten.return_annotation is not None
-    assert rewritten.return_annotation == "int"
+    assert rewritten.args[0].type_name == "int"
+    assert rewritten.args[1].type_name == "bool"
+    assert rewritten.args[1].default_value is not None
+    assert rewritten.args[1].default_value == "False"
+    assert rewritten.return_type_name is not None
+    assert rewritten.return_type_name == "int"
 
 
 def test_c_ast_visitor_does_not_log_for_non_generic_function(
@@ -340,6 +342,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     signatures = {
         "foo": ExtractedFunction(
             ml_name="foo",
+            function_cursor=_fake_function_cursor("foo"),
             ml_flags=METH_VARARGS,
             signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
         )
@@ -365,6 +368,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -375,6 +379,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
                 functions={
                     "bar": ExtractedFunction(
                         ml_name="bar",
+                        function_cursor=_fake_function_cursor("bar"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
                     )
@@ -710,6 +715,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -721,6 +727,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="float")])],
                     )
@@ -746,9 +753,9 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
     visitor.visit_module(second_module)
 
     assert [arg.name for arg in first_module.functions[0].args] == ["x"]
-    assert first_module.functions[0].args[0].annotation == "int"
+    assert first_module.functions[0].args[0].type_name == "int"
     assert [arg.name for arg in second_module.functions[0].args] == ["value"]
-    assert second_module.functions[0].args[0].annotation == "float"
+    assert second_module.functions[0].args[0].type_name == "float"
 
 
 def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
@@ -765,6 +772,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                     )
@@ -776,6 +784,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
                         signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="float")])],
                     )
@@ -808,7 +817,7 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     func = IRFunction(
         name="foo",
         args=_generic_signature(),
-        return_annotation="bytes",
+        return_type_name="bytes",
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -821,6 +830,7 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
@@ -839,8 +849,8 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     visitor.visit_module(module)
 
     rewritten = module.functions[0]
-    assert rewritten.return_annotation is not None
-    assert rewritten.return_annotation == "typing.Optional[int]"
+    assert rewritten.return_type_name is not None
+    assert rewritten.return_type_name == "typing.Optional[int]"
 
 
 def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -855,6 +865,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             }
@@ -1023,6 +1034,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
                     ml_flags=METH_VARARGS,
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
@@ -1144,6 +1156,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
             functions={
                 "foo": ExtractedFunction(
                     ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
                     signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
                 )
             }
@@ -1161,7 +1174,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.args] == ["a", "b"]
-    assert [arg.annotation for arg in parsed.args] == ["int", "int"]
+    assert [arg.type_name for arg in parsed.args] == ["int", "int"]
     assert extractor.called == 1
 
 
@@ -1201,7 +1214,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
-    assert parsed.return_annotation == "numpy.ndarray"
+    assert parsed.return_type_name == "numpy.ndarray"
     assert "Failed to rewrite generic signature for cdist_minkowski" not in caplog.text
     assert extractor.called == 1
 
@@ -2374,7 +2387,10 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
         "pkg.mod": ExtractedModule(
             name="pkg.mod",
             functions={
-                "foo": ExtractedFunction(ml_name="foo"),
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                ),
             },
         )
     }
@@ -2398,7 +2414,7 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "infer_function_signature",
+        "inference_signature",
         lambda function: calls.append("infer")
         if calls == ["parse", "build"]
         else pytest.fail("infer should run after build"),
@@ -2440,7 +2456,7 @@ def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "infer_function_signature",
+        "inference_signature",
         lambda function: pytest.fail("infer step should be skipped when parse result is empty"),
     )
     try:
@@ -2624,6 +2640,14 @@ class _FakeNode:
 
     def is_definition(self) -> bool:
         return False
+
+
+def _fake_function_cursor(name: str = "fake_function") -> clang.cindex.Cursor:
+    """构造可复用的假函数游标。"""
+    return cast(
+        clang.cindex.Cursor,
+        _FakeNode(kind=clang.cindex.CursorKind.FUNCTION_DECL, spelling=name),
+    )
 
 
 def _int_literal(value: str = "0") -> _FakeNode:
@@ -2997,6 +3021,28 @@ def test_c_signature_engine_extract_pymethoddef_init_list_expr_marks_sentinel(tm
 
     assert is_sentinel is True
     assert extracted is None
+
+
+def test_c_signature_engine_extract_pymethoddef_init_list_expr_discards_entry_without_function_cursor(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    tmp_path: Path,
+) -> None:
+    """验证缺失 `ml_meth` 引用时当前条目会被直接丢弃。"""
+    _patch_fake_eval_int(monkeypatch)
+    with caplog.at_level(logging.WARNING):
+        is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+            init_list_expr=_init_list(
+                _ml_name_field("missing"),
+                _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
+                _ml_flags_identifier_field("METH_VARARGS"),
+                _string_literal("doc"),
+            ),
+        )
+
+    assert is_sentinel is False
+    assert extracted is None
+    assert "cant find function cursor" in caplog.text
 
 
 def test_c_signature_engine_extract_method_table_stops_at_sentinel(

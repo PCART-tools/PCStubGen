@@ -110,20 +110,20 @@ def build_function(path: QualifiedName, func: Any) -> IRFunction:
         for param in sig.parameters.values():
             arg = IRArgument(name=param.name, kind=kind_map[param.kind])
             if param.default is not inspect.Signature.empty:
-                arg.default = _build_value(param.default)
+                arg.default_value = _build_value(param.default)
             if param.annotation is not inspect.Signature.empty:
-                arg.annotation = _build_annotation(param.annotation)
+                arg.type_name = _build_annotation(param.annotation)
             irfunc.args.append(arg)
 
         if sig.return_annotation is not inspect.Signature.empty:
-            irfunc.return_annotation = _build_annotation(sig.return_annotation)
+            irfunc.return_type_name = _build_annotation(sig.return_annotation)
     except (TypeError, ValueError):
         # inspect.signature 失败时，回退为泛型签名，后续可由 DocString 解析修复
         irfunc.args = [
             IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
             IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
         ]
-        irfunc.return_annotation = None
+        irfunc.return_type_name = None
     return irfunc
 
 

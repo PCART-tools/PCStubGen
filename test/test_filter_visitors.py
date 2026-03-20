@@ -41,7 +41,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
     parsed = ir_module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y"]
-    assert parsed.return_annotation == "str"
+    assert parsed.return_type_name == "str"
     assert parsed.doc == "parsed from docstring"
 
 
@@ -63,21 +63,21 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
     parsed = ir_module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
-    assert [arg.annotation for arg in parsed.args] == [
+    assert [arg.type_name for arg in parsed.args] == [
         "object",
         "object",
         "object",
         "object",
         "typing.SupportsFloat",
     ]
-    assert [arg.default for arg in parsed.args] == [
+    assert [arg.default_value for arg in parsed.args] == [
         None,
         None,
         "None",
         "None",
         "2.0",
     ]
-    assert parsed.return_annotation == "numpy.ndarray"
+    assert parsed.return_type_name == "numpy.ndarray"
 
 
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
@@ -97,11 +97,11 @@ def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
     visitor.visit_module(ir_module)
 
     parsed = ir_module.functions[0]
-    assert [arg.annotation for arg in parsed.args] == [
+    assert [arg.type_name for arg in parsed.args] == [
         "typing.Optional[list[int]]",
         "dict[str, tuple[int, str]]",
     ]
-    assert parsed.return_annotation == "typing.Union[int, str]"
+    assert parsed.return_type_name == "typing.Union[int, str]"
 
 
 def test_module_builder_keeps_raw_annotation_strings() -> None:
@@ -110,8 +110,8 @@ def test_module_builder_keeps_raw_annotation_strings() -> None:
 
     parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
-    assert [arg.annotation for arg in parsed.args] == ["int", "list[int]"]
-    assert parsed.return_annotation == "typing.Optional[int]"
+    assert [arg.type_name for arg in parsed.args] == ["int", "list[int]"]
+    assert parsed.return_type_name == "typing.Optional[int]"
 
 
 def test_module_builder_keeps_default_values_as_strings() -> None:
@@ -123,14 +123,14 @@ def test_module_builder_keeps_default_values_as_strings() -> None:
 
     parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
-    assert [arg.default for arg in parsed.args] == ["False", "(1, 2)"]
+    assert [arg.default_value for arg in parsed.args] == ["False", "(1, 2)"]
 
 
 def test_printer_preserves_raw_optional_annotation_text() -> None:
     func = IRFunction(
         name="foo",
-        args=[IRArgument(name="value", annotation="typing.Optional[int]")],
-        return_annotation="typing.Optional[int]",
+        args=[IRArgument(name="value", type_name="typing.Optional[int]")],
+        return_type_name="typing.Optional[int]",
     )
 
     lines = PrinterVisitor(include_docstrings=False).print_function(func)
@@ -144,7 +144,7 @@ def test_printer_preserves_raw_optional_annotation_text() -> None:
 def test_printer_prints_default_values_as_is() -> None:
     func = IRFunction(
         name="foo",
-        args=[IRArgument(name="value", default="unknown_default()")],
+        args=[IRArgument(name="value", default_value="unknown_default()")],
     )
 
     lines = PrinterVisitor(include_docstrings=False).print_function(func)

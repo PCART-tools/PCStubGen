@@ -9,7 +9,7 @@ from .IRArgument import IRArgument, IRArgumentKind
 class IRFunction:
     name: str
     args: list[IRArgument] = field(default_factory=list)
-    return_annotation: str | None = field(default=None)
+    return_type_name: str | None = field(default=None)
     doc: str | None = field(default=None)
     decorators: list[str] = field(default_factory=list)
 
@@ -33,5 +33,5 @@ class IRFunction:
 
     def __str__(self) -> str:
         return (
-            f"{self.name}({', '.join(str(arg) for arg in self.args)}) -> {self.return_annotation}"
+            f"{self.name}({', '.join(str(arg) for arg in self.args)}) -> {self.return_type_name}"
         )

@@ -185,12 +185,16 @@ class CSignatureExtractionVisitor(NodeVisitor):
                 ml_flags=selected.ml_flags,
             )
             inferred_return = self._build_annotation(sig.return_type_name)
-            return_annotation = inferred_return if inferred_return is not None else func.return_annotation
+            return_type_name = (
+                inferred_return
+                if inferred_return is not None
+                else func.return_type_name
+            )
             rewritten.append(
                 IRFunction(
                     name=func.name,
                     args=args,
-                    return_annotation=return_annotation,
+                    return_type_name=return_type_name,
                     # 多签名时转为 overload，避免单条 doc 误导到某个具体重载。
                     doc=func.doc if not overload else None,
                     decorators=["typing.overload"] if overload else list(func.decorators),
@@ -244,8 +248,8 @@ class CSignatureExtractionVisitor(NodeVisitor):
             }.get(arg.kind, IRArgumentKind.POSITIONAL_OR_KEYWORD)
 
             ir_arg = IRArgument(name=arg.name, kind=kind)
-            ir_arg.annotation = self._build_annotation(arg.type_name)
-            ir_arg.default = self._build_default_value(arg.default_value)
+            ir_arg.type_name = self._build_annotation(arg.type_name)
+            ir_arg.default_value = self._build_default_value(arg.default_value)
             result.append(ir_arg)
         return result
 
