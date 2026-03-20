@@ -7,7 +7,7 @@ from pathlib import Path
 
 from core import write_stubs
 from core.ir import QualifiedName
-from core.module_builder import ModuleBuilder
+from core.module_builder import build_module
 from core.stub_generation_options import StubGenerationOptions
 
 
@@ -47,9 +47,7 @@ def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
     module.sub = sub
     module.VALUE = 10
 
-    ir_module = ModuleBuilder().build_module(
-        QualifiedName.from_str("pkg"), module
-    )
+    ir_module = build_module(QualifiedName.from_str("pkg"), module)
 
     assert [func.name for func in ir_module.functions] == ["root_function"]
     assert [cls.name for cls in ir_module.classes] == ["RootClass"]

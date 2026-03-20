@@ -11,7 +11,7 @@ from core.ir import (
     IRModule,
     QualifiedName,
 )
-from core.module_builder import ModuleBuilder
+from core.module_builder import build_function
 from core.node_visitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
@@ -108,8 +108,7 @@ def test_module_builder_keeps_raw_annotation_strings() -> None:
     def sample(a: int, b: list[int]) -> typing.Optional[int]:
         raise NotImplementedError
 
-    builder = ModuleBuilder()
-    parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
+    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
     assert [arg.annotation for arg in parsed.args] == ["int", "list[int]"]
     assert parsed.return_annotation == "typing.Optional[int]"
@@ -122,8 +121,7 @@ def test_module_builder_keeps_default_values_as_strings() -> None:
     ) -> None:
         raise NotImplementedError
 
-    builder = ModuleBuilder()
-    parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
+    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
     assert [arg.default for arg in parsed.args] == ["False", "(1, 2)"]
 

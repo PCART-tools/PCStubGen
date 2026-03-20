@@ -4,7 +4,7 @@ import importlib
 import logging
 from pathlib import Path
 
-from .module_builder import ModuleBuilder
+from .module_builder import build_module
 from .stub_generation_options import StubGenerationOptions
 from .ir import QualifiedName
 from .pipeline import Pipeline
@@ -51,8 +51,7 @@ def write_stubs(
         module = importlib.import_module(module_name)
 
         # 2. 构建原始 IR
-        builder = ModuleBuilder()
-        ir_module = builder.build_module(
+        ir_module = build_module(
             QualifiedName.from_str(module_name),
             module,
         )

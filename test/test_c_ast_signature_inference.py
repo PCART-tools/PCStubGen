@@ -1015,7 +1015,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
             )
         ],
     )
-    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     _patch_c_signature_extractor(
         monkeypatch,
         modules=_module_fixture(
@@ -1062,7 +1062,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
             )
         ],
     )
-    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     _patch_c_signature_extractor(monkeypatch, modules={})
 
     options = StubGenerationOptions(
@@ -1108,7 +1108,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
             )
         ],
     )
-    monkeypatch.setattr(stubgen_module.ModuleBuilder, "build_module", lambda self, path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     options = StubGenerationOptions(
