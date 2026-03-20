@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .InvalidExpression import InvalidExpression
-    from .IRValue import IRValue
 
 
 class IRArgumentKind(Enum):
@@ -21,7 +16,7 @@ class IRArgumentKind(Enum):
 class IRArgument:
     name: str | None
     kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
-    default: IRValue | InvalidExpression | None = field(default=None)
+    default: str | None = field(default=None)
     annotation: str | None = field(default=None)
 
     def __str__(self) -> str:
@@ -34,7 +29,7 @@ class IRArgument:
         result.append(f"{self.name}")
         if self.annotation:
             result.append(f": {self.annotation}")
-        if self.default:
+        if self.default is not None:
             result.append(f" = {self.default}")
 
         return "".join(result)

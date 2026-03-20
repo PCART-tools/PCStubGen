@@ -7,22 +7,18 @@ from .ir import (
     IRArgumentKind,
     IRClass,
     IRFunction,
-    InvalidExpression,
     IRMethod,
     IRMethodDecorator,
     IRModule,
-    IRValue,
 )
 
 
 class PrinterVisitor:
     def __init__(
         self,
-        invalid_expr_as_ellipses: bool = True,
         include_docstrings: bool = True,
         include_module_type_comment: bool = False,
     ):
-        self.invalid_expr_as_ellipses = invalid_expr_as_ellipses
         self.include_docstrings = include_docstrings
         self.include_module_type_comment = include_module_type_comment
 
@@ -99,13 +95,8 @@ class PrinterVisitor:
         parts.append(f"{arg.name}")
         if arg.annotation is not None:
             parts.append(f": {arg.annotation}")
-        if isinstance(arg.default, IRValue):
-            if arg.default.is_print_safe:
-                parts.append(f" = {self.print_value(arg.default)}")
-            else:
-                parts.append(" = ...")
-        elif isinstance(arg.default, InvalidExpression):
-            parts.append(f" = {self.print_invalid_exp(arg.default)}")
+        if arg.default is not None:
+            parts.append(f" = {arg.default}")
 
         return "".join(parts)
 
@@ -183,14 +174,3 @@ class PrinterVisitor:
 
     def print_submodule_import(self, name: str) -> list[str]:
         return [f"from . import {name}"]
-
-    def print_value(self, value: IRValue) -> str:
-        split = value.repr.split("\n", 1)
-        if len(split) == 1:
-            return split[0]
-        return split[0] + "..."
-
-    def print_invalid_exp(self, invalid_expr: InvalidExpression) -> str:
-        if self.invalid_expr_as_ellipses:
-            return "..."
-        return invalid_expr.text

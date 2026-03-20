@@ -71,7 +71,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         "object",
         "typing.SupportsFloat",
     ]
-    assert [arg.default.repr if arg.default is not None else None for arg in parsed.args] == [
+    assert [arg.default for arg in parsed.args] == [
         None,
         None,
         "None",
@@ -116,6 +116,19 @@ def test_module_builder_keeps_raw_annotation_strings() -> None:
     assert parsed.return_annotation == "typing.Optional[int]"
 
 
+def test_module_builder_keeps_default_values_as_strings() -> None:
+    def sample(
+        flag: bool = False,
+        values: tuple[int, int] = (1, 2),
+    ) -> None:
+        raise NotImplementedError
+
+    builder = ModuleBuilder(ErrorCollector())
+    parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
+
+    assert [arg.default for arg in parsed.args] == ["False", "(1, 2)"]
+
+
 def test_printer_preserves_raw_optional_annotation_text() -> None:
     func = IRFunction(
         name="foo",
@@ -127,6 +140,20 @@ def test_printer_preserves_raw_optional_annotation_text() -> None:
 
     assert lines == [
         "def foo(value: typing.Optional[int]) -> typing.Optional[int]:",
+        "    ...",
+    ]
+
+
+def test_printer_prints_default_values_as_is() -> None:
+    func = IRFunction(
+        name="foo",
+        args=[IRArgument(name="value", default="unknown_default()")],
+    )
+
+    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(value = unknown_default()):",
         "    ...",
     ]
 

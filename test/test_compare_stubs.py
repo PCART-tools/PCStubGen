@@ -70,10 +70,8 @@ class ReferenceCLIArgs(CLIArgs):
 def build_new_options() -> StubGenerationOptions:
     """构造新版生成器支持的参数，避免与旧版参考 CLI 参数耦合。"""
     return StubGenerationOptions(
-        ignore_invalid_expressions=None,
         ignore_all_errors=False,
         enum_class_locations=[],
-        print_invalid_expressions_as_is=False,
         stub_extension="pyi",
     )
 

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import dataclasses
 import logging
 from pathlib import Path
@@ -15,15 +14,12 @@ from .core import (
 from .core.constants import METH_CLASS, METH_STATIC
 from ..NodeVisitor import NodeVisitor
 from ...error_collector import ErrorCollector
-from ...errors import InvalidExpressionError
 from ...ir import (
     IRArgument,
     IRArgumentKind,
     IRFunction,
-    InvalidExpression,
     IRModule,
     IRModuleType,
-    IRValue,
 )
 
 logger = logging.getLogger(__name__)
@@ -266,31 +262,14 @@ class CSignatureExtractionVisitor(NodeVisitor):
             return None
         return text
 
-    def _build_default_value(self, default_value: str | None) -> IRValue | InvalidExpression | None:
-        """
-        构建默认值表达式节点。
-
-        `ast.parse` 用于语法合法性检查；`literal_eval` 仅用于判断是否可安全打印。
-        """
+    def _build_default_value(self, default_value: str | None) -> str | None:
+        """清理提取结果里的默认值文本，仅过滤空白值。"""
         if default_value is None:
             return None
         expr = default_value.strip()
         if expr == "":
             return None
-
-        try:
-            ast.parse(expr)
-        except SyntaxError:
-            self.error_collector.report_error(InvalidExpressionError(expr))
-            return InvalidExpression(expr)
-
-        is_print_safe = False
-        try:
-            ast.literal_eval(expr)
-            is_print_safe = True
-        except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
-            pass
-        return IRValue(repr=expr, is_print_safe=is_print_safe)
+        return expr
 
     def _match_extracted_module(
         self,

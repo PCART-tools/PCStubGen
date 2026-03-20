@@ -93,13 +93,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--ignore-invalid-expressions",
-        metavar="REGEX",
-        default=None,
-        type=_regex,
-        help="Ignore invalid expressions matching REGEX",
-    )
-    parser.add_argument(
         "--ignore-all-errors",
         default=False,
         action="store_true",
@@ -151,12 +144,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--print-invalid-expressions-as-is",
-        default=False,
-        action="store_true",
-        help="Print invalid expressions as-is instead of replacing with ...",
-    )
-    parser.add_argument(
         "--no-docstrings",
         action="store_false",
         dest="include_docstrings",
@@ -199,7 +186,6 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
     source_root = _normalize_source_root(args.source_root)
 
     return StubGenerationOptions(
-        ignore_invalid_expressions=args.ignore_invalid_expressions,
         ignore_all_errors=args.ignore_all_errors,
         enum_class_locations=list(args.enum_class_locations),
         enable_docstring_signature_parser=args.enable_docstring_signature_parser,
@@ -208,7 +194,6 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
         clang_cpp_std=args.clang_cpp_std or default_options.clang_cpp_std,
         clang_include=list(args.clang_include),
         clang_include_directory=list(args.clang_include_directory),
-        print_invalid_expressions_as_is=args.print_invalid_expressions_as_is,
         include_docstrings=args.include_docstrings,
         include_module_type_comment=args.include_module_type_comment,
         stub_extension=args.stub_extension,

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import logging
-import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .errors import (
-    InvalidExpressionError,
     InvalidIdentifierError,
     NameResolutionError,
     ParserError,
@@ -27,7 +25,6 @@ class ErrorCollector:
     _current_path: QualifiedName | None = field(default=None)
 
     # 错误过滤选项
-    ignore_invalid_expressions: re.Pattern | None = field(default=None)
     ignore_all_errors: bool = field(default=False)
 
     def set_current_path(self, path: QualifiedName) -> None:
@@ -56,13 +53,6 @@ class ErrorCollector:
                 and name.endswith("]")
                 or name.startswith("ValuesView[")
                 and name.endswith("]")
-            ):
-                return
-
-        if isinstance(error, InvalidExpressionError):
-            if (
-                self.ignore_invalid_expressions
-                and self.ignore_invalid_expressions.match(error.expression)
             ):
                 return
 

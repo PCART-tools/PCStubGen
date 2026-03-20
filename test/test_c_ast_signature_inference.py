@@ -326,7 +326,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert rewritten.args[0].annotation == "int"
     assert rewritten.args[1].annotation == "bool"
     assert rewritten.args[1].default is not None
-    assert rewritten.args[1].default.repr == "False"
+    assert rewritten.args[1].default == "False"
     assert rewritten.return_annotation is not None
     assert rewritten.return_annotation == "int"
 

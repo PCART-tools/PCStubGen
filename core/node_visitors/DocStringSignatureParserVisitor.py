@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import ast
 import re
 
 from ..error_collector import ErrorCollector
@@ -8,8 +7,6 @@ from ..ir import (
     IRArgument,
     IRArgumentKind,
     IRFunction,
-    InvalidExpression,
-    IRValue,
     IRClass,
     IRMethod,
     IRModule,
@@ -212,8 +209,10 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         text = annotation_str.strip()
         return text or None
 
-    def parse_value_str(self, value: str) -> IRValue | InvalidExpression:
+    def parse_value_str(self, value: str) -> str | None:
         strip_expr = value.strip()
+        if not strip_expr:
+            return None
 
         match = self._pybind11_enum_pattern.match(strip_expr)
         if match is not None:
@@ -221,22 +220,9 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             class_path, entry = enum_qual_name.rsplit(".", maxsplit=1)
             for pattern, prefix in self.enum_class_locations.items():
                 if pattern.match(class_path):
-                    return IRValue(
-                        repr=f"{prefix}.{class_path}.{entry}",
-                        is_print_safe=True,
-                    )
+                    return f"{prefix}.{class_path}.{entry}"
 
-        try:
-            ast.parse(strip_expr)
-            print_safe = False
-            try:
-                ast.literal_eval(strip_expr)
-                print_safe = True
-            except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
-                pass
-            return IRValue(strip_expr, is_print_safe=print_safe)
-        except SyntaxError:
-            return InvalidExpression(strip_expr)
+        return strip_expr
 
     # --- 字符串分割辅助函数 ---
 

@@ -19,6 +19,20 @@ def test_parse_args_rejects_removed_enable_c_signature_inference_flag() -> None:
     assert ex.value.code == 2
 
 
+def test_parse_args_rejects_removed_ignore_invalid_expressions_flag() -> None:
+    with pytest.raises(SystemExit) as ex:
+        cli.parse_args(["math", "--ignore-invalid-expressions", ".*"])
+
+    assert ex.value.code == 2
+
+
+def test_parse_args_rejects_removed_print_invalid_expressions_flag() -> None:
+    with pytest.raises(SystemExit) as ex:
+        cli.parse_args(["math", "--print-invalid-expressions-as-is"])
+
+    assert ex.value.code == 2
+
+
 def test_build_options_treats_empty_source_root_as_none() -> None:
     args = cli.parse_args(["math", "--source-root", ""])
     options = cli._build_options(args)

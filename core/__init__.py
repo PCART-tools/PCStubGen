@@ -50,7 +50,6 @@ def write_stubs(
     try:
         # 为本次运行创建错误收集器
         error_collector = ErrorCollector()
-        error_collector.ignore_invalid_expressions = options.ignore_invalid_expressions
         error_collector.ignore_all_errors = options.ignore_all_errors
 
         # 1. 导入模块
@@ -101,7 +100,6 @@ def write_stubs(
         else:
             _writer.stub_extension = ext
         printer = PrinterVisitor(
-            invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
             include_docstrings=options.include_docstrings,
             include_module_type_comment=options.include_module_type_comment,
         )

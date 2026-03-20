@@ -17,12 +17,10 @@ from .ir import (
     IRArgumentKind,
     IRClass,
     IRFunction,
-    InvalidExpression,
     IRMethod,
     IRModule,
     IRModuleType,
     QualifiedName,
-    IRValue,
 )
 
 
@@ -164,7 +162,7 @@ class ModuleBuilder:
             return self._normalize_annotation_text(annotation)
         if isinstance(annotation, type):
             return str(self._get_type_fullname(annotation))
-        return self._normalize_annotation_text(self._build_value(annotation).repr)
+        return self._normalize_annotation_text(self._build_value(annotation))
 
     @staticmethod
     def _normalize_annotation_text(annotation_text: str | None) -> str | None:
@@ -173,47 +171,36 @@ class ModuleBuilder:
         text = annotation_text.strip()
         return text or None
 
-    def _build_value(self, value: Any) -> IRValue:
+    def _build_value(self, value: Any) -> str:
         value_type = type(value)
         if value is Ellipsis:
-            return IRValue(repr="...", is_print_safe=True)
+            return "..."
         if value is None or value_type in (bool, int, str):
-            return IRValue(repr=repr(value), is_print_safe=True)
+            return repr(value)
         if value_type in (float, complex):
             try:
                 repr_str = repr(value)
                 eval(repr_str)
-                return IRValue(repr=repr_str, is_print_safe=True)
+                return repr_str
             except (SyntaxError, NameError):
                 pass
         if value_type in (list, tuple, set):
             if len(value) == 0:
-                return IRValue(repr=f"{value_type.__name__}()", is_print_safe=True)
+                return f"{value_type.__name__}()"
             elements = [self._build_value(el) for el in value]
-            is_print_safe = all(el.is_print_safe for el in elements)
             left, right = {
                 list: ("[", "]"),
                 tuple: ("(", ")"),
                 set: ("{", "}"),
             }[value_type]
-            return IRValue(
-                repr="".join([left, ", ".join(el.repr for el in elements), right]),
-                is_print_safe=is_print_safe,
-            )
+            return "".join([left, ", ".join(elements), right])
         if value_type is dict:
             parts = []
-            is_print_safe = True
             for k, v in value.items():
                 k_value = self._build_value(k)
                 v_value = self._build_value(v)
-                parts.append(f"{k_value.repr}: {v_value.repr}")
-                is_print_safe = (
-                    is_print_safe and k_value.is_print_safe and v_value.is_print_safe
-                )
-            return IRValue(
-                repr="".join(["{", ", ".join(parts), "}"]),
-                is_print_safe=is_print_safe,
-            )
+                parts.append(f"{k_value}: {v_value}")
+            return "".join(["{", ", ".join(parts), "}"])
         if inspect.isroutine(value):
             module_name = get_module_name(value)
             qual_name = getattr(value, "__qualname__", None)
@@ -227,12 +214,12 @@ class ModuleBuilder:
                     repr_str = qual_name
                 else:
                     repr_str = f"{module_name}.{qual_name}"
-                return IRValue(repr=repr_str, is_print_safe=True)
+                return repr_str
         if inspect.isclass(value):
-            return IRValue(repr=str(self._get_type_fullname(value)), is_print_safe=True)
+            return str(self._get_type_fullname(value))
         if inspect.ismodule(value):
-            return IRValue(repr=value.__name__, is_print_safe=True)
-        return IRValue(repr=repr(value), is_print_safe=False)
+            return value.__name__
+        return repr(value)
 
     def _get_type_fullname(self, type_: type) -> QualifiedName:
         module = type_.__module__
