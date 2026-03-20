@@ -33,6 +33,13 @@ def test_parse_args_rejects_removed_print_invalid_expressions_flag() -> None:
     assert ex.value.code == 2
 
 
+def test_parse_args_rejects_removed_ignore_all_errors_flag() -> None:
+    with pytest.raises(SystemExit) as ex:
+        cli.parse_args(["math", "--ignore-all-errors"])
+
+    assert ex.value.code == 2
+
+
 def test_build_options_treats_empty_source_root_as_none() -> None:
     args = cli.parse_args(["math", "--source-root", ""])
     options = cli._build_options(args)

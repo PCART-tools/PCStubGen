@@ -3,7 +3,6 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from core.error_collector import ErrorCollector
 from core.ir import IRModule, IRModuleType, QualifiedName
 from core.module_builder import ModuleBuilder
 
@@ -22,7 +21,7 @@ def _module_with_loader(
 
 
 def test_detect_module_type_uses_loader_mapping() -> None:
-    builder = ModuleBuilder(ErrorCollector())
+    builder = ModuleBuilder()
     source_loader = importlib.machinery.SourceFileLoader("demo_source", "demo_source.py")
     sourceless_loader = importlib.machinery.SourcelessFileLoader(
         "demo_sourceless", "demo_sourceless.pyc"
@@ -45,7 +44,7 @@ def test_detect_module_type_uses_loader_mapping() -> None:
 
 
 def test_detect_module_type_returns_unknown_for_unrecognized_loader() -> None:
-    builder = ModuleBuilder(ErrorCollector())
+    builder = ModuleBuilder()
 
     native_module = _module_with_loader("native_mod", loader=None, file_path="native_mod.pyd")
     native_ir = builder.build_module(QualifiedName.from_str("native_mod"), native_module)

@@ -4,7 +4,6 @@ import importlib
 import logging
 from pathlib import Path
 
-from .error_collector import ErrorCollector
 from .module_builder import ModuleBuilder
 from .stub_generation_options import StubGenerationOptions
 from .ir import QualifiedName
@@ -48,15 +47,11 @@ def write_stubs(
     package_logger.setLevel(logging.INFO)
     package_logger.addHandler(file_handler)
     try:
-        # 为本次运行创建错误收集器
-        error_collector = ErrorCollector()
-        error_collector.ignore_all_errors = options.ignore_all_errors
-
         # 1. 导入模块
         module = importlib.import_module(module_name)
 
         # 2. 构建原始 IR
-        builder = ModuleBuilder(error_collector=error_collector)
+        builder = ModuleBuilder()
         ir_module = builder.build_module(
             QualifiedName.from_str(module_name),
             module,
@@ -69,7 +64,6 @@ def write_stubs(
         if options.enable_docstring_signature_parser:
             visitors.append(
                 DocStringSignatureParserVisitor(
-                    error_collector=error_collector,
                     enum_class_locations=dict(options.enum_class_locations),
                 )
             )
@@ -78,7 +72,6 @@ def write_stubs(
 
         if options.source_root is not None:
             c_ast_visitor = CSignatureExtractionVisitor(
-                error_collector=error_collector,
                 source_root=options.source_root,
                 clang_include=options.clang_include,
                 clang_include_directory=options.clang_include_directory,

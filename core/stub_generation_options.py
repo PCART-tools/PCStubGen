@@ -6,9 +6,6 @@ from pathlib import Path
 
 @dataclasses.dataclass
 class StubGenerationOptions:
-    # 错误过滤
-    ignore_all_errors: bool = False
-
     # 由 (正则, 前缀) 组成的列表，用于 docstring 中 pybind11 枚举值重写
     enum_class_locations: list[tuple[re.Pattern, str]] = dataclasses.field(default_factory=list)
 

@@ -6,7 +6,6 @@ import types
 from pathlib import Path
 
 from core import write_stubs
-from core.error_collector import ErrorCollector
 from core.ir import QualifiedName
 from core.module_builder import ModuleBuilder
 from core.stub_generation_options import StubGenerationOptions
@@ -48,7 +47,7 @@ def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
     module.sub = sub
     module.VALUE = 10
 
-    ir_module = ModuleBuilder(ErrorCollector()).build_module(
+    ir_module = ModuleBuilder().build_module(
         QualifiedName.from_str("pkg"), module
     )
 

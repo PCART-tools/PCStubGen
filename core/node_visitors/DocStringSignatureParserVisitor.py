@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 
-from ..error_collector import ErrorCollector
 from ..ir import (
     IRArgument,
     IRArgumentKind,
@@ -24,10 +23,8 @@ class DocStringSignatureParserVisitor(NodeVisitor):
 
     def __init__(
         self,
-        error_collector: ErrorCollector,
         enum_class_locations: dict[re.Pattern, str] | None = None,
     ):
-        self.error_collector = error_collector
         self.enum_class_locations = enum_class_locations or {}
 
     def visit_module(self, node: IRModule) -> None:

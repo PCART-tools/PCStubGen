@@ -13,7 +13,6 @@ from .core import (
 )
 from .core.constants import METH_CLASS, METH_STATIC
 from ..NodeVisitor import NodeVisitor
-from ...error_collector import ErrorCollector
 from ...ir import (
     IRArgument,
     IRArgumentKind,
@@ -55,7 +54,6 @@ class CSignatureExtractionVisitor(NodeVisitor):
     def __init__(
         self,
         *,
-        error_collector: ErrorCollector,
         source_root: Path,
         clang_include: list[str] = (),
         clang_include_directory: list[str] = (),
@@ -63,7 +61,6 @@ class CSignatureExtractionVisitor(NodeVisitor):
         clang_cpp_std: str = "c++17",
     ) -> None:
         """初始化 Visitor 运行配置与提取结果缓存。"""
-        self.error_collector = error_collector
         self._source_root = source_root
         self._clang_include = list(clang_include)
         self._clang_include_directory = list(clang_include_directory)

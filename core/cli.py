@@ -93,12 +93,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--ignore-all-errors",
-        default=False,
-        action="store_true",
-        help="Ignore all errors during module parsing",
-    )
-    parser.add_argument(
         "--enum-class-locations",
         dest="enum_class_locations",
         metavar="REGEX:LOC",
@@ -186,7 +180,6 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
     source_root = _normalize_source_root(args.source_root)
 
     return StubGenerationOptions(
-        ignore_all_errors=args.ignore_all_errors,
         enum_class_locations=list(args.enum_class_locations),
         enable_docstring_signature_parser=args.enable_docstring_signature_parser,
         source_root=source_root,

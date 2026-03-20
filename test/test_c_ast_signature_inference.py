@@ -32,7 +32,6 @@ from core.node_visitors.c_signature_extraction.core.models import (
     ExtractedModule,
     ExtractedSignature,
 )
-from core.error_collector import ErrorCollector
 from core.ir import (
     IRArgument,
     IRArgumentKind,
@@ -316,7 +315,6 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     )
 
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -336,7 +334,6 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     tmp_path: Path,
 ) -> None:
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     func = IRFunction(name="foo", args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])
@@ -386,7 +383,6 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
         },
     )
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     first_module = IRModule(
@@ -733,7 +729,6 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
         },
     )
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     first_module = IRModule(
@@ -794,7 +789,6 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
 
@@ -840,7 +834,6 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     )
 
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -868,7 +861,6 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
         ),
     )
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -889,7 +881,6 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
 
@@ -1160,9 +1151,8 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     )
     pipeline = Pipeline(
         [
-            DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
+            DocStringSignatureParserVisitor(),
             CSignatureExtractionVisitor(
-                error_collector=ErrorCollector(),
                 source_root=tmp_path,
             ),
         ]
@@ -1202,9 +1192,8 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
     ):
         Pipeline(
             [
-                DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
+                DocStringSignatureParserVisitor(),
                 CSignatureExtractionVisitor(
-                    error_collector=ErrorCollector(),
                     source_root=tmp_path,
                 ),
             ]
@@ -2355,7 +2344,6 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     )
 
     visitor = CSignatureExtractionVisitor(
-        error_collector=ErrorCollector(),
         source_root=tmp_path,
         clang_include=["Python.h"],
         clang_include_directory=["C:/MyInclude"],

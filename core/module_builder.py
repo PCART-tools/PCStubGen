@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import ast
 import importlib.machinery
 import inspect
 import types
 from typing import Any
 
-from .error_collector import ErrorCollector
 from .reflection_helpers import (
     get_doc,
     get_module_name,
@@ -25,11 +23,7 @@ from .ir import (
 
 
 class ModuleBuilder:
-    def __init__(self, error_collector: ErrorCollector):
-        self.error_collector = error_collector
-
     def build_module(self, path: QualifiedName, module: types.ModuleType) -> IRModule:
-        self.error_collector.set_current_path(path)
         irmodule = IRModule(
             full_name=path,
             doc=get_doc(module),
@@ -76,7 +70,6 @@ class ModuleBuilder:
         return IRModuleType.UNKNOWN
 
     def build_class(self, path: QualifiedName, class_: type) -> IRClass:
-        self.error_collector.set_current_path(path)
         irclass = IRClass(name=path.name, doc=get_doc(class_))
         irclass.bases = self.build_bases(class_)
 
@@ -97,7 +90,6 @@ class ModuleBuilder:
         return irclass
 
     def build_function(self, path: QualifiedName, func: Any) -> IRFunction:
-        self.error_collector.set_current_path(path)
         irfunc = IRFunction(name=path.name, doc=get_doc(func))
 
         try:
@@ -124,7 +116,7 @@ class ModuleBuilder:
 
             if sig.return_annotation is not inspect.Signature.empty:
                 irfunc.return_annotation = self._build_annotation(sig.return_annotation)
-        except (TypeError, ValueError) as ex:
+        except (TypeError, ValueError):
             # try:
             #     fullargspec = inspect.getfullargspec(signature_target)
             #     print(f"fullargspec: {fullargspec}\n")

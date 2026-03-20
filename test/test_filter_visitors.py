@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import typing
 
-from core.error_collector import ErrorCollector
 from core.ir import (
     IRArgument,
     IRArgumentKind,
@@ -28,7 +27,7 @@ def _generic_signature() -> list[IRArgument]:
 
 
 def test_docstring_parser_parses_generic_function_signature() -> None:
-    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     ir_module.functions = [
         IRFunction(
@@ -47,7 +46,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
-    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     ir_module.functions = [
         IRFunction(
@@ -82,7 +81,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
 
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
-    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     ir_module.functions = [
         IRFunction(
@@ -109,7 +108,7 @@ def test_module_builder_keeps_raw_annotation_strings() -> None:
     def sample(a: int, b: list[int]) -> typing.Optional[int]:
         raise NotImplementedError
 
-    builder = ModuleBuilder(ErrorCollector())
+    builder = ModuleBuilder()
     parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
     assert [arg.annotation for arg in parsed.args] == ["int", "list[int]"]
@@ -123,7 +122,7 @@ def test_module_builder_keeps_default_values_as_strings() -> None:
     ) -> None:
         raise NotImplementedError
 
-    builder = ModuleBuilder(ErrorCollector())
+    builder = ModuleBuilder()
     parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
     assert [arg.default for arg in parsed.args] == ["False", "(1, 2)"]
