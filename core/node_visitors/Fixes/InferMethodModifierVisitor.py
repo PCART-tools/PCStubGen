@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...IR import IRMethod, IRMethodDecorator
+from ...ir import IRMethod, IRMethodDecorator
 from ..NodeVisitor import NodeVisitor
 
 

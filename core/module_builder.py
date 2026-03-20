@@ -7,15 +7,15 @@ import re
 import types
 from typing import Any
 
-from .ErrorCollector import ErrorCollector
-from .Errors import InvalidExpressionError
-from .ReflectionHelpers import (
+from .error_collector import ErrorCollector
+from .errors import InvalidExpressionError
+from .reflection_helpers import (
     get_generic_alias_type,
     get_module_name,
     get_doc,
     is_package,
 )
-from .IR import (
+from .ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,

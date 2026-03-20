@@ -4,15 +4,15 @@ import importlib
 import logging
 from pathlib import Path
 
-from .ErrorCollector import ErrorCollector
-from .ModuleBuilder import ModuleBuilder
-from .StubGenerationOptions import StubGenerationOptions
-from .IR import QualifiedName
-from .Pipeline import Pipeline
-from .NodeVisitors.NodeVisitor import NodeVisitor
-from .NodeVisitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
-from .NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import CAstSignatureInferenceVisitor
-from .NodeVisitors.Fixes import (
+from .error_collector import ErrorCollector
+from .module_builder import ModuleBuilder
+from .stub_generation_options import StubGenerationOptions
+from .ir import QualifiedName
+from .pipeline import Pipeline
+from .node_visitors.NodeVisitor import NodeVisitor
+from .node_visitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
+from .node_visitors.c_signature_extraction.c_signature_extraction_visitor import CSignatureExtractionVisitor
+from .node_visitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixTypingTypeNamesVisitor,
     FixPEP585CollectionNamesVisitor,
@@ -21,8 +21,8 @@ from .NodeVisitors.Fixes import (
     RemoveSelfAnnotationVisitor,
     FixRedundantMethodsFromBuiltinObjectVisitor,
 )
-from .PrinterVisitor import PrinterVisitor
-from .Writer import Writer
+from .printer_visitor import PrinterVisitor
+from .writer import Writer
 
 __all__ = ["write_stubs"]
 
@@ -82,10 +82,10 @@ def write_stubs(
                 )
             )
 
-        c_ast_visitor: CAstSignatureInferenceVisitor | None = None
+        c_ast_visitor: CSignatureExtractionVisitor | None = None
 
         if options.source_root is not None:
-            c_ast_visitor = CAstSignatureInferenceVisitor(
+            c_ast_visitor = CSignatureExtractionVisitor(
                 error_collector=error_collector,
                 source_root=options.source_root,
                 clang_include=options.clang_include,

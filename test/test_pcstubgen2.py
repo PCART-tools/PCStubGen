@@ -18,7 +18,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from core import write_stubs
-from core.StubGenerationOptions import StubGenerationOptions
+from core.stub_generation_options import StubGenerationOptions
 
 DEFAULT_MODULE = "scipy"
 OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem

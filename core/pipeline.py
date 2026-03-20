@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Sequence
 
-from .IR import IRModule
-from .NodeVisitors.NodeVisitor import NodeVisitor
+from .ir import IRModule
+from .node_visitors.NodeVisitor import NodeVisitor
 
 
 class Pipeline:

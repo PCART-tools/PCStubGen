@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from . import write_stubs
-from .StubGenerationOptions import StubGenerationOptions
+from .stub_generation_options import StubGenerationOptions
 
 EXIT_OK = 0
 EXIT_ERROR = 1

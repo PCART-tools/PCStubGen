@@ -3,8 +3,8 @@ from __future__ import annotations
 import ast
 import re
 
-from ..ErrorCollector import ErrorCollector
-from ..IR import (
+from ..error_collector import ErrorCollector
+from ..ir import (
     IRArgument,
     IRArgumentKind,
     IRFunction,
@@ -17,7 +17,7 @@ from ..IR import (
     IRModule,
 )
 from .NodeVisitor import NodeVisitor
-from ..Errors import InvalidExpressionError
+from ..errors import InvalidExpressionError
 
 class DocStringSignatureParserVisitor(NodeVisitor):
     '''

@@ -1,0 +1,2 @@
+class PyArgParseTypeParser:
+    pass

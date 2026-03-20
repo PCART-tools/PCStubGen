@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .ParserError import ParserError
 
 if TYPE_CHECKING:
-    from ..IR import QualifiedName
+    from ..ir import QualifiedName
 
 
 @dataclass

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...IR import (
+from ...ir import (
     IRModule, IRClass, IRMethod, IRFunction, ResolvedType, QualifiedName
 )
 from ..NodeVisitor import NodeVisitor

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import logging
 import sysconfig
 from collections.abc import Iterable
@@ -10,31 +9,31 @@ from types import SimpleNamespace
 import clang.cindex
 import pytest
 
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction import CSignatureExtractor
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction.Constants import (
+from core.node_visitors.c_signature_extraction.core import extract_c_signature_modules
+from core.node_visitors.c_signature_extraction.core.constants import (
     METH_KEYWORDS,
     METH_VARARGS,
 )
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _cursor_utils as cursor_utils_module
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _module_table as module_table_module
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _signature_rules as signature_rules_module
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction import _translation_unit as translation_unit_module
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction._module_table import (
+from core.node_visitors.c_signature_extraction.core import (
+    c_signature_extraction as c_signature_extraction_module,
+)
+from core.node_visitors.c_signature_extraction.core import cursor_utils as cursor_utils_module
+from core.node_visitors.c_signature_extraction.core import inference_signature as signature_rules_module
+from core.node_visitors.c_signature_extraction.core import module_table as module_table_module
+from core.node_visitors.c_signature_extraction.core import translation_unit as translation_unit_module
+from core.node_visitors.c_signature_extraction.core.module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction._signature_rules import (
-    set_call_params as _set_call_params,
-)
-from core.NodeVisitors.CSignatureInference.CSignatureExtraction.Models import (
+from core.node_visitors.c_signature_extraction.core.models import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
     ExtractedSignature,
 )
-from core.ErrorCollector import ErrorCollector
-from core.IR import (
+from core.error_collector import ErrorCollector
+from core.ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -45,14 +44,14 @@ from core.IR import (
     QualifiedName,
     ResolvedType,
 )
-from core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor import (
-    CAstSignatureInferenceVisitor,
+from core.node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
+    CSignatureExtractionVisitor,
 )
-from core.NodeVisitors.DocStringSignatureParserVisitor import (
+from core.node_visitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
-from core.Pipeline import Pipeline
-from core.StubGenerationOptions import StubGenerationOptions
+from core.pipeline import Pipeline
+from core.stub_generation_options import StubGenerationOptions
 
 
 def _generic_signature() -> list[IRArgument]:
@@ -80,6 +79,53 @@ def _module_fixture(
     }
 
 
+def _make_extraction_config(
+    *,
+    source_root: Path,
+    clang_include: list[str] = (),
+    clang_include_directory: list[str] = (),
+    clang_c_std: str = "c11",
+    clang_cpp_std: str = "c++17",
+) -> dict[str, object]:
+    return {
+        "source_root": source_root,
+        "clang_include": list(clang_include),
+        "clang_include_directory": translation_unit_module.inject_python_include_directories(
+            list(clang_include_directory)
+        ),
+        "clang_c_std": clang_c_std,
+        "clang_cpp_std": clang_cpp_std,
+    }
+
+
+class CSignatureExtractor:
+    def __init__(
+        self,
+        source_root: Path,
+        *,
+        clang_include: list[str] = (),
+        clang_include_directory: list[str] = (),
+        clang_c_std: str = "c11",
+        clang_cpp_std: str = "c++17",
+    ) -> None:
+        self._source_root = source_root
+        self._clang_include = list(clang_include)
+        self._clang_include_directory = translation_unit_module.inject_python_include_directories(
+            list(clang_include_directory)
+        )
+        self._clang_c_std = clang_c_std
+        self._clang_cpp_std = clang_cpp_std
+
+    def extract_modules(self) -> dict[str, ExtractedModule]:
+        return extract_c_signature_modules(
+            self._source_root,
+            clang_include=self._clang_include,
+            clang_include_directory=self._clang_include_directory,
+            clang_c_std=self._clang_c_std,
+            clang_cpp_std=self._clang_cpp_std,
+        )
+
+
 class _FakeExtractor:
     def __init__(
         self,
@@ -87,18 +133,10 @@ class _FakeExtractor:
     ) -> None:
         self.modules = modules or {}
         self.called = 0
-        self._cached_modules: dict[str, ExtractedModule] | None = None
-
-    def _ensure_loaded(self) -> None:
-        if self._cached_modules is not None:
-            return
-
-        self.called += 1
-        self._cached_modules = self.modules
 
     def extract_modules(self) -> dict[str, ExtractedModule]:
-        self._ensure_loaded()
-        return self._cached_modules
+        self.called += 1
+        return self.modules
 
 
 def _patch_c_signature_extractor(
@@ -107,24 +145,20 @@ def _patch_c_signature_extractor(
 ) -> _FakeExtractor:
     extractor = _FakeExtractor(modules=modules)
 
-    class _PatchedExtractor:
-        def __init__(
-            self,
-            source_root: Path,
-            *,
-            clang_include: list[str] = (),
-            clang_include_directory: list[str] = (),
-            clang_c_std: str = "c11",
-            clang_cpp_std: str = "c++17",
-        ) -> None:
-            _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+    def _patched_extract_c_signature_modules(
+        source_root: Path,
+        *,
+        clang_include: list[str] = (),
+        clang_include_directory: list[str] = (),
+        clang_c_std: str = "c11",
+        clang_cpp_std: str = "c++17",
+    ) -> dict[str, ExtractedModule]:
+        _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+        return extractor.extract_modules()
 
-        def extract_modules(self) -> dict[str, ExtractedModule]:
-            return extractor.extract_modules()
+    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
 
-    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
-
-    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
+    monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
     return extractor
 
 
@@ -132,24 +166,20 @@ def _patch_raising_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
 ) -> None:
-    class _PatchedExtractor:
-        def __init__(
-            self,
-            source_root: Path,
-            *,
-            clang_include: list[str] = (),
-            clang_include_directory: list[str] = (),
-            clang_c_std: str = "c11",
-            clang_cpp_std: str = "c++17",
-        ) -> None:
-            _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+    def _patched_extract_c_signature_modules(
+        source_root: Path,
+        *,
+        clang_include: list[str] = (),
+        clang_include_directory: list[str] = (),
+        clang_c_std: str = "c11",
+        clang_cpp_std: str = "c++17",
+    ) -> dict[str, ExtractedModule]:
+        _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+        raise error
 
-        def extract_modules(self) -> dict[str, ExtractedModule]:
-            raise error
+    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
 
-    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
-
-    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _PatchedExtractor)
+    monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
 
 
 def _get_packaged_libclang_path() -> str | None:
@@ -286,7 +316,7 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
         ),
     )
 
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -306,7 +336,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -356,7 +386,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
             ),
         },
     )
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -396,8 +426,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    engine._clang = _FakeClangWithDiagnostics
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
         diagnostics=[
@@ -429,11 +458,11 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
         result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
-            source_root=engine._source_root,
-            clang_include=engine._clang_include,
-            clang_include_directory=engine._clang_include_directory,
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            source_root=config["source_root"],
+            clang_include=config["clang_include"],
+            clang_include_directory=config["clang_include_directory"],
+            clang_c_std=config["clang_c_std"],
+            clang_cpp_std=config["clang_cpp_std"],
         )
 
     assert result is translation_unit
@@ -443,10 +472,10 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     assert "suffix: .c" in message
     expected_parse_args = translation_unit_module.build_clang_parse_args(
         source,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        clang_include=config["clang_include"],
+        clang_include_directory=config["clang_include_directory"],
+        clang_c_std=config["clang_c_std"],
+        clang_cpp_std=config["clang_cpp_std"],
     )
     assert f"parse_args: {expected_parse_args!r}" in message
     assert f"[WARNING] {source}:3:1: warning detail" in message
@@ -458,8 +487,7 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
-    engine._clang = _FakeClangWithDiagnostics
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
         diagnostics=[
@@ -484,11 +512,11 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
         result = translation_unit_module.parse_translation_unit(
             index=_FakeIndex(translation_unit),
             file_path=source,
-            source_root=engine._source_root,
-            clang_include=engine._clang_include,
-            clang_include_directory=engine._clang_include_directory,
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            source_root=config["source_root"],
+            clang_include=config["clang_include"],
+            clang_include_directory=config["clang_include_directory"],
+            clang_c_std=config["clang_c_std"],
+            clang_cpp_std=config["clang_cpp_std"],
         )
 
     assert result is translation_unit
@@ -496,7 +524,7 @@ def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
 
 
 def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "src" / "module.c"
     header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
     header_path.parent.mkdir(parents=True, exist_ok=True)
@@ -519,17 +547,17 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     result = translation_unit_module.parse_translation_unit(
         index=index,
         file_path=source,
-        source_root=engine._source_root,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        source_root=config["source_root"],
+        clang_include=config["clang_include"],
+        clang_include_directory=config["clang_include_directory"],
+        clang_c_std=config["clang_c_std"],
+        clang_cpp_std=config["clang_cpp_std"],
     )
 
     assert result is second
     expected_include_root = header_path.parents[1]
-    assert str(expected_include_root) in engine._clang_include_directory
-    assert str(header_path.parent) not in engine._clang_include_directory
+    assert str(expected_include_root) in config["clang_include_directory"]
+    assert str(header_path.parent) not in config["clang_include_directory"]
     assert len(index.calls) == 2
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
@@ -539,7 +567,7 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "src" / "module.c"
     header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
     header_path.parent.mkdir(parents=True, exist_ok=True)
@@ -563,11 +591,11 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
         _ = translation_unit_module.parse_translation_unit(
             index=index,
             file_path=source,
-            source_root=engine._source_root,
-            clang_include=engine._clang_include,
-            clang_include_directory=engine._clang_include_directory,
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            source_root=config["source_root"],
+            clang_include=config["clang_include"],
+            clang_include_directory=config["clang_include_directory"],
+            clang_c_std=config["clang_c_std"],
+            clang_cpp_std=config["clang_cpp_std"],
         )
 
     messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
@@ -576,7 +604,7 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
 
 
 def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "pkg" / "src" / "module.c"
 
     include_one = tmp_path / "vendor1" / "include"
@@ -614,18 +642,18 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
     result = translation_unit_module.parse_translation_unit(
         index=index,
         file_path=source,
-        source_root=engine._source_root,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        source_root=config["source_root"],
+        clang_include=config["clang_include"],
+        clang_include_directory=config["clang_include_directory"],
+        clang_c_std=config["clang_c_std"],
+        clang_cpp_std=config["clang_cpp_std"],
     )
 
     include_arg_one = str(include_one)
     include_arg_two = str(include_two)
     assert result is third
-    assert include_arg_one in engine._clang_include_directory
-    assert include_arg_two in engine._clang_include_directory
+    assert include_arg_one in config["clang_include_directory"]
+    assert include_arg_two in config["clang_include_directory"]
     assert len(index.calls) == 3
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
@@ -638,9 +666,9 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
 
 
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "src" / "module.c"
-    initial_include_dirs = list(engine._clang_include_directory)
+    initial_include_dirs = list(config["clang_include_directory"])
 
     unrelated_header = tmp_path / "include" / "numpy" / "arrayobject.h"
     unrelated_header.parent.mkdir(parents=True, exist_ok=True)
@@ -662,15 +690,15 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
     result = translation_unit_module.parse_translation_unit(
         index=index,
         file_path=source,
-        source_root=engine._source_root,
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        source_root=config["source_root"],
+        clang_include=config["clang_include"],
+        clang_include_directory=config["clang_include_directory"],
+        clang_c_std=config["clang_c_std"],
+        clang_cpp_std=config["clang_cpp_std"],
     )
 
     assert result is unresolved
-    assert engine._clang_include_directory == initial_include_dirs
+    assert config["clang_include_directory"] == initial_include_dirs
     assert len(index.calls) == 1
 
 
@@ -705,7 +733,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
             ),
         },
     )
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -766,7 +794,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", args=_generic_signature())],
     )
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -812,7 +840,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
         ),
     )
 
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -840,7 +868,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
             }
         ),
     )
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -861,7 +889,7 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
     )
@@ -875,19 +903,19 @@ def test_write_stubs_skips_c_ast_visitor_when_disabled(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     captured_output_dirs: list[Path] = []
 
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when disabled")
+        raise AssertionError("CSignatureExtractionVisitor should not be instantiated when disabled")
 
     def _record_writer_output_dir(self: object, module: IRModule, printer: object, to: Path) -> None:
         _ = (self, module, printer)
         captured_output_dirs.append(to)
         (to / "math.pyi").write_text("", encoding="utf-8")
 
-    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
     monkeypatch.setattr(stubgen_module.Writer, "write", _record_writer_output_dir)
 
     options = StubGenerationOptions(
@@ -905,12 +933,12 @@ def test_write_stubs_skips_c_inference_when_source_root_not_set(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated when source_root is not set")
+        raise AssertionError("CSignatureExtractionVisitor should not be instantiated when source_root is not set")
 
-    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
 
     options = StubGenerationOptions(
         enable_docstring_signature_parser=False,
@@ -924,12 +952,12 @@ def test_write_stubs_defaults_do_not_require_source_root(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CAstSignatureInferenceVisitor should not be instantiated by default")
+        raise AssertionError("CSignatureExtractionVisitor should not be instantiated by default")
 
-    monkeypatch.setattr(stubgen_module, "CAstSignatureInferenceVisitor", _unexpected_constructor)
+    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
 
     options = StubGenerationOptions()
     assert options.source_root is None
@@ -943,7 +971,7 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     def _emit_warning(self: Pipeline, module: IRModule) -> None:
         _ = (self, module)
@@ -977,7 +1005,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1031,7 +1059,7 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1070,7 +1098,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     tmp_path: Path,
 ) -> None:
     import core as stubgen_module
-    from core.StubGenerationOptions import StubGenerationOptions
+    from core.stub_generation_options import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1134,7 +1162,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     pipeline = Pipeline(
         [
             DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
-            CAstSignatureInferenceVisitor(
+            CSignatureExtractionVisitor(
                 error_collector=ErrorCollector(),
                 source_root=tmp_path,
             ),
@@ -1171,12 +1199,12 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
 
     with caplog.at_level(
         logging.WARNING,
-        logger="core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor",
+        logger="core.node_visitors.c_signature_extraction.c_signature_extraction_visitor",
     ):
         Pipeline(
             [
                 DocStringSignatureParserVisitor(error_collector=ErrorCollector()),
-                CAstSignatureInferenceVisitor(
+                CSignatureExtractionVisitor(
                     error_collector=ErrorCollector(),
                     source_root=tmp_path,
                 ),
@@ -1188,219 +1216,6 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
     assert str(parsed.return_annotation) == "numpy.ndarray"
     assert "Failed to rewrite generic signature for cdist_minkowski" not in caplog.text
     assert extractor.called == 1
-
-
-def test_c_signature_extraction_engine_parses_minimal_c_file(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_ext.c"
-    source.write_text(
-        "\n".join(
-            [
-                "typedef struct _object PyObject;",
-                "typedef struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    void* ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "} PyMethodDef;",
-                "typedef struct PyModuleDef {",
-                "    int m_base;",
-                "    const char* m_name;",
-                "    const char* m_doc;",
-                "    int m_size;",
-                "    PyMethodDef* m_methods;",
-                "    void* m_slots;",
-                "    void* m_traverse;",
-                "    void* m_clear;",
-                "    void* m_free;",
-                "} PyModuleDef;",
-                "#define PyModuleDef_HEAD_INIT 0",
-                "#define METH_VARARGS 1",
-                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "static PyObject* add_impl(PyObject* self, PyObject* args) {",
-                "    int a = 0;",
-                "    int b = 0;",
-                "    if (!PyArg_ParseTuple(args, \"ii\", &a, &b)) {",
-                "        return (PyObject*)0;",
-                "    }",
-                "    return (PyObject*)0;",
-                "}",
-                "static PyMethodDef Methods[] = {",
-                "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
-                "    {0, 0, 0, 0}",
-                "};",
-                "static PyModuleDef moduledef = {",
-                "    PyModuleDef_HEAD_INIT,",
-                "    \"mini_ext\",",
-                "    0,",
-                "    -1,",
-                "    Methods,",
-                "    0, 0, 0, 0",
-                "};",
-                "PyObject* PyInit_mini_ext(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_c_std="c11",
-    )
-    extracted = engine.extract_modules()
-
-    assert "mini_ext" in extracted
-    first = extracted["mini_ext"].functions["add"]
-    assert first.ml_name == "add"
-    assert first.signatures
-    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
-    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
-    assert first.signatures[0].return_type_name is None
-
-
-def test_c_signature_extraction_engine_ignores_text_parser_signatures(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_text_parser_ext.c"
-    source.write_text(
-        "\n".join(
-            [
-                "typedef struct _object PyObject;",
-                "typedef struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    void* ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "} PyMethodDef;",
-                "typedef struct PyModuleDef {",
-                "    int m_base;",
-                "    const char* m_name;",
-                "    const char* m_doc;",
-                "    int m_size;",
-                "    PyMethodDef* m_methods;",
-                "    void* m_slots;",
-                "    void* m_traverse;",
-                "    void* m_clear;",
-                "    void* m_free;",
-                "} PyModuleDef;",
-                "#define PyModuleDef_HEAD_INIT 0",
-                "#define METH_VARARGS 1",
-                "static PyObject* parse_impl(PyObject* self, PyObject* args) {",
-                "    const char* parser = \"parse_impl(int count, double value=0)\";",
-                "    (void)parser;",
-                "    return (PyObject*)0;",
-                "}",
-                "static PyMethodDef Methods[] = {",
-                "    {\"parse\", parse_impl, METH_VARARGS, \"doc\"},",
-                "    {0, 0, 0, 0}",
-                "};",
-                "static PyModuleDef moduledef = {",
-                "    PyModuleDef_HEAD_INIT,",
-                "    \"mini_text_parser_ext\",",
-                "    0,",
-                "    -1,",
-                "    Methods,",
-                "    0, 0, 0, 0",
-                "};",
-                "PyObject* PyInit_mini_text_parser_ext(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_c_std="c11",
-    )
-    extracted = engine.extract_modules()
-
-    assert "mini_text_parser_ext" in extracted
-    first = extracted["mini_text_parser_ext"].functions["parse"]
-    assert first.ml_name == "parse"
-    assert first.signatures
-    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "args"]
-    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "object"]
-    assert first.signatures[0].return_type_name is None
-
-
-def test_c_signature_extraction_engine_parses_struct_typedef_pymethoddef_array(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_struct_typedef_ext.c"
-    source.write_text(
-        "\n".join(
-            [
-                "typedef struct _object PyObject;",
-                "typedef struct PyMethodDef PyMethodDef;",
-                "struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    void* ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "};",
-                "typedef struct PyModuleDef {",
-                "    int m_base;",
-                "    const char* m_name;",
-                "    const char* m_doc;",
-                "    int m_size;",
-                "PyMethodDef* m_methods;",
-                "    void* m_slots;",
-                "    void* m_traverse;",
-                "    void* m_clear;",
-                "    void* m_free;",
-                "} PyModuleDef;",
-                "#define PyModuleDef_HEAD_INIT 0",
-                "#define METH_VARARGS 1",
-                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
-                "static PyObject* add_impl(PyObject* self, PyObject* args) {",
-                "    int a = 0;",
-                "    int b = 0;",
-                "    if (!PyArg_ParseTuple(args, \"ii\", &a, &b)) {",
-                "        return (PyObject*)0;",
-                "    }",
-                "    return (PyObject*)0;",
-                "}",
-                "static PyMethodDef Methods[] = {",
-                "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
-                "    {0, 0, 0, 0}",
-                "};",
-                "static PyModuleDef moduledef = {",
-                "    PyModuleDef_HEAD_INIT,",
-                "    \"mini_struct_typedef_ext\",",
-                "    0,",
-                "    -1,",
-                "    Methods,",
-                "    0, 0, 0, 0",
-                "};",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_c_std="c11",
-    )
-    extracted = engine.extract_modules()
-
-    assert "mini_struct_typedef_ext" in extracted
-    first = extracted["mini_struct_typedef_ext"].functions["add"]
-    assert first.ml_name == "add"
-    assert first.signatures
-    assert [arg.name for arg in first.signatures[0].arguments] == ["self", "a", "b"]
-    assert [arg.type_name for arg in first.signatures[0].arguments] == ["object", "int", "int"]
 
 
 def test_c_signature_extraction_engine_extract_modules_isolates_same_named_functions_per_module(
@@ -2456,61 +2271,6 @@ def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_withou
     assert extracted == {}
 
 
-def test_write_stubs_uses_doc_parser_for_pybind11_and_preserves_c_ast_results(
-    tmp_path: Path,
-) -> None:
-    pytest.importorskip("scipy.spatial._distance_pybind")
-    numpy = pytest.importorskip("numpy")
-
-    spatial_src_root = Path(r"C:\Things\third_package_source\scipy_scipy\scipy\spatial\src")
-    if not spatial_src_root.exists():
-        pytest.skip("SciPy spatial source tree is not available")
-
-    import core as stubgen_module
-
-    python_include_dirs: list[str] = []
-    for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
-        if include_dir is None:
-            continue
-        if include_dir in python_include_dirs:
-            continue
-        python_include_dirs.append(include_dir)
-    numpy_include_dir = getattr(numpy, "get_include", lambda: None)()
-    if numpy_include_dir and numpy_include_dir not in python_include_dirs:
-        python_include_dirs.append(numpy_include_dir)
-
-    pybind_output_dir = tmp_path / "pybind_stubs"
-    wrap_output_dir = tmp_path / "wrap_stubs"
-    options = StubGenerationOptions(
-        include_docstrings=False,
-        enable_docstring_signature_parser=True,
-        source_root=spatial_src_root,
-        clang_include=["Python.h"],
-        clang_include_directory=python_include_dirs,
-    )
-
-    stubgen_module.write_stubs("scipy.spatial._distance_pybind", pybind_output_dir, options=options)
-    stubgen_module.write_stubs("scipy.spatial._distance_wrap", wrap_output_dir, options=options)
-
-    pybind_stub = (pybind_output_dir / "_distance_pybind.pyi").read_text(encoding="utf-8")
-    wrap_stub = (wrap_output_dir / "_distance_wrap.pyi").read_text(encoding="utf-8")
-    pybind_log_text = (pybind_output_dir / "pcstubgen.log").read_text(encoding="utf-8")
-
-    assert (
-        "def cdist_minkowski(x: object, y: object, w: object = None, "
-        "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray:"
-    ) in pybind_stub
-    assert (
-        "def pdist_minkowski(x: object, w: object = None, out: object = None, "
-        "p: typing.SupportsFloat = 2.0) -> numpy.ndarray:"
-    ) in pybind_stub
-    assert (
-        "def cdist_minkowski_double_wrap(XA_: object, XB_: object, dm_: object, p: float) -> float:"
-    ) in wrap_stub
-    assert "Failed to rewrite generic signature for cdist_minkowski" not in pybind_log_text
-    assert "Failed to rewrite generic signature for pdist_minkowski" not in pybind_log_text
-
-
 def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_table_yet(tmp_path: Path) -> None:
     pytest.importorskip("clang.cindex")
     if _get_packaged_libclang_path() is None:
@@ -2565,188 +2325,37 @@ def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_
     assert extracted == {}
 
 
-def test_c_signature_engine_infers_return_type_from_py_buildvalue(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_buildvalue_ext.c"
-    source.write_text(
-        "\n".join(
-            [
-                "typedef struct _object PyObject;",
-                "typedef struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    void* ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "} PyMethodDef;",
-                "typedef struct PyModuleDef {",
-                "    int m_base;",
-                "    const char* m_name;",
-                "    const char* m_doc;",
-                "    int m_size;",
-                "    PyMethodDef* m_methods;",
-                "    void* m_slots;",
-                "    void* m_traverse;",
-                "    void* m_clear;",
-                "    void* m_free;",
-                "} PyModuleDef;",
-                "#define PyModuleDef_HEAD_INIT 0",
-                "#define METH_VARARGS 1",
-                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* Py_BuildValue(const char* fmt, ...);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
-                "static PyObject* make_impl(PyObject* self, PyObject* args) {",
-                "    int value = 0;",
-                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
-                "        return (PyObject*)0;",
-                "    }",
-                "    return Py_BuildValue(\"i\", value);",
-                "}",
-                "static PyMethodDef Methods[] = {",
-                "    {\"make\", make_impl, METH_VARARGS, \"doc\"},",
-                "    {0, 0, 0, 0}",
-                "};",
-                "static PyModuleDef moduledef = {",
-                "    PyModuleDef_HEAD_INIT,",
-                "    \"mini_buildvalue_ext\",",
-                "    0,",
-                "    -1,",
-                "    Methods,",
-                "    0, 0, 0, 0",
-                "};",
-                "PyObject* PyInit_mini_buildvalue_ext(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_c_std="c11",
-    )
-    extracted = engine.extract_modules()
-
-    assert "mini_buildvalue_ext" in extracted
-    first = extracted["mini_buildvalue_ext"].functions["make"]
-    assert first.signatures
-    assert first.signatures[0].return_type_name == "int"
-
-
-def test_c_signature_engine_falls_back_to_object_on_conflicting_return_types(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_conflict_return_ext.c"
-    source.write_text(
-        "\n".join(
-            [
-                "typedef struct _object PyObject;",
-                "typedef struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    void* ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "} PyMethodDef;",
-                "typedef struct PyModuleDef {",
-                "    int m_base;",
-                "    const char* m_name;",
-                "    const char* m_doc;",
-                "    int m_size;",
-                "    PyMethodDef* m_methods;",
-                "    void* m_slots;",
-                "    void* m_traverse;",
-                "    void* m_clear;",
-                "    void* m_free;",
-                "} PyModuleDef;",
-                "#define PyModuleDef_HEAD_INIT 0",
-                "#define METH_VARARGS 1",
-                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "PyObject* PyLong_FromLong(long v);",
-                "PyObject* PyBool_FromLong(long v);",
-                "PyObject* PyModule_Create(PyModuleDef* def);",
-                "static PyObject* pick_impl(PyObject* self, PyObject* args) {",
-                "    int flag = 0;",
-                "    if (!PyArg_ParseTuple(args, \"i\", &flag)) {",
-                "        return (PyObject*)0;",
-                "    }",
-                "    if (flag) {",
-                "        return PyLong_FromLong(1);",
-                "    }",
-                "    return PyBool_FromLong(0);",
-                "}",
-                "static PyMethodDef Methods[] = {",
-                "    {\"pick\", pick_impl, METH_VARARGS, \"doc\"},",
-                "    {0, 0, 0, 0}",
-                "};",
-                "static PyModuleDef moduledef = {",
-                "    PyModuleDef_HEAD_INIT,",
-                "    \"mini_conflict_return_ext\",",
-                "    0,",
-                "    -1,",
-                "    Methods,",
-                "    0, 0, 0, 0",
-                "};",
-                "PyObject* PyInit_mini_conflict_return_ext(void) {",
-                "    return PyModule_Create(&moduledef);",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        clang_c_std="c11",
-    )
-    extracted = engine.extract_modules()
-
-    assert "mini_conflict_return_ext" in extracted
-    first = extracted["mini_conflict_return_ext"].functions["pick"]
-    assert first.signatures
-    assert first.signatures[0].return_type_name == "object"
-
-
 def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {
-        "init_calls": 0,
-        "extract_modules_calls": 0,
+        "extract_calls": 0,
         "clang_include": None,
     }
 
-    class _RecorderExtractor:
-        def __init__(
-            self,
-            source_root: Path,
-            *,
-            clang_include: list[str] = (),
-            clang_include_directory: list[str] = (),
-            clang_c_std: str = "c11",
-            clang_cpp_std: str = "c++17",
-        ) -> None:
-            captured["init_calls"] = int(captured["init_calls"]) + 1
-            captured["source_root"] = source_root
-            captured["clang_include"] = list(clang_include)
-            captured["clang_include_directory"] = list(clang_include_directory)
-            captured["clang_c_std"] = clang_c_std
-            captured["clang_cpp_std"] = clang_cpp_std
-            self._cached_result: dict[str, ExtractedModule] | None = None
+    def _record_extract_c_signature_modules(
+        source_root: Path,
+        *,
+        clang_include: list[str] = (),
+        clang_include_directory: list[str] = (),
+        clang_c_std: str = "c11",
+        clang_cpp_std: str = "c++17",
+    ) -> dict[str, ExtractedModule]:
+        captured["extract_calls"] = int(captured["extract_calls"]) + 1
+        captured["source_root"] = source_root
+        captured["clang_include"] = list(clang_include)
+        captured["clang_include_directory"] = list(clang_include_directory)
+        captured["clang_c_std"] = clang_c_std
+        captured["clang_cpp_std"] = clang_cpp_std
+        return {}
 
-        def extract_modules(self) -> dict[str, ExtractedModule]:
-            if self._cached_result is None:
-                captured["extract_modules_calls"] = int(captured["extract_modules_calls"]) + 1
-                self._cached_result = {}
-            return self._cached_result
+    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
 
-    import core.NodeVisitors.CSignatureInference.CAstSignatureInferenceVisitor as visitor_module
+    monkeypatch.setattr(
+        visitor_module,
+        "extract_c_signature_modules",
+        _record_extract_c_signature_modules,
+    )
 
-    monkeypatch.setattr(visitor_module, "CSignatureExtractor", _RecorderExtractor)
-
-    visitor = CAstSignatureInferenceVisitor(
+    visitor = CSignatureExtractionVisitor(
         error_collector=ErrorCollector(),
         source_root=tmp_path,
         clang_include=["Python.h"],
@@ -2755,13 +2364,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         clang_cpp_std="c++20",
     )
 
-    assert captured["init_calls"] == 1
-    assert captured["extract_modules_calls"] == 0
-    assert captured["source_root"] == tmp_path
-    assert captured["clang_include"] == ["Python.h"]
-    assert captured["clang_include_directory"] == ["C:/MyInclude"]
-    assert captured["clang_c_std"] == "c99"
-    assert captured["clang_cpp_std"] == "c++20"
+    assert captured["extract_calls"] == 0
 
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -2770,15 +2373,15 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor.visit_module(module)
     visitor.visit_module(module)
 
-    assert captured["extract_modules_calls"] == 1
+    assert captured["extract_calls"] == 1
+    assert captured["source_root"] == tmp_path
+    assert captured["clang_include"] == ["Python.h"]
+    assert captured["clang_include_directory"] == ["C:/MyInclude"]
+    assert captured["clang_c_std"] == "c99"
+    assert captured["clang_cpp_std"] == "c++20"
 
 
 def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_path: Path) -> None:
-    extractor_module = importlib.import_module(
-        "core.NodeVisitors.CSignatureInference.CSignatureExtraction.CSignatureExtractor"
-    )
-
-    engine = CSignatureExtractor(source_root=tmp_path)
     source = tmp_path / "module.c"
     built_modules = {
         "pkg.mod": ExtractedModule(
@@ -2809,12 +2412,7 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
     monkeypatch.setattr(
         signature_rules_module,
         "infer_function_signature",
-        lambda function: (
-            calls.append("infer"),
-            function.signatures.append(
-                ExtractedSignature(arguments=[ExtractedArgument(name="self", type_name="object")])
-            ),
-        )
+        lambda function: calls.append("infer")
         if calls == ["parse", "build"]
         else pytest.fail("infer should run after build"),
     )
@@ -2826,19 +2424,17 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
             fake_translation_unit,
         )[1],
     )
-    monkeypatch.setattr(extractor_module.Index, "create", lambda: _FakeIndexForPipeline())
+    monkeypatch.setattr(c_signature_extraction_module.Index, "create", lambda: _FakeIndexForPipeline())
     try:
-        extracted = engine.extract_modules()
+        extracted = extract_c_signature_modules(tmp_path)
     finally:
         monkeypatch.undo()
 
     assert calls == ["parse", "build", "infer"]
     assert extracted == built_modules
-    assert extracted["pkg.mod"].functions["foo"].signatures
 
 
 def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_empty(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
     calls: list[str] = []
 
     monkeypatch = pytest.MonkeyPatch()
@@ -2861,7 +2457,7 @@ def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_
         lambda function: pytest.fail("infer step should be skipped when parse result is empty"),
     )
     try:
-        extracted = engine.extract_modules()
+        extracted = extract_c_signature_modules(tmp_path)
     finally:
         monkeypatch.undo()
 
@@ -3001,62 +2597,6 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
             for item in ("--include-directory", include_dir)
         ],
     ]
-
-
-def test_c_signature_engine_skips_non_parser_calls_in_call_params(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-
-    assert (
-        _set_call_params(
-            func_cursor=object(),
-            call_cursor=_call_expr("Py_BuildValue", _string_literal("i"), _identifier_node("value")),
-        )
-        is None
-    )
-    assert (
-        _set_call_params(
-            func_cursor=object(),
-            call_cursor=_call_expr("PyArg_NoKeywords", _identifier_node("kwargs")),
-        )
-        is None
-    )
-    assert (
-        _set_call_params(
-            func_cursor=object(),
-            call_cursor=_call_expr(
-                "PyArg_UnpackTuple",
-                _identifier_node("args"),
-                _string_literal("demo"),
-                _int_literal("1"),
-                _int_literal("1"),
-                _identifier_node("value"),
-            ),
-        )
-        is None
-    )
-
-
-def test_c_signature_engine_requires_format_at_declared_slot(tmp_path: Path) -> None:
-    count_decl = _var_decl("count", _int_literal("1"))
-    func_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="demo",
-        children=[count_decl],
-    )
-
-    assert (
-        _set_call_params(
-            func_cursor=func_cursor,
-            call_cursor=_call_expr(
-                "PyArg_ParseTuple",
-                _identifier_node("args"),
-                _identifier_node("fmt"),
-                _string_literal("i"),
-                _address_of("count", referenced=count_decl),
-            ),
-        )
-        is None
-    )
 
 
 class _FakeToken:
@@ -3236,7 +2776,7 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_eval_int = cursor_utils_module.ClangEval.eval_int
+    original_eval_int = cursor_utils_module.clang_eval.eval_int
     method_flag_values = {
         "METH_VARARGS": METH_VARARGS,
         "METH_KEYWORDS": METH_KEYWORDS,
@@ -3269,7 +2809,7 @@ def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
             return value
         return None
 
-    monkeypatch.setattr(cursor_utils_module.ClangEval, "eval_int", _eval_int)
+    monkeypatch.setattr(cursor_utils_module.clang_eval, "eval_int", _eval_int)
 
 def test_c_signature_engine_resolve_init_list_expr_supports_positional_entries(tmp_path: Path) -> None:
     field_names = ("a", "b", "c")
@@ -3472,49 +3012,6 @@ def test_c_signature_engine_extract_pymethoddef_init_list_expr_marks_sentinel(tm
     assert extracted is None
 
 
-def test_c_signature_engine_infers_function_signature_from_built_skeleton() -> None:
-    function_cursor = object()
-    extracted = ExtractedFunction(
-        ml_name="add",
-        ml_flags=METH_VARARGS,
-        function_cursor=function_cursor,
-    )
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        signature_rules_module,
-        "extract_signatures_from_function",
-        lambda func_cursor: [
-            ExtractedSignature(
-                arguments=[
-                    ExtractedArgument(name="a", type_name="int"),
-                    ExtractedArgument(name="b", type_name="int"),
-                ]
-            )
-        ]
-        if func_cursor is function_cursor
-        else [],
-    )
-    monkeypatch.setattr(
-        signature_rules_module,
-        "infer_return_type_from_function",
-        lambda func_cursor: "int" if func_cursor is function_cursor else None,
-    )
-    monkeypatch.setattr(
-        signature_rules_module,
-        "signature_from_param_decls",
-        lambda func_cursor: pytest.fail("fallback should not run when signatures are extracted"),
-    )
-    try:
-        signature_rules_module.infer_function_signature(extracted)
-    finally:
-        monkeypatch.undo()
-
-    assert len(extracted.signatures) == 1
-    assert [arg.name for arg in extracted.signatures[0].arguments] == ["self", "a", "b"]
-    assert extracted.signatures[0].return_type_name == "int"
-
-
 def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -3582,41 +3079,5 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     assert calls == [method_1, non_sentinel, method_2]
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
 
-def test_c_signature_engine_parses_keywords_with_non_kwlist_name(tmp_path: Path) -> None:
-    count_decl = _var_decl("count", _int_literal("1"))
-    expected_type_decl = _var_decl("expected_type", _null_ptr_literal())
-    value_decl = _var_decl("value", _null_ptr_literal())
-    keywords_decl = _var_decl(
-        "keywords",
-        _init_list(
-            _string_literal("count"),
-            _string_literal("expected_type"),
-            _string_literal("value"),
-            _int_literal("0"),
-        ),
-    )
-    func_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="demo",
-        children=[count_decl, expected_type_decl, value_decl, keywords_decl],
-    )
-
-    args = _set_call_params(
-        func_cursor=func_cursor,
-        call_cursor=_call_expr(
-            "PyArg_ParseTupleAndKeywords",
-            _identifier_node("args"),
-            _identifier_node("kwargs"),
-            _string_literal("iO!"),
-            _token_identifier_node("keywords", referenced=keywords_decl),
-            _address_of("count", referenced=count_decl),
-            _address_of("expected_type", referenced=expected_type_decl),
-            _address_of("value", referenced=value_decl),
-        ),
-    )
-
-    assert args is not None
-    assert [arg.name for arg in args] == ["count", "expected_type", "value"]
-    assert [arg.type_name for arg in args] == ["int", "object", "object"]
 
 

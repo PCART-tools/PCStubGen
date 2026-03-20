@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .PrinterVisitor import PrinterVisitor
-from .IR import IRModule
+from .printer_visitor import PrinterVisitor
+from .ir import IRModule
 
 
 class Writer:

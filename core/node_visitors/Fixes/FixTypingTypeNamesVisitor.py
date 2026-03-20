@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...IR import (
+from ...ir import (
     IRClass, IRFunction, IRModule, ResolvedType, QualifiedName
 )
 from ..NodeVisitor import NodeVisitor

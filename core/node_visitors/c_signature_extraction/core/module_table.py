@@ -4,9 +4,9 @@ import logging
 
 from clang.cindex import Cursor, CursorKind, TokenKind, TypeKind
 
-from . import ClangEval
-from .Models import ExtractedFunction, ExtractedModule
-from ._cursor_utils import (
+from . import clang_eval
+from .models import ExtractedFunction, ExtractedModule
+from .cursor_utils import (
     is_nullptr_or_zero,
     unwrap_transparent,
     var_decl_to_init_list_expr,
@@ -146,7 +146,7 @@ def extract_pymethoddef_init_list_expr(
 
     ml_flags_cursor = values.get("ml_flags")
     assert ml_flags_cursor is not None
-    ml_flags = ClangEval.eval_int(ml_flags_cursor)
+    ml_flags = clang_eval.eval_int(ml_flags_cursor)
     if ml_flags is None:
         ml_flags = 0
 

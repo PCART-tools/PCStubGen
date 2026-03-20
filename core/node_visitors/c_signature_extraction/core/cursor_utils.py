@@ -5,7 +5,7 @@ from collections.abc import Iterable
 
 from clang.cindex import Cursor, CursorKind, TokenKind
 
-from . import ClangEval
+from . import clang_eval
 
 _SINGLE_TRANSPARENT_CURSOR_KINDS = {
     # python libclang 未暴露的若干表达式会落到 UNEXPOSED_EXPR。
@@ -53,7 +53,7 @@ def is_integer_literal_zero(cursor: Cursor) -> bool:
     """判断是否为值为 0 的整数字面量。"""
     if cursor.kind != CursorKind.INTEGER_LITERAL:
         return False
-    value = ClangEval.eval_int(cursor)
+    value = clang_eval.eval_int(cursor)
     if value is None:
         return False
     return value == 0

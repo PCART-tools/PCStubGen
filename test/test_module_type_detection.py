@@ -3,9 +3,9 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from core.ErrorCollector import ErrorCollector
-from core.IR import IRModule, IRModuleType, QualifiedName
-from core.ModuleBuilder import ModuleBuilder
+from core.error_collector import ErrorCollector
+from core.ir import IRModule, IRModuleType, QualifiedName
+from core.module_builder import ModuleBuilder
 
 
 def _module_with_loader(

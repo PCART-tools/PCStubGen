@@ -11,7 +11,7 @@ from clang.cindex import Cursor
 MODULE_PATH = (
     Path(__file__).resolve().parents[1]
     / "core"
-    / "NodeVisitors"
+    / "node_visitors"
     / "CSignatureInference"
     / "CSignatureExtraction"
     / "PyBuildValueTypeParser.py"

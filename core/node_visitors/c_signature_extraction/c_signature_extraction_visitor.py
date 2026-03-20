@@ -7,17 +7,17 @@ import re
 from pathlib import Path
 from typing import Literal
 
-from .CSignatureExtraction import (
-    CSignatureExtractor,
+from .core import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
+    extract_c_signature_modules,
 )
-from .CSignatureExtraction.Constants import METH_CLASS, METH_STATIC
+from .core.constants import METH_CLASS, METH_STATIC
 from ..NodeVisitor import NodeVisitor
-from ...ErrorCollector import ErrorCollector
-from ...Errors import InvalidExpressionError
-from ...IR import (
+from ...error_collector import ErrorCollector
+from ...errors import InvalidExpressionError
+from ...ir import (
     IRArgument,
     IRArgumentKind,
     IRFunction,
@@ -49,7 +49,7 @@ class _InferenceStats:
     empty_extract: int = 0
 
 
-class CAstSignatureInferenceVisitor(NodeVisitor):
+class CSignatureExtractionVisitor(NodeVisitor):
     """
     使用 C AST 提取结果补全 generic signature。
 
@@ -69,15 +69,13 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> None:
-        """初始化 Visitor 运行配置与 C 签名提取器。"""
+        """初始化 Visitor 运行配置与提取结果缓存。"""
         self.error_collector = error_collector
-        self._extractor = CSignatureExtractor(
-            source_root=source_root,
-            clang_include=clang_include,
-            clang_include_directory=clang_include_directory,
-            clang_c_std=clang_c_std,
-            clang_cpp_std=clang_cpp_std,
-        )
+        self._source_root = source_root
+        self._clang_include = list(clang_include)
+        self._clang_include_directory = list(clang_include_directory)
+        self._clang_c_std = clang_c_std
+        self._clang_cpp_std = clang_cpp_std
         self._stats = _InferenceStats()
         self._signature_modules: dict[str, ExtractedModule] | None = None
         self._signature_load_status: SignatureLoadStatus | None = None
@@ -329,14 +327,20 @@ class CAstSignatureInferenceVisitor(NodeVisitor):
 
     def _get_signature_modules(self) -> tuple[dict[str, ExtractedModule], SignatureLoadStatus]:
         """
-        按需提取 C AST 结果；缓存由 extraction engine 负责。
+        按需提取 C AST 结果；空结果也缓存到 visitor。
 
         提取失败时直接向上传播异常，由调用方决定是否中断主流程。
         """
         if self._signature_modules is not None and self._signature_load_status is not None:
             return self._signature_modules, self._signature_load_status
 
-        self._signature_modules = self._extractor.extract_modules()
+        self._signature_modules = extract_c_signature_modules(
+            self._source_root,
+            clang_include=self._clang_include,
+            clang_include_directory=self._clang_include_directory,
+            clang_c_std=self._clang_c_std,
+            clang_cpp_std=self._clang_cpp_std,
+        )
         self._signature_load_status = "nonempty" if self._signature_modules else "empty"
         return self._signature_modules, self._signature_load_status
 

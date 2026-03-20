@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .Errors import (
+from .errors import (
     InvalidExpressionError,
     InvalidIdentifierError,
     NameResolutionError,
@@ -13,7 +13,7 @@ from .Errors import (
 )
 
 if TYPE_CHECKING:
-    from .IR import QualifiedName
+    from .ir import QualifiedName
 
 logger = logging.getLogger(__name__)
 

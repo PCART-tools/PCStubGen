@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ...IR import IRClass, IRModule
+from ...ir import IRClass, IRModule
 from ..NodeVisitor import NodeVisitor
 
 class FixRedundantMethodsFromBuiltinObjectVisitor(NodeVisitor):

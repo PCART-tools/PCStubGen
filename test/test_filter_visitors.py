@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from core.ErrorCollector import ErrorCollector
-from core.IR import (
+from core.error_collector import ErrorCollector
+from core.ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -11,11 +11,11 @@ from core.IR import (
     QualifiedName,
     ResolvedType,
 )
-from core.NodeVisitors.DocStringSignatureParserVisitor import (
+from core.node_visitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
-from core.NodeVisitors.NodeVisitor import NodeVisitor
-from core.NodeVisitors.Fixes import (
+from core.node_visitors.NodeVisitor import NodeVisitor
+from core.node_visitors.Fixes import (
     FixBuiltinTypesVisitor,
     FixCurrentModulePrefixInTypeNamesVisitor,
     InferMethodModifierVisitor,

@@ -6,10 +6,10 @@ import types
 from pathlib import Path
 
 from core import write_stubs
-from core.ErrorCollector import ErrorCollector
-from core.IR import QualifiedName
-from core.ModuleBuilder import ModuleBuilder
-from core.StubGenerationOptions import StubGenerationOptions
+from core.error_collector import ErrorCollector
+from core.ir import QualifiedName
+from core.module_builder import ModuleBuilder
+from core.stub_generation_options import StubGenerationOptions
 
 
 def test_module_builder_keeps_only_tree_functions_and_methods() -> None:

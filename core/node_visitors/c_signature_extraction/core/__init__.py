@@ -2,8 +2,8 @@ from __future__ import annotations
 
 """C 签名提取子包对外导出入口。"""
 
-from .CSignatureExtractor import CSignatureExtractor
-from .Models import (
+from .c_signature_extraction import extract_c_signature_modules
+from .models import (
     ExtractedArgument,
     ExtractedArgumentKind,
     ExtractedFunction,
@@ -12,7 +12,7 @@ from .Models import (
 )
 
 __all__ = [
-    "CSignatureExtractor",
+    "extract_c_signature_modules",
     "ExtractedArgument",
     "ExtractedArgumentKind",
     "ExtractedFunction",

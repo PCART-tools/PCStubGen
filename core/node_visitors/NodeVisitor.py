@@ -4,7 +4,7 @@ import abc
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..IR import (
+    from ..ir import (
         IRModule,
         IRClass,
         IRFunction,

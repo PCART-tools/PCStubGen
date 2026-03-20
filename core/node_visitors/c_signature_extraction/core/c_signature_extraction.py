@@ -1,0 +1,83 @@
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from clang.cindex import Index
+
+from .models import ExtractedModule
+from . import module_table as module_table
+from . import translation_unit as translation_unit
+from . import inference_signature
+
+logger = logging.getLogger(__name__)
+
+
+def _check(condition: bool, message: str = "check failed!") -> None:
+    """在核心前置条件不满足时抛出显式异常。"""
+    if not condition:
+        raise RuntimeError(message)
+
+
+def extract_c_signature_modules(
+    source_root: Path,
+    *,
+    clang_include: list[str] = (),
+    clang_include_directory: list[str] = (),
+    clang_c_std: str = "c11",
+    clang_cpp_std: str = "c++17",
+) -> dict[str, ExtractedModule]:
+    """
+    基于 libclang 提取模块级 C 签名。
+
+    该流程从 `PyModuleDef` 变量定义出发，读取 `m_name` / `m_methods`
+    还原模块级 `PyMethodDef`，再结合 `PyArg_*` 调用和格式串规则推断
+    Python 侧参数信息。
+    """
+    _check(source_root.exists())
+
+    normalized_clang_include = list(clang_include)
+    normalized_include_dirs = translation_unit.inject_python_include_directories(
+        list(clang_include_directory)
+    )
+
+    source_files = translation_unit.find_candidate_files(source_root)
+    if not source_files:
+        return {}
+
+    index = Index.create()
+    translation_units = []
+    for file_path in source_files:
+        tu = translation_unit.parse_translation_unit(
+            index,
+            file_path,
+            source_root=source_root,
+            clang_include=normalized_clang_include,
+            clang_include_directory=normalized_include_dirs,
+            clang_c_std=clang_c_std,
+            clang_cpp_std=clang_cpp_std,
+        )
+        translation_units.append(tu)
+
+    result: dict[str, ExtractedModule] = {}
+    for tu in translation_units:
+        try:
+            modules = module_table.process_translation_unit(tu.cursor)
+        except AssertionError as ex:
+            logger.exception("AssertionError", exc_info=ex)
+            continue
+        for module in modules:
+            existing = result.get(module.name)
+            if existing is not None:
+                logger.warning(
+                    "Discarded duplicate extracted module %s: kept existing module, discarded incoming module",
+                    existing.name,
+                )
+                continue
+            result[module.name] = module
+
+    for module in result.values():
+        for function in module.functions.values():
+            inference_signature.inference_signature(function)
+
+    return result

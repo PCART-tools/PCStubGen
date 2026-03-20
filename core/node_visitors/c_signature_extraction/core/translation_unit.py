@@ -9,7 +9,7 @@ from pathlib import Path
 import clang
 from clang.cindex import Diagnostic, Index, TranslationUnit
 
-from .Constants import CPP_SOURCE_SUFFIXES, NATIVE_SOURCE_SUFFIXES
+from .constants import CPP_SOURCE_SUFFIXES, NATIVE_SOURCE_SUFFIXES
 
 logger = logging.getLogger(__name__)
 
