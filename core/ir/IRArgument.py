@@ -5,7 +5,6 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .IRAnnotation import IRAnnotation
     from .InvalidExpression import InvalidExpression
     from .IRValue import IRValue
 
@@ -23,7 +22,7 @@ class IRArgument:
     name: str | None
     kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
     default: IRValue | InvalidExpression | None = field(default=None)
-    annotation: IRAnnotation | None = field(default=None)
+    annotation: str | None = field(default=None)
 
     def __str__(self) -> str:
         result = []

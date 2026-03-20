@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from .IRAnnotation import IRAnnotation
 from .IRArgument import IRArgument, IRArgumentKind
 from .IRClass import IRClass
 from .IRFunction import IRFunction
@@ -9,11 +8,9 @@ from .IRMethod import IRMethod
 from .IRMethodDecorator import IRMethodDecorator
 from .IRModule import IRModule, IRModuleType
 from .QualifiedName import QualifiedName
-from .ResolvedType import ResolvedType
 from .IRValue import IRValue
 
 __all__ = [
-    "IRAnnotation",
     "IRArgument",
     "IRArgumentKind",
     "IRClass",
@@ -24,6 +21,5 @@ __all__ = [
     "IRModule",
     "IRModuleType",
     "QualifiedName",
-    "ResolvedType",
     "IRValue",
 ]

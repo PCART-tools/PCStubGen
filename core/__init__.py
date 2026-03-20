@@ -11,15 +11,8 @@ from .ir import QualifiedName
 from .pipeline import Pipeline
 from .node_visitors.NodeVisitor import NodeVisitor
 from .node_visitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
-from .node_visitors.c_signature_extraction.c_signature_extraction_visitor import CSignatureExtractionVisitor
-from .node_visitors.Fixes import (
-    FixBuiltinTypesVisitor,
-    FixTypingTypeNamesVisitor,
-    FixPEP585CollectionNamesVisitor,
-    FixCurrentModulePrefixInTypeNamesVisitor,
-    InferMethodModifierVisitor,
-    RemoveSelfAnnotationVisitor,
-    FixRedundantMethodsFromBuiltinObjectVisitor,
+from .node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
+    CSignatureExtractionVisitor,
 )
 from .printer_visitor import PrinterVisitor
 from .writer import Writer
@@ -31,7 +24,7 @@ def write_stubs(
     module_name: str,
     output_dir: Path,
     options: StubGenerationOptions | None = None,
-    writer: Writer | None = None,
+    _writer: Writer | None = None,
 ) -> None:
     """
     生成存根并写入文件。
@@ -95,36 +88,24 @@ def write_stubs(
             )
             visitors.append(c_ast_visitor)
 
-        visitors.extend(
-            [
-                InferMethodModifierVisitor(),
-                # FixTypingTypeNamesVisitor(),
-                # FixBuiltinTypesVisitor(),
-                # FixPEP585CollectionNamesVisitor(),
-                # FixCurrentModulePrefixInTypeNamesVisitor(),
-                # FixRedundantMethodsFromBuiltinObjectVisitor(),
-                # RemoveSelfAnnotationVisitor(),
-            ]
-        )
-
-        pipeline = Pipeline(visitors)
+        _pipeline = Pipeline(visitors)
 
         # 4. 运行管道
-        pipeline.run(ir_module)
+        _pipeline.run(ir_module)
         if c_ast_visitor is not None:
             c_ast_visitor.log_summary(str(ir_module.full_name))
 
         ext = options.stub_extension if options.stub_extension else "pyi"
-        if writer is None:
-            writer = Writer(stub_extension=ext)
+        if _writer is None:
+            _writer = Writer(stub_extension=ext)
         else:
-            writer.stub_extension = ext
+            _writer.stub_extension = ext
         printer = PrinterVisitor(
             invalid_expr_as_ellipses=not options.print_invalid_expressions_as_is,
             include_docstrings=options.include_docstrings,
             include_module_type_comment=options.include_module_type_comment,
         )
-        writer.write(ir_module, printer, to=output_dir)
+        _writer.write(ir_module, printer, to=output_dir)
     finally:
         package_logger.removeHandler(file_handler)
         package_logger.setLevel(previous_package_logger_level)

@@ -42,7 +42,6 @@ from core.ir import (
     IRModule,
     IRModuleType,
     QualifiedName,
-    ResolvedType,
 )
 from core.node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
     CSignatureExtractionVisitor,
@@ -324,12 +323,12 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
 
     rewritten = module.functions[0]
     assert [arg.name for arg in rewritten.args] == ["x", "flag"]
-    assert str(rewritten.args[0].annotation) == "int"
-    assert str(rewritten.args[1].annotation) == "bool"
+    assert rewritten.args[0].annotation == "int"
+    assert rewritten.args[1].annotation == "bool"
     assert rewritten.args[1].default is not None
     assert rewritten.args[1].default.repr == "False"
     assert rewritten.return_annotation is not None
-    assert str(rewritten.return_annotation) == "int"
+    assert rewritten.return_annotation == "int"
 
 
 def test_c_ast_visitor_does_not_log_for_non_generic_function(
@@ -752,9 +751,9 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
     visitor.visit_module(second_module)
 
     assert [arg.name for arg in first_module.functions[0].args] == ["x"]
-    assert str(first_module.functions[0].args[0].annotation) == "int"
+    assert first_module.functions[0].args[0].annotation == "int"
     assert [arg.name for arg in second_module.functions[0].args] == ["value"]
-    assert str(second_module.functions[0].args[0].annotation) == "float"
+    assert second_module.functions[0].args[0].annotation == "float"
 
 
 def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
@@ -809,13 +808,13 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
     )
 
 
-def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
+def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     func = IRFunction(
         name="foo",
         args=_generic_signature(),
-        return_annotation=ResolvedType(name=QualifiedName.from_str("bytes")),
+        return_annotation="bytes",
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -848,7 +847,7 @@ def test_c_ast_visitor_keeps_existing_return_when_inferred_return_invalid(
 
     rewritten = module.functions[0]
     assert rewritten.return_annotation is not None
-    assert str(rewritten.return_annotation) == "bytes"
+    assert rewritten.return_annotation == "typing.Optional[int]"
 
 
 def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -1172,7 +1171,7 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.args] == ["a", "b"]
-    assert [str(arg.annotation) for arg in parsed.args] == ["int", "int"]
+    assert [arg.annotation for arg in parsed.args] == ["int", "int"]
     assert extractor.called == 1
 
 
@@ -1213,7 +1212,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
-    assert str(parsed.return_annotation) == "numpy.ndarray"
+    assert parsed.return_annotation == "numpy.ndarray"
     assert "Failed to rewrite generic signature for cdist_minkowski" not in caplog.text
     assert extractor.called == 1
 

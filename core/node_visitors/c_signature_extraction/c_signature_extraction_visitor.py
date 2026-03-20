@@ -3,7 +3,6 @@ from __future__ import annotations
 import ast
 import dataclasses
 import logging
-import re
 from pathlib import Path
 from typing import Literal
 
@@ -25,8 +24,6 @@ from ...ir import (
     IRModule,
     IRModuleType,
     IRValue,
-    QualifiedName,
-    ResolvedType,
 )
 
 logger = logging.getLogger(__name__)
@@ -259,16 +256,15 @@ class CSignatureExtractionVisitor(NodeVisitor):
             result.append(ir_arg)
         return result
 
-    def _build_annotation(self, type_name: str | None) -> ResolvedType | None:
-        """把字符串类型名转换为 `ResolvedType`，仅接受合法 dotted name。"""
+    @staticmethod
+    def _build_annotation(type_name: str | None) -> str | None:
+        """清理提取结果里的注解文本，仅过滤空白值。"""
         if type_name is None:
             return None
         text = type_name.strip()
         if not text:
             return None
-        if not re.match(r"^[_A-Za-z]\w*(\.[_A-Za-z]\w*)*$", text):
-            return None
-        return ResolvedType(name=QualifiedName.from_str(text))
+        return text
 
     def _build_default_value(self, default_value: str | None) -> IRValue | InvalidExpression | None:
         """

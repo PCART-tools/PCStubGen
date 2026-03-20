@@ -9,15 +9,12 @@ from ..ir import (
     IRArgumentKind,
     IRFunction,
     InvalidExpression,
-    ResolvedType,
     IRValue,
-    QualifiedName,
     IRClass,
     IRMethod,
     IRModule,
 )
 from .NodeVisitor import NodeVisitor
-from ..errors import InvalidExpressionError
 
 class DocStringSignatureParserVisitor(NodeVisitor):
     '''
@@ -210,52 +207,10 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             )
         return result
 
-    def parse_annotation_str(
-        self, annotation_str: str
-    ) -> ResolvedType | InvalidExpression | IRValue:
-        variants = self._split_type_union_str(annotation_str)
-        if variants is None or len(variants) == 0:
-            self.error_collector.report_error(InvalidExpressionError(annotation_str))
-            return InvalidExpression(annotation_str)
-        if len(variants) == 1:
-            return self.parse_type_str(variants[0])
-        
-        # 这里我们没有直接访问权限来检查 typing.Union 是否为有效导入，
-        # 但我们可以生成 ResolvedType。
-        return ResolvedType(
-            name=QualifiedName.from_str("typing.Union"),
-            parameters=[self.parse_type_str(variant) for variant in variants],
-        )
-
-    def parse_type_str(
-        self, annotation_str: str
-    ) -> ResolvedType | InvalidExpression | IRValue:
-        qname_regex = re.compile(
-            r"^\s*(?P<qual_name>([_A-Za-z]\w*)?(\s*\.\s*[_A-Za-z]\w*)*)"
-        )
-        annotation_str = annotation_str.strip()
-        match = qname_regex.match(annotation_str)
-        if match is None:
-            return self.parse_value_str(annotation_str)
-        qual_name = QualifiedName(
-            part for part in match.group("qual_name").replace(" ", "").split(".")
-        )
-        parameters_str = annotation_str[match.end("qual_name") :].strip()
-
-        if len(parameters_str) == 0:
-            parameters = None
-        else:
-            if parameters_str[0] != "[" or parameters_str[-1] != "]":
-                return self.parse_value_str(annotation_str)
-
-            split_parameters = self._split_parameters_str(parameters_str[1:-1])
-            if split_parameters is None:
-                return self.parse_value_str(annotation_str)
-
-            parameters = [
-                self.parse_annotation_str(param_str) for param_str in split_parameters
-            ]
-        return ResolvedType(name=qual_name, parameters=parameters)
+    @staticmethod
+    def parse_annotation_str(annotation_str: str) -> str | None:
+        text = annotation_str.strip()
+        return text or None
 
     def parse_value_str(self, value: str) -> IRValue | InvalidExpression:
         strip_expr = value.strip()
@@ -281,7 +236,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 pass
             return IRValue(strip_expr, is_print_safe=print_safe)
         except SyntaxError:
-            self.error_collector.report_error(InvalidExpressionError(strip_expr))
             return InvalidExpression(strip_expr)
 
     # --- 字符串分割辅助函数 ---
@@ -345,46 +299,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         if len(args_str[arg_begin:i].strip()) != 0:
             add_arg()
 
-        return result
-
-    def _split_type_union_str(self, type_str: str) -> list[str] | None:
-        return self._split_str(type_str, delim="|")
-
-    def _split_parameters_str(self, param_str: str) -> list[str] | None:
-        return self._split_str(param_str, delim=",")
-
-    def _split_str(self, param_str: str, delim: str) -> list[str] | None:
-        result = []
-        closing = {"(": ")", "{": "}", "[": "]"}
-        stack = []
-        i = 0
-        arg_begin = 0
-
-        def add_arg():
-            arg_end = i
-            param = param_str[arg_begin:arg_end]
-            result.append(param)
-
-        while i < len(param_str):
-            c = param_str[i]
-            if c in "\"'":
-                str_end = self._find_str_end(param_str, i)
-                if str_end is None:
-                    return None
-                i = str_end
-            elif c in closing:
-                stack.append(closing[c])
-            elif len(stack) == 0:
-                if c == delim:
-                    add_arg()
-                    arg_begin = i + 1
-            elif stack[-1] == c:
-                stack.pop()
-            i += 1
-        if len(stack) != 0:
-            return None
-        if len(param_str[arg_begin:i].strip()) != 0:
-            add_arg()
         return result
 
     def _find_str_end(self, s: str, start: int) -> int | None:

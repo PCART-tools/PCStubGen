@@ -3,16 +3,13 @@ from __future__ import annotations
 import ast
 import importlib.machinery
 import inspect
-import re
 import types
 from typing import Any
 
 from .error_collector import ErrorCollector
-from .errors import InvalidExpressionError
 from .reflection_helpers import (
-    get_generic_alias_type,
-    get_module_name,
     get_doc,
+    get_module_name,
     is_package,
 )
 from .ir import (
@@ -25,7 +22,6 @@ from .ir import (
     IRModule,
     IRModuleType,
     QualifiedName,
-    ResolvedType,
     IRValue,
 )
 
@@ -163,133 +159,19 @@ class ModuleBuilder:
             result.append(base_name)
         return result
 
-    def _build_annotation(self, annotation: Any) -> ResolvedType | IRValue | InvalidExpression:
+    def _build_annotation(self, annotation: Any) -> str | None:
         if isinstance(annotation, str):
-            return self._parse_annotation_str(annotation)
+            return self._normalize_annotation_text(annotation)
         if isinstance(annotation, type):
-            return ResolvedType(name=self._get_type_fullname(annotation))
-        if self._is_generic_alias(annotation):
-            return self._handle_generic_alias(annotation)
-        return self._build_value(annotation)
+            return str(self._get_type_fullname(annotation))
+        return self._normalize_annotation_text(self._build_value(annotation).repr)
 
-    def _is_generic_alias(self, annotation: Any) -> bool:
-        generic_alias = get_generic_alias_type()
-        if generic_alias is not None:
-            return isinstance(annotation, generic_alias)
-        return False
-
-    def _parse_annotation_str(
-        self, annotation_str: str
-    ) -> ResolvedType | InvalidExpression | IRValue:
-        variants = self._split_type_union_str(annotation_str)
-        if variants is None or len(variants) == 0:
-            self.error_collector.report_error(InvalidExpressionError(annotation_str))
-            return InvalidExpression(annotation_str)
-        if len(variants) == 1:
-            return self._parse_type_str(variants[0])
-        return ResolvedType(
-            name=QualifiedName.from_str("typing.Union"),
-            parameters=[self._parse_type_str(variant) for variant in variants],
-        )
-
-    def _parse_type_str(
-        self, annotation_str: str
-    ) -> ResolvedType | InvalidExpression | IRValue:
-        qname_regex = re.compile(
-            r"^\s*(?P<qual_name>([_A-Za-z]\w*)?(\s*\.\s*[_A-Za-z]\w*)*)"
-        )
-        annotation_str = annotation_str.strip()
-        match = qname_regex.match(annotation_str)
-        if match is None:
-            return self._parse_value_str(annotation_str)
-        qual_name = QualifiedName(
-            part for part in match.group("qual_name").replace(" ", "").split(".")
-        )
-        parameters_str = annotation_str[match.end("qual_name") :].strip()
-
-        if len(parameters_str) == 0:
-            parameters = None
-        else:
-            if parameters_str[0] != "[" or parameters_str[-1] != "]":
-                return self._parse_value_str(annotation_str)
-            split_parameters = self._split_parameters_str(parameters_str[1:-1])
-            if split_parameters is None:
-                return self._parse_value_str(annotation_str)
-            parameters = [
-                self._parse_annotation_str(param_str) for param_str in split_parameters
-            ]
-        return ResolvedType(name=qual_name, parameters=parameters)
-
-    def _parse_value_str(self, value: str) -> IRValue | InvalidExpression:
-        strip_expr = value.strip()
-        try:
-            ast.parse(strip_expr)
-            print_safe = False
-            try:
-                ast.literal_eval(strip_expr)
-                print_safe = True
-            except (ValueError, TypeError, SyntaxError, MemoryError, RecursionError):
-                pass
-            return IRValue(strip_expr, is_print_safe=print_safe)
-        except SyntaxError:
-            self.error_collector.report_error(InvalidExpressionError(strip_expr))
-            return InvalidExpression(strip_expr)
-
-    def _split_type_union_str(self, type_str: str) -> list[str] | None:
-        return self._split_str(type_str, delim="|")
-
-    def _split_parameters_str(self, param_str: str) -> list[str] | None:
-        return self._split_str(param_str, delim=",")
-
-    def _split_str(self, param_str: str, delim: str) -> list[str] | None:
-        result: list[str] = []
-        closing = {"(": ")", "{": "}", "[": "]"}
-        stack = []
-        i = 0
-        arg_begin = 0
-
-        def add_arg() -> None:
-            arg_end = i
-            param = param_str[arg_begin:arg_end]
-            result.append(param)
-
-        while i < len(param_str):
-            c = param_str[i]
-            if c in "\"'":
-                str_end = self._find_str_end(param_str, i)
-                if str_end is None:
-                    return None
-                i = str_end
-            elif c in closing:
-                stack.append(closing[c])
-            elif len(stack) == 0:
-                if c == delim:
-                    add_arg()
-                    arg_begin = i + 1
-            elif stack[-1] == c:
-                stack.pop()
-            i += 1
-        if len(stack) != 0:
+    @staticmethod
+    def _normalize_annotation_text(annotation_text: str | None) -> str | None:
+        if annotation_text is None:
             return None
-        if param_str[arg_begin:i].strip() != "":
-            add_arg()
-        return result
-
-    def _find_str_end(self, s: str, start: int) -> int | None:
-        for i in range(start + 1, len(s)):
-            c = s[i]
-            if c == "\\":
-                continue
-            if c == s[start]:
-                return i
-        return None
-
-    def _handle_generic_alias(self, alias: Any) -> ResolvedType:
-        origin = alias.__origin__
-        args = alias.__args__
-
-        parameters = [self._build_annotation(arg) for arg in args]
-        return ResolvedType(name=self._get_type_fullname(origin), parameters=parameters)
+        text = annotation_text.strip()
+        return text or None
 
     def _build_value(self, value: Any) -> IRValue:
         value_type = type(value)

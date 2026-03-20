@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 
 from .ir import (
-    IRAnnotation,
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -12,7 +11,6 @@ from .ir import (
     IRMethod,
     IRMethodDecorator,
     IRModule,
-    ResolvedType,
     IRValue,
 )
 
@@ -100,7 +98,7 @@ class PrinterVisitor:
             parts.append("**")
         parts.append(f"{arg.name}")
         if arg.annotation is not None:
-            parts.append(f": {self.print_annotation(arg.annotation)}")
+            parts.append(f": {arg.annotation}")
         if isinstance(arg.default, IRValue):
             if arg.default.is_print_safe:
                 parts.append(f" = {self.print_value(arg.default)}")
@@ -167,7 +165,7 @@ class PrinterVisitor:
 
         signature = [f"def {func.name}(", ", ".join(args), ")"]
         if func.return_annotation is not None:
-            signature.append(f" -> {self.print_annotation(func.return_annotation)}")
+            signature.append(f" -> {func.return_annotation}")
         signature.append(":")
 
         result: list[str] = [
@@ -191,30 +189,6 @@ class PrinterVisitor:
         if len(split) == 1:
             return split[0]
         return split[0] + "..."
-
-    def print_type(self, type_: ResolvedType) -> str:
-        if (
-            str(type_.name) == "typing.Optional"
-            and type_.parameters is not None
-            and len(type_.parameters) == 1
-        ):
-            return f"{self.print_annotation(type_.parameters[0])} | None"
-        if str(type_.name) == "typing.Union" and type_.parameters is not None:
-            return " | ".join(self.print_annotation(p) for p in type_.parameters)
-        if type_.parameters:
-            param_str = "[" + ", ".join(self.print_annotation(p) for p in type_.parameters) + "]"
-        else:
-            param_str = ""
-        return f"{type_.name}{param_str}"
-
-    def print_annotation(self, annotation: IRAnnotation) -> str:
-        if isinstance(annotation, ResolvedType):
-            return self.print_type(annotation)
-        if isinstance(annotation, IRValue):
-            return self.print_value(annotation)
-        if isinstance(annotation, InvalidExpression):
-            return self.print_invalid_exp(annotation)
-        return str(annotation)
 
     def print_invalid_exp(self, invalid_expr: InvalidExpression) -> str:
         if self.invalid_expr_as_ellipses:

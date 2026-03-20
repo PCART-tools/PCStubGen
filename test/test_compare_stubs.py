@@ -108,7 +108,7 @@ def generate_old(module_name, output_dir: Path):
 
 def generate_new(module_name, options: StubGenerationOptions, output_dir: Path):
     writer = NewWriter(stub_extension=options.stub_extension)
-    write_stubs(module_name, output_dir, options=options, writer=writer)
+    write_stubs(module_name, output_dir, options=options, _writer=writer)
 
 
 def normalize_import_block(code: str) -> str:

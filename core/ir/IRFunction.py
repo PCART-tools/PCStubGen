@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 from .IRArgument import IRArgument, IRArgumentKind
-
-if TYPE_CHECKING:
-    from .IRAnnotation import IRAnnotation
 
 
 @dataclass
 class IRFunction:
     name: str
     args: list[IRArgument] = field(default_factory=list)
-    return_annotation: IRAnnotation | None = field(default=None)
+    return_annotation: str | None = field(default=None)
     doc: str | None = field(default=None)
     decorators: list[str] = field(default_factory=list)
 

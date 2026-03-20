@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 from core.error_collector import ErrorCollector
 from core.ir import (
     IRArgument,
@@ -9,21 +11,13 @@ from core.ir import (
     IRMethod,
     IRModule,
     QualifiedName,
-    ResolvedType,
 )
+from core.module_builder import ModuleBuilder
 from core.node_visitors.DocStringSignatureParserVisitor import (
     DocStringSignatureParserVisitor,
 )
 from core.node_visitors.NodeVisitor import NodeVisitor
-from core.node_visitors.Fixes import (
-    FixBuiltinTypesVisitor,
-    FixCurrentModulePrefixInTypeNamesVisitor,
-    InferMethodModifierVisitor,
-    FixPEP585CollectionNamesVisitor,
-    FixRedundantMethodsFromBuiltinObjectVisitor,
-    FixTypingTypeNamesVisitor,
-    RemoveSelfAnnotationVisitor,
-)
+from core.printer_visitor import PrinterVisitor
 
 
 def _generic_signature() -> list[IRArgument]:
@@ -48,7 +42,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
     parsed = ir_module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y"]
-    assert str(parsed.return_annotation) == "str"
+    assert parsed.return_annotation == "str"
     assert parsed.doc == "parsed from docstring"
 
 
@@ -70,7 +64,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
     parsed = ir_module.functions[0]
     assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
-    assert [str(arg.annotation) for arg in parsed.args] == [
+    assert [arg.annotation for arg in parsed.args] == [
         "object",
         "object",
         "object",
@@ -84,164 +78,57 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         "None",
         "2.0",
     ]
-    assert str(parsed.return_annotation) == "numpy.ndarray"
+    assert parsed.return_annotation == "numpy.ndarray"
 
 
-def test_infer_method_modifier_visitor_reinfers_after_docstring_parse() -> None:
-    parser_visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
-    infer_modifier_visitor = InferMethodModifierVisitor()
-    ir_class = IRClass(name="C")
-    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
-    ir_class.methods = [
-        IRMethod(
-            function=IRFunction(
-                name="build",
-                args=_generic_signature(),
-                doc="build(cls: C, count: int) -> C",
+def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
+    visitor = DocStringSignatureParserVisitor(error_collector=ErrorCollector())
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    ir_module.functions = [
+        IRFunction(
+            name="foo",
+            args=_generic_signature(),
+            doc=(
+                "foo(value: typing.Optional[list[int]], "
+                "item: dict[str, tuple[int, str]]) -> typing.Union[int, str]"
             ),
-            decorator="staticmethod",
         )
     ]
 
-    parser_visitor.visit_class(ir_class, ir_module)
+    visitor.visit_module(ir_module)
 
-    parsed = ir_class.methods[0]
-    assert [arg.name for arg in parsed.function.args] == ["cls", "count"]
-    assert parsed.decorator == "staticmethod"
-
-    infer_modifier_visitor.visit_class(ir_class, ir_module)
-
-    assert parsed.decorator == "classmethod"
-
-
-def test_infer_method_modifier_visitor_covers_all_first_arg_cases() -> None:
-    visitor = InferMethodModifierVisitor()
-    ir_class = IRClass(
-        name="C",
-        methods=[
-            IRMethod(
-                function=IRFunction(name="instance_method", args=[IRArgument(name="self")]),
-                decorator="staticmethod",
-            ),
-            IRMethod(
-                function=IRFunction(name="class_method", args=[IRArgument(name="cls")]),
-                decorator=None,
-            ),
-            IRMethod(
-                function=IRFunction(name="static_no_args", args=[]),
-                decorator=None,
-            ),
-            IRMethod(
-                function=IRFunction(name="static_other_first", args=[IRArgument(name="value")]),
-                decorator="classmethod",
-            ),
-        ],
-    )
-    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
-
-    visitor.visit_class(ir_class, ir_module)
-
-    decorators = {method.function.name: method.decorator for method in ir_class.methods}
-    assert decorators == {
-        "instance_method": None,
-        "class_method": "classmethod",
-        "static_no_args": "staticmethod",
-        "static_other_first": "staticmethod",
-    }
+    parsed = ir_module.functions[0]
+    assert [arg.annotation for arg in parsed.args] == [
+        "typing.Optional[list[int]]",
+        "dict[str, tuple[int, str]]",
+    ]
+    assert parsed.return_annotation == "typing.Union[int, str]"
 
 
-def test_type_fix_visitors_update_annotations_and_bases() -> None:
-    method = IRMethod(
-        function=IRFunction(
-            name="m",
-            args=[
-                IRArgument(
-                    name="value",
-                    annotation=ResolvedType(name=QualifiedName.from_str("sequence")),
-                )
-            ],
-            return_annotation=ResolvedType(name=QualifiedName.from_str("builtins.NoneType")),
-        ),
-        decorator=None,
-    )
-    ir_class = IRClass(
-        name="C",
-        bases=[QualifiedName.from_str("typing.List")],
-        methods=[method],
-    )
-    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
+def test_module_builder_keeps_raw_annotation_strings() -> None:
+    def sample(a: int, b: list[int]) -> typing.Optional[int]:
+        raise NotImplementedError
 
-    FixTypingTypeNamesVisitor().visit_module(ir_module)
-    FixPEP585CollectionNamesVisitor().visit_module(ir_module)
-    FixBuiltinTypesVisitor().visit_module(ir_module)
+    builder = ModuleBuilder(ErrorCollector())
+    parsed = builder.build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
-    assert str(method.function.args[0].annotation) == "typing.Sequence"
-    assert str(method.function.return_annotation) == "None"
-    assert [str(base) for base in ir_class.bases] == ["list"]
+    assert [arg.annotation for arg in parsed.args] == ["int", "list[int]"]
+    assert parsed.return_annotation == "typing.Optional[int]"
 
 
-def test_remove_self_annotation_visitor_strips_class_self_type() -> None:
-    method = IRMethod(
-        function=IRFunction(
-            name="m",
-            args=[
-                IRArgument(
-                    name="self",
-                    annotation=ResolvedType(name=QualifiedName.from_str("pkg.mod.C")),
-                )
-            ],
-        ),
-        decorator=None,
-    )
-    ir_class = IRClass(name="C", methods=[method])
-    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
-
-    RemoveSelfAnnotationVisitor().visit_module(ir_module)
-
-    assert method.function.args[0].annotation is None
-
-
-def test_fix_current_module_prefix_visitor_strips_local_prefix() -> None:
-    method = IRMethod(
-        function=IRFunction(
-            name="m",
-            args=[
-                IRArgument(
-                    name="x",
-                    annotation=ResolvedType(name=QualifiedName.from_str("pkg.mod.LocalType")),
-                )
-            ],
-            return_annotation=ResolvedType(name=QualifiedName.from_str("pkg.mod.ResultType")),
-        ),
-        decorator=None,
-    )
-    ir_module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        classes=[IRClass(name="C", methods=[method])],
+def test_printer_preserves_raw_optional_annotation_text() -> None:
+    func = IRFunction(
+        name="foo",
+        args=[IRArgument(name="value", annotation="typing.Optional[int]")],
+        return_annotation="typing.Optional[int]",
     )
 
-    FixCurrentModulePrefixInTypeNamesVisitor().visit_module(ir_module)
+    lines = PrinterVisitor(include_docstrings=False).print_function(func)
 
-    assert str(method.function.args[0].annotation) == "LocalType"
-    assert str(method.function.return_annotation) == "ResultType"
-
-
-def test_fix_redundant_object_init_visitor_removes_only_builtin_init() -> None:
-    ir_class = IRClass(
-        name="C",
-        methods=[
-            IRMethod(
-                function=IRFunction(name="__init__", doc=object.__init__.__doc__),
-                decorator=None,
-            ),
-            IRMethod(function=IRFunction(name="run"), decorator=None),
-        ],
-    )
-    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"), classes=[ir_class])
-
-    FixRedundantMethodsFromBuiltinObjectVisitor().visit_class(ir_class, ir_module)
-
-    assert [m.function.name for m in ir_class.methods] == ["run"]
+    assert lines == [
+        "def foo(value: typing.Optional[int]) -> typing.Optional[int]:",
+        "    ...",
+    ]
 
 
 def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -> None:
