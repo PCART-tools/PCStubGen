@@ -18,6 +18,7 @@ from .ir import (
     IRMethod,
     IRModule,
     IRModuleType,
+    IRSignature,
     QualifiedName,
 )
 
@@ -107,23 +108,28 @@ def build_function(path: QualifiedName, func: Any) -> IRFunction:
             inspect.Parameter.VAR_KEYWORD: IRArgumentKind.VAR_KEYWORD,
         }
 
+        args: list[IRArgument] = []
         for param in sig.parameters.values():
             arg = IRArgument(name=param.name, kind=kind_map[param.kind])
             if param.default is not inspect.Signature.empty:
                 arg.default_value = _build_value(param.default)
             if param.annotation is not inspect.Signature.empty:
                 arg.type_name = _build_annotation(param.annotation)
-            irfunc.args.append(arg)
+            args.append(arg)
 
+        return_type_name: str | None = None
         if sig.return_annotation is not inspect.Signature.empty:
-            irfunc.return_type_name = _build_annotation(sig.return_annotation)
+            return_type_name = _build_annotation(sig.return_annotation)
+        irfunc.signatures.append(
+            IRSignature(
+                args=args,
+                return_type_name=return_type_name,
+                doc=irfunc.doc,
+            )
+        )
     except (TypeError, ValueError):
-        # inspect.signature 失败时，回退为泛型签名，后续可由 DocString 解析修复
-        irfunc.args = [
-            IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
-            IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
-        ]
-        irfunc.return_type_name = None
+        # inspect.signature 失败时保留空签名，后续可由其它链路补全
+        pass
     return irfunc
 
 

@@ -6,6 +6,7 @@ from .IRFunction import IRFunction
 from .IRMethod import IRMethod
 from .IRMethodDecorator import IRMethodDecorator
 from .IRModule import IRModule, IRModuleType
+from .IRSignature import IRSignature
 from .QualifiedName import QualifiedName
 
 __all__ = [
@@ -17,5 +18,6 @@ __all__ = [
     "IRMethodDecorator",
     "IRModule",
     "IRModuleType",
+    "IRSignature",
     "QualifiedName",
 ]

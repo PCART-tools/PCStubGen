@@ -2,36 +2,24 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .IRArgument import IRArgument, IRArgumentKind
+from .IRSignature import IRSignature
 
 
 @dataclass
 class IRFunction:
+    """IR 中的函数节点。"""
+
     name: str
-    args: list[IRArgument] = field(default_factory=list)
-    return_type_name: str | None = field(default=None)
+    signatures: list[IRSignature] = field(default_factory=list)
     doc: str | None = field(default=None)
-    decorators: list[str] = field(default_factory=list)
-
-    @staticmethod
-    def generic_args_template() -> list[IRArgument]:
-        return [
-            IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
-            IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
-        ]
-
-    def is_generic_signature(self) -> bool:
-        """检查函数是否具有泛型 (*args, **kwargs) 签名。"""
-        if len(self.args) != 2:
-            return False
-        return (
-            self.args[0].kind is IRArgumentKind.VAR_POSITIONAL
-            and self.args[0].name == "args"
-            and self.args[1].kind is IRArgumentKind.VAR_KEYWORD
-            and self.args[1].name == "kwargs"
-        )
 
     def __str__(self) -> str:
-        return (
-            f"{self.name}({', '.join(str(arg) for arg in self.args)}) -> {self.return_type_name}"
-        )
+        """返回函数节点的调试字符串。"""
+        if not self.signatures:
+            return f"{self.name}(...)"
+
+        rendered = []
+        for signature in self.signatures:
+            args = ", ".join(str(arg) for arg in signature.args)
+            rendered.append(f"({args}) -> {signature.return_type_name}")
+        return f"{self.name}{' | '.join(rendered)}"

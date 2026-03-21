@@ -42,6 +42,7 @@ from core.ir import (
     IRMethod,
     IRModule,
     IRModuleType,
+    IRSignature,
     QualifiedName,
 )
 from core.node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
@@ -54,11 +55,23 @@ from core.pipeline import Pipeline
 from core.stub_generation_options import StubGenerationOptions
 
 
-def _generic_signature() -> list[IRArgument]:
-    return [
-        IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
-        IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
-    ]
+def _signature(
+    *,
+    args: list[IRArgument] | None = None,
+    return_type_name: str | None = None,
+    doc: str | None = None,
+) -> IRSignature:
+    """构造测试用 IR 签名。"""
+    return IRSignature(
+        args=list(args or ()),
+        return_type_name=return_type_name,
+        doc=doc,
+    )
+
+
+def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
+    """构造签名未知的测试函数。"""
+    return IRFunction(name=name, doc=doc)
 
 
 def _module_fixture(
@@ -288,7 +301,7 @@ def _has_std_arg(args: list[str], std_value: str) -> bool:
 def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    func = IRFunction(name="foo", args=_generic_signature())
+    func = _unknown_function("foo")
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -323,23 +336,28 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     visitor.visit_module(module)
 
     rewritten = module.functions[0]
-    assert [arg.name for arg in rewritten.args] == ["x", "flag"]
-    assert rewritten.args[0].type_name == "int"
-    assert rewritten.args[1].type_name == "bool"
-    assert rewritten.args[1].default_value is not None
-    assert rewritten.args[1].default_value == "False"
-    assert rewritten.return_type_name is not None
-    assert rewritten.return_type_name == "int"
+    assert len(rewritten.signatures) == 1
+    signature = rewritten.signatures[0]
+    assert [arg.name for arg in signature.args] == ["x", "flag"]
+    assert signature.args[0].type_name == "int"
+    assert signature.args[1].type_name == "bool"
+    assert signature.args[1].default_value is not None
+    assert signature.args[1].default_value == "False"
+    assert signature.return_type_name is not None
+    assert signature.return_type_name == "int"
 
 
-def test_c_ast_visitor_does_not_log_for_non_generic_function(
+def test_c_ast_visitor_does_not_log_for_known_function(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
     )
-    func = IRFunction(name="foo", args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])],
+    )
     signatures = {
         "foo": ExtractedFunction(
             ml_name="foo",
@@ -352,7 +370,7 @@ def test_c_ast_visitor_does_not_log_for_non_generic_function(
     with caplog.at_level(logging.INFO, logger="core"):
         rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
 
-    assert rewritten == [func]
+    assert rewritten is func
     assert caplog.records == []
 
 
@@ -394,12 +412,12 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
     second_module = IRModule(
         full_name=QualifiedName.from_str("pkg.second"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="bar", args=_generic_signature())],
+        functions=[_unknown_function("bar")],
     )
 
     with caplog.at_level(logging.INFO, logger="core"):
@@ -418,7 +436,7 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
     assert len(summary_records) == 1
     assert summary_records[0].message == (
         "C AST signature inference summary for pkg: "
-        "total_generic=2, success=2, failed=0, no_candidates=0, "
+        "total_unknown_signatures=2, success=2, failed=0, no_candidates=0, "
         "empty_selected_signatures=0, empty_extract=0"
     )
 
@@ -742,21 +760,21 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
     second_module = IRModule(
         full_name=QualifiedName.from_str("pkg.second"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
 
     visitor.visit_module(first_module)
     visitor.visit_module(second_module)
 
-    assert [arg.name for arg in first_module.functions[0].args] == ["x"]
-    assert first_module.functions[0].args[0].type_name == "int"
-    assert [arg.name for arg in second_module.functions[0].args] == ["value"]
-    assert second_module.functions[0].args[0].type_name == "float"
+    assert [arg.name for arg in first_module.functions[0].signatures[0].args] == ["x"]
+    assert first_module.functions[0].signatures[0].args[0].type_name == "int"
+    assert [arg.name for arg in second_module.functions[0].signatures[0].args] == ["value"]
+    assert second_module.functions[0].signatures[0].args[0].type_name == "float"
 
 
 def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
@@ -796,7 +814,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
@@ -805,9 +823,9 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
     with caplog.at_level(logging.WARNING, logger="core"):
         visitor.visit_module(module)
 
-    assert module.functions[0].is_generic_signature()
+    assert module.functions[0].signatures == []
     assert (
-        "Failed to rewrite generic signature for foo (is_method=False): no C signature candidates found"
+        "Failed to rewrite unknown signature for foo (is_method=False): no C signature candidates found"
         in caplog.text
     )
 
@@ -817,8 +835,8 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
 ) -> None:
     func = IRFunction(
         name="foo",
-        args=_generic_signature(),
-        return_type_name="bytes",
+        signatures=[],
+        doc="original doc",
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -850,15 +868,15 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     visitor.visit_module(module)
 
     rewritten = module.functions[0]
-    assert rewritten.return_type_name is not None
-    assert rewritten.return_type_name == "typing.Optional[int]"
+    assert rewritten.signatures[0].return_type_name is not None
+    assert rewritten.signatures[0].return_type_name == "typing.Optional[int]"
 
 
 def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
     extractor = _patch_c_signature_extractor(
         monkeypatch,
@@ -877,7 +895,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
     )
     visitor.visit_module(module)
 
-    assert module.functions[0].is_generic_signature()
+    assert module.functions[0].signatures == []
     assert extractor.called == 0
 
 
@@ -888,7 +906,7 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
@@ -1012,18 +1030,18 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
         classes=[
             IRClass(
                 name="Builder",
-                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
             )
         ],
         sub_modules=[
             IRModule(
                 full_name=QualifiedName.from_str("pkg.child"),
                 module_type=IRModuleType.EXTENSION,
-                functions=[IRFunction(name="bar", args=_generic_signature())],
+                functions=[_unknown_function("bar")],
             )
         ],
     )
@@ -1052,7 +1070,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
     log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
         "C AST signature inference summary for pkg: "
-        "total_generic=2, success=1, failed=1, no_candidates=1, "
+        "total_unknown_signatures=2, success=1, failed=1, no_candidates=1, "
         "empty_selected_signatures=0, empty_extract=0"
     ) in log_text
 
@@ -1067,11 +1085,11 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
         classes=[
             IRClass(
                 name="Builder",
-                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
             )
         ],
     )
@@ -1086,12 +1104,12 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
 
     log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
-        "Failed to rewrite generic signature for foo (is_method=False): "
+        "Failed to rewrite unknown signature for foo (is_method=False): "
         "C signature extraction returned no results"
     ) in log_text
     assert (
         "C AST signature inference summary for pkg: "
-        "total_generic=1, success=0, failed=1, no_candidates=0, "
+        "total_unknown_signatures=1, success=0, failed=1, no_candidates=0, "
         "empty_selected_signatures=0, empty_extract=1"
     ) in log_text
 
@@ -1106,18 +1124,18 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
         module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", args=_generic_signature())],
+        functions=[_unknown_function("foo")],
         classes=[
             IRClass(
                 name="Builder",
-                methods=[IRMethod(function=IRFunction(name="build", args=_generic_signature()), decorator=None)],
+                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
             )
         ],
         sub_modules=[
             IRModule(
                 full_name=QualifiedName.from_str("pkg.child"),
                 module_type=IRModuleType.EXTENSION,
-                functions=[IRFunction(name="bar", args=_generic_signature())],
+                functions=[_unknown_function("bar")],
             )
         ],
     )
@@ -1144,9 +1162,8 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[
-            IRFunction(
-                name="foo",
-                args=_generic_signature(),
+            _unknown_function(
+                "foo",
                 doc="foo(a: int, b: int = 0) -> int",
             )
         ],
@@ -1174,8 +1191,8 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     pipeline.run(module)
 
     parsed = module.functions[0]
-    assert [arg.name for arg in parsed.args] == ["a", "b"]
-    assert [arg.type_name for arg in parsed.args] == ["int", "int"]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["a", "b"]
+    assert [arg.type_name for arg in parsed.signatures[0].args] == ["int", "int"]
     assert extractor.called == 1
 
 
@@ -1188,9 +1205,8 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[
-            IRFunction(
-                name="cdist_minkowski",
-                args=_generic_signature(),
+            _unknown_function(
+                "cdist_minkowski",
                 doc=(
                     "cdist_minkowski(x: object, y: object, w: object = None, "
                     "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
@@ -1214,9 +1230,9 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
         ).run(module)
 
     parsed = module.functions[0]
-    assert [arg.name for arg in parsed.args] == ["x", "y", "w", "out", "p"]
-    assert parsed.return_type_name == "numpy.ndarray"
-    assert "Failed to rewrite generic signature for cdist_minkowski" not in caplog.text
+    assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
+    assert parsed.signatures[0].return_type_name == "numpy.ndarray"
+    assert "Failed to rewrite unknown signature for cdist_minkowski" not in caplog.text
     assert extractor.called == 1
 
 

@@ -19,6 +19,7 @@ from ...ir import (
     IRFunction,
     IRModule,
     IRModuleType,
+    IRSignature,
 )
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ RewriteOutcome = Literal[
 
 @dataclasses.dataclass
 class _InferenceStats:
-    total_generic: int = 0
+    total_unknown_signatures: int = 0
     success: int = 0
     failed: int = 0
     no_candidates: int = 0
@@ -43,7 +44,7 @@ class _InferenceStats:
 
 class CSignatureExtractionVisitor(NodeVisitor):
     """
-    使用 C AST 提取结果补全 generic signature。
+    使用 C AST 提取结果补全未知函数签名。
 
     执行顺序设计为：
     1) DocStringSignatureParserVisitor
@@ -72,29 +73,29 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
-
         if node.module_type is IRModuleType.EXTENSION:
             modules, load_status = self._get_signature_modules()
             extracted_module = self._match_extracted_module(node, modules)
-            node.functions = self._rewrite_module_functions(
-                node.functions,
-                extracted_module,
+            self._rewrite_module_functions(
+                funcs=node.functions,
+                extracted_module=extracted_module,
                 load_status=load_status,
             )
 
         super().visit_module(node)
 
     def log_summary(self, project_name: str) -> None:
-        if self._stats.total_generic <= 0:
+        """输出一次项目级 C AST 签名补全统计。"""
+        if self._stats.total_unknown_signatures <= 0:
             self._reset_stats()
             return
 
         logger.info(
             "C AST signature inference summary for %s: "
-            "total_generic=%d, success=%d, failed=%d, no_candidates=%d, "
+            "total_unknown_signatures=%d, success=%d, failed=%d, no_candidates=%d, "
             "empty_selected_signatures=%d, empty_extract=%d",
             project_name,
-            self._stats.total_generic,
+            self._stats.total_unknown_signatures,
             self._stats.success,
             self._stats.failed,
             self._stats.no_candidates,
@@ -109,26 +110,27 @@ class CSignatureExtractionVisitor(NodeVisitor):
         extracted_module: ExtractedModule | None,
         *,
         load_status: SignatureLoadStatus,
-    ) -> list[IRFunction]:
+    ) -> None:
         """批量重写模块级函数。"""
         if load_status != "nonempty":
             self._record_unavailable_extract(
                 funcs=[(func, False) for func in funcs],
                 failure_key="empty_extract",
             )
-            return funcs
+            return
 
         signatures = extracted_module.functions if extracted_module is not None else {}
-        new_funcs: list[IRFunction] = []
         for func in funcs:
-            rewritten, outcome = self._rewrite_function_with_outcome(
+            had_unknown_signature = self._has_unknown_signatures(func)
+            outcome = self._rewrite_function_with_outcome(
                 func=func,
                 signatures=signatures,
                 is_method=False,
             )
-            self._record_outcome(func=func, outcome=outcome)
-            new_funcs.extend(rewritten)
-        return new_funcs
+            self._record_outcome(
+                had_unknown_signature=had_unknown_signature,
+                outcome=outcome,
+            )
 
     def _rewrite_function(
         self,
@@ -136,13 +138,14 @@ class CSignatureExtractionVisitor(NodeVisitor):
         func: IRFunction,
         signatures: dict[str, ExtractedFunction],
         is_method: bool,
-    ) -> list[IRFunction]:
-        rewritten, _ = self._rewrite_function_with_outcome(
+    ) -> IRFunction:
+        """改写单个函数并返回同一节点。"""
+        self._rewrite_function_with_outcome(
             func=func,
             signatures=signatures,
             is_method=is_method,
         )
-        return rewritten
+        return func
 
     def _rewrite_function_with_outcome(
         self,
@@ -150,64 +153,55 @@ class CSignatureExtractionVisitor(NodeVisitor):
         func: IRFunction,
         signatures: dict[str, ExtractedFunction],
         is_method: bool,
-    ) -> tuple[list[IRFunction], RewriteOutcome | None]:
+    ) -> RewriteOutcome | None:
         """
         用提取结果重写单个函数签名。
 
-        仅处理仍为 generic 占位签名的函数，避免覆盖前序 visitor 已解析出的精确信息。
+        仅处理仍缺失签名的函数，避免覆盖前序 visitor 已解析出的精确信息。
         """
-        if not func.is_generic_signature():
-            return [func], None
+        if not self._has_unknown_signatures(func):
+            return None
 
         selected = signatures.get(func.name)
         if selected is None:
             logger.warning(
-                "Failed to rewrite generic signature for %s (is_method=%s): no C signature candidates found",
+                "Failed to rewrite unknown signature for %s (is_method=%s): no C signature candidates found",
                 func.name,
                 is_method,
             )
-            return [func], "no_candidates"
+            return "no_candidates"
 
         if not selected.signatures:
             logger.warning(
-                "Failed to rewrite generic signature for %s (is_method=%s): selected candidate has no signatures",
+                "Failed to rewrite unknown signature for %s (is_method=%s): selected candidate has no signatures",
                 func.name,
                 is_method,
             )
-            return [func], "empty_selected_signatures"
+            return "empty_selected_signatures"
 
-        overload = len(selected.signatures) > 1
-        rewritten: list[IRFunction] = []
+        rewritten_signatures: list[IRSignature] = []
         for sig in selected.signatures:
             args = self._build_ir_arguments(
                 arguments=sig.arguments,
                 is_method=is_method,
                 ml_flags=selected.ml_flags,
             )
-            inferred_return = self._build_annotation(sig.return_type_name)
-            return_type_name = (
-                inferred_return
-                if inferred_return is not None
-                else func.return_type_name
-            )
-            rewritten.append(
-                IRFunction(
-                    name=func.name,
+            rewritten_signatures.append(
+                IRSignature(
                     args=args,
-                    return_type_name=return_type_name,
-                    # 多签名时转为 overload，避免单条 doc 误导到某个具体重载。
-                    doc=func.doc if not overload else None,
-                    decorators=["typing.overload"] if overload else list(func.decorators),
+                    return_type_name=self._build_annotation(sig.return_type_name),
+                    doc=func.doc,
                 )
             )
-        if rewritten:
-            logger.info(
-                "Rewrote generic signature for %s (is_method=%s): generated_signatures=%d",
-                func.name,
-                is_method,
-                len(rewritten),
-            )
-        return (rewritten if rewritten else [func]), "success"
+
+        func.signatures = rewritten_signatures
+        logger.info(
+            "Rewrote unknown signature for %s (is_method=%s): generated_signatures=%d",
+            func.name,
+            is_method,
+            len(rewritten_signatures),
+        )
+        return "success"
 
     def _build_ir_arguments(
         self,
@@ -235,7 +229,6 @@ class CSignatureExtractionVisitor(NodeVisitor):
                 else:
                     normalized = [ExtractedArgument(name="self", type_name="object")]
         else:
-            # 某些提取样本会错误携带实例首参，这里统一清洗。
             while normalized and normalized[0].name in {"self", "cls"}:
                 normalized.pop(0)
 
@@ -277,6 +270,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         node: IRModule,
         modules: dict[str, ExtractedModule],
     ) -> ExtractedModule | None:
+        """在提取结果里匹配当前模块节点。"""
         if not modules:
             return None
 
@@ -320,11 +314,17 @@ class CSignatureExtractionVisitor(NodeVisitor):
         self._signature_load_status = "nonempty" if self._signature_modules else "empty"
         return self._signature_modules, self._signature_load_status
 
-    def _record_outcome(self, *, func: IRFunction, outcome: RewriteOutcome | None) -> None:
-        if not func.is_generic_signature() or outcome is None:
+    def _record_outcome(
+        self,
+        *,
+        had_unknown_signature: bool,
+        outcome: RewriteOutcome | None,
+    ) -> None:
+        """记录单个函数的改写结果。"""
+        if not had_unknown_signature or outcome is None:
             return
 
-        self._stats.total_generic += 1
+        self._stats.total_unknown_signatures += 1
         if outcome == "success":
             self._stats.success += 1
             return
@@ -338,23 +338,30 @@ class CSignatureExtractionVisitor(NodeVisitor):
         funcs: list[tuple[IRFunction, bool]],
         failure_key: Literal["empty_extract"],
     ) -> None:
-        generic_count = 0
+        """记录提取结果整体不可用时的逐项失败。"""
+        unknown_count = 0
         reason = "C signature extraction returned no results"
         for func, is_method in funcs:
-            if not func.is_generic_signature():
+            if not self._has_unknown_signatures(func):
                 continue
-            generic_count += 1
+            unknown_count += 1
             logger.warning(
-                "Failed to rewrite generic signature for %s (is_method=%s): %s",
+                "Failed to rewrite unknown signature for %s (is_method=%s): %s",
                 func.name,
                 is_method,
                 reason,
             )
 
-        if generic_count > 0:
-            self._stats.total_generic += generic_count
-            self._stats.failed += generic_count
-            setattr(self._stats, failure_key, getattr(self._stats, failure_key) + generic_count)
+        if unknown_count > 0:
+            self._stats.total_unknown_signatures += unknown_count
+            self._stats.failed += unknown_count
+            setattr(self._stats, failure_key, getattr(self._stats, failure_key) + unknown_count)
+
+    @staticmethod
+    def _has_unknown_signatures(func: IRFunction) -> bool:
+        """判断函数是否仍缺失已解析签名。"""
+        return len(func.signatures) == 0
 
     def _reset_stats(self) -> None:
+        """重置项目级统计。"""
         self._stats = _InferenceStats()
