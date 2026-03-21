@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import logging
 import sysconfig
 from collections.abc import Iterable
@@ -2668,6 +2669,7 @@ def _gnu_null_literal() -> _FakeNode:
 def _identifier_node(name: str) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+        spelling=name,
         tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
     )
 
@@ -2748,6 +2750,42 @@ def _call_expr(name: str, *args: _FakeNode) -> _FakeNode:
     )
 
 
+def _conditional_expr(condition: _FakeNode, when_true: _FakeNode, when_false: _FakeNode) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.CONDITIONAL_OPERATOR,
+        children=[condition, when_true, when_false],
+    )
+
+
+def _return_stmt(expr: _FakeNode | None = None) -> _FakeNode:
+    """构造 return 语句节点。"""
+    children = [] if expr is None else [expr]
+    return _FakeNode(kind=clang.cindex.CursorKind.RETURN_STMT, children=children)
+
+
+def _macro_expr(name: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        spelling=name,
+        children=[_FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, spelling=name)],
+    )
+
+
+def _fake_function_cursor_with_children(
+    *children: _FakeNode,
+    name: str = "fake_function",
+) -> clang.cindex.Cursor:
+    """构造带子节点的假函数游标。"""
+    return cast(
+        clang.cindex.Cursor,
+        _FakeNode(
+            kind=clang.cindex.CursorKind.FUNCTION_DECL,
+            spelling=name,
+            children=list(children),
+        ),
+    )
+
+
 def _ml_name_field(name: str) -> _FakeNode:
     return _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _string_literal(name)))
 
@@ -2784,6 +2822,381 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
         kind=clang.cindex.CursorKind.BINARY_OPERATOR,
         children=[_token_identifier_node(flag) for flag in flags],
     )
+
+
+@pytest.mark.parametrize(
+    ("token_name", "expected"),
+    [
+        ("Py_None", "None"),
+        ("Py_True", "bool"),
+        ("Py_False", "bool"),
+    ],
+)
+def test_infer_expr_type_detects_direct_object_returns(token_name: str, expected: str) -> None:
+    inferred = signature_rules_module.infer_expr_type(_identifier_node(token_name))
+
+    assert inferred == expected
+
+
+@pytest.mark.parametrize(
+    ("token_name", "expected"),
+    [
+        ("Py_RETURN_NONE", "None"),
+        ("Py_RETURN_TRUE", "bool"),
+        ("Py_RETURN_FALSE", "bool"),
+        ("Py_RETURN_NAN", "float"),
+        ("Py_RETURN_INF", "float"),
+    ],
+)
+def test_infer_expr_type_detects_preserved_macro_tokens(token_name: str, expected: str) -> None:
+    macro_expr = _macro_expr(token_name)
+
+    inferred = signature_rules_module.infer_expr_type(macro_expr)
+
+    assert inferred == expected
+
+
+def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() -> None:
+    macro_expr = _FakeNode(
+        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        children=[_FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR)],
+    )
+
+    inferred = signature_rules_module.infer_expr_type(macro_expr)
+
+    assert inferred is None
+
+
+@pytest.mark.parametrize(
+    ("call_name", "expected"),
+    [
+        ("PyBool_FromLong", "bool"),
+        ("PyLong_FromLong", "int"),
+        ("PyFloat_FromDouble", "float"),
+        ("PyComplex_FromDoubles", "complex"),
+        ("PyUnicode_FromString", "str"),
+        ("PyUnicode_AsUTF8String", "bytes"),
+        ("PyByteArray_FromObject", "bytearray"),
+        ("PySlice_New", "slice"),
+        ("PyMemoryView_FromObject", "memoryview"),
+        ("PyTuple_New", "tuple"),
+        ("PyList_New", "list"),
+        ("PyDict_New", "dict"),
+        ("PySet_New", "set"),
+        ("PyFrozenSet_New", "frozenset"),
+        ("PyList_AsTuple", "tuple"),
+        ("PyDict_Items", "list"),
+    ],
+)
+def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: str) -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(call_name, _identifier_node("arg"))
+    )
+
+    assert inferred == expected
+
+
+def test_infer_expr_type_parses_py_buildvalue() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "Py_BuildValue",
+            _string_literal("(is)"),
+            _identifier_node("count"),
+            _identifier_node("name"),
+        )
+    )
+
+    assert inferred == "tuple[int, str | None]"
+
+
+def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "Py_BuildValue",
+            _string_literal("(O)"),
+            _call_expr("PyLong_FromLong", _identifier_node("value")),
+        )
+    )
+
+    assert inferred == "tuple[int,]"
+
+
+def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "Py_BuildValue",
+            _string_literal("(O)"),
+            _call_expr("CustomFactory", _identifier_node("value")),
+        )
+    )
+
+    assert inferred == "tuple[Any,]"
+
+
+def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
+    wrapped_expr = _wrap(
+        clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        _wrap(
+            clang.cindex.CursorKind.PAREN_EXPR,
+            _FakeNode(
+                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
+                children=[
+                    _identifier_node("PyObject"),
+                    _call_expr("PyUnicode_AsUTF8String", _identifier_node("value")),
+                ],
+            ),
+        ),
+    )
+
+    inferred = signature_rules_module.infer_expr_type(wrapped_expr)
+
+    assert inferred == "bytes"
+
+
+def test_infer_expr_type_merges_conditional_branch_types() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _conditional_expr(
+            _identifier_node("cond"),
+            _call_expr("PyLong_FromLong", _identifier_node("left")),
+            _call_expr("PyFloat_FromDouble", _identifier_node("right")),
+        )
+    )
+
+    assert inferred == "int | float"
+
+
+def test_infer_expr_type_deduplicates_conditional_branch_types() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _conditional_expr(
+            _identifier_node("cond"),
+            _call_expr("PyLong_FromLong", _identifier_node("left")),
+            _call_expr("PyLong_FromLong", _identifier_node("right")),
+        )
+    )
+
+    assert inferred == "int"
+
+
+def test_infer_expr_type_keeps_known_conditional_branch_when_other_is_unknown() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _conditional_expr(
+            _identifier_node("cond"),
+            _call_expr("PyLong_FromLong", _identifier_node("value")),
+            _call_expr("CustomFactory", _identifier_node("value")),
+        )
+    )
+
+    assert inferred == "int"
+
+
+def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _conditional_expr(
+            _macro_expr("Py_RETURN_NONE"),
+            _call_expr("CustomFactory", _identifier_node("left")),
+            _identifier_node("UnknownToken"),
+        )
+    )
+
+    assert inferred is None
+
+
+def test_infer_expr_type_unwraps_wrapped_conditional_expr() -> None:
+    wrapped_expr = _wrap(
+        clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        _wrap(
+            clang.cindex.CursorKind.PAREN_EXPR,
+            _FakeNode(
+                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
+                children=[
+                    _identifier_node("PyObject"),
+                    _conditional_expr(
+                        _identifier_node("cond"),
+                        _call_expr("PyUnicode_AsUTF8String", _identifier_node("value")),
+                        _call_expr("PyBytes_FromString", _identifier_node("fallback")),
+                    ),
+                ],
+            ),
+        ),
+    )
+
+    inferred = signature_rules_module.infer_expr_type(wrapped_expr)
+
+    assert inferred == "bytes"
+
+
+def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr("CustomFactory", _identifier_node("value"))
+    )
+
+    assert inferred is None
+
+
+@pytest.mark.parametrize(
+    ("token_name", "expected"),
+    [
+        ("Py_None", "None"),
+        ("Py_True", "bool"),
+        ("Py_False", "bool"),
+    ],
+)
+def test_return_type_detects_direct_object_returns(token_name: str, expected: str) -> None:
+    cursor = _fake_function_cursor_with_children(_return_stmt(_identifier_node(token_name)))
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == expected
+
+
+@pytest.mark.parametrize(
+    ("token_name", "expected"),
+    [
+        ("Py_RETURN_NONE", "None"),
+        ("Py_RETURN_TRUE", "bool"),
+        ("Py_RETURN_FALSE", "bool"),
+        ("Py_RETURN_NAN", "float"),
+        ("Py_RETURN_INF", "float"),
+    ],
+)
+def test_return_type_detects_preserved_macro_tokens(token_name: str, expected: str) -> None:
+    macro_expr = _macro_expr(token_name)
+    cursor = _fake_function_cursor_with_children(_return_stmt(macro_expr))
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == expected
+
+
+@pytest.mark.parametrize(
+    ("call_name", "expected"),
+    [
+        ("PyBool_FromLong", "bool"),
+        ("PyLong_FromLong", "int"),
+        ("PyFloat_FromDouble", "float"),
+        ("PyComplex_FromDoubles", "complex"),
+        ("PyUnicode_FromString", "str"),
+        ("PyUnicode_AsUTF8String", "bytes"),
+        ("PyByteArray_FromObject", "bytearray"),
+        ("PySlice_New", "slice"),
+        ("PyMemoryView_FromObject", "memoryview"),
+        ("PyTuple_New", "tuple"),
+        ("PyList_New", "list"),
+        ("PyDict_New", "dict"),
+        ("PySet_New", "set"),
+        ("PyFrozenSet_New", "frozenset"),
+        ("PyList_AsTuple", "tuple"),
+        ("PyDict_Items", "list"),
+    ],
+)
+def test_return_type_detects_exact_factory_mappings(call_name: str, expected: str) -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr(call_name, _identifier_node("arg")))
+    )
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == expected
+
+
+def test_return_type_parses_py_buildvalue() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("(is)"),
+                _identifier_node("count"),
+                _identifier_node("name"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == "tuple[int, str | None]"
+
+
+def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
+    wrapped_expr = _wrap(
+        clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        _wrap(
+            clang.cindex.CursorKind.PAREN_EXPR,
+            _FakeNode(
+                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
+                children=[
+                    _identifier_node("PyObject"),
+                    _call_expr("PyUnicode_AsUTF8String", _identifier_node("value")),
+                ],
+            ),
+        ),
+    )
+    cursor = _fake_function_cursor_with_children(_return_stmt(wrapped_expr))
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == "bytes"
+
+
+def test_return_type_deduplicates_and_preserves_order() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_identifier_node("Py_None")),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("i"),
+                _identifier_node("value"),
+            )
+        ),
+        _return_stmt(_identifier_node("Py_False")),
+    )
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == "None | int | bool"
+
+
+def test_return_type_detects_conditional_expr() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _conditional_expr(
+                _identifier_node("cond"),
+                _call_expr("PyLong_FromLong", _identifier_node("value")),
+                _call_expr("PyFloat_FromDouble", _identifier_node("value")),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred == "int | float"
+
+
+def test_return_type_returns_none_for_unsupported_returns() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
+        _return_stmt(),
+    )
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred is None
+
+
+def test_return_type_returns_none_when_function_has_no_return() -> None:
+    cursor = _fake_function_cursor_with_children()
+
+    inferred = signature_rules_module.inference_return_type(cursor)
+
+    assert inferred is None
+
+
+def test_return_type_py_buildvalue_parser_is_importable_by_package_path() -> None:
+    module = importlib.import_module(
+        "core.node_visitors.c_signature_extraction.core.py_buildvalue_type_parser"
+    )
+
+    assert module.PyBuildValueTypeParser is not None
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:

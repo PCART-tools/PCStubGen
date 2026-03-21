@@ -1,7 +1,7 @@
 from __future__ import annotations
 from clang.cindex import Cursor
 from typing import Callable
-from py_buildvalue_type_nodes import *
+from .py_buildvalue_type_nodes import *
 
 class PyBuildValueTypeParserError(ValueError):
     pass
