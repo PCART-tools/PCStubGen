@@ -6,9 +6,9 @@ from pathlib import Path
 from clang.cindex import Index
 
 from .models import ExtractedModule
+from . import signature_inference
 from . import module_table as module_table
 from . import translation_unit as translation_unit
-from . import inference_signature
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,6 @@ def extract_c_signature_modules(
 
     for module in result.values():
         for function in module.functions.values():
-            inference_signature.inference_signature(function)
+            signature_inference.infer_signature(function)
 
     return result

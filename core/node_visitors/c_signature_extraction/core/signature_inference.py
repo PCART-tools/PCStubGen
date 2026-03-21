@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from clang.cindex import Cursor, CursorKind
 
 from .cursor_utils import split_top_level, unique_keep_order, unwrap_transparent, walk_cursor
-from .models import ExtractedFunction
+from .models import ExtractedFunction, ExtractedSignature
 from .py_buildvalue_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 _RETURN_OBJECT_TYPE_MAP: dict[str, str] = {
@@ -149,12 +149,27 @@ _RETURN_CALL_TYPE_MAP: dict[str, str] = {
     "PyFrozenSet_New": "frozenset",
 }
 
-def inference_signature(function: ExtractedFunction) -> None:
-    """保留签名推断入口，当前不接入返回值推断。"""
-    _ = function.function_cursor
+def infer_signature(function: ExtractedFunction) -> None:
+    """将可识别的返回值类型接入函数签名骨架。"""
+    inferred_return_type = infer_return_type(function.function_cursor)
+    if inferred_return_type is None:
+        return
+
+    if not function.signatures:
+        function.signatures.append(
+            ExtractedSignature(
+                arguments=[],
+                return_type_name=inferred_return_type,
+            )
+        )
+        return
+
+    for signature in function.signatures:
+        if signature.return_type_name is None:
+            signature.return_type_name = inferred_return_type
 
 
-def inference_return_type(func_cursor: Cursor) -> str | None:
+def infer_return_type(func_cursor: Cursor) -> str | None:
     """遍历函数子树中的 return 语句并汇总可识别的返回类型。"""
     inferred_types: list[str] = []
     seen: set[str] = set()

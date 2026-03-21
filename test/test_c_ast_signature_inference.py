@@ -20,7 +20,7 @@ from core.node_visitors.c_signature_extraction.core import (
     c_signature_extraction as c_signature_extraction_module,
 )
 from core.node_visitors.c_signature_extraction.core import cursor_utils as cursor_utils_module
-from core.node_visitors.c_signature_extraction.core import inference_signature as signature_rules_module
+from core.node_visitors.c_signature_extraction.core import signature_inference as signature_rules_module
 from core.node_visitors.c_signature_extraction.core import module_table as module_table_module
 from core.node_visitors.c_signature_extraction.core import translation_unit as translation_unit_module
 from core.node_visitors.c_signature_extraction.core.module_table import (
@@ -1310,6 +1310,70 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
     assert extracted["second"].functions["foo"].ml_flags == METH_VARARGS
 
 
+def test_c_signature_extraction_engine_extract_modules_populates_inferred_return_only_signature(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "return_only_module.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "PyObject* PyLong_FromLong(long value);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    return PyLong_FromLong(1);",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"return_only\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["return_only"].functions["foo"].signatures
+    assert len(signatures) == 1
+    assert signatures[0].arguments == []
+    assert signatures[0].return_type_name == "int"
+
+
 def test_c_signature_extraction_engine_extract_modules_handles_multiple_moduledefs_in_one_file(
     tmp_path: Path,
 ) -> None:
@@ -2431,7 +2495,7 @@ def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "inference_signature",
+        "infer_signature",
         lambda function: calls.append("infer")
         if calls == ["parse", "build"]
         else pytest.fail("infer should run after build"),
@@ -2473,7 +2537,7 @@ def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "inference_signature",
+        "infer_signature",
         lambda function: pytest.fail("infer step should be skipped when parse result is empty"),
     )
     try:
@@ -3060,7 +3124,7 @@ def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
 def test_return_type_detects_direct_object_returns(token_name: str, expected: str) -> None:
     cursor = _fake_function_cursor_with_children(_return_stmt(_identifier_node(token_name)))
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == expected
 
@@ -3079,7 +3143,7 @@ def test_return_type_detects_preserved_macro_tokens(token_name: str, expected: s
     macro_expr = _macro_expr(token_name)
     cursor = _fake_function_cursor_with_children(_return_stmt(macro_expr))
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == expected
 
@@ -3110,7 +3174,7 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
         _return_stmt(_call_expr(call_name, _identifier_node("arg")))
     )
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == expected
 
@@ -3127,7 +3191,7 @@ def test_return_type_parses_py_buildvalue() -> None:
         )
     )
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == "tuple[int, str | None]"
 
@@ -3148,7 +3212,7 @@ def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
     )
     cursor = _fake_function_cursor_with_children(_return_stmt(wrapped_expr))
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == "bytes"
 
@@ -3167,7 +3231,7 @@ def test_return_type_deduplicates_and_preserves_order() -> None:
         _return_stmt(_identifier_node("Py_False")),
     )
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == "None | int | bool"
 
@@ -3183,7 +3247,7 @@ def test_return_type_detects_conditional_expr() -> None:
         )
     )
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == "int | float"
 
@@ -3194,7 +3258,7 @@ def test_return_type_returns_none_for_unsupported_returns() -> None:
         _return_stmt(),
     )
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred is None
 
@@ -3202,9 +3266,62 @@ def test_return_type_returns_none_for_unsupported_returns() -> None:
 def test_return_type_returns_none_when_function_has_no_return() -> None:
     cursor = _fake_function_cursor_with_children()
 
-    inferred = signature_rules_module.inference_return_type(cursor)
+    inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred is None
+
+
+def test_infer_signature_creates_signature_with_inferred_return_type() -> None:
+    function = ExtractedFunction(
+        ml_name="foo",
+        function_cursor=_fake_function_cursor_with_children(
+            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
+        ),
+    )
+
+    signature_rules_module.infer_signature(function)
+
+    assert len(function.signatures) == 1
+    assert function.signatures[0].arguments == []
+    assert function.signatures[0].return_type_name == "int"
+
+
+def test_infer_signature_keeps_signatures_empty_when_return_type_is_unknown() -> None:
+    function = ExtractedFunction(
+        ml_name="foo",
+        function_cursor=_fake_function_cursor_with_children(
+            _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
+        ),
+    )
+
+    signature_rules_module.infer_signature(function)
+
+    assert function.signatures == []
+
+
+def test_infer_signature_only_fills_missing_return_type_on_existing_signatures() -> None:
+    signature_with_missing_return = ExtractedSignature(
+        arguments=[ExtractedArgument(name="value", type_name="int")],
+    )
+    signature_with_existing_return = ExtractedSignature(
+        arguments=[ExtractedArgument(name="flag", type_name="bool")],
+        return_type_name="str",
+    )
+    function = ExtractedFunction(
+        ml_name="foo",
+        function_cursor=_fake_function_cursor_with_children(
+            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
+        ),
+        signatures=[signature_with_missing_return, signature_with_existing_return],
+    )
+
+    signature_rules_module.infer_signature(function)
+
+    assert len(function.signatures) == 2
+    assert [arg.name for arg in function.signatures[0].arguments] == ["value"]
+    assert function.signatures[0].return_type_name == "int"
+    assert [arg.name for arg in function.signatures[1].arguments] == ["flag"]
+    assert function.signatures[1].return_type_name == "str"
 
 
 def test_return_type_py_buildvalue_parser_is_importable_by_package_path() -> None:
