@@ -28,14 +28,14 @@ class PyBuildValueTypeParser:
         self,
         fmt: str,
         args: list[Cursor],
-        resolve_object_type_func: Callable[[Cursor], str] | None = None,
+        resolve_object_type_func: Callable[[Cursor], TypeNode | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
         self._args = args
         self._char_index = 0
         self._arg_index = 0
-        self._resolve_object_type_func: Callable[[Cursor], str] | None = (
+        self._resolve_object_type_func: Callable[[Cursor], TypeNode | None] | None = (
             resolve_object_type_func
         )
 
@@ -236,8 +236,7 @@ class PyBuildValueTypeParser:
     def _resolve_object_type(self, cursor: Cursor) -> TypeNode:
         """解析对象槽位的类型，未知时保留为显式 `Any` 节点。"""
         if self._resolve_object_type_func is not None:
-            resolved_type_name = self._resolve_object_type_func(cursor)
-            if resolved_type_name == "Any":
-                return AnyTypeNode()
-            return NamedTypeNode(resolved_type_name)
+            resolved_type = self._resolve_object_type_func(cursor)
+            if resolved_type is not None:
+                return resolved_type
         return AnyTypeNode()

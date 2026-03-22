@@ -331,10 +331,10 @@ def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> str:
+    def resolve_object_type(cursor: Cursor) -> TypeNode:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
-        return "Converted"
+        return NamedTypeNode("Converted")
 
     parser = PyBuildValueTypeParser(
         "O&",
@@ -352,10 +352,10 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> str:
+    def resolve_object_type(cursor: Cursor) -> TypeNode:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
-        return "Converted"
+        return NamedTypeNode("Converted")
 
     parser = PyBuildValueTypeParser(
         "([O&])",

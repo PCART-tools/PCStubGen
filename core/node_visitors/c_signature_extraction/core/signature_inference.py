@@ -5,8 +5,9 @@ from collections.abc import Iterable
 
 from clang.cindex import Cursor, CursorKind
 
-from .cursor_utils import split_top_level, unique_keep_order, unwrap_transparent, walk_cursor
+from .cursor_utils import unwrap_transparent, walk_cursor
 from .models import ExtractedFunction, ExtractedSignature
+from .py_buildvalue_type_nodes import AnyTypeNode, NamedTypeNode, TypeNode, UnionTypeNode
 from .py_buildvalue_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 _OBJECT_NAME_TO_TYPE: dict[str, str] = {
@@ -171,19 +172,18 @@ def infer_signature(function: ExtractedFunction) -> None:
 
 def infer_return_type(func_cursor: Cursor) -> str | None:
     """遍历函数子树中的 return 语句并汇总可识别的返回类型。"""
-    inferred_types: list[str] = []
-    seen: set[str] = set()
+    inferred_types: list[TypeNode] = []
 
     for return_stmt in _iter_return_statements(func_cursor):
         inferred_type = _infer_type_from_return_stmt(return_stmt)
-        if inferred_type is None or inferred_type in seen:
+        if inferred_type is None:
             continue
-        seen.add(inferred_type)
         inferred_types.append(inferred_type)
 
-    if not inferred_types:
+    merged_type = _merge_inferred_type_nodes(inferred_types)
+    if merged_type is None:
         return None
-    return " | ".join(inferred_types)
+    return merged_type.render()
 
 
 def _iter_return_statements(func_cursor: Cursor) -> Iterable[Cursor]:
@@ -193,7 +193,7 @@ def _iter_return_statements(func_cursor: Cursor) -> Iterable[Cursor]:
             yield cursor
 
 
-def _infer_type_from_return_stmt(return_stmt: Cursor) -> str | None:
+def _infer_type_from_return_stmt(return_stmt: Cursor) -> TypeNode | None:
     """从单条 return 语句推断返回类型。"""
     return_expr = _get_return_expression(return_stmt)
     if return_expr is None:
@@ -201,7 +201,7 @@ def _infer_type_from_return_stmt(return_stmt: Cursor) -> str | None:
     return infer_expr_type(return_expr)
 
 
-def infer_expr_type(expr_cursor: Cursor) -> str | None:
+def infer_expr_type(expr_cursor: Cursor) -> TypeNode | None:
     """对单个表达式做 Python 类型推断。"""
     normalized_expr = unwrap_transparent(expr_cursor)
 
@@ -219,27 +219,19 @@ def infer_expr_type(expr_cursor: Cursor) -> str | None:
     return _infer_macro_expr_type(normalized_expr)
 
 
-def _infer_conditional_operator_type(expr_cursor: Cursor) -> str | None:
+def _infer_conditional_operator_type(expr_cursor: Cursor) -> TypeNode | None:
     """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
     children = list(expr_cursor.get_children())
     if len(children) != 3:
         return None
 
-    branch_types: list[str] = []
+    branch_types: list[TypeNode] = []
     for branch in children[1:]:
         inferred = infer_expr_type(branch)
         if inferred is None:
             continue
-        branch_types.extend(_split_type_union_members(inferred))
-
-    if not branch_types:
-        return None
-    return " | ".join(unique_keep_order(branch_types))
-
-
-def _split_type_union_members(type_name: str) -> list[str]:
-    """按顶层 `|` 拆分联合类型，避免破坏泛型内部结构。"""
-    return [part.strip() for part in split_top_level(type_name, "|") if part.strip()]
+        branch_types.append(inferred)
+    return _merge_inferred_type_nodes(branch_types)
 
 
 def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
@@ -250,20 +242,21 @@ def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
     return children[0]
 
 
-def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> str | None:
+def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> TypeNode | None:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
     identifier_name = _get_cursor_name(expr_cursor)
-    if identifier_name in _OBJECT_NAME_TO_TYPE:
-        return _OBJECT_NAME_TO_TYPE[identifier_name]
+    mapped = _OBJECT_NAME_TO_TYPE.get(identifier_name)
+    if mapped is not None:
+        return NamedTypeNode(mapped)
     return None
 
 
-def _infer_macro_expr_type(expr_cursor: Cursor) -> str | None:
+def _infer_macro_expr_type(expr_cursor: Cursor) -> TypeNode | None:
     """识别 AST 子树中可见名称对应的返回宏类型。"""
     for name in _iter_subtree_names(expr_cursor):
         mapped = _RETURN_MACRO_TO_TYPE.get(name)
         if mapped is not None:
-            return mapped
+            return NamedTypeNode(mapped)
     return None
 
 
@@ -275,7 +268,7 @@ def _iter_subtree_names(node: Cursor) -> Iterable[str]:
             yield name
 
 
-def _infer_call_expr_type(call_expr_cursor: Cursor) -> str | None:
+def _infer_call_expr_type(call_expr_cursor: Cursor) -> TypeNode | None:
     """从调用表达式推断返回类型。"""
     assert call_expr_cursor.kind == CursorKind.CALL_EXPR
     call_name = call_expr_cursor.spelling
@@ -284,7 +277,10 @@ def _infer_call_expr_type(call_expr_cursor: Cursor) -> str | None:
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(call_expr_cursor)
-    return _FUNCTION_NAME_TO_TYPE.get(call_name)
+    mapped = _FUNCTION_NAME_TO_TYPE.get(call_name)
+    if mapped is None:
+        return None
+    return NamedTypeNode(mapped)
 
 
 def _get_cursor_name(cursor: Cursor) -> str | None:
@@ -306,7 +302,7 @@ def _extract_call_arguments(call_cursor: Cursor) -> list[Cursor]:
     return children[1:]
 
 
-def _infer_py_buildvalue_type(call_cursor: Cursor) -> str | None:
+def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
     args = _extract_call_arguments(call_cursor)
     if not args:
@@ -322,18 +318,22 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> str | None:
             args[1:],
             resolve_object_type_func=_resolve_expr_python_type_for_buildvalue,
         ).parse()
-        canonical_type = parsed_type.canonicalize()
-        return canonical_type.render()
+        return parsed_type.canonicalize()
     except PyBuildValueTypeParserError:
         return None
 
 
-def _resolve_expr_python_type_for_buildvalue(cursor: Cursor) -> str:
-    """给 `Py_BuildValue` 的对象位提供表达式类型解析，并在失败时回退显式 `Any`。"""
-    inferred = infer_expr_type(cursor)
-    if inferred is None:
-        return "Any"
-    return inferred
+def _resolve_expr_python_type_for_buildvalue(cursor: Cursor) -> TypeNode | None:
+    """给 `Py_BuildValue` 的对象位提供表达式类型解析。"""
+    return infer_expr_type(cursor)
+
+
+def _merge_inferred_type_nodes(type_nodes: Iterable[TypeNode]) -> TypeNode | None:
+    """合并推断结果，并统一复用联合类型的规范化语义。"""
+    members = tuple(type_nodes)
+    if not members:
+        return None
+    return UnionTypeNode(members).canonicalize()
 
 
 def _extract_string_literal(node: Cursor) -> str | None:
