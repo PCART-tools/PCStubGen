@@ -230,7 +230,7 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> str | None:
         inferred = infer_expr_type(branch)
         if inferred is None:
             continue
-        branch_types.extend(inferred)
+        branch_types.extend(_split_type_union_members(inferred))
 
     if not branch_types:
         return None
@@ -317,17 +317,19 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> str | None:
         return None
 
     try:
-        return PyBuildValueTypeParser(
+        parsed_type = PyBuildValueTypeParser(
             format_string,
             args[1:],
             resolve_object_type_func=_resolve_expr_python_type_for_buildvalue,
         ).parse()
+        canonical_type = parsed_type.canonicalize()
+        return canonical_type.render()
     except PyBuildValueTypeParserError:
         return None
 
 
 def _resolve_expr_python_type_for_buildvalue(cursor: Cursor) -> str:
-    """给 `Py_BuildValue` 的对象位提供表达式类型解析，并在失败时回退 `Any`。"""
+    """给 `Py_BuildValue` 的对象位提供表达式类型解析，并在失败时回退显式 `Any`。"""
     inferred = infer_expr_type(cursor)
     if inferred is None:
         return "Any"

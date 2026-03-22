@@ -2986,7 +2986,21 @@ def test_infer_expr_type_parses_py_buildvalue() -> None:
         )
     )
 
-    assert inferred == "tuple[int, str | None]"
+    assert inferred == "tuple[int, None | str]"
+
+
+def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
+    """`Py_BuildValue` 推断结果应在渲染前先规范化容器内部的联合类型。"""
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "Py_BuildValue",
+            _string_literal("[si]"),
+            _identifier_node("name"),
+            _identifier_node("count"),
+        )
+    )
+
+    assert inferred == "list[None | int | str]"
 
 
 def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
@@ -3193,7 +3207,7 @@ def test_return_type_parses_py_buildvalue() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "tuple[int, str | None]"
+    assert inferred == "tuple[int, None | str]"
 
 
 def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
