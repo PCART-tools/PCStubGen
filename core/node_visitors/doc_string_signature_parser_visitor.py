@@ -10,7 +10,7 @@ from ..ir import (
     IRModule,
     IRSignature,
 )
-from .NodeVisitor import NodeVisitor
+from .node_visitor import NodeVisitor
 
 
 class DocStringSignatureParserVisitor(NodeVisitor):

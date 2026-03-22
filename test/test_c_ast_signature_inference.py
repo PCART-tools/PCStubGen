@@ -48,7 +48,7 @@ from core.ir import (
 from core.node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
     CSignatureExtractionVisitor,
 )
-from core.node_visitors.DocStringSignatureParserVisitor import (
+from core.node_visitors.doc_string_signature_parser_visitor import (
     DocStringSignatureParserVisitor,
 )
 from core.pipeline import Pipeline

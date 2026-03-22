@@ -16,10 +16,10 @@ from core.ir import (
 )
 import core.module_builder as module_builder_module
 from core.module_builder import build_function
-from core.node_visitors.DocStringSignatureParserVisitor import (
+from core.node_visitors.doc_string_signature_parser_visitor import (
     DocStringSignatureParserVisitor,
 )
-from core.node_visitors.NodeVisitor import NodeVisitor
+from core.node_visitors.node_visitor import NodeVisitor
 from core.printer_visitor import PrinterVisitor
 
 

@@ -9,13 +9,13 @@ from .cursor_utils import split_top_level, unique_keep_order, unwrap_transparent
 from .models import ExtractedFunction, ExtractedSignature
 from .py_buildvalue_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
-_RETURN_OBJECT_TYPE_MAP: dict[str, str] = {
+_OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "Py_None": "None",
     "Py_True": "bool",
     "Py_False": "bool",
 }
 
-_RETURN_MACRO_TYPE_MAP: dict[str, str] = {
+_RETURN_MACRO_TO_TYPE: dict[str, str] = {
     "Py_RETURN_NONE": "None",
     "Py_RETURN_TRUE": "bool",
     "Py_RETURN_FALSE": "bool",
@@ -23,7 +23,7 @@ _RETURN_MACRO_TYPE_MAP: dict[str, str] = {
     "Py_RETURN_INF": "float",
 }
 
-_RETURN_CALL_TYPE_MAP: dict[str, str] = {
+_FUNCTION_NAME_TO_TYPE: dict[str, str] = {
     # bool
     "PyBool_FromLong": "bool",
 
@@ -202,7 +202,7 @@ def _infer_type_from_return_stmt(return_stmt: Cursor) -> str | None:
 
 
 def infer_expr_type(expr_cursor: Cursor) -> str | None:
-    """对单个表达式做轻量 Python 类型推断。"""
+    """对单个表达式做 Python 类型推断。"""
     normalized_expr = unwrap_transparent(expr_cursor)
 
     if normalized_expr.kind == CursorKind.CONDITIONAL_OPERATOR:
@@ -230,7 +230,7 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> str | None:
         inferred = infer_expr_type(branch)
         if inferred is None:
             continue
-        branch_types.extend(_split_type_union_members(inferred))
+        branch_types.extend(inferred)
 
     if not branch_types:
         return None
@@ -253,15 +253,15 @@ def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
 def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> str | None:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
     identifier_name = _get_cursor_name(expr_cursor)
-    if identifier_name in _RETURN_OBJECT_TYPE_MAP:
-        return _RETURN_OBJECT_TYPE_MAP[identifier_name]
+    if identifier_name in _OBJECT_NAME_TO_TYPE:
+        return _OBJECT_NAME_TO_TYPE[identifier_name]
     return None
 
 
 def _infer_macro_expr_type(expr_cursor: Cursor) -> str | None:
     """识别 AST 子树中可见名称对应的返回宏类型。"""
     for name in _iter_subtree_names(expr_cursor):
-        mapped = _RETURN_MACRO_TYPE_MAP.get(name)
+        mapped = _RETURN_MACRO_TO_TYPE.get(name)
         if mapped is not None:
             return mapped
     return None
@@ -275,36 +275,16 @@ def _iter_subtree_names(node: Cursor) -> Iterable[str]:
             yield name
 
 
-def _infer_call_expr_type(call_cursor: Cursor) -> str | None:
+def _infer_call_expr_type(call_expr_cursor: Cursor) -> str | None:
     """从调用表达式推断返回类型。"""
-    call_name = _get_call_name(call_cursor)
+    assert call_expr_cursor.kind == CursorKind.CALL_EXPR
+    call_name = call_expr_cursor.spelling
     if call_name is None:
         return None
 
     if call_name == "Py_BuildValue":
-        return _infer_py_buildvalue_return_type(call_cursor)
-    return _RETURN_CALL_TYPE_MAP.get(call_name)
-
-
-def _get_call_name(call_cursor: Cursor) -> str | None:
-    """提取调用表达式的函数名。"""
-    if call_cursor.spelling:
-        return str(call_cursor.spelling)
-
-    children = list(call_cursor.get_children())
-    if not children:
-        return None
-
-    callee_cursor = unwrap_transparent(children[0])
-    identifier_name = _get_cursor_name(callee_cursor)
-    if identifier_name is not None:
-        return identifier_name
-
-    for child in callee_cursor.get_children():
-        child_name = _get_cursor_name(unwrap_transparent(child))
-        if child_name is not None:
-            return child_name
-    return None
+        return _infer_py_buildvalue_type(call_expr_cursor)
+    return _FUNCTION_NAME_TO_TYPE.get(call_name)
 
 
 def _get_cursor_name(cursor: Cursor) -> str | None:
@@ -326,7 +306,7 @@ def _extract_call_arguments(call_cursor: Cursor) -> list[Cursor]:
     return children[1:]
 
 
-def _infer_py_buildvalue_return_type(call_cursor: Cursor) -> str | None:
+def _infer_py_buildvalue_type(call_cursor: Cursor) -> str | None:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
     args = _extract_call_arguments(call_cursor)
     if not args:

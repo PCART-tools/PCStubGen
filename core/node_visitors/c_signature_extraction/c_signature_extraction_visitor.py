@@ -12,7 +12,7 @@ from .core import (
     extract_c_signature_modules,
 )
 from .core.constants import METH_CLASS, METH_STATIC
-from ..NodeVisitor import NodeVisitor
+from ..node_visitor import NodeVisitor
 from ...ir import (
     IRArgument,
     IRArgumentKind,

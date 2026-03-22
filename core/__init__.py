@@ -8,8 +8,8 @@ from .module_builder import build_module
 from .stub_generation_options import StubGenerationOptions
 from .ir import QualifiedName
 from .pipeline import Pipeline
-from .node_visitors.NodeVisitor import NodeVisitor
-from .node_visitors.DocStringSignatureParserVisitor import DocStringSignatureParserVisitor
+from .node_visitors.node_visitor import NodeVisitor
+from .node_visitors.doc_string_signature_parser_visitor import DocStringSignatureParserVisitor
 from .node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
     CSignatureExtractionVisitor,
 )
