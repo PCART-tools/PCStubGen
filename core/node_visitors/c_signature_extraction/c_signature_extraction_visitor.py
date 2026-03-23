@@ -234,13 +234,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         result: list[IRArgument] = []
         for arg in normalized:
-            kind = {
-                "keyword_only": IRArgumentKind.KEYWORD_ONLY,
-                "var_positional": IRArgumentKind.VAR_POSITIONAL,
-                "var_keyword": IRArgumentKind.VAR_KEYWORD,
-            }.get(arg.kind, IRArgumentKind.POSITIONAL_OR_KEYWORD)
-
-            ir_arg = IRArgument(name=arg.name, kind=kind)
+            ir_arg = IRArgument(name=arg.name, kind=arg.kind)
             ir_arg.type_name = self._build_annotation(arg.type_name)
             ir_arg.default_value = self._build_default_value(arg.default_value)
             result.append(ir_arg)

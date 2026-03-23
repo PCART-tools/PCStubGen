@@ -354,6 +354,58 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert signature.return_type_name == "int"
 
 
+def test_c_ast_visitor_preserves_extracted_argument_kinds(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    func = _unknown_function("foo")
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS | METH_KEYWORDS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[
+                                ExtractedArgument(
+                                    name="value",
+                                    kind=IRArgumentKind.KEYWORD_ONLY,
+                                ),
+                                ExtractedArgument(
+                                    name="args",
+                                    kind=IRArgumentKind.VAR_POSITIONAL,
+                                ),
+                                ExtractedArgument(
+                                    name="kwargs",
+                                    kind=IRArgumentKind.VAR_KEYWORD,
+                                ),
+                            ]
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    signature = module.functions[0].signatures[0]
+    assert [arg.kind for arg in signature.args] == [
+        IRArgumentKind.KEYWORD_ONLY,
+        IRArgumentKind.VAR_POSITIONAL,
+        IRArgumentKind.VAR_KEYWORD,
+    ]
+
+
 def test_c_ast_visitor_does_not_log_for_known_function(
     caplog: pytest.LogCaptureFixture,
     tmp_path: Path,

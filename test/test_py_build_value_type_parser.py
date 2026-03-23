@@ -301,6 +301,39 @@ def test_parse_canonicalize_render_returns_expected_type_string(
     assert _canonical_render(format_string, arg_count) == expected
 
 
+@pytest.mark.parametrize(
+    ("format_string", "arg_count", "expected"),
+    [
+        ("", 0, "None"),
+        ("i", 1, "int"),
+        ("iii", 3, "tuple[int, int, int]"),
+        ("s", 1, "None | str"),
+        ("y", 1, "None | bytes"),
+        ("ss", 2, "tuple[None | str, None | str]"),
+        ("s#", 2, "None | str"),
+        ("y#", 2, "None | bytes"),
+        ("()", 0, "tuple[()]"),
+        ("(i)", 1, "tuple[int,]"),
+        ("(ii)", 2, "tuple[int, int]"),
+        ("(i,i)", 2, "tuple[int, int]"),
+        ("[i,i]", 2, "list[int]"),
+        ("{s:i,s:i}", 4, "dict[None | str, int]"),
+        (
+            "((ii)(ii)) (ii)",
+            6,
+            "tuple[tuple[tuple[int, int], tuple[int, int]], tuple[int, int]]",
+        ),
+    ],
+)
+def test_parse_canonicalize_render_matches_documented_py_buildvalue_examples(
+    format_string: str,
+    arg_count: int,
+    expected: str,
+) -> None:
+    """文档样例在当前项目的类型推断语义下应保持稳定。"""
+    assert _canonical_render(format_string, arg_count) == expected
+
+
 def test_parse_value_returns_list_node_for_empty_list_format() -> None:
     """直接解析值时应为列表格式返回列表节点。"""
     parser = PyBuildValueTypeParser("[]", [])

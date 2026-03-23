@@ -56,8 +56,7 @@ class UnionTypeNode(TypeNode):
         if self.is_empty():
             return self
 
-        flat_members: list[TypeNode] = []
-
+        member_set: set[TypeNode] = set()
         for member in self.members:
             canonical_member = member.canonicalize()
             if isinstance(canonical_member, AnyTypeNode):
@@ -66,25 +65,15 @@ class UnionTypeNode(TypeNode):
 
             if isinstance(canonical_member, UnionTypeNode):
                 # 这里不需要递归flatten，canonicalize已保证flat
-                flat_members.extend(canonical_member.members)
+                for m in canonical_member.members:
+                    member_set.add(m)
                 continue
 
-            flat_members.append(canonical_member)
-
-        if not flat_members:
-            return self
-
-        # len(flat_members) >= 1
-        member_set: set[TypeNode] = set()
-        for member in flat_members:
-            member_set.add(member)
-
+            member_set.add(canonical_member)
 
         unique_members = list(member_set)
         unique_members.sort(key=_union_sort_key)
 
-        if not unique_members:
-            return self # 理论不可达
         if len(unique_members) == 1:
             return unique_members[0]
         return UnionTypeNode(tuple(unique_members))

@@ -5,7 +5,6 @@ from __future__ import annotations
 from .c_signature_extraction import extract_c_signature_modules
 from .models import (
     ExtractedArgument,
-    ExtractedArgumentKind,
     ExtractedFunction,
     ExtractedModule,
     ExtractedSignature,
@@ -14,7 +13,6 @@ from .models import (
 __all__ = [
     "extract_c_signature_modules",
     "ExtractedArgument",
-    "ExtractedArgumentKind",
     "ExtractedFunction",
     "ExtractedModule",
     "ExtractedSignature",

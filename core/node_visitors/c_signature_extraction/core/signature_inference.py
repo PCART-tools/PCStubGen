@@ -318,7 +318,7 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
             args[1:],
             resolve_object_type_func=_resolve_expr_python_type_for_buildvalue,
         ).parse()
-        return parsed_type.canonicalize()
+        return parsed_type
     except PyBuildValueTypeParserError:
         return None
 

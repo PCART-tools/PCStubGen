@@ -1,18 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
+
+from ....ir import IRArgumentKind
 
 if TYPE_CHECKING:
     from clang.cindex import Cursor
-
-# 提取参数在 Python 函数签名中的位置语义。
-ExtractedArgumentKind = Literal[
-    "positional_or_keyword",
-    "keyword_only",
-    "var_positional",
-    "var_keyword",
-]
 
 
 @dataclass
@@ -22,8 +16,7 @@ class ExtractedArgument:
     name: str
     type_name: str | None = None
     default_value: str | None = None
-    # 与 IRArgumentKind 对齐的轻量语义标记。
-    kind: ExtractedArgumentKind = "positional_or_keyword"
+    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD
 
 
 @dataclass
