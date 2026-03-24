@@ -7,8 +7,8 @@ from clang.cindex import Cursor, CursorKind
 
 from .cursor_utils import unwrap_transparent, walk_cursor
 from .models import ExtractedFunction, ExtractedSignature
-from .py_buildvalue_type_nodes import AnyTypeNode, NamedTypeNode, TypeNode, UnionTypeNode
-from .py_buildvalue_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
+from .py_build_value_type_nodes import AnyTypeNode, NamedTypeNode, TypeNode, UnionTypeNode
+from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 _OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "Py_None": "None",

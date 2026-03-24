@@ -6,7 +6,7 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from .py_buildvalue_type_nodes import (
+from .py_build_value_type_nodes import (
     AnyTypeNode,
     DictTypeNode,
     ListTypeNode,
@@ -33,14 +33,15 @@ class PyBuildValueTypeParser:
         """初始化格式串解析器。"""
         self._format = fmt
         self._args = args
+        self._resolve_object_type_func = resolve_object_type_func
         self._char_index = 0
         self._arg_index = 0
-        self._resolve_object_type_func: Callable[[Cursor], TypeNode | None] | None = (
-            resolve_object_type_func
-        )
 
     def parse(self) -> TypeNode:
         """解析格式串并返回未经规范化的类型树。"""
+        self._char_index = 0
+        self._arg_index = 0
+
         top_level_types = self._parse_items(stop_char=None)
         self._skip_ignored_chars()
         if self._arg_index != len(self._args):

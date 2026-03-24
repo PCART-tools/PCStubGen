@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from core.node_visitors.c_signature_extraction.core.py_buildvalue_type_nodes import (
+from core.node_visitors.c_signature_extraction.core.py_build_value_type_nodes import (
     AnyTypeNode,
     DictTypeNode,
     ListTypeNode,
@@ -16,7 +16,7 @@ from core.node_visitors.c_signature_extraction.core.py_buildvalue_type_nodes imp
     TypeNode,
     UnionTypeNode,
 )
-from core.node_visitors.c_signature_extraction.core.py_buildvalue_type_parser import (
+from core.node_visitors.c_signature_extraction.core.py_build_value_type_parser import (
     PyBuildValueTypeParser,
     PyBuildValueTypeParserError,
 )

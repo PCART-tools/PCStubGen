@@ -1,0 +1,335 @@
+from __future__ import annotations
+
+"""`PyArg_ParseTuple` 格式串到参数信息的解析器。"""
+
+from dataclasses import dataclass
+from typing import Callable
+
+from clang.cindex import Cursor
+
+from .models import ExtractedArgument
+
+
+class PyArgParseTupleTypeParserError(ValueError):
+    """表示 `PyArg_ParseTuple` 格式串无法被当前解析器接受。"""
+
+
+@dataclass(frozen=True)
+class _FormatUnitSpec:
+    """描述单个标量格式单元如何映射到 Python 参数。"""
+
+    unit: str
+    type_name: str
+    c_arg_count: int
+    default_arg_offset: int
+    object_type_arg_offset: int | None = None
+
+
+_FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
+    _FormatUnitSpec("es#", "str", 3, 1),
+    _FormatUnitSpec("et#", "str | bytes | bytearray", 3, 1),
+    _FormatUnitSpec("s*", "str | collections.abc.Buffer", 1, 0),
+    _FormatUnitSpec("s#", "str | collections.abc.Buffer", 2, 0),
+    _FormatUnitSpec("z*", "str | collections.abc.Buffer | None", 1, 0),
+    _FormatUnitSpec("z#", "str | collections.abc.Buffer | None", 2, 0),
+    _FormatUnitSpec("y*", "collections.abc.Buffer", 1, 0),
+    _FormatUnitSpec("y#", "collections.abc.Buffer", 2, 0),
+    _FormatUnitSpec("es", "str", 2, 1),
+    _FormatUnitSpec("et", "str | bytes | bytearray", 2, 1),
+    _FormatUnitSpec("w*", "collections.abc.Buffer", 1, 0),
+    _FormatUnitSpec("O!", "object", 2, 1, object_type_arg_offset=0),
+    _FormatUnitSpec("O&", "object", 2, 1, object_type_arg_offset=0),
+    _FormatUnitSpec("s", "str", 1, 0),
+    _FormatUnitSpec("z", "str | None", 1, 0),
+    _FormatUnitSpec("y", "collections.abc.Buffer", 1, 0),
+    _FormatUnitSpec("S", "bytes", 1, 0),
+    _FormatUnitSpec("Y", "bytearray", 1, 0),
+    _FormatUnitSpec("U", "str", 1, 0),
+    _FormatUnitSpec("b", "int", 1, 0),
+    _FormatUnitSpec("B", "int", 1, 0),
+    _FormatUnitSpec("h", "int", 1, 0),
+    _FormatUnitSpec("H", "int", 1, 0),
+    _FormatUnitSpec("i", "int", 1, 0),
+    _FormatUnitSpec("I", "int", 1, 0),
+    _FormatUnitSpec("l", "int", 1, 0),
+    _FormatUnitSpec("k", "int", 1, 0),
+    _FormatUnitSpec("L", "int", 1, 0),
+    _FormatUnitSpec("K", "int", 1, 0),
+    _FormatUnitSpec("n", "int", 1, 0),
+    _FormatUnitSpec("c", "bytes | bytearray", 1, 0),
+    _FormatUnitSpec("C", "str", 1, 0),
+    _FormatUnitSpec("f", "float", 1, 0),
+    _FormatUnitSpec("d", "float", 1, 0),
+    _FormatUnitSpec("D", "complex", 1, 0),
+    _FormatUnitSpec("O", "object", 1, 0),
+    _FormatUnitSpec("p", "object", 1, 0),
+)
+
+
+class _ParsedValue:
+    """表示一个已完成格式串消费、但尚未包装成参数的值节点。"""
+
+    c_args: tuple[Cursor, ...]
+
+    def render_type_name(self) -> str:
+        raise NotImplementedError
+
+    def render_default_value(
+        self,
+        resolve_default_value_func: Callable[[Cursor], str | None] | None,
+    ) -> str | None:
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class _ScalarParsedValue(_ParsedValue):
+    """标量格式单元的解析结果。"""
+
+    type_name: str
+    c_args: tuple[Cursor, ...]
+    default_value_cursor: Cursor
+
+    def render_type_name(self) -> str:
+        return self.type_name
+
+    def render_default_value(
+        self,
+        resolve_default_value_func: Callable[[Cursor], str | None] | None,
+    ) -> str | None:
+        if resolve_default_value_func is None:
+            return None
+        return resolve_default_value_func(self.default_value_cursor)
+
+
+@dataclass(frozen=True)
+class _TupleParsedValue(_ParsedValue):
+    """tuple 格式单元的解析结果。"""
+
+    items: tuple[_ParsedValue, ...]
+    c_args: tuple[Cursor, ...]
+
+    def render_type_name(self) -> str:
+        item_type_names = tuple(item.render_type_name() for item in self.items)
+        if not item_type_names:
+            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+        if len(item_type_names) == 1:
+            return f"tuple[{item_type_names[0]},]"
+        return f"tuple[{', '.join(item_type_names)}]"
+
+    def render_default_value(
+        self,
+        resolve_default_value_func: Callable[[Cursor], str | None] | None,
+    ) -> str | None:
+        if not self.items:
+            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+
+        rendered_items: list[str] = []
+        for item in self.items:
+            default_value = item.render_default_value(resolve_default_value_func)
+            if default_value is None:
+                return None
+            rendered_items.append(default_value)
+
+        if len(rendered_items) == 1:
+            return f"({rendered_items[0]},)"
+        return f"({', '.join(rendered_items)})"
+
+
+class PyArgParseTupleTypeParser:
+    """将 `PyArg_ParseTuple` 的格式串解析为提取参数列表。"""
+
+    def __init__(
+        self,
+        fmt: str,
+        args: list[Cursor],
+        resolve_name_func: Callable[[list[Cursor]], str | None],
+        resolve_object_type_func: Callable[[Cursor], str | None] | None = None,
+        resolve_default_value_func: Callable[[Cursor], str | None] | None = None,
+    ) -> None:
+        """初始化格式串解析器。"""
+        self._format = fmt
+        self._args = args
+        self._resolve_name_func = resolve_name_func
+        self._resolve_object_type_func = resolve_object_type_func
+        self._resolve_default_value_func = resolve_default_value_func
+        self._char_index = 0
+        self._arg_index = 0
+
+    def parse(self) -> list[ExtractedArgument]:
+        """解析格式串并返回参数列表。"""
+        self._char_index = 0
+        self._arg_index = 0
+
+        arguments: list[ExtractedArgument] = []
+        in_optional_section = False
+
+        while True:
+            self._skip_separators()
+            current = self._peek_char()
+
+            if current is None or current in ":;":
+                break
+
+            if current == "|":
+                if in_optional_section:
+                    raise PyArgParseTupleTypeParserError("Found duplicate '|' in format string.")
+                self._advance_char()
+                in_optional_section = True
+                continue
+
+            arguments.append(self._parse_argument(has_default=in_optional_section))
+
+        self._validate_counts()
+        return arguments
+
+    def _parse_argument(self, *, has_default: bool) -> ExtractedArgument:
+        """解析一个顶层参数单元并包装为 `ExtractedArgument`。"""
+        value = self._parse_value()
+        name = self._resolve_name(value.c_args)
+        default_value: str | None = None
+        if has_default:
+            default_value = value.render_default_value(self._resolve_default_value_func)
+
+        return ExtractedArgument(
+            name=name,
+            type_name=value.render_type_name(),
+            default_value=default_value,
+            has_default=has_default,
+        )
+
+    def _parse_value(self) -> _ParsedValue:
+        """解析单个格式值，可递归进入 tuple 单元。"""
+        current = self._peek_char_required()
+        if current == "(":
+            return self._parse_tuple_value()
+
+        return self._parse_scalar_value()
+
+    def _parse_tuple_value(self) -> _TupleParsedValue:
+        """
+        解析 tuple 格式单元。
+
+        tuple 内允许继续嵌套 tuple 或标量单元；默认值和类型渲染都会保留
+        当前的结构而不是将叶子参数拍平。
+        """
+        self._consume_char("(")
+        self._skip_separators()
+        current = self._peek_char()
+        if current is None:
+            raise PyArgParseTupleTypeParserError(
+                "Expected ')' before end of format string."
+            )
+        if current == ")":
+            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+
+        items: list[_ParsedValue] = []
+        while True:
+            items.append(self._parse_value())
+            self._skip_separators()
+            current = self._peek_char()
+
+            if current is None:
+                raise PyArgParseTupleTypeParserError(
+                    "Expected ')' before end of format string."
+                )
+
+            if current == ")":
+                self._advance_char()
+                break
+
+        c_args: list[Cursor] = []
+        for item in items:
+            c_args.extend(item.c_args)
+        return _TupleParsedValue(tuple(items), tuple(c_args))
+
+    def _parse_scalar_value(self) -> _ScalarParsedValue:
+        """按最长匹配规则消费一个标量格式单元。"""
+        current = self._peek_char_required()
+        for spec in _FORMAT_UNIT_SPECS:
+            if self._format.startswith(spec.unit, self._char_index):
+                self._char_index += len(spec.unit)
+                c_args = self._advance_c_args_required(spec.c_arg_count)
+                type_name = spec.type_name
+                if spec.object_type_arg_offset is not None:
+                    type_name = self._resolve_object_type(c_args[spec.object_type_arg_offset])
+                return _ScalarParsedValue(
+                    type_name=type_name,
+                    c_args=c_args,
+                    default_value_cursor=c_args[spec.default_arg_offset],
+                )
+
+        raise PyArgParseTupleTypeParserError(
+            f"Unsupported format unit {current!r} at index {self._char_index}."
+        )
+
+    def _validate_counts(self) -> None:
+        """在解析结束后统一校验 C 参数槽位数量。"""
+        if self._arg_index != len(self._args):
+            raise PyArgParseTupleTypeParserError(
+                f"Expected {self._arg_index} C arguments, found {len(self._args)}."
+            )
+
+    def _resolve_name(self, c_args: tuple[Cursor, ...]) -> str:
+        """解析顶层 Python 参数名。"""
+        name = self._resolve_name_func(list(c_args))
+        if name is None:
+            raise PyArgParseTupleTypeParserError("Failed to resolve argument name.")
+        return name
+
+    def _resolve_object_type(self, cursor: Cursor) -> str:
+        """解析对象单元的 Python 类型，未知时回退为 `object`。"""
+        if self._resolve_object_type_func is not None:
+            resolved_type = self._resolve_object_type_func(cursor)
+            if resolved_type is not None:
+                return resolved_type
+        return "object"
+
+    def _peek_char(self) -> str | None:
+        """查看当前位置字符而不推进游标。"""
+        if self._char_index >= len(self._format):
+            return None
+        return self._format[self._char_index]
+
+    def _peek_char_required(self) -> str:
+        """查看当前位置字符；若已结束则抛错。"""
+        current = self._peek_char()
+        if current is None:
+            raise PyArgParseTupleTypeParserError("Found end of format string.")
+        return current
+
+    def _advance_char(self) -> str | None:
+        """推进一个格式串字符。"""
+        current = self._peek_char()
+        if current is None:
+            return None
+        self._char_index += 1
+        return current
+
+    def _consume_char(self, expected: str) -> None:
+        """消费一个预期字符并在不匹配时抛错。"""
+        current = self._advance_char()
+        if current != expected:
+            found = "end of format string" if current is None else repr(current)
+            raise PyArgParseTupleTypeParserError(
+                f"Expected {expected!r} at index {self._char_index - 1}, found {found}."
+            )
+
+    def _skip_separators(self) -> None:
+        """跳过格式串中的空白与逗号分隔符。"""
+        while True:
+            current = self._peek_char()
+            if current is None or current not in " \t,":
+                return
+            self._char_index += 1
+
+    def _advance_c_args_required(self, count: int) -> tuple[Cursor, ...]:
+        """消费指定数量的 C 参数槽位。"""
+        end_index = self._arg_index + count
+        if end_index > len(self._args):
+            raise PyArgParseTupleTypeParserError(
+                f"Expected {count} C arguments starting at index {self._arg_index}, but none remained."
+            )
+
+        values = tuple(self._args[self._arg_index:end_index])
+        self._arg_index = end_index
+        return values

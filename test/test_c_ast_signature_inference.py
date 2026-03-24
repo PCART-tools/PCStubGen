@@ -23,7 +23,7 @@ from core.node_visitors.c_signature_extraction.core import cursor_utils as curso
 from core.node_visitors.c_signature_extraction.core import signature_inference as signature_rules_module
 from core.node_visitors.c_signature_extraction.core import module_table as module_table_module
 from core.node_visitors.c_signature_extraction.core import translation_unit as translation_unit_module
-from core.node_visitors.c_signature_extraction.core.py_buildvalue_type_nodes import (
+from core.node_visitors.c_signature_extraction.core.py_build_value_type_nodes import (
     AnyTypeNode,
     ListTypeNode,
     NamedTypeNode,
