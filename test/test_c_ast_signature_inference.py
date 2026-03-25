@@ -351,6 +351,9 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert signature.args[1].default_value == "False"
     assert signature.return_type_name is not None
     assert signature.return_type_name == "int"
+    assert visitor._stats.total_unknown_signatures == 1
+    assert visitor._stats.success == 1
+    assert visitor._stats.failed == 0
 
 
 def test_c_ast_visitor_preserves_extracted_argument_kinds(
@@ -405,7 +408,10 @@ def test_c_ast_visitor_preserves_extracted_argument_kinds(
     ]
 
 
-def test_c_ast_visitor_keeps_known_function_unchanged(tmp_path: Path) -> None:
+def test_c_ast_visitor_keeps_known_function_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
     )
@@ -413,20 +419,126 @@ def test_c_ast_visitor_keeps_known_function_unchanged(tmp_path: Path) -> None:
         name="foo",
         signatures=[_signature(args=[IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_OR_KEYWORD)])],
     )
-    signatures = {
-        "foo": ExtractedFunction(
-            ml_name="foo",
-            function_cursor=_fake_function_cursor("foo"),
-            ml_flags=METH_VARARGS,
-            signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-        )
-    }
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                )
+            }
+        ),
+    )
 
-    rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
+    visitor.visit_module(module)
 
-    assert rewritten is func
-    assert rewritten.signatures[0].args[0].name == "x"
-    assert rewritten.signatures[0].args[0].type_name is None
+    assert module.functions[0] is func
+    assert func.signatures[0].args[0].name == "x"
+    assert func.signatures[0].args[0].type_name is None
+    assert visitor._stats.total_unknown_signatures == 0
+    assert visitor._stats.success == 0
+    assert visitor._stats.failed == 0
+
+
+def test_c_ast_visitor_records_no_candidates_stats(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "bar": ExtractedFunction(
+                    ml_name="bar",
+                    function_cursor=_fake_function_cursor("bar"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    assert module.functions[0].signatures == []
+    assert visitor._stats.total_unknown_signatures == 1
+    assert visitor._stats.success == 0
+    assert visitor._stats.failed == 1
+    assert visitor._stats.no_candidates == 1
+    assert visitor._stats.empty_selected_signatures == 0
+    assert visitor._stats.empty_extract == 0
+
+
+def test_c_ast_visitor_records_empty_selected_signatures_stats(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    assert module.functions[0].signatures == []
+    assert visitor._stats.total_unknown_signatures == 1
+    assert visitor._stats.success == 0
+    assert visitor._stats.failed == 1
+    assert visitor._stats.no_candidates == 0
+    assert visitor._stats.empty_selected_signatures == 1
+    assert visitor._stats.empty_extract == 0
+
+
+def test_c_ast_visitor_records_empty_extract_stats(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+    _patch_c_signature_extractor(monkeypatch, modules={})
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    assert module.functions[0].signatures == []
+    assert visitor._stats.total_unknown_signatures == 1
+    assert visitor._stats.success == 0
+    assert visitor._stats.failed == 1
+    assert visitor._stats.no_candidates == 0
+    assert visitor._stats.empty_selected_signatures == 0
+    assert visitor._stats.empty_extract == 1
 
 
 def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path: Path) -> None:

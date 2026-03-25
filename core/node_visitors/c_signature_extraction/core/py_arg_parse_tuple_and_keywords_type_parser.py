@@ -2,7 +2,6 @@ from __future__ import annotations
 
 """`PyArg_ParseTupleAndKeywords` 格式串到参数信息的解析器。"""
 
-from dataclasses import dataclass
 from enum import Enum
 from typing import Callable
 
@@ -11,6 +10,7 @@ from clang.cindex import Cursor
 from ....ir import IRArgumentKind
 from .cursor_utils import looks_like_identifier
 from .models import ExtractedArgument
+from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):
@@ -21,67 +21,6 @@ class _ArgumentSection(Enum):
     REQUIRED = "required"
     OPTIONAL = "optional"
     KEYWORD_ONLY = "keyword_only"
-
-
-@dataclass(frozen=True)
-class _FormatUnitSpec:
-    """描述单个格式单元如何映射到 Python 参数。"""
-
-    # format unit
-    unit: str
-
-    # 对应Python类型
-    type_name: str
-
-    # 读取c参数数量
-    c_arg_count: int
-
-    # 默认值参数在c参数中的位置
-    default_arg_offset: int
-
-    # 处理O! O&要从c参数中resolve类型，在c参数中的位置
-    object_type_arg_offset: int | None = None
-
-
-_FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
-    _FormatUnitSpec("es#", "str", 3, 1),
-    _FormatUnitSpec("et#", "str | bytes | bytearray", 3, 1),
-    _FormatUnitSpec("s*", "str | collections.abc.Buffer", 1, 0),
-    _FormatUnitSpec("s#", "str | collections.abc.Buffer", 2, 0),
-    _FormatUnitSpec("z*", "str | collections.abc.Buffer | None", 1, 0),
-    _FormatUnitSpec("z#", "str | collections.abc.Buffer | None", 2, 0),
-    _FormatUnitSpec("y*", "collections.abc.Buffer", 1, 0),
-    _FormatUnitSpec("y#", "collections.abc.Buffer", 2, 0),
-    _FormatUnitSpec("es", "str", 2, 1),
-    _FormatUnitSpec("et", "str | bytes | bytearray", 2, 1),
-    _FormatUnitSpec("w*", "collections.abc.Buffer", 1, 0),
-    _FormatUnitSpec("O!", "object", 2, 1, object_type_arg_offset=0),
-    _FormatUnitSpec("O&", "object", 2, 1, object_type_arg_offset=0),
-    _FormatUnitSpec("s", "str", 1, 0),
-    _FormatUnitSpec("z", "str | None", 1, 0),
-    _FormatUnitSpec("y", "collections.abc.Buffer", 1, 0),
-    _FormatUnitSpec("S", "bytes", 1, 0),
-    _FormatUnitSpec("Y", "bytearray", 1, 0),
-    _FormatUnitSpec("U", "str", 1, 0),
-    _FormatUnitSpec("b", "int", 1, 0),
-    _FormatUnitSpec("B", "int", 1, 0),
-    _FormatUnitSpec("h", "int", 1, 0),
-    _FormatUnitSpec("H", "int", 1, 0),
-    _FormatUnitSpec("i", "int", 1, 0),
-    _FormatUnitSpec("I", "int", 1, 0),
-    _FormatUnitSpec("l", "int", 1, 0),
-    _FormatUnitSpec("k", "int", 1, 0),
-    _FormatUnitSpec("L", "int", 1, 0),
-    _FormatUnitSpec("K", "int", 1, 0),
-    _FormatUnitSpec("n", "int", 1, 0),
-    _FormatUnitSpec("c", "bytes | bytearray", 1, 0),
-    _FormatUnitSpec("C", "str", 1, 0),
-    _FormatUnitSpec("f", "float", 1, 0),
-    _FormatUnitSpec("d", "float", 1, 0),
-    _FormatUnitSpec("D", "complex", 1, 0),
-    _FormatUnitSpec("O", "object", 1, 0),
-    _FormatUnitSpec("p", "object", 1, 0),
-)
 
 
 class PyArgParseTupleAndKeywordsTypeParser:

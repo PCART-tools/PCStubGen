@@ -15,56 +15,6 @@ METH_COEXIST = 64
 METH_FASTCALL = 128
 METH_METHOD = 512
 
-# PyArg_* 格式串 marker 到 Python 类型的近似映射。
-# 注意：带序号的 key（如 y#1 / y#2）表示“同一格式符展开出的第 1/2 个 C 参数”。
-FORMAT_TYPE_MAP: dict[str, str] = {
-    "self": "object",
-    "cls": "type",
-    "y": "bytes",
-    "*": "object",
-    "$": "object",
-    "i": "int",
-    "I": "int",
-    "e": "str",
-    "t": "str",
-    "s": "str",
-    "z": "str",
-    "u": "str",
-    "U": "str",
-    "d": "float",
-    "D": "complex",
-    "f": "float",
-    "b": "int",
-    "h": "int",
-    "l": "int",
-    "B": "int",
-    "H": "int",
-    "L": "int",
-    "c": "int",
-    "C": "str",
-    "k": "int",
-    "K": "int",
-    "n": "int",
-    "N": "object",
-    "O": "object",
-    "S": "object",
-    "p": "bool",
-    "F_INT_PYFMT": "int",
-    # y# -> (const char* buffer, Py_ssize_t length)
-    "y#1": "bytes",
-    "y#2": "int",
-    "y*": "bytes",
-    # z# / s# 同样会拆成“内容 + 长度”两段参数。
-    "z#1": "str",
-    "z#2": "int",
-    "s#1": "str",
-    "s#2": "int",
-    # O! -> (PyTypeObject*, PyObject*)
-    "O!1": "object",
-    "O!2": "object",
-    "O&": "object",
-}
-
 # 调用 token 提取阶段需要忽略的噪声标识（转换器、宏、数字字面量等）。
 UNRELATED_TOKENS: set[str] = {
     "NI_ObjectToInputArray",

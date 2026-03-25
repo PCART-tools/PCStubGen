@@ -69,7 +69,7 @@ def write_stubs(
     # 4. 运行管道
     _pipeline.run(ir_module)
     if c_ast_visitor is not None:
-        c_ast_visitor.log_summary(str(ir_module.full_name))
+        c_ast_visitor.log_summary()
 
     ext = options.stub_extension if options.stub_extension else "pyi"
     if _writer is None:
