@@ -4,109 +4,231 @@ import sys
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from core import cli
+from core.stub_generation_options import StubGenerationOptions
+
+RUNNER = CliRunner()
 
 
-def test_parse_args_rejects_removed_enable_c_signature_inference_flag() -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["math", "--enable-c-signature-inference"])
+def test_removed_enable_c_signature_inference_flag_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--enable-c-signature-inference"],
+        prog_name="pcstubgen",
+    )
 
-    assert ex.value.code == 2
-
-
-def test_parse_args_rejects_removed_ignore_invalid_expressions_flag() -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["math", "--ignore-invalid-expressions", ".*"])
-
-    assert ex.value.code == 2
+    assert result.exit_code == 2
 
 
-def test_parse_args_rejects_removed_print_invalid_expressions_flag() -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["math", "--print-invalid-expressions-as-is"])
+def test_removed_ignore_invalid_expressions_flag_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--ignore-invalid-expressions", ".*"],
+        prog_name="pcstubgen",
+    )
 
-    assert ex.value.code == 2
-
-
-def test_parse_args_rejects_removed_ignore_all_errors_flag() -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["math", "--ignore-all-errors"])
-
-    assert ex.value.code == 2
+    assert result.exit_code == 2
 
 
-def test_build_options_treats_empty_source_root_as_none() -> None:
-    args = cli.parse_args(["math", "--source-root", ""])
-    options = cli._build_options(args)
+def test_removed_print_invalid_expressions_flag_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--print-invalid-expressions-as-is"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+
+
+def test_removed_ignore_all_errors_flag_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--ignore-all-errors"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+
+
+def test_build_options_keeps_none_source_root() -> None:
+    options = cli._build_options(
+        enum_class_locations=[],
+        enable_docstring_signature_parser=True,
+        source_root=None,
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        include_docstrings=True,
+        include_module_type_comment=False,
+        stub_extension="pyi",
+    )
 
     assert options.source_root is None
 
 
-def test_build_options_treats_whitespace_source_root_as_none() -> None:
-    args = cli.parse_args(["math", "--source-root", "   "])
-    options = cli._build_options(args)
-
-    assert options.source_root is None
-
-
-def test_build_options_keeps_non_empty_source_root_path() -> None:
-    args = cli.parse_args(["math", "--source-root", "C:/tmp/src"])
-    options = cli._build_options(args)
+def test_build_options_keeps_path_source_root() -> None:
+    options = cli._build_options(
+        enum_class_locations=[],
+        enable_docstring_signature_parser=True,
+        source_root=Path("C:/tmp/src"),
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        include_docstrings=True,
+        include_module_type_comment=False,
+        stub_extension="pyi",
+    )
 
     assert options.source_root == Path("C:/tmp/src")
 
 
-def test_parse_args_accepts_clang_include_directory() -> None:
-    args = cli.parse_args(
+def test_cli_passes_repeated_clang_include_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_module_name: str | None = None
+    captured_output_dir: Path | None = None
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_module_name, captured_output_dir, captured_options
+        captured_module_name = module_name
+        captured_output_dir = output_dir
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        cli.app,
         [
             "math",
+            "--output-dir",
+            str(tmp_path),
             "--clang-include-directory",
             "C:/IncludeA",
             "--clang-include-directory=C:/IncludeB",
-        ]
+        ],
+        prog_name="pcstubgen",
     )
-    options = cli._build_options(args)
 
-    assert options.clang_include_directory == ["C:/IncludeA", "C:/IncludeB"]
+    assert result.exit_code == 0
+    assert captured_module_name == "math"
+    assert captured_output_dir == tmp_path
+    assert captured_options is not None
+    assert captured_options.clang_include_directory == [
+        str(Path("C:/IncludeA")),
+        str(Path("C:/IncludeB")),
+    ]
 
 
-def test_parse_args_accepts_clang_include() -> None:
-    args = cli.parse_args(
+def test_cli_passes_source_root_as_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_options
+        _ = (module_name, output_dir)
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        cli.app,
         [
             "math",
+            "--output-dir",
+            str(tmp_path),
+            "--source-root",
+            str(tmp_path / "src"),
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert captured_options is not None
+    assert captured_options.source_root == tmp_path / "src"
+
+
+def test_cli_passes_repeated_clang_include(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_module_name: str | None = None
+    captured_output_dir: Path | None = None
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_module_name, captured_output_dir, captured_options
+        captured_module_name = module_name
+        captured_output_dir = output_dir
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        cli.app,
+        [
+            "math",
+            "--output-dir",
+            str(tmp_path),
             "--clang-include",
             "Python.h",
             "--clang-include=numpy/arrayobject.h",
-        ]
+        ],
+        prog_name="pcstubgen",
     )
-    options = cli._build_options(args)
 
-    assert options.clang_include == ["Python.h", "numpy/arrayobject.h"]
-
-
-def test_parse_args_help_contains_chinese_project_text(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["--help"])
-
-    assert ex.value.code == 0
-    captured = capsys.readouterr()
-    assert "使用 pcstubgen 为模块生成 Python stub。" in captured.out
-    assert "输出 stub 的根目录" in captured.out
+    assert result.exit_code == 0
+    assert captured_module_name == "math"
+    assert captured_output_dir == tmp_path
+    assert captured_options is not None
+    assert captured_options.clang_include == ["Python.h", "numpy/arrayobject.h"]
 
 
-def test_parse_args_reports_chinese_custom_validation_error(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with pytest.raises(SystemExit) as ex:
-        cli.parse_args(["math", "--clang-include=-bad"])
+def test_help_contains_chinese_project_text() -> None:
+    result = RUNNER.invoke(cli.app, ["--help"], prog_name="pcstubgen")
 
-    assert ex.value.code == 2
-    captured = capsys.readouterr()
-    assert "clang_include 条目必须是 header，不能是类似选项的值: '-bad'" in captured.err
+    assert result.exit_code == 0
+    assert "使用 pcstubgen 为模块生成 Python stub。" in result.stdout
+    assert "--output-dir" in result.stdout
+    assert "输出 stub 的根目录" in result.stdout
+
+
+def test_invalid_clang_include_reports_chinese_validation_error() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--clang-include=-bad"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--clang-include'" in result.stderr
+    assert "'-bad'" in result.stderr
+
+
+def test_validate_clang_include_preserves_chinese_error_message() -> None:
+    with pytest.raises(cli.typer.BadParameter) as ex:
+        cli._validate_clang_include(["-bad"])
+
+    assert str(ex.value) == "clang_include 条目必须是 header，不能是类似选项的值: '-bad'"
+
+
+def test_invalid_stub_extension_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--stub-extension", "txt"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+    assert "生成 stub 的扩展名必须是 pyi 或 py" in result.stderr

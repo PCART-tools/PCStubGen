@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import re
 import sys
-from collections.abc import Sequence
 from pathlib import Path
+
+import typer
 from loguru import logger
 
 from . import write_stubs
@@ -17,45 +17,27 @@ MY_LOGURU_FORMAT = (
     "<level>{message}</level>\n"
 )
 
+app = typer.Typer(add_completion=False)
 
-def _regex(pattern_str: str) -> re.Pattern:
+
+def _regex(pattern_str: str) -> re.Pattern[str]:
     try:
         return re.compile(pattern_str)
     except re.error as ex:
-        raise argparse.ArgumentTypeError(f"无效的 REGEX pattern: {ex}") from ex
+        raise ValueError(f"无效的 REGEX pattern: {ex}") from ex
 
 
-def _regex_colon_path(regex_path: str) -> tuple[re.Pattern, str]:
+def _regex_colon_path(regex_path: str) -> tuple[re.Pattern[str], str]:
     if ":" not in regex_path:
-        raise argparse.ArgumentTypeError(
-            "无效的 enum class 位置，期望格式为 REGEX:PATH"
-        )
+        raise ValueError("无效的 enum class 位置，期望格式为 REGEX:PATH")
 
     pattern_str, path = regex_path.rsplit(":", maxsplit=1)
     if any(not part.isidentifier() for part in path.split(".")):
-        raise argparse.ArgumentTypeError(f"无效的 PATH: {path}")
+        raise ValueError(f"无效的 PATH: {path}")
     return _regex(pattern_str), path
 
 
-def _normalize_clang_include_directory(include_paths: Sequence[str]) -> list[str]:
-    normalized: list[str] = []
-    for raw_path in include_paths:
-        if raw_path is None:
-            raise TypeError("clang_include_directory 条目必须是非空的 include path")
-
-        include_path = str(raw_path).strip()
-        if not include_path:
-            raise ValueError("clang_include_directory 条目必须是非空的 include path")
-        if include_path.startswith("-"):
-            raise ValueError(
-                f"clang_include_directory 条目必须是 path，不能是类似选项的值: {include_path!r}"
-            )
-        if include_path not in normalized:
-            normalized.append(include_path)
-    return normalized
-
-
-def _normalize_clang_include(includes: Sequence[str]) -> list[str]:
+def _normalize_clang_include(includes: list[str]) -> list[str]:
     normalized: list[str] = []
     for raw_include in includes:
         if raw_include is None:
@@ -73,134 +55,146 @@ def _normalize_clang_include(includes: Sequence[str]) -> list[str]:
     return normalized
 
 
-def _normalize_source_root(raw_source_root: str | None) -> Path | None:
-    if raw_source_root is None:
-        return None
-
-    source_root = str(raw_source_root).strip()
-    if not source_root:
-        return None
-    return Path(source_root)
+def _normalize_stub_extension(stub_extension: str) -> str:
+    if stub_extension not in {"pyi", "py"}:
+        raise ValueError("生成 stub 的扩展名必须是 pyi 或 py")
+    return stub_extension
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="pcstubgen",
-        description="使用 pcstubgen 为模块生成 Python stub。",
-        allow_abbrev=False,
-    )
-    parser.add_argument("module_name", metavar="MODULE_NAME", help="模块名")
-    parser.add_argument(
-        "-o",
-        "--output-dir",
-        default="./stubs",
-        help="输出 stub 的根目录",
-    )
-
-    parser.add_argument(
-        "--enum-class-locations",
-        dest="enum_class_locations",
-        metavar="REGEX:LOC",
-        action="append",
-        default=[],
-        type=_regex_colon_path,
-        help="enum class 位置，格式为 <enum-class-name-regex>:<path-to-class>",
-    )
-
-    parser.add_argument(
-        "--no-docstring-signature-parser",
-        action="store_false",
-        dest="enable_docstring_signature_parser",
-        default=True,
-        help="禁用从 docstring 解析签名",
-    )
-    parser.add_argument(
-        "--source-root",
-        default=None,
-        help="用于 C signature inference 的 C/C++ 源码根目录",
-    )
-    parser.add_argument(
-        "--clang-include",
-        action="append",
-        default=[],
-        help="额外的 clang include 头文件，可重复指定",
-    )
-    parser.add_argument(
-        "--clang-include-directory",
-        action="append",
-        default=[],
-        help="额外的 clang include 目录路径，可重复指定",
-    )
-    parser.add_argument(
-        "--clang-c-std",
-        default=None,
-        help="传给 clang 的 C standard，例如 c11",
-    )
-    parser.add_argument(
-        "--clang-cpp-std",
-        default=None,
-        help="传给 clang 的 C++ standard，例如 c++17",
-    )
-
-    parser.add_argument(
-        "--no-docstrings",
-        action="store_false",
-        dest="include_docstrings",
-        default=True,
-        help="生成 stub 时不包含 docstring",
-    )
-    parser.add_argument(
-        "--include-module-type-comment",
-        default=False,
-        action="store_true",
-        help="在生成的 stub 中包含 module type comment",
-    )
-    parser.add_argument(
-        "--stub-extension",
-        type=str,
-        default="pyi",
-        metavar="EXT",
-        choices=["pyi", "py"],
-        help="生成 stub 的扩展名: pyi (默认) 或 py",
-    )
-
-    return parser
-
-
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+def _validate_enum_class_locations(
+    value: list[str] | None,
+) -> list[str]:
+    if value is None:
+        return []
 
     try:
-        args.clang_include = _normalize_clang_include(args.clang_include)
-        args.clang_include_directory = _normalize_clang_include_directory(args.clang_include_directory)
+        for item in value:
+            _regex_colon_path(item)
+    except ValueError as ex:
+        raise typer.BadParameter(str(ex)) from ex
+    return value
+
+
+def _validate_clang_include(value: list[str] | None) -> list[str]:
+    values = [] if value is None else list(value)
+    try:
+        _normalize_clang_include(values)
     except (TypeError, ValueError) as ex:
-        parser.error(str(ex))
+        raise typer.BadParameter(str(ex)) from ex
+    return values
 
-    return args
+
+def _validate_stub_extension(value: str) -> str:
+    try:
+        return _normalize_stub_extension(value)
+    except ValueError as ex:
+        raise typer.BadParameter(str(ex)) from ex
 
 
-def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
+def _build_options(
+    *,
+    enum_class_locations: list[str] | None,
+    enable_docstring_signature_parser: bool,
+    source_root: Path | None,
+    clang_include: list[str] | None,
+    clang_include_directory: list[Path] | None,
+    clang_c_std: str | None,
+    clang_cpp_std: str | None,
+    include_docstrings: bool,
+    include_module_type_comment: bool,
+    stub_extension: str,
+) -> StubGenerationOptions:
+    """
+    将 CLI 入参归一化并转换为 stub 生成配置。
+    """
     default_options = StubGenerationOptions()
-    source_root = _normalize_source_root(args.source_root)
 
     return StubGenerationOptions(
-        enum_class_locations=list(args.enum_class_locations),
-        enable_docstring_signature_parser=args.enable_docstring_signature_parser,
+        enum_class_locations=[
+            _regex_colon_path(item) for item in (enum_class_locations or [])
+        ],
+        enable_docstring_signature_parser=enable_docstring_signature_parser,
         source_root=source_root,
-        clang_c_std=args.clang_c_std or default_options.clang_c_std,
-        clang_cpp_std=args.clang_cpp_std or default_options.clang_cpp_std,
-        clang_include=list(args.clang_include),
-        clang_include_directory=list(args.clang_include_directory),
-        include_docstrings=args.include_docstrings,
-        include_module_type_comment=args.include_module_type_comment,
-        stub_extension=args.stub_extension,
+        clang_c_std=clang_c_std or default_options.clang_c_std,
+        clang_cpp_std=clang_cpp_std or default_options.clang_cpp_std,
+        clang_include=_normalize_clang_include(clang_include or []),
+        clang_include_directory=[
+            str(include_dir) for include_dir in (clang_include_directory or [])
+        ],
+        include_docstrings=include_docstrings,
+        include_module_type_comment=include_module_type_comment,
+        stub_extension=_normalize_stub_extension(stub_extension),
     )
 
 
-def main(argv: Sequence[str] | None = None):
-    args = parse_args(argv)
-    output_dir = Path(args.output_dir)
+@app.command(help="使用 pcstubgen 为模块生成 Python stub。")
+def main(
+    module_name: str = typer.Argument(..., metavar="MODULE_NAME", help="模块名"),
+    output_dir: Path = typer.Option(
+        Path("./stubs"),
+        "--output-dir",
+        "-o",
+        help="输出 stub 的根目录",
+    ),
+    enum_class_locations: list[str] | None = typer.Option(
+        None,
+        "--enum-class-locations",
+        metavar="REGEX:LOC",
+        callback=_validate_enum_class_locations,
+        help="enum class 位置，格式为 <enum-class-name-regex>:<path-to-class>",
+    ),
+    enable_docstring_signature_parser: bool = typer.Option(
+        True,
+        "--no-docstring-signature-parser",
+        help="禁用从 docstring 解析签名",
+    ),
+    source_root: Path | None = typer.Option(
+        None,
+        "--source-root",
+        help="用于 C signature inference 的 C/C++ 源码根目录",
+    ),
+    clang_include: list[str] | None = typer.Option(
+        None,
+        "--clang-include",
+        callback=_validate_clang_include,
+        help="额外的 clang include 头文件，可重复指定",
+    ),
+    clang_include_directory: list[Path] | None = typer.Option(
+        None,
+        "--clang-include-directory",
+        help="额外的 clang include 目录路径，可重复指定",
+    ),
+    clang_c_std: str | None = typer.Option(
+        None,
+        "--clang-c-std",
+        help="传给 clang 的 C standard，例如 c11",
+    ),
+    clang_cpp_std: str | None = typer.Option(
+        None,
+        "--clang-cpp-std",
+        help="传给 clang 的 C++ standard，例如 c++17",
+    ),
+    include_docstrings: bool = typer.Option(
+        True,
+        "--no-docstrings",
+        help="生成 stub 时不包含 docstring",
+    ),
+    include_module_type_comment: bool = typer.Option(
+        False,
+        "--include-module-type-comment",
+        help="在生成的 stub 中包含 module type comment",
+    ),
+    stub_extension: str = typer.Option(
+        "pyi",
+        "--stub-extension",
+        metavar="EXT",
+        callback=_validate_stub_extension,
+        help="生成 stub 的扩展名: pyi (默认) 或 py",
+    ),
+) -> None:
+    """
+    使用 pcstubgen 为模块生成 Python stub。
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.remove()
@@ -216,9 +210,20 @@ def main(argv: Sequence[str] | None = None):
     )
     try:
         write_stubs(
-            module_name=args.module_name,
+            module_name=module_name,
             output_dir=output_dir,
-            options=_build_options(args),
+            options=_build_options(
+                enum_class_locations=enum_class_locations,
+                enable_docstring_signature_parser=enable_docstring_signature_parser,
+                source_root=source_root,
+                clang_include=clang_include,
+                clang_include_directory=clang_include_directory,
+                clang_c_std=clang_c_std,
+                clang_cpp_std=clang_cpp_std,
+                include_docstrings=include_docstrings,
+                include_module_type_comment=include_module_type_comment,
+                stub_extension=stub_extension,
+            ),
         )
     finally:
         logger.remove(console_sink_id)
@@ -227,4 +232,4 @@ def main(argv: Sequence[str] | None = None):
 
 
 if __name__ == "__main__":
-    main()
+    app()
