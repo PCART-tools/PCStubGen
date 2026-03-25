@@ -57,13 +57,6 @@ def is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     return False
 
 
-def build_module_lookup_names(module_name: str) -> set[str]:
-    """构建模块别名集合，仅保留完整名与叶子名。"""
-    lookup_names = {module_name}
-    lookup_names.add(module_name.rsplit(".", 1)[-1])
-    return lookup_names
-
-
 def resolve_init_list_expr(
     cursor: Cursor,
     field_names: tuple[str, ...] | list[str],
@@ -206,7 +199,6 @@ def extract_module_from_pymoduledef(module_def_cursor: Cursor) -> ExtractedModul
     m_name = str(m_name_cursor.spelling).strip('"')
 
     module = ExtractedModule(name=m_name)
-    module.lookup_names.update(build_module_lookup_names(m_name))
 
     # 方法表
     m_methods_cursor = values.get("m_methods")

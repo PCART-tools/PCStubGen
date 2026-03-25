@@ -199,7 +199,9 @@ _DECL_CURSOR_KINDS = {
 
 def infer_signature(function: ExtractedFunction) -> None:
     """汇合参数推断与返回值推断结果，生成函数签名。"""
-    function.signatures = infer_argument_signatures(function.function_cursor)
+    inferred_argument_signatures = infer_argument_signatures(function.function_cursor)
+    if inferred_argument_signatures:
+        function.signatures = inferred_argument_signatures
 
     inferred_return_type = infer_return_type(function.function_cursor)
     if inferred_return_type is None:
@@ -209,7 +211,8 @@ def infer_signature(function: ExtractedFunction) -> None:
         function.signatures.append(ExtractedSignature())
 
     for signature in function.signatures:
-        signature.return_type_name = inferred_return_type
+        if signature.return_type_name is None:
+            signature.return_type_name = inferred_return_type
 
 
 def infer_argument_signatures(func_cursor: Cursor) -> list[ExtractedSignature]:

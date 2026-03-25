@@ -50,5 +50,4 @@ class ExtractedModule:
     """按 PyModuleDef 聚合的模块级提取结果。"""
 
     name: str
-    lookup_names: set[str] = field(default_factory=set)
     functions: dict[str, ExtractedFunction] = field(default_factory=dict)

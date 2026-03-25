@@ -84,15 +84,10 @@ def _module_fixture(
     *,
     name: str = "pkg.mod",
     functions: dict[str, ExtractedFunction] | None = None,
-    lookup_names: set[str] | None = None,
 ) -> dict[str, ExtractedModule]:
-    module_lookup_names = set(lookup_names or ())
-    module_lookup_names.add(name)
-    module_lookup_names.add(name.rsplit(".", 1)[-1])
     return {
         name: ExtractedModule(
             name=name,
-            lookup_names=module_lookup_names,
             functions=functions or {},
         )
     }
@@ -353,7 +348,6 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert signature.return_type_name == "int"
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 1
-    assert visitor._stats.failed == 0
 
 
 def test_c_ast_visitor_preserves_extracted_argument_kinds(
@@ -445,10 +439,9 @@ def test_c_ast_visitor_keeps_known_function_unchanged(
     assert func.signatures[0].args[0].type_name is None
     assert visitor._stats.total_unknown_signatures == 0
     assert visitor._stats.success == 0
-    assert visitor._stats.failed == 0
 
 
-def test_c_ast_visitor_records_no_candidates_stats(
+def test_c_ast_visitor_records_missing_function_match_stats(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -477,13 +470,12 @@ def test_c_ast_visitor_records_no_candidates_stats(
     assert module.functions[0].signatures == []
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 0
-    assert visitor._stats.failed == 1
-    assert visitor._stats.no_candidates == 1
-    assert visitor._stats.empty_selected_signatures == 0
-    assert visitor._stats.empty_extract == 0
+    assert visitor._stats.missing_module_match == 0
+    assert visitor._stats.missing_function_match == 1
+    assert visitor._stats.matched_function_without_signatures == 0
 
 
-def test_c_ast_visitor_records_empty_selected_signatures_stats(
+def test_c_ast_visitor_records_matched_function_without_signatures_stats(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -512,13 +504,12 @@ def test_c_ast_visitor_records_empty_selected_signatures_stats(
     assert module.functions[0].signatures == []
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 0
-    assert visitor._stats.failed == 1
-    assert visitor._stats.no_candidates == 0
-    assert visitor._stats.empty_selected_signatures == 1
-    assert visitor._stats.empty_extract == 0
+    assert visitor._stats.missing_module_match == 0
+    assert visitor._stats.missing_function_match == 0
+    assert visitor._stats.matched_function_without_signatures == 1
 
 
-def test_c_ast_visitor_records_empty_extract_stats(
+def test_c_ast_visitor_records_empty_extraction_as_missing_module_match(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -535,10 +526,9 @@ def test_c_ast_visitor_records_empty_extract_stats(
     assert module.functions[0].signatures == []
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 0
-    assert visitor._stats.failed == 1
-    assert visitor._stats.no_candidates == 0
-    assert visitor._stats.empty_selected_signatures == 0
-    assert visitor._stats.empty_extract == 1
+    assert visitor._stats.missing_module_match == 1
+    assert visitor._stats.missing_function_match == 0
+    assert visitor._stats.matched_function_without_signatures == 0
 
 
 def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path: Path) -> None:
@@ -731,7 +721,6 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
         modules={
             "pkg.first": ExtractedModule(
                 name="pkg.first",
-                lookup_names={"pkg.first", "first"},
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
@@ -743,7 +732,6 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
             ),
             "pkg.second": ExtractedModule(
                 name="pkg.second",
-                lookup_names={"pkg.second", "second"},
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
@@ -778,6 +766,44 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
     assert second_module.functions[0].signatures[0].args[0].type_name == "float"
 
 
+def test_c_ast_visitor_falls_back_to_unique_leaf_module_match(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules={
+            "mod": ExtractedModule(
+                name="mod",
+                functions={
+                    "foo": ExtractedFunction(
+                        ml_name="foo",
+                        function_cursor=_fake_function_cursor("foo"),
+                        ml_flags=METH_VARARGS,
+                        signatures=[
+                            ExtractedSignature(
+                                arguments=[ExtractedArgument(name="value", type_name="float")]
+                            )
+                        ],
+                    )
+                },
+            ),
+        },
+    )
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+
+    visitor.visit_module(module)
+
+    assert [arg.name for arg in module.functions[0].signatures[0].args] == ["value"]
+    assert module.functions[0].signatures[0].args[0].type_name == "float"
+    assert visitor._stats.success == 1
+
+
 def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -786,8 +812,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         monkeypatch,
         modules={
             "one": ExtractedModule(
-                name="one",
-                lookup_names={"mod"},
+                name="mod",
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
@@ -798,8 +823,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                 },
             ),
             "two": ExtractedModule(
-                name="two",
-                lookup_names={"mod"},
+                name="mod",
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
@@ -823,6 +847,9 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
     visitor.visit_module(module)
 
     assert module.functions[0].signatures == []
+    assert visitor._stats.total_unknown_signatures == 1
+    assert visitor._stats.missing_module_match == 1
+    assert visitor._stats.missing_function_match == 0
 
 
 def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(

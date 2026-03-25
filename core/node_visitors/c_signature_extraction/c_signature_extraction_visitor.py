@@ -25,10 +25,9 @@ from ...ir import (
 class _InferenceStats:
     total_unknown_signatures: int = 0
     success: int = 0
-    failed: int = 0
-    no_candidates: int = 0
-    empty_selected_signatures: int = 0
-    empty_extract: int = 0
+    missing_module_match: int = 0
+    missing_function_match: int = 0
+    matched_function_without_signatures: int = 0
 
 
 class CSignatureExtractionVisitor(NodeVisitor):
@@ -62,16 +61,22 @@ class CSignatureExtractionVisitor(NodeVisitor):
     def visit_module(self, node: IRModule) -> None:
         """按模块粒度决定是否启用 C AST 签名补全。"""
         if node.module_type is IRModuleType.EXTENSION:
+            module_full_name = str(node.full_name)
             modules = self._get_signature_modules()
-            if not modules:
-                self._record_empty_extract(funcs=node.functions)
-            else:
-                extracted_module = self._match_extracted_module(node, modules)
-                signatures = extracted_module.functions if extracted_module is not None else {}
-                self._rewrite_module_functions(
+            extracted_module = self._match_extracted_module(node, modules)
+            if extracted_module is None:
+                self._record_missing_module_match(
                     funcs=node.functions,
-                    signatures=signatures,
+                    module_full_name=module_full_name,
                 )
+            else:
+                for func in node.functions:
+                    self._rewrite_function(
+                        func=func,
+                        signatures=extracted_module.functions,
+                        is_method=False,
+                        module_full_name=module_full_name,
+                    )
 
         super().visit_module(node)
 
@@ -83,29 +88,15 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         logger.info(
             "C AST 签名推断汇总: "
-            "total_unknown_signatures={}, success={}, failed={}, no_candidates={}, "
-            "empty_selected_signatures={}, empty_extract={}",
+            "total_unknown_signatures={}, success={}, missing_module_match={}, missing_function_match={}, "
+            "matched_function_without_signatures={}",
             self._stats.total_unknown_signatures,
             self._stats.success,
-            self._stats.failed,
-            self._stats.no_candidates,
-            self._stats.empty_selected_signatures,
-            self._stats.empty_extract,
+            self._stats.missing_module_match,
+            self._stats.missing_function_match,
+            self._stats.matched_function_without_signatures,
         )
         self._reset_stats()
-
-    def _rewrite_module_functions(
-        self,
-        funcs: list[IRFunction],
-        signatures: dict[str, ExtractedFunction],
-    ) -> None:
-        """批量重写模块级函数。"""
-        for func in funcs:
-            self._rewrite_function(
-                func=func,
-                signatures=signatures,
-                is_method=False,
-            )
 
     def _rewrite_function(
         self,
@@ -113,6 +104,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         func: IRFunction,
         signatures: dict[str, ExtractedFunction],
         is_method: bool,
+        module_full_name: str,
     ) -> None:
         """
         用提取结果原地重写单个函数签名并记录统计。
@@ -127,22 +119,22 @@ class CSignatureExtractionVisitor(NodeVisitor):
         selected = signatures.get(func.name)
         if selected is None:
             logger.warning(
-                "重写签名失败, func_name: {}, is_method: {}: 未找到 C signature candidates",
+                "重写签名失败, 未找到 C 函数, module_name: {}, func_name: {}, is_method: {}",
+                module_full_name,
                 func.name,
                 is_method,
             )
-            self._stats.failed += 1
-            self._stats.no_candidates += 1
+            self._stats.missing_function_match += 1
             return
 
         if not selected.signatures:
             logger.warning(
-                "重写签名失败, func_name: {}, is_method: {}: 选中的 candidate 不包含 signatures",
+                "重写签名失败, 选中的 candidate 不包含 signatures, module_name: {}, func_name: {}, is_method: {}",
+                module_full_name,
                 func.name,
                 is_method,
             )
-            self._stats.failed += 1
-            self._stats.empty_selected_signatures += 1
+            self._stats.matched_function_without_signatures += 1
             return
 
         rewritten_signatures: list[IRSignature] = []
@@ -232,14 +224,11 @@ class CSignatureExtractionVisitor(NodeVisitor):
         modules: dict[str, ExtractedModule],
     ) -> ExtractedModule | None:
         """在提取结果里匹配当前模块节点。"""
-        if not modules:
-            return None
-
         full_name = str(node.full_name)
         exact_matches = [
             module
             for module in modules.values()
-            if full_name in module.lookup_names
+            if module.name == full_name
         ]
         if len(exact_matches) == 1:
             return exact_matches[0]
@@ -250,7 +239,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         leaf_matches = [
             module
             for module in modules.values()
-            if leaf_name in module.lookup_names
+            if module.name == leaf_name
         ]
         if len(leaf_matches) == 1:
             return leaf_matches[0]
@@ -274,29 +263,27 @@ class CSignatureExtractionVisitor(NodeVisitor):
         )
         return self._signature_modules
 
-    def _record_empty_extract(
+    def _record_missing_module_match(
         self,
         *,
         funcs: list[IRFunction],
+        module_full_name: str,
     ) -> None:
-        """记录全局提取结果为空时的逐项失败。"""
+        """记录未匹配到提取模块时仍缺失签名的函数。"""
         unknown_count = 0
-        reason = "C signature extraction 未返回结果"
         for func in funcs:
             if not self._has_unknown_signatures(func):
                 continue
             unknown_count += 1
             logger.warning(
-                "重写签名失败, func_name: {}, is_method: {}: {}",
+                "重写签名失败, 未找到 C 模块, module_name: {}, func_name: {}",
+                module_full_name,
                 func.name,
-                False,
-                reason,
             )
 
         if unknown_count > 0:
             self._stats.total_unknown_signatures += unknown_count
-            self._stats.failed += unknown_count
-            self._stats.empty_extract += unknown_count
+            self._stats.missing_module_match += unknown_count
 
     @staticmethod
     def _has_unknown_signatures(func: IRFunction) -> bool:
