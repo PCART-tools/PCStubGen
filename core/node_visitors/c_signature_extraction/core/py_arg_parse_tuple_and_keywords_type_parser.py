@@ -125,11 +125,11 @@ class PyArgParseTupleAndKeywordsTypeParser:
             if current == "|":
                 if section is _ArgumentSection.OPTIONAL:
                     raise PyArgParseTupleAndKeywordsTypeParserError(
-                        "Found duplicate '|' in format string."
+                        "format string 中发现重复的 '|'。"
                     )
                 if section is _ArgumentSection.KEYWORD_ONLY:
                     raise PyArgParseTupleAndKeywordsTypeParserError(
-                        "Found '|' after '$' in format string."
+                        "format string 中在 '$' 之后出现了 '|'。"
                     )
                 self._advance_char()
                 section = _ArgumentSection.OPTIONAL
@@ -138,11 +138,11 @@ class PyArgParseTupleAndKeywordsTypeParser:
             if current == "$":
                 if section is _ArgumentSection.REQUIRED:
                     raise PyArgParseTupleAndKeywordsTypeParserError(
-                        "Found '$' before '|'."
+                        "format string 中在 '|' 之前出现了 '$'。"
                     )
                 if section is _ArgumentSection.KEYWORD_ONLY:
                     raise PyArgParseTupleAndKeywordsTypeParserError(
-                        "Found duplicate '$' in format string."
+                        "format string 中发现重复的 '$'。"
                     )
                 self._advance_char()
                 section = _ArgumentSection.KEYWORD_ONLY
@@ -187,11 +187,11 @@ class PyArgParseTupleAndKeywordsTypeParser:
         for keyword_name in self._kwlist:
             if not keyword_name or not looks_like_identifier(keyword_name):
                 raise PyArgParseTupleAndKeywordsTypeParserError(
-                    f"Invalid keyword name {keyword_name!r}."
+                    f"无效的 keyword name: {keyword_name!r}。"
                 )
             if keyword_name in seen:
                 raise PyArgParseTupleAndKeywordsTypeParserError(
-                    f"Duplicate keyword name {keyword_name!r}."
+                    f"重复的 keyword name: {keyword_name!r}。"
                 )
             seen.add(keyword_name)
 
@@ -199,11 +199,11 @@ class PyArgParseTupleAndKeywordsTypeParser:
         """在解析结束后统一校验 Python 参数和 C 槽位计数。"""
         if self._python_arg_index != len(self._kwlist):
             raise PyArgParseTupleAndKeywordsTypeParserError(
-                f"Expected {self._python_arg_index} keyword names, found {len(self._kwlist)}."
+                f"期望 {self._python_arg_index} 个 keyword names，实际找到 {len(self._kwlist)} 个。"
             )
         if self._arg_index != len(self._args):
             raise PyArgParseTupleAndKeywordsTypeParserError(
-                f"Expected {self._arg_index} C arguments, found {len(self._args)}."
+                f"期望 {self._arg_index} 个 C arguments，实际找到 {len(self._args)} 个。"
             )
 
     def _advance_format_unit_required(self) -> _FormatUnitSpec:
@@ -211,7 +211,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         current = self._peek_char_required()
         if current in "()[]{}":
             raise PyArgParseTupleAndKeywordsTypeParserError(
-                f"Unsupported format structure {current!r} at index {self._char_index}."
+                f"索引 {self._char_index} 处的 format structure {current!r} 不受支持。"
             )
 
         for spec in _FORMAT_UNIT_SPECS:
@@ -220,7 +220,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
                 return spec
 
         raise PyArgParseTupleAndKeywordsTypeParserError(
-            f"Unsupported format unit {current!r} at index {self._char_index}."
+            f"索引 {self._char_index} 处的 format unit {current!r} 不受支持。"
         )
 
     def _peek_char(self) -> str | None:
@@ -233,7 +233,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         """查看当前位置字符；若已结束则抛错。"""
         current = self._peek_char()
         if current is None:
-            raise PyArgParseTupleAndKeywordsTypeParserError("Found end of format string.")
+            raise PyArgParseTupleAndKeywordsTypeParserError("已到达 format string 末尾。")
         return current
 
     def _advance_char(self) -> str | None:
@@ -256,7 +256,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         """消费一个 Python 关键字参数名。"""
         if self._python_arg_index >= len(self._kwlist):
             raise PyArgParseTupleAndKeywordsTypeParserError(
-                f"Expected keyword name at index {self._python_arg_index}, but none remained."
+                f"期望在索引 {self._python_arg_index} 处取得 keyword name，但已没有剩余项。"
             )
 
         name = self._kwlist[self._python_arg_index]
@@ -268,7 +268,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         end_index = self._arg_index + count
         if end_index > len(self._args):
             raise PyArgParseTupleAndKeywordsTypeParserError(
-                f"Expected {count} C arguments starting at index {self._arg_index}, but none remained."
+                f"期望从索引 {self._arg_index} 开始取得 {count} 个 C arguments，但已没有剩余参数。"
             )
 
         values = self._args[self._arg_index:end_index]

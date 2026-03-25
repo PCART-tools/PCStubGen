@@ -46,7 +46,7 @@ class PyBuildValueTypeParser:
         self._skip_ignored_chars()
         if self._arg_index != len(self._args):
             raise PyBuildValueTypeParserError(
-                f"Expected {self._arg_index} arguments, found {len(self._args)}."
+                f"期望 {self._arg_index} 个 arguments，实际找到 {len(self._args)} 个。"
             )
 
         if not top_level_types:
@@ -67,7 +67,7 @@ class PyBuildValueTypeParser:
                 if stop_char is None:
                     return items
                 raise PyBuildValueTypeParserError(
-                    f"Expected '{stop_char}' before end of format string."
+                    f"在 format string 结束前应找到 '{stop_char}'。"
                 )
 
             if stop_char is not None and current == stop_char:
@@ -108,7 +108,7 @@ class PyBuildValueTypeParser:
         self._consume_char("}")
 
         if len(items) % 2 != 0:
-            raise PyBuildValueTypeParserError("Dictionary format must contain key/value pairs.")
+            raise PyBuildValueTypeParserError("Dictionary format 必须包含成对的 key/value。")
 
         key_types = items[0::2]
         value_types = items[1::2]
@@ -169,7 +169,7 @@ class PyBuildValueTypeParser:
             return self._resolve_object_type(arg)
 
         raise PyBuildValueTypeParserError(
-            f"Unsupported format unit '{unit}' at index {self._char_index}."
+            f"索引 {self._char_index} 处的 format unit '{unit}' 不受支持。"
         )
 
     def _peek_char(self) -> str | None:
@@ -181,7 +181,7 @@ class PyBuildValueTypeParser:
     def _peek_char_required(self) -> str:
         """查看当前位置字符；若已结束则抛错。"""
         if self._char_index >= len(self._format):
-            raise PyBuildValueTypeParserError("Found end of format string.")
+            raise PyBuildValueTypeParserError("已到达 format string 末尾。")
         return self._format[self._char_index]
 
     def _advance_char(self) -> str | None:
@@ -195,7 +195,7 @@ class PyBuildValueTypeParser:
     def _advance_char_required(self) -> str:
         """推进一个格式串字符；若已结束则抛错。"""
         if self._char_index >= len(self._format):
-            raise PyBuildValueTypeParserError("Found end of format string.")
+            raise PyBuildValueTypeParserError("已到达 format string 末尾。")
         current = self._format[self._char_index]
         self._char_index += 1
         return current
@@ -206,7 +206,7 @@ class PyBuildValueTypeParser:
         if current != expected:
             found = "end of format string" if current is None else repr(current)
             raise PyBuildValueTypeParserError(
-                f"Expected '{expected}' at index {self._char_index - 1}, found {found}."
+                f"期望在索引 {self._char_index - 1} 处找到 '{expected}'，实际为 {found}。"
             )
 
     def _skip_ignored_chars(self) -> None:
@@ -221,7 +221,7 @@ class PyBuildValueTypeParser:
         """消费一个实参游标；若已无剩余则抛错。"""
         if self._arg_index >= len(self._args):
             raise PyBuildValueTypeParserError(
-                f"Expected argument at index {self._arg_index}, but none remained."
+                f"期望在索引 {self._arg_index} 处取得 argument，但已没有剩余参数。"
             )
 
         value = self._args[self._arg_index]

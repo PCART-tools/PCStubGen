@@ -152,7 +152,7 @@ def extract_pymethoddef_init_list_expr(
 
     function_cursor = ml_meth_cursor.referenced
     if function_cursor is None:
-        logger.warning("cant find function cursor, location: %s", ml_meth_cursor.location)
+        logger.warning("找不到 function cursor，位置: %s", ml_meth_cursor.location)
         return False, None
 
     return False, ExtractedFunction(
@@ -182,7 +182,7 @@ def extract_method_table(
             continue
         if extracted.ml_name in result:
             logger.warning(
-                "Discarded duplicate extracted function in module %s for Python name %s: kept existing function, discarded incoming function",
+                "丢弃 module %s 中 Python 名称 %s 对应的重复 extracted function: 已保留现有函数，丢弃新函数",
                 module_name,
                 extracted.ml_name,
             )

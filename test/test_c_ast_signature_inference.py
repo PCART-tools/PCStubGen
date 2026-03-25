@@ -490,11 +490,11 @@ def test_c_ast_visitor_log_summary_resets_after_logging(
     summary_records = [
         record
         for record in caplog.records
-        if record.message.startswith("C AST signature inference summary for pkg:")
+        if record.message.startswith("项目 pkg 的 C AST 签名推断汇总:")
     ]
     assert len(summary_records) == 1
     assert summary_records[0].message == (
-        "C AST signature inference summary for pkg: "
+        "项目 pkg 的 C AST 签名推断汇总: "
         "total_unknown_signatures=2, success=2, failed=0, no_candidates=0, "
         "empty_selected_signatures=0, empty_extract=0"
     )
@@ -546,8 +546,9 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
     assert result is translation_unit
     assert len(caplog.records) == 1
     message = caplog.records[0].message
+    assert "Translation unit 诊断信息" in message
     assert str(source) in message
-    assert "suffix: .c" in message
+    assert "文件后缀 suffix: .c" in message
     expected_parse_args = translation_unit_module.build_clang_parse_args(
         source,
         clang_include=config["clang_include"],
@@ -555,7 +556,7 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
         clang_c_std=config["clang_c_std"],
         clang_cpp_std=config["clang_cpp_std"],
     )
-    assert f"parse_args: {expected_parse_args!r}" in message
+    assert f"解析参数 parse_args: {expected_parse_args!r}" in message
     assert f"[WARNING] {source}:3:1: warning detail" in message
     assert f"[ERROR] {source}:7:9: error detail" in message
     assert f"[FATAL] {source}:11:4: fatal detail" in message
@@ -677,7 +678,10 @@ def test_c_signature_engine_logs_info_when_auto_include_is_added(
         )
 
     messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
-    assert any("Auto-added clang include path for missing header numpy/npy_common.h" in message for message in messages)
+    assert any(
+        "已为 numpy/npy_common.h 在 " in message and "自动补全 clang include path" in message
+        for message in messages
+    )
     assert any(str(header_path.parents[1]) in message for message in messages)
 
 
@@ -884,7 +888,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
 
     assert module.functions[0].signatures == []
     assert (
-        "Failed to rewrite unknown signature for foo (is_method=False): no C signature candidates found"
+        "重写 foo 的未知签名失败 (is_method=False): 未找到 C signature candidates"
         in caplog.text
     )
 
@@ -1079,6 +1083,43 @@ def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
     )
 
 
+def test_write_stubs_configures_chinese_console_log_formatter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import core as stubgen_module
+
+    seen_basic_config: dict[str, object] = {}
+
+    def _capture_basic_config(**kwargs: object) -> None:
+        seen_basic_config.update(kwargs)
+
+    def _noop_run(self: Pipeline, module: IRModule) -> None:
+        _ = (self, module)
+
+    monkeypatch.setattr(stubgen_module.logging, "basicConfig", _capture_basic_config)
+    monkeypatch.setattr(
+        stubgen_module,
+        "build_module",
+        lambda path, module: IRModule(
+            full_name=QualifiedName.from_str("pkg"),
+            module_type=IRModuleType.EXTENSION,
+        ),
+    )
+    monkeypatch.setattr(stubgen_module.Pipeline, "run", _noop_run)
+
+    options = StubGenerationOptions(
+        enable_docstring_signature_parser=False,
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options)
+
+    assert seen_basic_config == {
+        "level": logging.INFO,
+        "format": "[{levelname}]: {message}\n位置: {filename}:{lineno} (函数 {funcName}())\n",
+        "style": "{",
+    }
+
+
 def test_write_stubs_logs_project_level_c_ast_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1128,7 +1169,7 @@ def test_write_stubs_logs_project_level_c_ast_summary(
 
     log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
-        "C AST signature inference summary for pkg: "
+        "项目 pkg 的 C AST 签名推断汇总: "
         "total_unknown_signatures=2, success=1, failed=1, no_candidates=1, "
         "empty_selected_signatures=0, empty_extract=0"
     ) in log_text
@@ -1163,11 +1204,11 @@ def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
 
     log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert (
-        "Failed to rewrite unknown signature for foo (is_method=False): "
-        "C signature extraction returned no results"
+        "重写 foo 的未知签名失败 (is_method=False): "
+        "C signature extraction 未返回结果"
     ) in log_text
     assert (
-        "C AST signature inference summary for pkg: "
+        "项目 pkg 的 C AST 签名推断汇总: "
         "total_unknown_signatures=1, success=0, failed=1, no_candidates=0, "
         "empty_selected_signatures=0, empty_extract=1"
     ) in log_text
@@ -1211,7 +1252,7 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
     assert "Failed to extract C signatures: boom" not in log_text
     assert "C signature extraction failed" not in log_text
-    assert "C AST signature inference summary for pkg:" not in log_text
+    assert "项目 pkg 的 C AST 签名推断汇总:" not in log_text
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
@@ -1291,7 +1332,7 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
     assert parsed.signatures[0].return_type_name == "numpy.ndarray"
-    assert "Failed to rewrite unknown signature for cdist_minkowski" not in caplog.text
+    assert "重写 cdist_minkowski 的未知签名失败" not in caplog.text
     assert extractor.called == 1
 
 
@@ -1832,8 +1873,8 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
-        "Discarded duplicate extracted module dup.shared: "
-        "kept existing module, discarded incoming module"
+        "丢弃重复提取的 module dup.shared: "
+        "已保留现有模块，丢弃新模块"
     ) in caplog.text
 
 
@@ -1924,8 +1965,8 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
-        "Discarded duplicate extracted module dup.same_file: "
-        "kept existing module, discarded incoming module"
+        "丢弃重复提取的 module dup.same_file: "
+        "已保留现有模块，丢弃新模块"
     ) in caplog.text
 
 
@@ -2004,8 +2045,8 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
     module = extracted["dup.mod"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
-        "Discarded duplicate extracted function in module dup.mod for Python name foo: "
-        "kept existing function, discarded incoming function"
+        "丢弃 module dup.mod 中 Python 名称 foo 对应的重复 extracted function: "
+        "已保留现有函数，丢弃新函数"
     ) in caplog.text
 
 
@@ -2081,8 +2122,8 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
     module = extracted["dup.shared"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
     assert (
-        "Discarded duplicate extracted module dup.shared: "
-        "kept existing module, discarded incoming module"
+        "丢弃重复提取的 module dup.shared: "
+        "已保留现有模块，丢弃新模块"
     ) in caplog.text
 
 
@@ -4159,7 +4200,7 @@ def test_c_signature_engine_extract_pymethoddef_init_list_expr_discards_entry_wi
 
     assert is_sentinel is False
     assert extracted is None
-    assert "cant find function cursor" in caplog.text
+    assert "找不到 function cursor" in caplog.text
 
 
 def test_c_signature_engine_extract_method_table_stops_at_sentinel(

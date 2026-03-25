@@ -209,6 +209,14 @@ def test_parse_raises_for_invalid_keyword_names(kwlist: list[str]) -> None:
         _parse("i" * len(kwlist), kwlist, [_cursor(f"arg_{index}") for index in range(len(kwlist))])
 
 
+def test_parse_raises_with_chinese_message_for_invalid_keyword_name() -> None:
+    with pytest.raises(
+        PyArgParseTupleAndKeywordsTypeParserError,
+        match=r"无效的 keyword name: ''。",
+    ):
+        _parse("i", [""], [_cursor("arg_0")])
+
+
 @pytest.mark.parametrize(
     ("format_string", "kwlist", "args"),
     [

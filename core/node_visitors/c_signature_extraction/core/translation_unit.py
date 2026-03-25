@@ -52,13 +52,12 @@ def format_diagnostics_message(
 ) -> str:
     """格式化 translation unit 的诊断日志块，便于统一输出和排查。"""
     lines = [
-        "Translation unit diagnostics",
-        f"  file_path: {file_path}",
-        f"  suffix: {file_path.suffix.lower() or '<none>'}",
-        f"  parse_args: {parse_args!r}",
-        "  diagnostics:",
+        "翻译单元诊断信息",
+        f"文件路径: {file_path}",
+        f"解析参数: {parse_args}",
+        "诊断:",
     ]
-    lines.extend(f"    {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
+    lines.extend(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
     return "\n".join(lines)
 
 
@@ -154,12 +153,7 @@ def discover_missing_include_args(
     for include_literal, include_dir in resolved_pairs:
         if include_dir not in added:
             continue
-        logger.info(
-            "Auto-added clang include path for missing header %s in %s: %s",
-            include_literal,
-            file_path,
-            include_dir,
-        )
+        logger.info(f"补全clang include path: {include_dir}, parse 文件: {file_path}, include 字面量: {include_literal}")
     return added
 
 

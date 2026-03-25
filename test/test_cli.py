@@ -87,3 +87,26 @@ def test_parse_args_accepts_clang_include() -> None:
     options = cli._build_options(args)
 
     assert options.clang_include == ["Python.h", "numpy/arrayobject.h"]
+
+
+def test_parse_args_help_contains_chinese_project_text(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as ex:
+        cli.parse_args(["--help"])
+
+    assert ex.value.code == 0
+    captured = capsys.readouterr()
+    assert "使用 pcstubgen 为模块生成 Python stub。" in captured.out
+    assert "输出 stub 的根目录" in captured.out
+
+
+def test_parse_args_reports_chinese_custom_validation_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as ex:
+        cli.parse_args(["math", "--clang-include=-bad"])
+
+    assert ex.value.code == 2
+    captured = capsys.readouterr()
+    assert "clang_include 条目必须是 header，不能是类似选项的值: '-bad'" in captured.err

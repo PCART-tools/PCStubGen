@@ -111,7 +111,7 @@ class _TupleParsedValue(_ParsedValue):
     def render_type_name(self) -> str:
         item_type_names = tuple(item.render_type_name() for item in self.items)
         if not item_type_names:
-            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+            raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
         if len(item_type_names) == 1:
             return f"tuple[{item_type_names[0]},]"
         return f"tuple[{', '.join(item_type_names)}]"
@@ -121,7 +121,7 @@ class _TupleParsedValue(_ParsedValue):
         resolve_default_value_func: Callable[[Cursor], str | None] | None,
     ) -> str | None:
         if not self.items:
-            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+            raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
 
         rendered_items: list[str] = []
         for item in self.items:
@@ -172,7 +172,7 @@ class PyArgParseTupleTypeParser:
 
             if current == "|":
                 if in_optional_section:
-                    raise PyArgParseTupleTypeParserError("Found duplicate '|' in format string.")
+                    raise PyArgParseTupleTypeParserError("format string 中发现重复的 '|'。")
                 self._advance_char()
                 in_optional_section = True
                 continue
@@ -217,10 +217,10 @@ class PyArgParseTupleTypeParser:
         current = self._peek_char()
         if current is None:
             raise PyArgParseTupleTypeParserError(
-                "Expected ')' before end of format string."
+                "在 format string 结束前应找到 ')'。"
             )
         if current == ")":
-            raise PyArgParseTupleTypeParserError("Empty tuple format '()' is unsupported.")
+            raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
 
         items: list[_ParsedValue] = []
         while True:
@@ -230,7 +230,7 @@ class PyArgParseTupleTypeParser:
 
             if current is None:
                 raise PyArgParseTupleTypeParserError(
-                    "Expected ')' before end of format string."
+                    "在 format string 结束前应找到 ')'。"
                 )
 
             if current == ")":
@@ -259,21 +259,21 @@ class PyArgParseTupleTypeParser:
                 )
 
         raise PyArgParseTupleTypeParserError(
-            f"Unsupported format unit {current!r} at index {self._char_index}."
+            f"索引 {self._char_index} 处的 format unit {current!r} 不受支持。"
         )
 
     def _validate_counts(self) -> None:
         """在解析结束后统一校验 C 参数槽位数量。"""
         if self._arg_index != len(self._args):
             raise PyArgParseTupleTypeParserError(
-                f"Expected {self._arg_index} C arguments, found {len(self._args)}."
+                f"期望 {self._arg_index} 个 C arguments，实际找到 {len(self._args)} 个。"
             )
 
     def _resolve_name(self, c_args: tuple[Cursor, ...]) -> str:
         """解析顶层 Python 参数名。"""
         name = self._resolve_name_func(list(c_args))
         if name is None:
-            raise PyArgParseTupleTypeParserError("Failed to resolve argument name.")
+            raise PyArgParseTupleTypeParserError("无法解析 argument name。")
         return name
 
     def _resolve_object_type(self, cursor: Cursor) -> str:
@@ -294,7 +294,7 @@ class PyArgParseTupleTypeParser:
         """查看当前位置字符；若已结束则抛错。"""
         current = self._peek_char()
         if current is None:
-            raise PyArgParseTupleTypeParserError("Found end of format string.")
+            raise PyArgParseTupleTypeParserError("已到达 format string 末尾。")
         return current
 
     def _advance_char(self) -> str | None:
@@ -311,7 +311,7 @@ class PyArgParseTupleTypeParser:
         if current != expected:
             found = "end of format string" if current is None else repr(current)
             raise PyArgParseTupleTypeParserError(
-                f"Expected {expected!r} at index {self._char_index - 1}, found {found}."
+                f"期望在索引 {self._char_index - 1} 处找到 {expected!r}，实际为 {found}。"
             )
 
     def _skip_separators(self) -> None:
@@ -327,7 +327,7 @@ class PyArgParseTupleTypeParser:
         end_index = self._arg_index + count
         if end_index > len(self._args):
             raise PyArgParseTupleTypeParserError(
-                f"Expected {count} C arguments starting at index {self._arg_index}, but none remained."
+                f"期望从索引 {self._arg_index} 开始取得 {count} 个 C arguments，但已没有剩余参数。"
             )
 
         values = tuple(self._args[self._arg_index:end_index])

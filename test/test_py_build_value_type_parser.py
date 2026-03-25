@@ -358,6 +358,14 @@ def test_parse_value_returns_dict_node_for_empty_dict_format() -> None:
     assert dict_node.value == UnionTypeNode(())
 
 
+def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> None:
+    with pytest.raises(
+        PyBuildValueTypeParserError,
+        match=r"Dictionary format 必须包含成对的 key/value。",
+    ):
+        _parse("{sis}", 3)
+
+
 def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
     """`O&` 应将 converter 游标交给对象类型解析函数。"""
     converter_cursor = cast(Cursor, object())

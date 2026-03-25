@@ -13,7 +13,7 @@ from . import translation_unit as translation_unit
 logger = logging.getLogger(__name__)
 
 
-def _check(condition: bool, message: str = "check failed!") -> None:
+def _check(condition: bool, message: str = "前置条件检查失败。") -> None:
     """在核心前置条件不满足时抛出显式异常。"""
     if not condition:
         raise RuntimeError(message)
@@ -64,13 +64,13 @@ def extract_c_signature_modules(
         try:
             modules = module_table.process_translation_unit(tu.cursor)
         except AssertionError as ex:
-            logger.exception("AssertionError", exc_info=ex)
+            logger.exception("处理 translation unit 时触发 AssertionError", exc_info=ex)
             continue
         for module in modules:
             existing = result.get(module.name)
             if existing is not None:
                 logger.warning(
-                    "Discarded duplicate extracted module %s: kept existing module, discarded incoming module",
+                    "丢弃重复提取的 module %s: 已保留现有模块，丢弃新模块",
                     existing.name,
                 )
                 continue

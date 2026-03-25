@@ -370,7 +370,7 @@ def test_parse_raises_for_c_argument_count_mismatch(
 
 
 def test_parse_raises_when_resolved_name_is_none() -> None:
-    with pytest.raises(PyArgParseTupleTypeParserError):
+    with pytest.raises(PyArgParseTupleTypeParserError, match="无法解析 argument name。"):
         _parse("i", [_cursor("value")], resolve_name_func=lambda c_args: None)
 
 

@@ -36,7 +36,7 @@ def write_stubs(
     # 设置日志
     logging.basicConfig(
         level=logging.INFO,
-        format="[{levelname}]: {message}\nat {filename}:{lineno} (in {funcName}())\n",
+        format="[{levelname}] {message}\nat {filename}:{lineno} (in {funcName}())\n",
         style="{",
     )
 

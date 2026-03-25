@@ -17,18 +17,18 @@ def _regex(pattern_str: str) -> re.Pattern:
     try:
         return re.compile(pattern_str)
     except re.error as ex:
-        raise argparse.ArgumentTypeError(f"Invalid REGEX pattern: {ex}") from ex
+        raise argparse.ArgumentTypeError(f"无效的 REGEX pattern: {ex}") from ex
 
 
 def _regex_colon_path(regex_path: str) -> tuple[re.Pattern, str]:
     if ":" not in regex_path:
         raise argparse.ArgumentTypeError(
-            "Invalid enum class location, expected REGEX:PATH format"
+            "无效的 enum class 位置，期望格式为 REGEX:PATH"
         )
 
     pattern_str, path = regex_path.rsplit(":", maxsplit=1)
     if any(not part.isidentifier() for part in path.split(".")):
-        raise argparse.ArgumentTypeError(f"Invalid PATH: {path}")
+        raise argparse.ArgumentTypeError(f"无效的 PATH: {path}")
     return _regex(pattern_str), path
 
 
@@ -36,14 +36,14 @@ def _normalize_clang_include_directory(include_paths: Sequence[str]) -> list[str
     normalized: list[str] = []
     for raw_path in include_paths:
         if raw_path is None:
-            raise TypeError("clang_include_directory entries must be non-empty include paths")
+            raise TypeError("clang_include_directory 条目必须是非空的 include path")
 
         include_path = str(raw_path).strip()
         if not include_path:
-            raise ValueError("clang_include_directory entries must be non-empty include paths")
+            raise ValueError("clang_include_directory 条目必须是非空的 include path")
         if include_path.startswith("-"):
             raise ValueError(
-                f"clang_include_directory entry must be a path, got option-like value: {include_path!r}"
+                f"clang_include_directory 条目必须是 path，不能是类似选项的值: {include_path!r}"
             )
         if include_path not in normalized:
             normalized.append(include_path)
@@ -54,14 +54,14 @@ def _normalize_clang_include(includes: Sequence[str]) -> list[str]:
     normalized: list[str] = []
     for raw_include in includes:
         if raw_include is None:
-            raise TypeError("clang_include entries must be non-empty include headers")
+            raise TypeError("clang_include 条目必须是非空的 include header")
 
         include = str(raw_include).strip()
         if not include:
-            raise ValueError("clang_include entries must be non-empty include headers")
+            raise ValueError("clang_include 条目必须是非空的 include header")
         if include.startswith("-"):
             raise ValueError(
-                f"clang_include entry must be a header, got option-like value: {include!r}"
+                f"clang_include 条目必须是 header，不能是类似选项的值: {include!r}"
             )
         if include not in normalized:
             normalized.append(include)
@@ -81,15 +81,15 @@ def _normalize_source_root(raw_source_root: str | None) -> Path | None:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pcstubgen",
-        description="Generate Python stubs for a module with pcstubgen.",
+        description="使用 pcstubgen 为模块生成 Python stub。",
         allow_abbrev=False,
     )
-    parser.add_argument("module_name", metavar="MODULE_NAME", help="module name")
+    parser.add_argument("module_name", metavar="MODULE_NAME", help="模块名")
     parser.add_argument(
         "-o",
         "--output-dir",
         default="./stubs",
-        help="The root directory for output stubs",
+        help="输出 stub 的根目录",
     )
 
     parser.add_argument(
@@ -99,7 +99,7 @@ def _build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         type=_regex_colon_path,
-        help="Locations of enum classes in <enum-class-name-regex>:<path-to-class> format",
+        help="enum class 位置，格式为 <enum-class-name-regex>:<path-to-class>",
     )
 
     parser.add_argument(
@@ -107,34 +107,34 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_false",
         dest="enable_docstring_signature_parser",
         default=True,
-        help="Disable parsing signatures from docstrings",
+        help="禁用从 docstring 解析签名",
     )
     parser.add_argument(
         "--source-root",
         default=None,
-        help="C/C++ source root used for C signature inference",
+        help="用于 C signature inference 的 C/C++ 源码根目录",
     )
     parser.add_argument(
         "--clang-include",
         action="append",
         default=[],
-        help="Additional clang include header, can be repeated",
+        help="额外的 clang include 头文件，可重复指定",
     )
     parser.add_argument(
         "--clang-include-directory",
         action="append",
         default=[],
-        help="Additional clang include directory path, can be repeated",
+        help="额外的 clang include 目录路径，可重复指定",
     )
     parser.add_argument(
         "--clang-c-std",
         default=None,
-        help="C standard passed to clang, e.g. c11",
+        help="传给 clang 的 C standard，例如 c11",
     )
     parser.add_argument(
         "--clang-cpp-std",
         default=None,
-        help="C++ standard passed to clang, e.g. c++17",
+        help="传给 clang 的 C++ standard，例如 c++17",
     )
 
     parser.add_argument(
@@ -142,13 +142,13 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_false",
         dest="include_docstrings",
         default=True,
-        help="Do not include docstrings in generated stubs",
+        help="生成 stub 时不包含 docstring",
     )
     parser.add_argument(
         "--include-module-type-comment",
         default=False,
         action="store_true",
-        help="Include module type comment in generated stubs",
+        help="在生成的 stub 中包含 module type comment",
     )
     parser.add_argument(
         "--stub-extension",
@@ -156,7 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
         default="pyi",
         metavar="EXT",
         choices=["pyi", "py"],
-        help="The extension of generated stubs: pyi (default) or py",
+        help="生成 stub 的扩展名: pyi (默认) 或 py",
     )
 
     return parser
