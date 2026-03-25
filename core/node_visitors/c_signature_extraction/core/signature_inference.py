@@ -199,25 +199,17 @@ _DECL_CURSOR_KINDS = {
 
 def infer_signature(function: ExtractedFunction) -> None:
     """汇合参数推断与返回值推断结果，生成函数签名。"""
-    if not function.signatures:
-        function.signatures = infer_argument_signatures(function.function_cursor)
+    function.signatures = infer_argument_signatures(function.function_cursor)
 
     inferred_return_type = infer_return_type(function.function_cursor)
     if inferred_return_type is None:
         return
 
     if not function.signatures:
-        function.signatures.append(
-            ExtractedSignature(
-                arguments=[],
-                return_type_name=inferred_return_type,
-            )
-        )
-        return
+        function.signatures.append(ExtractedSignature())
 
     for signature in function.signatures:
-        if signature.return_type_name is None:
-            signature.return_type_name = inferred_return_type
+        signature.return_type_name = inferred_return_type
 
 
 def infer_argument_signatures(func_cursor: Cursor) -> list[ExtractedSignature]:
@@ -243,8 +235,11 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
     """遍历函数子树中的 return 语句并汇总可识别的返回类型。"""
     inferred_types: list[TypeNode] = []
 
-    for return_stmt in _iter_return_statements(func_cursor):
-        inferred_type = _infer_type_from_return_stmt(return_stmt)
+    for cursor in walk_cursor(func_cursor):
+        if cursor.kind != CursorKind.RETURN_STMT:
+            continue
+
+        inferred_type = _infer_type_from_return_stmt(cursor)
         if inferred_type is None:
             continue
         inferred_types.append(inferred_type)
@@ -253,13 +248,6 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
     if merged_type is None:
         return None
     return merged_type.render()
-
-
-def _iter_return_statements(func_cursor: Cursor) -> Iterable[Cursor]:
-    """按前序遍历函数子树中的所有 return 语句。"""
-    for cursor in walk_cursor(func_cursor):
-        if cursor.kind == CursorKind.RETURN_STMT:
-            yield cursor
 
 
 def _iter_call_exprs(func_cursor: Cursor) -> Iterable[Cursor]:

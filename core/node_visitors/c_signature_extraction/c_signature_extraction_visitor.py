@@ -15,7 +15,6 @@ from .core.constants import METH_CLASS, METH_STATIC
 from ..node_visitor import NodeVisitor
 from ...ir import (
     IRArgument,
-    IRArgumentKind,
     IRFunction,
     IRModule,
     IRModuleType,
