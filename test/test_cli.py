@@ -56,9 +56,18 @@ def test_removed_ignore_all_errors_flag_is_rejected() -> None:
     assert result.exit_code == 2
 
 
+def test_removed_enum_class_locations_flag_is_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        ["math", "--enum-class-locations", "MyEnum:pkg.enums"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+
+
 def test_build_options_keeps_none_source_root() -> None:
     options = cli._build_options(
-        enum_class_locations=[],
         enable_docstring_signature_parser=True,
         source_root=None,
         clang_include=[],
@@ -75,7 +84,6 @@ def test_build_options_keeps_none_source_root() -> None:
 
 def test_build_options_keeps_path_source_root() -> None:
     options = cli._build_options(
-        enum_class_locations=[],
         enable_docstring_signature_parser=True,
         source_root=Path("C:/tmp/src"),
         clang_include=[],

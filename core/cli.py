@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 import sys
 from pathlib import Path
 
@@ -18,23 +17,6 @@ MY_LOGURU_FORMAT = (
 )
 
 app = typer.Typer(add_completion=False)
-
-
-def _regex(pattern_str: str) -> re.Pattern[str]:
-    try:
-        return re.compile(pattern_str)
-    except re.error as ex:
-        raise ValueError(f"无效的 REGEX pattern: {ex}") from ex
-
-
-def _regex_colon_path(regex_path: str) -> tuple[re.Pattern[str], str]:
-    if ":" not in regex_path:
-        raise ValueError("无效的 enum class 位置，期望格式为 REGEX:PATH")
-
-    pattern_str, path = regex_path.rsplit(":", maxsplit=1)
-    if any(not part.isidentifier() for part in path.split(".")):
-        raise ValueError(f"无效的 PATH: {path}")
-    return _regex(pattern_str), path
 
 
 def _normalize_clang_include(includes: list[str]) -> list[str]:
@@ -61,20 +43,6 @@ def _normalize_stub_extension(stub_extension: str) -> str:
     return stub_extension
 
 
-def _validate_enum_class_locations(
-    value: list[str] | None,
-) -> list[str]:
-    if value is None:
-        return []
-
-    try:
-        for item in value:
-            _regex_colon_path(item)
-    except ValueError as ex:
-        raise typer.BadParameter(str(ex)) from ex
-    return value
-
-
 def _validate_clang_include(value: list[str] | None) -> list[str]:
     values = [] if value is None else list(value)
     try:
@@ -93,7 +61,6 @@ def _validate_stub_extension(value: str) -> str:
 
 def _build_options(
     *,
-    enum_class_locations: list[str] | None,
     enable_docstring_signature_parser: bool,
     source_root: Path | None,
     clang_include: list[str] | None,
@@ -110,9 +77,6 @@ def _build_options(
     default_options = StubGenerationOptions()
 
     return StubGenerationOptions(
-        enum_class_locations=[
-            _regex_colon_path(item) for item in (enum_class_locations or [])
-        ],
         enable_docstring_signature_parser=enable_docstring_signature_parser,
         source_root=source_root,
         clang_c_std=clang_c_std or default_options.clang_c_std,
@@ -135,13 +99,6 @@ def main(
         "--output-dir",
         "-o",
         help="输出 stub 的根目录",
-    ),
-    enum_class_locations: list[str] | None = typer.Option(
-        None,
-        "--enum-class-locations",
-        metavar="REGEX:LOC",
-        callback=_validate_enum_class_locations,
-        help="enum class 位置，格式为 <enum-class-name-regex>:<path-to-class>",
     ),
     enable_docstring_signature_parser: bool = typer.Option(
         True,
@@ -213,7 +170,6 @@ def main(
             module_name=module_name,
             output_dir=output_dir,
             options=_build_options(
-                enum_class_locations=enum_class_locations,
                 enable_docstring_signature_parser=enable_docstring_signature_parser,
                 source_root=source_root,
                 clang_include=clang_include,

@@ -98,6 +98,25 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
     assert signature.return_type_name == "numpy.ndarray"
 
 
+def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
+    visitor = DocStringSignatureParserVisitor()
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    ir_module.functions = [
+        _unknown_function(
+            "foo",
+            doc="foo(value: object = <demo.Color.RED: 1>) -> None",
+        )
+    ]
+
+    visitor.visit_module(ir_module)
+
+    parsed = ir_module.functions[0]
+    assert len(parsed.signatures) == 1
+    signature = parsed.signatures[0]
+    assert [arg.default_value for arg in signature.args] == ["<demo.Color.RED: 1>"]
+    assert signature.return_type_name == "None"
+
+
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
     visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))

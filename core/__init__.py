@@ -46,11 +46,7 @@ def write_stubs(
 
     # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
     if options.enable_docstring_signature_parser:
-        visitors.append(
-            DocStringSignatureParserVisitor(
-                enum_class_locations=dict(options.enum_class_locations),
-            )
-        )
+        visitors.append(DocStringSignatureParserVisitor())
 
     c_ast_visitor: CSignatureExtractionVisitor | None = None
 

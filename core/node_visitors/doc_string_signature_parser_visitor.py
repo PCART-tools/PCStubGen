@@ -21,13 +21,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
     _arg_star_name_regex = re.compile(
         r"^\s*(?P<stars>\*{1,2})?" r"\s*(?P<name>\w+)\s*$"
     )
-    _pybind11_enum_pattern = re.compile(r"<(?P<enum>\w+(\.\w+)+): (?P<value>-?\d+)>")
-
-    def __init__(
-        self,
-        enum_class_locations: dict[re.Pattern, str] | None = None,
-    ):
-        self.enum_class_locations = enum_class_locations or {}
 
     def visit_module(self, node: IRModule) -> None:
         """在模块层原地补全文档字符串签名。"""
@@ -198,15 +191,6 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         strip_expr = value.strip()
         if not strip_expr:
             return None
-
-        match = self._pybind11_enum_pattern.match(strip_expr)
-        if match is not None:
-            enum_qual_name = match.group("enum")
-            class_path, entry = enum_qual_name.rsplit(".", maxsplit=1)
-            for pattern, prefix in self.enum_class_locations.items():
-                if pattern.match(class_path):
-                    return f"{prefix}.{class_path}.{entry}"
-
         return strip_expr
 
     def _split_args_str(
