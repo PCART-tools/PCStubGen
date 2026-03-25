@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 
 from clang.cindex import Index
+from loguru import logger
 
 from .models import ExtractedModule
 from . import signature_inference
 from . import module_table as module_table
 from . import translation_unit as translation_unit
-
-logger = logging.getLogger(__name__)
 
 
 def _check(condition: bool, message: str = "前置条件检查失败。") -> None:
@@ -63,16 +61,13 @@ def extract_c_signature_modules(
     for tu in translation_units:
         try:
             modules = module_table.process_translation_unit(tu.cursor)
-        except AssertionError as ex:
-            logger.exception("处理 translation unit 时触发 AssertionError", exc_info=ex)
+        except AssertionError:
+            logger.exception("处理 translation unit 时触发 AssertionError")
             continue
         for module in modules:
             existing = result.get(module.name)
             if existing is not None:
-                logger.warning(
-                    "丢弃重复提取的 module %s: 已保留现有模块，丢弃新模块",
-                    existing.name,
-                )
+                logger.warning("模块重复, 丢弃新模块, module: {}", existing.name)
                 continue
             result[module.name] = module
 

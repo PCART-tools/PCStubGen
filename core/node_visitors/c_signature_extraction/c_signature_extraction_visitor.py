@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 from pathlib import Path
 from typing import Literal
+from loguru import logger
 
 from .core import (
     ExtractedArgument,
@@ -20,8 +20,6 @@ from ...ir import (
     IRModuleType,
     IRSignature,
 )
-
-logger = logging.getLogger(__name__)
 
 SignatureLoadStatus = Literal["nonempty", "empty"]
 RewriteOutcome = Literal[
@@ -90,10 +88,9 @@ class CSignatureExtractionVisitor(NodeVisitor):
             return
 
         logger.info(
-            "项目 %s 的 C AST 签名推断汇总: "
-            "total_unknown_signatures=%d, success=%d, failed=%d, no_candidates=%d, "
-            "empty_selected_signatures=%d, empty_extract=%d",
-            project_name,
+            "C AST 签名推断汇总: "
+            "total_unknown_signatures={}, success={}, failed={}, no_candidates={}, "
+            "empty_selected_signatures={}, empty_extract={}",
             self._stats.total_unknown_signatures,
             self._stats.success,
             self._stats.failed,
@@ -164,7 +161,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         selected = signatures.get(func.name)
         if selected is None:
             logger.warning(
-                "重写 %s 的未知签名失败 (is_method=%s): 未找到 C signature candidates",
+                "重写签名失败, func_name: {}, is_method: {}: 未找到 C signature candidates",
                 func.name,
                 is_method,
             )
@@ -172,7 +169,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         if not selected.signatures:
             logger.warning(
-                "重写 %s 的未知签名失败 (is_method=%s): 选中的 candidate 不包含 signatures",
+                "重写签名失败, func_name: {}, is_method: {}: 选中的 candidate 不包含 signatures",
                 func.name,
                 is_method,
             )
@@ -195,7 +192,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         func.signatures = rewritten_signatures
         logger.info(
-            "已重写 %s 的未知签名 (is_method=%s): generated_signatures=%d",
+            "重写签名成功, func_name: {}, is_method: {}: generated_signatures={}",
             func.name,
             is_method,
             len(rewritten_signatures),
@@ -339,7 +336,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
                 continue
             unknown_count += 1
             logger.warning(
-                "重写 %s 的未知签名失败 (is_method=%s): %s",
+                "重写签名失败, func_name: {}, is_method: {}: {}",
                 func.name,
                 is_method,
                 reason,

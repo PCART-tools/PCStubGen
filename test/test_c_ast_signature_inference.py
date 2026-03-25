@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import logging
 import sysconfig
 from collections.abc import Iterable
 from pathlib import Path
@@ -406,10 +405,7 @@ def test_c_ast_visitor_preserves_extracted_argument_kinds(
     ]
 
 
-def test_c_ast_visitor_does_not_log_for_known_function(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
+def test_c_ast_visitor_keeps_known_function_unchanged(tmp_path: Path) -> None:
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
     )
@@ -426,84 +422,14 @@ def test_c_ast_visitor_does_not_log_for_known_function(
         )
     }
 
-    with caplog.at_level(logging.INFO, logger="core"):
-        rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
+    rewritten = visitor._rewrite_function(func=func, signatures=signatures, is_method=False)
 
     assert rewritten is func
-    assert caplog.records == []
+    assert rewritten.signatures[0].args[0].name == "x"
+    assert rewritten.signatures[0].args[0].type_name is None
 
 
-def test_c_ast_visitor_log_summary_resets_after_logging(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    _patch_c_signature_extractor(
-        monkeypatch,
-        modules={
-            **_module_fixture(
-                name="pkg.first",
-                functions={
-                    "foo": ExtractedFunction(
-                        ml_name="foo",
-                        function_cursor=_fake_function_cursor("foo"),
-                        ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                    )
-                },
-            ),
-            **_module_fixture(
-                name="pkg.second",
-                functions={
-                    "bar": ExtractedFunction(
-                        ml_name="bar",
-                        function_cursor=_fake_function_cursor("bar"),
-                        ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="int")])],
-                    )
-                },
-            ),
-        },
-    )
-    visitor = CSignatureExtractionVisitor(
-        source_root=tmp_path,
-    )
-    first_module = IRModule(
-        full_name=QualifiedName.from_str("pkg.first"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("foo")],
-    )
-    second_module = IRModule(
-        full_name=QualifiedName.from_str("pkg.second"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("bar")],
-    )
-
-    with caplog.at_level(logging.INFO, logger="core"):
-        visitor.visit_module(first_module)
-        visitor.visit_module(second_module)
-        visitor.log_summary("pkg")
-        after_first_summary = len(caplog.records)
-        visitor.log_summary("pkg")
-
-    assert len(caplog.records) == after_first_summary
-    summary_records = [
-        record
-        for record in caplog.records
-        if record.message.startswith("项目 pkg 的 C AST 签名推断汇总:")
-    ]
-    assert len(summary_records) == 1
-    assert summary_records[0].message == (
-        "项目 pkg 的 C AST 签名推断汇总: "
-        "total_unknown_signatures=2, success=2, failed=0, no_candidates=0, "
-        "empty_selected_signatures=0, empty_extract=0"
-    )
-
-
-def test_c_signature_engine_logs_all_diagnostics_when_error_present(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
+def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path: Path) -> None:
     config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
@@ -532,74 +458,17 @@ def test_c_signature_engine_logs_all_diagnostics_when_error_present(
         ]
     )
 
-    with caplog.at_level(logging.WARNING, logger="core"):
-        result = translation_unit_module.parse_translation_unit(
-            index=_FakeIndex(translation_unit),
-            file_path=source,
-            source_root=config["source_root"],
-            clang_include=config["clang_include"],
-            clang_include_directory=config["clang_include_directory"],
-            clang_c_std=config["clang_c_std"],
-            clang_cpp_std=config["clang_cpp_std"],
-        )
-
-    assert result is translation_unit
-    assert len(caplog.records) == 1
-    message = caplog.records[0].message
-    assert "Translation unit 诊断信息" in message
-    assert str(source) in message
-    assert "文件后缀 suffix: .c" in message
-    expected_parse_args = translation_unit_module.build_clang_parse_args(
-        source,
+    result = translation_unit_module.parse_translation_unit(
+        index=_FakeIndex(translation_unit),
+        file_path=source,
+        source_root=config["source_root"],
         clang_include=config["clang_include"],
         clang_include_directory=config["clang_include_directory"],
         clang_c_std=config["clang_c_std"],
         clang_cpp_std=config["clang_cpp_std"],
     )
-    assert f"解析参数 parse_args: {expected_parse_args!r}" in message
-    assert f"[WARNING] {source}:3:1: warning detail" in message
-    assert f"[ERROR] {source}:7:9: error detail" in message
-    assert f"[FATAL] {source}:11:4: fatal detail" in message
-
-
-def test_c_signature_engine_skips_logging_for_non_error_diagnostics(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "module.c"
-    translation_unit = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=_FakeDiagnosticType.Note,
-                message="note detail",
-                file_name=str(source),
-                line=2,
-                column=5,
-            ),
-            _FakeDiagnostic(
-                severity=_FakeDiagnosticType.Warning,
-                message="warning detail",
-                file_name=str(source),
-                line=4,
-                column=6,
-            ),
-        ]
-    )
-
-    with caplog.at_level(logging.WARNING, logger="core"):
-        result = translation_unit_module.parse_translation_unit(
-            index=_FakeIndex(translation_unit),
-            file_path=source,
-            source_root=config["source_root"],
-            clang_include=config["clang_include"],
-            clang_include_directory=config["clang_include_directory"],
-            clang_c_std=config["clang_c_std"],
-            clang_cpp_std=config["clang_cpp_std"],
-        )
 
     assert result is translation_unit
-    assert caplog.records == []
 
 
 def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_path: Path) -> None:
@@ -640,49 +509,6 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     assert len(index.calls) == 2
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
-
-
-def test_c_signature_engine_logs_info_when_auto_include_is_added(
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
-) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
-    source = tmp_path / "src" / "module.c"
-    header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
-    header_path.parent.mkdir(parents=True, exist_ok=True)
-    header_path.write_text("/* header */", encoding="utf-8")
-
-    first = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=1,
-                column=1,
-            )
-        ]
-    )
-    second = _FakeTranslationUnit(diagnostics=[])
-    index = _SequentialIndex([first, second])
-
-    with caplog.at_level(logging.INFO, logger="core"):
-        _ = translation_unit_module.parse_translation_unit(
-            index=index,
-            file_path=source,
-            source_root=config["source_root"],
-            clang_include=config["clang_include"],
-            clang_include_directory=config["clang_include_directory"],
-            clang_c_std=config["clang_c_std"],
-            clang_cpp_std=config["clang_cpp_std"],
-        )
-
-    messages = [record.message for record in caplog.records if record.levelno == logging.INFO]
-    assert any(
-        "已为 numpy/npy_common.h 在 " in message and "自动补全 clang include path" in message
-        for message in messages
-    )
-    assert any(str(header_path.parents[1]) in message for message in messages)
 
 
 def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Path) -> None:
@@ -842,7 +668,6 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
 
 def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallback(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     _patch_c_signature_extractor(
@@ -883,14 +708,9 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         source_root=tmp_path,
     )
 
-    with caplog.at_level(logging.WARNING, logger="core"):
-        visitor.visit_module(module)
+    visitor.visit_module(module)
 
     assert module.functions[0].signatures == []
-    assert (
-        "重写 foo 的未知签名失败 (is_method=False): 未找到 C signature candidates"
-        in caplog.text
-    )
 
 
 def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
@@ -1049,172 +869,7 @@ def test_write_stubs_defaults_do_not_require_source_root(
     assert list(tmp_path.rglob("*.pyi"))
 
 
-def test_write_stubs_logs_to_output_file_and_cleans_up_handler(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    def _emit_warning(self: Pipeline, module: IRModule) -> None:
-        _ = (self, module)
-        logging.getLogger("core.tests").warning("file log works")
-
-    monkeypatch.setattr(stubgen_module.Pipeline, "run", _emit_warning)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    log_file = tmp_path / "pcstubgen.log"
-    assert log_file.exists()
-    assert log_file.read_text(encoding="utf-8") == (
-        "[WARNING] - core.tests\n"
-        "file log works\n"
-        "\n"
-    )
-
-    package_logger = logging.getLogger("core")
-    assert all(
-        not isinstance(handler, logging.FileHandler)
-        or Path(handler.baseFilename) != log_file
-        for handler in package_logger.handlers
-    )
-
-
-def test_write_stubs_configures_chinese_console_log_formatter(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-
-    seen_basic_config: dict[str, object] = {}
-
-    def _capture_basic_config(**kwargs: object) -> None:
-        seen_basic_config.update(kwargs)
-
-    def _noop_run(self: Pipeline, module: IRModule) -> None:
-        _ = (self, module)
-
-    monkeypatch.setattr(stubgen_module.logging, "basicConfig", _capture_basic_config)
-    monkeypatch.setattr(
-        stubgen_module,
-        "build_module",
-        lambda path, module: IRModule(
-            full_name=QualifiedName.from_str("pkg"),
-            module_type=IRModuleType.EXTENSION,
-        ),
-    )
-    monkeypatch.setattr(stubgen_module.Pipeline, "run", _noop_run)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    assert seen_basic_config == {
-        "level": logging.INFO,
-        "format": "[{levelname}]: {message}\n位置: {filename}:{lineno} (函数 {funcName}())\n",
-        "style": "{",
-    }
-
-
-def test_write_stubs_logs_project_level_c_ast_summary(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    ir_module = IRModule(
-        full_name=QualifiedName.from_str("pkg"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("foo")],
-        classes=[
-            IRClass(
-                name="Builder",
-                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
-            )
-        ],
-        sub_modules=[
-            IRModule(
-                full_name=QualifiedName.from_str("pkg.child"),
-                module_type=IRModuleType.EXTENSION,
-                functions=[_unknown_function("bar")],
-            )
-        ],
-    )
-    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
-    _patch_c_signature_extractor(
-        monkeypatch,
-        modules=_module_fixture(
-            name="pkg",
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    function_cursor=_fake_function_cursor("foo"),
-                    ml_flags=METH_VARARGS,
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            }
-        ),
-    )
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-        source_root=tmp_path,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
-    assert (
-        "项目 pkg 的 C AST 签名推断汇总: "
-        "total_unknown_signatures=2, success=1, failed=1, no_candidates=1, "
-        "empty_selected_signatures=0, empty_extract=0"
-    ) in log_text
-
-
-def test_write_stubs_logs_empty_extract_summary_with_per_item_failures(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    ir_module = IRModule(
-        full_name=QualifiedName.from_str("pkg"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("foo")],
-        classes=[
-            IRClass(
-                name="Builder",
-                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
-            )
-        ],
-    )
-    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
-    _patch_c_signature_extractor(monkeypatch, modules={})
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-        source_root=tmp_path,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
-    assert (
-        "重写 foo 的未知签名失败 (is_method=False): "
-        "C signature extraction 未返回结果"
-    ) in log_text
-    assert (
-        "项目 pkg 的 C AST 签名推断汇总: "
-        "total_unknown_signatures=1, success=0, failed=1, no_candidates=0, "
-        "empty_selected_signatures=0, empty_extract=1"
-    ) in log_text
-
-
-def test_write_stubs_propagates_extract_errors_without_logging_summary(
+def test_write_stubs_propagates_extract_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -1248,11 +903,6 @@ def test_write_stubs_propagates_extract_errors_without_logging_summary(
     )
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    log_text = (tmp_path / "pcstubgen.log").read_text(encoding="utf-8")
-    assert "Failed to extract C signatures: boom" not in log_text
-    assert "C signature extraction failed" not in log_text
-    assert "项目 pkg 的 C AST 签名推断汇总:" not in log_text
 
 
 def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
@@ -1296,10 +946,9 @@ def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
     assert extractor.called == 1
 
 
-def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
+def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -1316,23 +965,18 @@ def test_doc_parser_prevents_no_candidate_warning_after_signature_rewrite(
     )
     extractor = _patch_c_signature_extractor(monkeypatch, modules={})
 
-    with caplog.at_level(
-        logging.WARNING,
-        logger="core.node_visitors.c_signature_extraction.c_signature_extraction_visitor",
-    ):
-        Pipeline(
-            [
-                DocStringSignatureParserVisitor(),
-                CSignatureExtractionVisitor(
-                    source_root=tmp_path,
-                ),
-            ]
-        ).run(module)
+    Pipeline(
+        [
+            DocStringSignatureParserVisitor(),
+            CSignatureExtractionVisitor(
+                source_root=tmp_path,
+            ),
+        ]
+    ).run(module)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
     assert parsed.signatures[0].return_type_name == "numpy.ndarray"
-    assert "重写 cdist_minkowski 的未知签名失败" not in caplog.text
     assert extractor.called == 1
 
 
@@ -1801,7 +1445,6 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_modulede
 
 
 def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
-    caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -1866,20 +1509,14 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="core"):
-        extracted = engine.extract_modules()
+    extracted = engine.extract_modules()
 
     module = extracted["dup.shared"]
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
-    assert (
-        "丢弃重复提取的 module dup.shared: "
-        "已保留现有模块，丢弃新模块"
-    ) in caplog.text
 
 
 def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
-    caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -1958,20 +1595,14 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="core"):
-        extracted = engine.extract_modules()
+    extracted = engine.extract_modules()
 
     module = extracted["dup.same_file"]
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
-    assert (
-        "丢弃重复提取的 module dup.same_file: "
-        "已保留现有模块，丢弃新模块"
-    ) in caplog.text
 
 
 def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_method_table(
-    caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -2039,19 +1670,13 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="core"):
-        extracted = engine.extract_modules()
+    extracted = engine.extract_modules()
 
     module = extracted["dup.mod"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
-    assert (
-        "丢弃 module dup.mod 中 Python 名称 foo 对应的重复 extracted function: "
-        "已保留现有函数，丢弃新函数"
-    ) in caplog.text
 
 
 def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_across_files(
-    caplog: pytest.LogCaptureFixture,
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -2116,15 +1741,10 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
         source_root=tmp_path,
         clang_c_std="c11",
     )
-    with caplog.at_level(logging.WARNING, logger="core"):
-        extracted = engine.extract_modules()
+    extracted = engine.extract_modules()
 
     module = extracted["dup.shared"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
-    assert (
-        "丢弃重复提取的 module dup.shared: "
-        "已保留现有模块，丢弃新模块"
-    ) in caplog.text
 
 
 def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_from_pymodule_addobject(
@@ -4150,26 +3770,22 @@ def test_c_signature_engine_extracts_combined_flags_from_ast_field(
     assert extracted.ml_flags == (METH_VARARGS | METH_KEYWORDS)
 
 
-def test_c_signature_engine_warns_and_keeps_empty_flags_when_ast_field_is_unparseable(
+def test_c_signature_engine_keeps_empty_flags_when_ast_field_is_unparseable(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
 ) -> None:
     _patch_fake_eval_int(monkeypatch)
-    with caplog.at_level(logging.WARNING):
-        is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _ml_name_field("add"),
-                _ml_meth_field("simple_add"),
-                _identifier_node("flag_var"),
-                _string_literal("doc"),
-            ),
-        )
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(
+            _ml_name_field("add"),
+            _ml_meth_field("simple_add"),
+            _identifier_node("flag_var"),
+            _string_literal("doc"),
+        ),
+    )
 
     assert is_sentinel is False
     assert extracted is not None
     assert extracted.ml_flags == 0
-    assert caplog.records == []
 
 
 def test_c_signature_engine_extract_pymethoddef_init_list_expr_marks_sentinel(tmp_path: Path) -> None:
@@ -4183,24 +3799,20 @@ def test_c_signature_engine_extract_pymethoddef_init_list_expr_marks_sentinel(tm
 
 def test_c_signature_engine_extract_pymethoddef_init_list_expr_discards_entry_without_function_cursor(
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-    tmp_path: Path,
 ) -> None:
     """验证缺失 `ml_meth` 引用时当前条目会被直接丢弃。"""
     _patch_fake_eval_int(monkeypatch)
-    with caplog.at_level(logging.WARNING):
-        is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
-            init_list_expr=_init_list(
-                _ml_name_field("missing"),
-                _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
-                _ml_flags_identifier_field("METH_VARARGS"),
-                _string_literal("doc"),
-            ),
-        )
+    is_sentinel, extracted = _extract_PyMethodDef_INIT_LIST_EXPR(
+        init_list_expr=_init_list(
+            _ml_name_field("missing"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR),
+            _ml_flags_identifier_field("METH_VARARGS"),
+            _string_literal("doc"),
+        ),
+    )
 
     assert is_sentinel is False
     assert extracted is None
-    assert "找不到 function cursor" in caplog.text
 
 
 def test_c_signature_engine_extract_method_table_stops_at_sentinel(

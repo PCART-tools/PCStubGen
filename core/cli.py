@@ -5,12 +5,17 @@ import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from loguru import logger
 
 from . import write_stubs
 from .stub_generation_options import StubGenerationOptions
 
-EXIT_OK = 0
-EXIT_ERROR = 1
+MY_LOGURU_FORMAT = (
+    "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
+    "<level>{level: <8}</level> | \n"
+    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan>\n"
+    "<level>{message}</level>\n"
+)
 
 
 def _regex(pattern_str: str) -> re.Pattern:
@@ -195,12 +200,30 @@ def _build_options(args: argparse.Namespace) -> StubGenerationOptions:
 
 def main(argv: Sequence[str] | None = None):
     args = parse_args(argv)
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    write_stubs(
-        module_name=args.module_name,
-        output_dir=Path(args.output_dir),
-        options=_build_options(args),
+    logger.remove()
+    console_sink_id = logger.add(sys.stderr, format=MY_LOGURU_FORMAT)
+    sink_id = logger.add(
+        output_dir / "pcstubgen.log",
+        mode="w",
+        encoding="utf-8",
+        catch=False,
+        backtrace=False,
+        diagnose=False,
+        format=MY_LOGURU_FORMAT,
     )
+    try:
+        write_stubs(
+            module_name=args.module_name,
+            output_dir=output_dir,
+            options=_build_options(args),
+        )
+    finally:
+        logger.remove(console_sink_id)
+        logger.remove(sink_id)
+        logger.add(sys.stderr)
 
 
 if __name__ == "__main__":

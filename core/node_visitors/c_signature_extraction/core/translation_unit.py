@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import posixpath
 import re
 import sysconfig
@@ -8,10 +7,9 @@ from pathlib import Path
 
 import clang
 from clang.cindex import Diagnostic, Index, TranslationUnit
+from loguru import logger
 
 from .constants import CPP_SOURCE_SUFFIXES, NATIVE_SOURCE_SUFFIXES
-
-logger = logging.getLogger(__name__)
 
 _FILE_NOT_FOUND_RE = re.compile(r"'([^']+)' file not found")
 
@@ -153,7 +151,12 @@ def discover_missing_include_args(
     for include_literal, include_dir in resolved_pairs:
         if include_dir not in added:
             continue
-        logger.info(f"补全clang include path: {include_dir}, parse 文件: {file_path}, include 字面量: {include_literal}")
+        logger.info(
+            "补全clang include path: {}, parse 文件: {}, include 字面量: {}",
+            include_dir,
+            file_path,
+            include_literal,
+        )
     return added
 
 

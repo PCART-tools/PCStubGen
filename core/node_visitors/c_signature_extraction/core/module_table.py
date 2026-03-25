@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import logging
-
 from clang.cindex import Cursor, CursorKind, TokenKind, TypeKind
+from loguru import logger
 
 from . import clang_eval
 from .models import ExtractedFunction, ExtractedModule
@@ -12,8 +11,6 @@ from .cursor_utils import (
     var_decl_to_init_list_expr,
     walk_cursor,
 )
-
-logger = logging.getLogger(__name__)
 
 _ARRAY_TYPE_KINDS = {
     TypeKind.CONSTANTARRAY,
@@ -152,7 +149,7 @@ def extract_pymethoddef_init_list_expr(
 
     function_cursor = ml_meth_cursor.referenced
     if function_cursor is None:
-        logger.warning("找不到 function cursor，位置: %s", ml_meth_cursor.location)
+        logger.warning("找不到 function cursor，位置: {}", ml_meth_cursor.location)
         return False, None
 
     return False, ExtractedFunction(
@@ -182,7 +179,7 @@ def extract_method_table(
             continue
         if extracted.ml_name in result:
             logger.warning(
-                "丢弃 module %s 中 Python 名称 %s 对应的重复 extracted function: 已保留现有函数，丢弃新函数",
+                "模块重复函数, 丢弃新函数, module_name: {}, ml_name: {}",
                 module_name,
                 extracted.ml_name,
             )
