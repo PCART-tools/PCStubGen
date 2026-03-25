@@ -45,7 +45,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         *,
         source_root: Path,
         clang_include: list[str] = (),
-        clang_include_directory: list[str] = (),
+        clang_include_directory: list[Path] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> None:

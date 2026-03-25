@@ -68,9 +68,7 @@ def _build_options(
         clang_c_std=clang_c_std or default_options.clang_c_std,
         clang_cpp_std=clang_cpp_std or default_options.clang_cpp_std,
         clang_include=_normalize_clang_include(clang_include or []),
-        clang_include_directory=[
-            str(include_dir) for include_dir in (clang_include_directory or [])
-        ],
+        clang_include_directory=list(clang_include_directory or []),
         include_docstrings=include_docstrings,
         include_module_type_comment=include_module_type_comment,
     )

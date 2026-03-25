@@ -130,8 +130,8 @@ def test_cli_passes_repeated_clang_include_directory(
     assert captured_output_dir == tmp_path
     assert captured_options is not None
     assert captured_options.clang_include_directory == [
-        str(Path("C:/IncludeA")),
-        str(Path("C:/IncludeB")),
+        Path("C:/IncludeA"),
+        Path("C:/IncludeB"),
     ]
 
 

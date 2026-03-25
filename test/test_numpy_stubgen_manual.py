@@ -139,7 +139,7 @@ def run_single_generation(
     c_inference_enabled: bool,
     source_root: Path | None,
     clang_include: list[str],
-    clang_include_directory: list[str],
+    clang_include_directory: list[Path],
     clang_c_std: str,
     clang_cpp_std: str,
 ) -> GenerationResult:
@@ -284,7 +284,7 @@ def main() -> int:
     source_root = Path(args.source_root)
     output_root = Path(args.output_root)
     clang_include: list[str] = list(args.clang_include)
-    clang_include_directory: list[str] = list(args.clang_include_directory)
+    clang_include_directory: list[Path] = [Path(path) for path in args.clang_include_directory]
     clang_c_std: str = args.clang_c_std
     clang_cpp_std: str = args.clang_cpp_std
 

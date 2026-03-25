@@ -97,7 +97,7 @@ def _make_extraction_config(
     *,
     source_root: Path,
     clang_include: list[str] = (),
-    clang_include_directory: list[str] = (),
+    clang_include_directory: list[Path] = (),
     clang_c_std: str = "c11",
     clang_cpp_std: str = "c++17",
 ) -> dict[str, object]:
@@ -118,7 +118,7 @@ class CSignatureExtractor:
         source_root: Path,
         *,
         clang_include: list[str] = (),
-        clang_include_directory: list[str] = (),
+        clang_include_directory: list[Path] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> None:
@@ -163,7 +163,7 @@ def _patch_c_signature_extractor(
         source_root: Path,
         *,
         clang_include: list[str] = (),
-        clang_include_directory: list[str] = (),
+        clang_include_directory: list[Path] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
@@ -184,7 +184,7 @@ def _patch_raising_c_signature_extractor(
         source_root: Path,
         *,
         clang_include: list[str] = (),
-        clang_include_directory: list[str] = (),
+        clang_include_directory: list[Path] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
@@ -606,8 +606,8 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
 
     assert result is second
     expected_include_root = header_path.parents[1]
-    assert str(expected_include_root) in config["clang_include_directory"]
-    assert str(header_path.parent) not in config["clang_include_directory"]
+    assert expected_include_root in config["clang_include_directory"]
+    assert header_path.parent not in config["clang_include_directory"]
     assert len(index.calls) == 2
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
@@ -659,20 +659,18 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
         clang_cpp_std=config["clang_cpp_std"],
     )
 
-    include_arg_one = str(include_one)
-    include_arg_two = str(include_two)
     assert result is third
-    assert include_arg_one in config["clang_include_directory"]
-    assert include_arg_two in config["clang_include_directory"]
+    assert include_one in config["clang_include_directory"]
+    assert include_two in config["clang_include_directory"]
     assert len(index.calls) == 3
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
     assert _has_std_arg(index.calls[2][1], "c11")
-    assert not _has_include_directory_arg(index.calls[0][1], include_arg_one)
-    assert _has_include_directory_arg(index.calls[1][1], include_arg_one)
-    assert not _has_include_directory_arg(index.calls[1][1], include_arg_two)
-    assert _has_include_directory_arg(index.calls[2][1], include_arg_one)
-    assert _has_include_directory_arg(index.calls[2][1], include_arg_two)
+    assert not _has_include_directory_arg(index.calls[0][1], include_one)
+    assert _has_include_directory_arg(index.calls[1][1], include_one)
+    assert not _has_include_directory_arg(index.calls[1][1], include_two)
+    assert _has_include_directory_arg(index.calls[2][1], include_one)
+    assert _has_include_directory_arg(index.calls[2][1], include_two)
 
 
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
@@ -2514,7 +2512,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         source_root: Path,
         *,
         clang_include: list[str] = (),
-        clang_include_directory: list[str] = (),
+        clang_include_directory: list[Path] = (),
         clang_c_std: str = "c11",
         clang_cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
@@ -2537,7 +2535,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
         clang_include=["Python.h"],
-        clang_include_directory=["C:/MyInclude"],
+        clang_include_directory=[Path("C:/MyInclude")],
         clang_c_std="c99",
         clang_cpp_std="c++20",
     )
@@ -2554,7 +2552,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     assert captured["extract_calls"] == 1
     assert captured["source_root"] == tmp_path
     assert captured["clang_include"] == ["Python.h"]
-    assert captured["clang_include_directory"] == ["C:/MyInclude"]
+    assert captured["clang_include_directory"] == [Path("C:/MyInclude")]
     assert captured["clang_c_std"] == "c99"
     assert captured["clang_cpp_std"] == "c++20"
 
@@ -2649,7 +2647,7 @@ def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
     assert engine._clang_include_directory is not None
-    assert "-std=c11" not in engine._clang_include_directory
+    assert Path("-std=c11") not in engine._clang_include_directory
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.c",
@@ -2671,7 +2669,7 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_include_directory=["C:/MyInclude"],
+        clang_include_directory=[Path("C:/MyInclude")],
         clang_c_std="-std=c99",
         clang_cpp_std="--std=c++20",
     )
@@ -2708,20 +2706,21 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
     engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_include=["Python.h"],
-        clang_include_directory=["C:/MyInclude"],
+        clang_include_directory=[Path("C:/MyInclude")],
     )
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [])
 
     try:
         assert engine.extract_modules() == {}
-        expected_include_dirs = ["C:/MyInclude"]
+        expected_include_dirs = [Path("C:/MyInclude")]
         for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
             if not include_dir:
                 continue
-            if include_dir in expected_include_dirs:
+            include_path = Path(include_dir)
+            if include_path in expected_include_dirs:
                 continue
-            expected_include_dirs.append(include_dir)
+            expected_include_dirs.append(include_path)
 
         assert engine._clang_include == ["Python.h"]
         assert engine._clang_include_directory == expected_include_dirs
@@ -2744,7 +2743,7 @@ def test_c_signature_engine_build_parse_args_uses_only_external_include_values(t
         *[
             item
             for include_dir in engine._clang_include_directory
-            for item in ("--include-directory", include_dir)
+            for item in ("--include-directory", str(include_dir))
         ],
     ]
 
@@ -2753,7 +2752,7 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
     engine = CSignatureExtractor(
         source_root=tmp_path,
         clang_include=["Python.h", "numpy/arrayobject.h"],
-        clang_include_directory=["C:/MyInclude"],
+        clang_include_directory=[Path("C:/MyInclude")],
         clang_c_std="c11",
     )
 
@@ -2771,11 +2770,11 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
         "--include",
         "numpy/arrayobject.h",
         "--include-directory",
-        "C:/MyInclude",
+        str(Path("C:/MyInclude")),
         *[
             item
             for include_dir in engine._clang_include_directory[1:]
-            for item in ("--include-directory", include_dir)
+            for item in ("--include-directory", str(include_dir))
         ],
     ]
 

@@ -87,7 +87,7 @@ def extract_missing_include_literals(diagnostics: list[Diagnostic]) -> list[str]
     return sorted(missing)
 
 
-def inject_python_include_directories(include_directories: list[str]) -> list[str]:
+def inject_python_include_directories(include_directories: list[Path]) -> list[Path]:
     """向 include 目录列表注入当前 Python 头文件目录。"""
     directories = list(include_directories)
     include_candidates = [
@@ -95,9 +95,12 @@ def inject_python_include_directories(include_directories: list[str]) -> list[st
         sysconfig.get_path("platinclude"),
     ]
     for include_dir in include_candidates:
-        if not include_dir or include_dir in directories:
+        if not include_dir:
             continue
-        directories.append(include_dir)
+        include_path = Path(include_dir)
+        if include_path in directories:
+            continue
+        directories.append(include_path)
     return directories
 
 
@@ -114,9 +117,9 @@ def resolve_missing_include_dir(source_root: Path, *, include_literal: str) -> P
     return None
 
 
-def append_include_args(clang_include_directory: list[str], include_args: list[str]) -> list[str]:
+def append_include_args(clang_include_directory: list[Path], include_args: list[Path]) -> list[Path]:
     """将新发现的 include 目录追加到 clang 参数中，并返回实际新增项。"""
-    added: list[str] = []
+    added: list[Path] = []
     for include_dir in include_args:
         if include_dir in clang_include_directory or include_dir in added:
             continue
@@ -130,16 +133,16 @@ def discover_missing_include_args(
     file_path: Path,
     diagnostics: list[Diagnostic],
     source_root: Path,
-    clang_include_directory: list[str],
-) -> list[str]:
+    clang_include_directory: list[Path],
+) -> list[Path]:
     """基于缺失头文件诊断自动补全 clang include 目录。"""
-    resolved_pairs: list[tuple[str, str]] = []
+    resolved_pairs: list[tuple[str, Path]] = []
     missing_literals = extract_missing_include_literals(diagnostics)
     for include_literal in missing_literals:
         include_dir = resolve_missing_include_dir(source_root, include_literal=include_literal)
         if include_dir is None:
             continue
-        resolved_pairs.append((include_literal, str(include_dir)))
+        resolved_pairs.append((include_literal, include_dir))
 
     added = append_include_args(
         clang_include_directory,
@@ -188,7 +191,7 @@ def build_clang_parse_args(
     file_path: Path,
     *,
     clang_include: list[str],
-    clang_include_directory: list[str],
+    clang_include_directory: list[Path],
     clang_c_std: str,
     clang_cpp_std: str,
 ) -> list[str]:
@@ -203,7 +206,7 @@ def build_clang_parse_args(
     for include_value in clang_include:
         parse_args.extend(["--include", include_value])
     for include_dir in clang_include_directory:
-        parse_args.extend(["--include-directory", include_dir])
+        parse_args.extend(["--include-directory", str(include_dir)])
     return parse_args
 
 
@@ -221,7 +224,7 @@ def parse_translation_unit(
     *,
     source_root: Path,
     clang_include: list[str],
-    clang_include_directory: list[str],
+    clang_include_directory: list[Path],
     clang_c_std: str,
     clang_cpp_std: str,
 ) -> TranslationUnit:
