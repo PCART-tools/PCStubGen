@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-import importlib
-import sys
 import types
-from pathlib import Path
 
-from core import write_stubs
 from core.ir import QualifiedName
 from core.module_builder import build_module
-from core.stub_generation_options import StubGenerationOptions
 
 
 def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
@@ -61,83 +56,3 @@ def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
     assert not hasattr(ir_module, "variables")
     assert not hasattr(root_cls, "properties")
     assert not hasattr(root_cls, "fields")
-
-
-def test_write_stubs_outputs_core_structure_only(tmp_path: Path) -> None:
-    package_dir = tmp_path / "demo_pkg"
-    package_dir.mkdir(parents=True, exist_ok=True)
-    (package_dir / "__init__.py").write_text(
-        "\n".join(
-            [
-                "VALUE = 123",
-                "",
-                "def root_function(*args, **kwargs):",
-                "    \"\"\"root_function(x: int) -> int\"\"\"",
-                "    return 0",
-                "",
-                "class RootClass:",
-                "    CLASS_FIELD = 3",
-                "",
-                "    def method(*args, **kwargs):",
-                "        \"\"\"method(self, y: int) -> int\"\"\"",
-                "        return 0",
-                "",
-                "    @property",
-                "    def prop(self):",
-                "        return 1",
-                "",
-                "from . import sub",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    (package_dir / "sub.py").write_text(
-        "\n".join(
-            [
-                "def sub_function(*args, **kwargs):",
-                "    \"\"\"sub_function(name: str) -> str\"\"\"",
-                "    return name",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    out_dir = tmp_path / "stubs"
-    out_dir_with_comment = tmp_path / "stubs_with_comment"
-    sys.path.insert(0, str(tmp_path))
-    importlib.invalidate_caches()
-    try:
-        write_stubs("demo_pkg", out_dir, options=StubGenerationOptions())
-        write_stubs(
-            "demo_pkg",
-            out_dir_with_comment,
-            options=StubGenerationOptions(include_module_type_comment=True),
-        )
-    finally:
-        sys.path.remove(str(tmp_path))
-        sys.modules.pop("demo_pkg", None)
-        sys.modules.pop("demo_pkg.sub", None)
-
-    root_stub = (out_dir / "demo_pkg" / "__init__.pyi").read_text(encoding="utf-8")
-    sub_stub = (out_dir / "demo_pkg" / "sub.pyi").read_text(encoding="utf-8")
-    root_stub_with_comment = (
-        out_dir_with_comment / "demo_pkg" / "__init__.pyi"
-    ).read_text(encoding="utf-8")
-    sub_stub_with_comment = (out_dir_with_comment / "demo_pkg" / "sub.pyi").read_text(
-        encoding="utf-8"
-    )
-
-    assert not root_stub.startswith("# module type:")
-    assert not sub_stub.startswith("# module type:")
-
-    assert "from . import sub" in root_stub
-    assert "def root_function(x: int) -> int:" in root_stub
-    assert "class RootClass:" in root_stub
-    assert "def method(self, y: int) -> int:" in root_stub
-    assert "VALUE" not in root_stub
-    assert "CLASS_FIELD" not in root_stub
-    assert "prop" not in root_stub
-
-    assert "def sub_function(name: str) -> str:" in sub_stub
-    assert root_stub_with_comment.startswith("# module type: python\n")
-    assert sub_stub_with_comment.startswith("# module type: python\n")

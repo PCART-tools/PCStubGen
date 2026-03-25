@@ -5,9 +5,9 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .IRClass import IRClass
-    from .IRFunction import IRFunction
-    from .QualifiedName import QualifiedName
+    from .ir_class import IRClass
+    from .ir_function import IRFunction
+    from .qualified_name import QualifiedName
 
 class IRModuleType(Enum):
     UNKNOWN = "unknown"

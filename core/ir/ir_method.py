@@ -4,8 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .IRFunction import IRFunction
-    from .IRMethodDecorator import IRMethodDecorator
+    from .ir_function import IRFunction
+    from .ir_method_decorator import IRMethodDecorator
 
 @dataclass
 class IRMethod:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .IRArgument import IRArgument
+from .ir_argument import IRArgument
 
 
 @dataclass

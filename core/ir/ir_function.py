@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .IRSignature import IRSignature
+from .ir_signature import IRSignature
 
 
 @dataclass
