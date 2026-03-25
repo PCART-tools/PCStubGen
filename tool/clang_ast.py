@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import os
 import subprocess
 import sys
@@ -9,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 
+import typer
 from clang.cindex import Cursor, CursorKind, Diagnostic, TranslationUnit
 
 import clang.cindex as clang_cindex
@@ -20,8 +20,9 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / f"{SCRIPT_PATH.stem}_output"
 LIBCLANG_OUTPUT_EXTENSION = ".libclang.txt"
 CLANG_OUTPUT_EXTENSION = ".clang.txt"
 
-EXIT_OK = 0
 EXIT_ERROR = 1
+
+app = typer.Typer(add_completion=False)
 
 
 @dataclass(frozen=True)
@@ -42,57 +43,6 @@ def configure_output_encoding() -> None:
             sys.stderr.reconfigure(encoding="utf-8")
         except (AttributeError, OSError, ValueError):
             pass
-
-
-def _normalize_clang_include_directory_tokens(argv: Sequence[str] | None) -> list[str] | None:
-    if argv is None:
-        return None
-
-    repeatable_flags = {"--clang-include-directory", "--clang-include"}
-    normalized: list[str] = []
-    index = 0
-    while index < len(argv):
-        token = argv[index]
-        if token not in repeatable_flags:
-            normalized.append(token)
-            index += 1
-            continue
-
-        if index + 1 >= len(argv):
-            normalized.append(token)
-            break
-
-        normalized.append(f"{token}={argv[index + 1]}")
-        index += 2
-
-    return normalized
-
-
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。",
-        allow_abbrev=False,
-    )
-    parser.add_argument("source_path", help="待解析的 C/C++ 源文件路径。")
-    parser.add_argument(
-        "--clang-include",
-        action="append",
-        default=[],
-        help="追加 include 头文件，可重复传入。",
-    )
-    parser.add_argument(
-        "--clang-include-directory",
-        action="append",
-        default=[],
-        help="追加 include 目录路径，可重复传入。",
-    )
-    parser.add_argument("--clang-c-std", help="指定 C 标准（如 c11 或 -std=c11）。")
-    parser.add_argument("--clang-cpp-std", help="指定 C++ 标准（如 c++17 或 -std=c++17）。")
-    parser.add_argument(
-        "--clang-library-path",
-        help="显式指定 libclang 动态库路径。",
-    )
-    return parser.parse_args(_normalize_clang_include_directory_tokens(argv))
 
 
 def _safe_str(value: str | None) -> str | None:
@@ -156,6 +106,24 @@ def _normalize_include_headers(include_headers: Sequence[str]) -> list[str]:
         if include_header not in normalized_headers:
             normalized_headers.append(include_header)
     return normalized_headers
+
+
+def _validate_clang_include(value: list[str] | None) -> list[str]:
+    values = [] if value is None else list(value)
+    try:
+        _normalize_include_headers(values)
+    except (TypeError, ValueError) as ex:
+        raise typer.BadParameter(str(ex)) from ex
+    return values
+
+
+def _validate_clang_include_directory(value: list[Path] | None) -> list[Path]:
+    values = [] if value is None else list(value)
+    try:
+        _normalize_include_paths([str(path) for path in values])
+    except (TypeError, ValueError) as ex:
+        raise typer.BadParameter(str(ex)) from ex
+    return values
 
 
 def build_clang_args(
@@ -435,30 +403,39 @@ def _build_clang_failure(result: ClangAstDumpResult) -> RuntimeError | None:
     return RuntimeError(details)
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def run_ast_export(
+    *,
+    source_path: Path,
+    clang_include: Sequence[str],
+    clang_include_directory: Sequence[Path],
+    clang_c_std: str | None,
+    clang_cpp_std: str | None,
+    clang_library_path: str | None,
+) -> list[Exception]:
+    """
+    导出单个源文件的 libclang 与 clang AST，并返回执行过程中收集到的失败。
+    """
     configure_output_encoding()
-    args = parse_args(argv)
-
-    source_path = Path(args.source_path).resolve()
-    if not source_path.is_file():
-        raise FileNotFoundError(f"Source file not found: {source_path}")
+    source_path = source_path.resolve()
 
     libclang_output_path, clang_output_path = resolve_output_paths(source_path)
-    library_path: str | None = _safe_str(args.clang_library_path)
-    clang_include = _normalize_include_headers([str(header) for header in args.clang_include])
-    clang_include_directory = _normalize_include_paths([str(path) for path in args.clang_include_directory])
-    clang_c_std: str | None = _safe_str(args.clang_c_std)
-    clang_cpp_std: str | None = _safe_str(args.clang_cpp_std)
+    library_path = _safe_str(clang_library_path)
+    normalized_clang_include = _normalize_include_headers([str(header) for header in clang_include])
+    normalized_clang_include_directory = _normalize_include_paths(
+        [str(path) for path in clang_include_directory]
+    )
+    normalized_clang_c_std = _safe_str(clang_c_std)
+    normalized_clang_cpp_std = _safe_str(clang_cpp_std)
     clang_args = build_clang_args(
         source_path=source_path,
     )
     clang_parse_args = _build_parse_args(
         source_path=source_path,
         clang_args=clang_args,
-        include_headers=clang_include,
-        include_paths=clang_include_directory,
-        clang_c_std=clang_c_std,
-        clang_cpp_std=clang_cpp_std,
+        include_headers=normalized_clang_include,
+        include_paths=normalized_clang_include_directory,
+        clang_c_std=normalized_clang_c_std,
+        clang_cpp_std=normalized_clang_cpp_std,
     )
 
     errors: list[Exception] = []
@@ -495,8 +472,60 @@ def main(argv: Sequence[str] | None = None) -> int:
         errors.append(error)
         _report_failure("clang AST export", error)
 
-    return EXIT_OK if not errors else EXIT_ERROR
+    return errors
+
+
+@app.command(help="使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。")
+def command(
+    source_path: Path = typer.Argument(
+        ...,
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        resolve_path=True,
+        metavar="SOURCE_PATH",
+        help="待解析的 C/C++ 源文件路径。",
+    ),
+    clang_include: list[str] | None = typer.Option(
+        None,
+        "--clang-include",
+        callback=_validate_clang_include,
+        help="追加 include 头文件，可重复传入。",
+    ),
+    clang_include_directory: list[Path] | None = typer.Option(
+        None,
+        "--clang-include-directory",
+        callback=_validate_clang_include_directory,
+        help="追加 include 目录路径，可重复传入。",
+    ),
+    clang_c_std: str | None = typer.Option(
+        None,
+        "--clang-c-std",
+        help="指定 C 标准（如 c11 或 -std=c11）。",
+    ),
+    clang_cpp_std: str | None = typer.Option(
+        None,
+        "--clang-cpp-std",
+        help="指定 C++ 标准（如 c++17 或 -std=c++17）。",
+    ),
+    clang_library_path: str | None = typer.Option(
+        None,
+        "--clang-library-path",
+        help="显式指定 libclang 动态库路径。",
+    ),
+) -> None:
+    errors = run_ast_export(
+        source_path=source_path,
+        clang_include=clang_include or [],
+        clang_include_directory=clang_include_directory or [],
+        clang_c_std=clang_c_std,
+        clang_cpp_std=clang_cpp_std,
+        clang_library_path=clang_library_path,
+    )
+    if errors:
+        raise typer.Exit(code=EXIT_ERROR)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()

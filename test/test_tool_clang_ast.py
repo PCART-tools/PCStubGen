@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import clang.cindex
 import pytest
+from typer.testing import CliRunner
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -14,27 +15,111 @@ if str(ROOT_DIR) not in sys.path:
 
 from tool import clang_ast
 
+RUNNER = CliRunner()
 
-def test_parse_args_accepts_clang_include_and_include_directory() -> None:
-    args = clang_ast.parse_args(
+
+def test_cli_accepts_clang_include_and_include_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_kwargs: dict[str, object] = {}
+    source_path = tmp_path / "sample.c"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    def fake_run_ast_export(**kwargs: object) -> list[Exception]:
+        captured_kwargs.update(kwargs)
+        return []
+
+    monkeypatch.setattr(clang_ast, "run_ast_export", fake_run_ast_export)
+
+    result = RUNNER.invoke(
+        clang_ast.app,
         [
-            "sample.c",
+            str(source_path),
             "--clang-include",
             "Python.h",
             "--clang-include=numpy/arrayobject.h",
             "--clang-include-directory",
             "C:/IncludeA",
             "--clang-include-directory=C:/IncludeB",
-        ]
+        ],
+        prog_name="clang_ast",
     )
 
-    assert args.clang_include == ["Python.h", "numpy/arrayobject.h"]
-    assert args.clang_include_directory == ["C:/IncludeA", "C:/IncludeB"]
+    assert result.exit_code == 0
+    assert captured_kwargs["source_path"] == source_path.resolve()
+    assert captured_kwargs["clang_include"] == ["Python.h", "numpy/arrayobject.h"]
+    assert captured_kwargs["clang_include_directory"] == [
+        Path("C:/IncludeA"),
+        Path("C:/IncludeB"),
+    ]
 
 
-def test_parse_args_rejects_removed_output_option() -> None:
-    with pytest.raises(SystemExit):
-        clang_ast.parse_args(["sample.c", "--output", "out.txt"])
+def test_cli_rejects_removed_output_option(tmp_path: Path) -> None:
+    source_path = tmp_path / "sample.c"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        clang_ast.app,
+        [str(source_path), "--output", "out.txt"],
+        prog_name="clang_ast",
+    )
+
+    assert result.exit_code == 2
+    assert "No such option: --output" in result.stderr
+
+
+def test_cli_help_contains_chinese_text() -> None:
+    result = RUNNER.invoke(clang_ast.app, ["--help"], prog_name="clang_ast")
+
+    assert result.exit_code == 0
+    assert "使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。" in result.stdout
+    assert "--clang-include" in result.stdout
+    assert "追加 include 头文件，可重复传入。" in result.stdout
+
+
+def test_cli_invalid_clang_include_reports_bad_parameter(tmp_path: Path) -> None:
+    source_path = tmp_path / "sample.c"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        clang_ast.app,
+        [str(source_path), "--clang-include=-bad"],
+        prog_name="clang_ast",
+    )
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--clang-include'" in result.stderr
+    assert "'-bad'" in result.stderr
+
+
+def test_cli_invalid_clang_include_directory_reports_bad_parameter(tmp_path: Path) -> None:
+    source_path = tmp_path / "sample.c"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        clang_ast.app,
+        [str(source_path), "--clang-include-directory=-bad"],
+        prog_name="clang_ast",
+    )
+
+    assert result.exit_code == 2
+    assert "Invalid value for '--clang-include-directory'" in result.stderr
+    assert "'-bad'" in result.stderr
+
+
+def test_cli_missing_source_path_reports_typer_path_error(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing.c"
+
+    result = RUNNER.invoke(
+        clang_ast.app,
+        [str(missing_path)],
+        prog_name="clang_ast",
+    )
+
+    assert result.exit_code == 2
+    assert "SOURCE_PATH" in result.stderr
+    assert "does not exist" in result.stderr
 
 
 def test_build_parse_args_places_include_before_include_directory() -> None:
@@ -62,6 +147,20 @@ def test_build_parse_args_places_include_before_include_directory() -> None:
 def test_normalize_include_headers_rejects_option_like_values() -> None:
     with pytest.raises(ValueError, match="option-like"):
         clang_ast._normalize_include_headers(["-Winvalid"])
+
+
+def test_validate_clang_include_preserves_message() -> None:
+    with pytest.raises(clang_ast.typer.BadParameter) as ex:
+        clang_ast._validate_clang_include(["-bad"])
+
+    assert str(ex.value) == "clang_include entry must be a header, got option-like value: '-bad'"
+
+
+def test_validate_clang_include_directory_preserves_message() -> None:
+    with pytest.raises(clang_ast.typer.BadParameter) as ex:
+        clang_ast._validate_clang_include_directory([Path("-bad")])
+
+    assert str(ex.value) == "clang_include_directory entry must be a path, got option-like value: '-bad'"
 
 
 class _FakeLocation:
@@ -287,7 +386,7 @@ def test_run_clang_ast_dump_returns_stdout(monkeypatch: pytest.MonkeyPatch) -> N
     assert captured_command[:4] == ["clang", "-Xclang", "-ast-dump-all", "-fsyntax-only"]
 
 
-def test_main_writes_clang_stdout_even_when_clang_returns_error(
+def test_run_ast_export_writes_clang_stdout_even_when_clang_returns_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -309,17 +408,24 @@ def test_main_writes_clang_stdout_even_when_clang_returns_error(
         ),
     )
 
-    exit_code = clang_ast.main([str(source_path)])
+    errors = clang_ast.run_ast_export(
+        source_path=source_path,
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        clang_library_path=None,
+    )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
     captured = capsys.readouterr()
 
-    assert exit_code == clang_ast.EXIT_ERROR
+    assert len(errors) == 1
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
     assert clang_path.read_text(encoding="utf-8") == "partial ast\n"
     assert "clang AST export failed: syntax error" in captured.err
 
 
-def test_main_partial_success_when_clang_export_fails(
+def test_run_ast_export_partial_success_when_clang_export_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -337,17 +443,24 @@ def test_main_partial_success_when_clang_export_fails(
 
     monkeypatch.setattr(clang_ast, "run_clang_ast_dump", raise_clang_failure)
 
-    exit_code = clang_ast.main([str(source_path)])
+    errors = clang_ast.run_ast_export(
+        source_path=source_path,
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        clang_library_path=None,
+    )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
     captured = capsys.readouterr()
 
-    assert exit_code == clang_ast.EXIT_ERROR
+    assert len(errors) == 1
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
     assert not clang_path.exists()
     assert "clang AST export failed: clang missing" in captured.err
 
 
-def test_main_partial_success_when_libclang_export_fails(
+def test_run_ast_export_partial_success_when_libclang_export_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -367,17 +480,24 @@ def test_main_partial_success_when_libclang_export_fails(
         lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload", stderr="", returncode=0),
     )
 
-    exit_code = clang_ast.main([str(source_path)])
+    errors = clang_ast.run_ast_export(
+        source_path=source_path,
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        clang_library_path=None,
+    )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
     captured = capsys.readouterr()
 
-    assert exit_code == clang_ast.EXIT_ERROR
+    assert len(errors) == 1
     assert not libclang_path.exists()
     assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
     assert "libclang AST export failed: libclang unavailable" in captured.err
 
 
-def test_main_writes_both_outputs_when_exports_succeed(
+def test_run_ast_export_writes_both_outputs_when_exports_succeed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -394,9 +514,16 @@ def test_main_writes_both_outputs_when_exports_succeed(
         lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
     )
 
-    exit_code = clang_ast.main([str(source_path)])
+    errors = clang_ast.run_ast_export(
+        source_path=source_path,
+        clang_include=[],
+        clang_include_directory=[],
+        clang_c_std=None,
+        clang_cpp_std=None,
+        clang_library_path=None,
+    )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
 
-    assert exit_code == clang_ast.EXIT_OK
+    assert errors == []
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
     assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
