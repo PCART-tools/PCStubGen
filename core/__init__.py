@@ -67,11 +67,8 @@ def write_stubs(
     if c_ast_visitor is not None:
         c_ast_visitor.log_summary()
 
-    ext = options.stub_extension if options.stub_extension else "pyi"
     if _writer is None:
-        _writer = Writer(stub_extension=ext)
-    else:
-        _writer.stub_extension = ext
+        _writer = Writer()
     printer = PrinterVisitor(
         include_docstrings=options.include_docstrings,
         include_module_type_comment=options.include_module_type_comment,

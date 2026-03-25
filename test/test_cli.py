@@ -76,7 +76,6 @@ def test_build_options_keeps_none_source_root() -> None:
         clang_cpp_std=None,
         include_docstrings=True,
         include_module_type_comment=False,
-        stub_extension="pyi",
     )
 
     assert options.source_root is None
@@ -92,7 +91,6 @@ def test_build_options_keeps_path_source_root() -> None:
         clang_cpp_std=None,
         include_docstrings=True,
         include_module_type_comment=False,
-        stub_extension="pyi",
     )
 
     assert options.source_root == Path("C:/tmp/src")
@@ -231,7 +229,7 @@ def test_validate_clang_include_preserves_chinese_error_message() -> None:
     assert str(ex.value) == "clang_include 条目必须是 header，不能是类似选项的值: '-bad'"
 
 
-def test_invalid_stub_extension_is_rejected() -> None:
+def test_removed_stub_extension_flag_is_rejected() -> None:
     result = RUNNER.invoke(
         cli.app,
         ["math", "--stub-extension", "txt"],
@@ -239,4 +237,4 @@ def test_invalid_stub_extension_is_rejected() -> None:
     )
 
     assert result.exit_code == 2
-    assert "生成 stub 的扩展名必须是 pyi 或 py" in result.stderr
+    assert "No such option: --stub-extension" in result.stderr

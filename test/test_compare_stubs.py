@@ -69,9 +69,7 @@ class ReferenceCLIArgs(CLIArgs):
 
 def build_new_options() -> StubGenerationOptions:
     """构造新版生成器支持的参数，避免与旧版参考 CLI 参数耦合。"""
-    return StubGenerationOptions(
-        stub_extension="pyi",
-    )
+    return StubGenerationOptions()
 
 
 def prepare_output_dir(base_dir: Path) -> Path:
@@ -103,7 +101,7 @@ def generate_old(module_name, output_dir: Path):
 
 
 def generate_new(module_name, options: StubGenerationOptions, output_dir: Path):
-    writer = NewWriter(stub_extension=options.stub_extension)
+    writer = NewWriter()
     write_stubs(module_name, output_dir, options=options, _writer=writer)
 
 

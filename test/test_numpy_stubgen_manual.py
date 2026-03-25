@@ -106,8 +106,8 @@ def prepare_output_dir(output_dir: Path) -> Path:
     return output_dir
 
 
-def collect_stub_files(output_dir: Path, stub_extension: str = "pyi") -> list[Path]:
-    return sorted(output_dir.rglob(f"*.{stub_extension}"))
+def collect_stub_files(output_dir: Path) -> list[Path]:
+    return sorted(output_dir.rglob("*.pyi"))
 
 
 def count_generic_signatures(stub_files: list[Path]) -> int:
@@ -157,7 +157,7 @@ def run_single_generation(
             include_module_type_comment=True,
         )
         write_stubs(module_name, output_dir, options=options)
-        stub_files = collect_stub_files(output_dir, stub_extension=options.stub_extension)
+        stub_files = collect_stub_files(output_dir)
         if not stub_files:
             elapsed = time.perf_counter() - started
             return GenerationResult(

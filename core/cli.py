@@ -37,12 +37,6 @@ def _normalize_clang_include(includes: list[str]) -> list[str]:
     return normalized
 
 
-def _normalize_stub_extension(stub_extension: str) -> str:
-    if stub_extension not in {"pyi", "py"}:
-        raise ValueError("生成 stub 的扩展名必须是 pyi 或 py")
-    return stub_extension
-
-
 def _validate_clang_include(value: list[str] | None) -> list[str]:
     values = [] if value is None else list(value)
     try:
@@ -50,13 +44,6 @@ def _validate_clang_include(value: list[str] | None) -> list[str]:
     except (TypeError, ValueError) as ex:
         raise typer.BadParameter(str(ex)) from ex
     return values
-
-
-def _validate_stub_extension(value: str) -> str:
-    try:
-        return _normalize_stub_extension(value)
-    except ValueError as ex:
-        raise typer.BadParameter(str(ex)) from ex
 
 
 def _build_options(
@@ -69,7 +56,6 @@ def _build_options(
     clang_cpp_std: str | None,
     include_docstrings: bool,
     include_module_type_comment: bool,
-    stub_extension: str,
 ) -> StubGenerationOptions:
     """
     将 CLI 入参归一化并转换为 stub 生成配置。
@@ -87,7 +73,6 @@ def _build_options(
         ],
         include_docstrings=include_docstrings,
         include_module_type_comment=include_module_type_comment,
-        stub_extension=_normalize_stub_extension(stub_extension),
     )
 
 
@@ -141,13 +126,6 @@ def main(
         "--include-module-type-comment",
         help="在生成的 stub 中包含 module type comment",
     ),
-    stub_extension: str = typer.Option(
-        "pyi",
-        "--stub-extension",
-        metavar="EXT",
-        callback=_validate_stub_extension,
-        help="生成 stub 的扩展名: pyi (默认) 或 py",
-    ),
 ) -> None:
     """
     使用 pcstubgen 为模块生成 Python stub。
@@ -178,7 +156,6 @@ def main(
                 clang_cpp_std=clang_cpp_std,
                 include_docstrings=include_docstrings,
                 include_module_type_comment=include_module_type_comment,
-                stub_extension=stub_extension,
             ),
         )
     finally:
