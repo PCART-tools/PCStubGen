@@ -1433,6 +1433,244 @@ def test_c_signature_extraction_engine_extract_modules_populates_inferred_return
     assert signatures[0].return_type_name == "int"
 
 
+def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_arguments(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "parse_tuple_args.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct _typeobject PyTypeObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyTypeObject PyList_Type;",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int count = 0;",
+                "    PyObject* items = (PyObject*)0;",
+                "    if (!PyArg_ParseTuple(args, \"iO!\", &count, &PyList_Type, &items)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"parse_tuple_args\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["parse_tuple_args"].functions["foo"].signatures
+    assert signatures == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(name="count", type_name="int"),
+                ExtractedArgument(name="items", type_name="list"),
+            ]
+        )
+    ]
+
+
+def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_and_keywords_arguments(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "parse_tuple_keywords_args.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "#define METH_KEYWORDS 2",
+                "int PyArg_ParseTupleAndKeywords(PyObject* args, PyObject* kwds, const char* fmt, char** kwlist, ...);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args, PyObject* kwds) {",
+                "    static char* kwlist[] = {\"x\", \"y\", 0};",
+                "    double x = 0.0;",
+                "    double y = -1.5;",
+                "    if (!PyArg_ParseTupleAndKeywords(args, kwds, \"|d$d\", kwlist, &x, &y)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS | METH_KEYWORDS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"parse_tuple_keywords_args\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["parse_tuple_keywords_args"].functions["foo"].signatures
+    assert signatures == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(
+                    name="x",
+                    type_name="float",
+                    default_value="0.0",
+                    has_default=True,
+                ),
+                ExtractedArgument(
+                    name="y",
+                    type_name="float",
+                    default_value="-1.5",
+                    has_default=True,
+                    kind=IRArgumentKind.KEYWORD_ONLY,
+                ),
+            ]
+        )
+    ]
+
+
+def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures_for_multiple_pyarg_calls(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "multiple_pyarg_signatures.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    const char* label = 0;",
+                "    if (0) {",
+                "        if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "            return (PyObject*)0;",
+                "        }",
+                "    }",
+                "    if (!PyArg_ParseTuple(args, \"s\", &label)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"multiple_pyarg_signatures\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        clang_c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["multiple_pyarg_signatures"].functions["foo"].signatures
+    assert signatures == [
+        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")]),
+        ExtractedSignature(arguments=[ExtractedArgument(name="label", type_name="str")]),
+    ]
+
+
 def test_c_signature_extraction_engine_extract_modules_handles_multiple_moduledefs_in_one_file(
     tmp_path: Path,
 ) -> None:
@@ -2844,6 +3082,13 @@ def _string_literal(value: str) -> _FakeNode:
     )
 
 
+def _float_literal(value: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.FLOATING_LITERAL,
+        tokens=[_FakeToken(clang.cindex.TokenKind.LITERAL, value)],
+    )
+
+
 def _token_identifier_node(
     name: str,
     *,
@@ -2871,6 +3116,14 @@ def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
         children=[_token_identifier_node(name, referenced=referenced)],
+    )
+
+
+def _signed_numeric_literal(sign: str, child: _FakeNode) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.PUNCTUATION, sign)],
+        children=[child],
     )
 
 
@@ -2960,6 +3213,20 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.BINARY_OPERATOR,
         children=[_token_identifier_node(flag) for flag in flags],
+    )
+
+
+def _kwlist_decl(name: str, *keywords: str) -> _FakeNode:
+    return _var_decl(
+        name,
+        _init_list(*[_string_literal(keyword) for keyword in keywords], _int_literal("0")),
+    )
+
+
+def _type_object_decl(name: str, tp_name: str) -> _FakeNode:
+    return _var_decl(
+        name,
+        _init_list(_designated_initializer("tp_name", _string_literal(tp_name))),
     )
 
 
@@ -3386,6 +3653,148 @@ def test_return_type_returns_none_when_function_has_no_return() -> None:
     assert inferred is None
 
 
+def test_infer_argument_signatures_parses_pyarg_parsetuple() -> None:
+    count_decl = _var_decl("count", _int_literal("1"))
+    label_decl = _var_decl("label", _identifier_node("Py_None"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i|z"),
+            _address_of("count", referenced=count_decl),
+            _address_of("label", referenced=label_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(name="count", type_name="int"),
+                ExtractedArgument(
+                    name="label",
+                    type_name="str | None",
+                    default_value="None",
+                    has_default=True,
+                ),
+            ]
+        )
+    ]
+
+
+def test_infer_argument_signatures_parses_pyarg_parsetuple_and_keywords() -> None:
+    kwlist_decl = _kwlist_decl("kwlist", "x", "y")
+    x_decl = _var_decl("x", _float_literal("0.0"))
+    y_decl = _var_decl("y", _signed_numeric_literal("-", _float_literal("1.5")))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("|d$d"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _address_of("x", referenced=x_decl),
+            _address_of("y", referenced=y_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(
+                    name="x",
+                    type_name="float",
+                    default_value="0.0",
+                    has_default=True,
+                ),
+                ExtractedArgument(
+                    name="y",
+                    type_name="float",
+                    default_value="-1.5",
+                    has_default=True,
+                    kind=IRArgumentKind.KEYWORD_ONLY,
+                ),
+            ]
+        )
+    ]
+
+
+def test_infer_argument_signatures_resolves_builtin_and_custom_o_bang_types() -> None:
+    items_decl = _var_decl("items")
+    point_decl = _var_decl("point")
+    point_type_decl = _type_object_decl("PointType", "pkg.mod.Point")
+    list_type_decl = _var_decl("PyList_Type")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O!O!"),
+            _address_of("PyList_Type", referenced=list_type_decl),
+            _address_of("items", referenced=items_decl),
+            _address_of("PointType", referenced=point_type_decl),
+            _address_of("point", referenced=point_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(name="items", type_name="list"),
+                ExtractedArgument(name="point", type_name="Point"),
+            ]
+        )
+    ]
+
+
+def test_infer_argument_signatures_skips_parse_tuple_and_keywords_without_valid_kwlist() -> None:
+    invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _int_literal("0")))
+    x_decl = _var_decl("x", _float_literal("0.0"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("|d"),
+            _token_identifier_node("kwlist", referenced=invalid_kwlist_decl),
+            _address_of("x", referenced=x_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == []
+
+
+def test_infer_argument_signatures_deduplicates_matching_pyarg_calls() -> None:
+    first_decl = _var_decl("value")
+    second_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=first_decl),
+        ),
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=second_decl),
+        ),
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
+    ]
+
+
 def test_infer_signature_creates_signature_with_inferred_return_type() -> None:
     function = ExtractedFunction(
         ml_name="foo",
@@ -3401,6 +3810,28 @@ def test_infer_signature_creates_signature_with_inferred_return_type() -> None:
     assert function.signatures[0].return_type_name == "int"
 
 
+def test_infer_signature_creates_signature_with_inferred_arguments_when_return_is_unknown() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    function = ExtractedFunction(
+        ml_name="foo",
+        function_cursor=_fake_function_cursor_with_children(
+            _call_expr(
+                "PyArg_ParseTuple",
+                _identifier_node("args"),
+                _string_literal("i"),
+                _address_of("value", referenced=value_decl),
+            ),
+            _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
+        ),
+    )
+
+    signature_rules_module.infer_signature(function)
+
+    assert function.signatures == [
+        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
+    ]
+
+
 def test_infer_signature_keeps_signatures_empty_when_return_type_is_unknown() -> None:
     function = ExtractedFunction(
         ml_name="foo",
@@ -3412,6 +3843,31 @@ def test_infer_signature_keeps_signatures_empty_when_return_type_is_unknown() ->
     signature_rules_module.infer_signature(function)
 
     assert function.signatures == []
+
+
+def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    function = ExtractedFunction(
+        ml_name="foo",
+        function_cursor=_fake_function_cursor_with_children(
+            _call_expr(
+                "PyArg_ParseTuple",
+                _identifier_node("args"),
+                _string_literal("i"),
+                _address_of("value", referenced=value_decl),
+            ),
+            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+        ),
+    )
+
+    signature_rules_module.infer_signature(function)
+
+    assert function.signatures == [
+        ExtractedSignature(
+            arguments=[ExtractedArgument(name="value", type_name="int")],
+            return_type_name="int",
+        )
+    ]
 
 
 def test_infer_signature_only_fills_missing_return_type_on_existing_signatures() -> None:
@@ -3441,7 +3897,7 @@ def test_infer_signature_only_fills_missing_return_type_on_existing_signatures()
 
 def test_return_type_py_buildvalue_parser_is_importable_by_package_path() -> None:
     module = importlib.import_module(
-        "core.node_visitors.c_signature_extraction.core.py_buildvalue_type_parser"
+        "core.node_visitors.c_signature_extraction.core.py_build_value_type_parser"
     )
 
     assert module.PyBuildValueTypeParser is not None
