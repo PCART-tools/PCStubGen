@@ -1,42 +1,47 @@
 """
-独立测试：输入模块名，输出模块与子模块是否为 C 实现。
+工具：输入模块名，输出模块与子模块是否为 C 实现。
 
 示例:
-    python test/test_module_c_impl.py
-    python test/test_module_c_impl.py numpy.random
-    python test/test_module_c_impl.py math
+    python -m tool.module_c_impl
+    python -m tool.module_c_impl numpy.random
+    python tool/module_c_impl.py math
 """
 
 from __future__ import annotations
 
-from contextlib import suppress
 import csv
-import inspect
+from contextlib import suppress
 import importlib
 import importlib.machinery
 import importlib.util
+import inspect
+from pathlib import Path
 import sys
 import types
-from pathlib import Path
+
+import typer
+
 
 SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
-ROOT_DIR = SCRIPT_PATH.parents[1]
+ROOT_DIR = SCRIPT_DIR.parent
 
-DEFAULT_MODULE = "numpy.random"
-OUTPUT_DIR = SCRIPT_DIR / "output" / SCRIPT_PATH.stem
+DEFAULT_OUTPUT_DIR = SCRIPT_DIR / f"{SCRIPT_PATH.stem}_output"
+EXIT_ERROR = 1
+
+app = typer.Typer(add_completion=False)
 
 
 def configure_output_encoding() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             pass
     if hasattr(sys.stderr, "reconfigure"):
         try:
             sys.stderr.reconfigure(encoding="utf-8")
-        except Exception:
+        except (AttributeError, OSError, ValueError):
             pass
 
 
@@ -44,8 +49,8 @@ def is_c_implemented(module_name: str) -> bool:
     spec = importlib.util.find_spec(module_name)
     if spec is None:
         module = importlib.import_module(module_name)
-        spec = getattr(module, "__spec__", None)
-    loader = getattr(spec, "loader", None) if spec is not None else None
+        spec = module.__spec__
+    loader = spec.loader if spec is not None else None
     return (
         isinstance(loader, importlib.machinery.ExtensionFileLoader)
         or loader is importlib.machinery.BuiltinImporter
@@ -58,13 +63,16 @@ def _iter_submodule_names(module: types.ModuleType) -> list[str]:
     for _, member in inspect.getmembers(module):
         if not inspect.ismodule(member):
             continue
-        member_name = getattr(member, "__name__", "")
+        member_name = member.__name__
         if member_name.startswith(prefix):
             result.append(member_name)
     return result
 
 
 def collect_module_names(module_name: str) -> list[str]:
+    """
+    从根模块开始遍历已暴露的子模块属性，并返回去重后的模块名列表。
+    """
     root_module = importlib.import_module(module_name)
     pending_modules: list[types.ModuleType] = [root_module]
     visited_names: set[str] = set()
@@ -90,11 +98,14 @@ def collect_module_names(module_name: str) -> list[str]:
     return sorted(all_names)
 
 
-def output_file_for(module_name: str) -> Path:
-    return OUTPUT_DIR / f"{module_name}.csv"
+def output_file_for(module_name: str, *, output_dir: Path) -> Path:
+    return output_dir / f"{module_name}.csv"
 
 
 def write_report(module_names: list[str], report_path: Path) -> int:
+    """
+    将模块检查结果写入 CSV，并返回其中 C 实现模块的数量。
+    """
     report_path.parent.mkdir(parents=True, exist_ok=True)
     c_module_count = 0
     rows: list[tuple[str, bool]] = []
@@ -110,24 +121,27 @@ def write_report(module_names: list[str], report_path: Path) -> int:
             c_module_count += 1
         rows.append((name, is_c))
 
-    with report_path.open("w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+    with report_path.open("w", newline="", encoding="utf-8") as file:
+        writer = csv.writer(file)
         writer.writerow(["module_name", "is_c_implemented"])
         rows.sort(key=lambda item: not item[1])
         writer.writerows(rows)
     return c_module_count
 
 
-def run_single_module(module_name: str) -> int:
+def run_single_module(module_name: str, *, output_dir: Path) -> int:
+    """
+    运行单个模块检查流程，并将结果写入指定输出目录。
+    """
     print(f"开始检查模块: {module_name}")
 
     try:
         module_names = collect_module_names(module_name)
     except Exception as exc:
         print(f"检查失败: {exc}")
-        return 1
+        return EXIT_ERROR
 
-    report_path = output_file_for(module_name)
+    report_path = output_file_for(module_name, output_dir=output_dir)
     c_count = write_report(module_names, report_path)
 
     try:
@@ -142,11 +156,25 @@ def run_single_module(module_name: str) -> int:
     return 0
 
 
-def main() -> int:
+@app.command(help="检查模块及其子模块是否为 C 实现，并导出 CSV 报告。")
+def command(
+    module_name: str = typer.Argument(
+        ...,
+        metavar="MODULE_NAME",
+        help="待检查的模块名。",
+    ),
+    output_dir: Path | None = typer.Option(
+        None,
+        "--output-dir",
+        help="CSV 输出目录，默认写入 tool/module_c_impl_output。",
+    ),
+) -> None:
     configure_output_encoding()
-    module_name = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_MODULE
-    return run_single_module(module_name)
+    effective_output_dir = DEFAULT_OUTPUT_DIR if output_dir is None else output_dir
+    exit_code = run_single_module(module_name, output_dir=effective_output_dir)
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    app()
