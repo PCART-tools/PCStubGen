@@ -134,6 +134,7 @@ def build_function(
             arg = IRArgument(name=param.name, kind=kind_map[param.kind])
             if param.default is not inspect.Signature.empty:
                 arg.default_value = _build_value(param.default)
+                arg.has_default = True
             if param.annotation is not inspect.Signature.empty:
                 arg.type_name = _build_annotation(param.annotation)
             args.append(arg)

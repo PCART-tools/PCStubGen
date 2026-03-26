@@ -145,7 +145,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
             rewritten_signatures.append(
                 IRSignature(
                     args=args,
-                    return_type_name=self._build_annotation(sig.return_type_name),
+                    return_type_name=sig.return_type_name,
                     doc=func.doc,
                 )
             )
@@ -190,31 +190,16 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         result: list[IRArgument] = []
         for arg in normalized:
-            ir_arg = IRArgument(name=arg.name, kind=arg.kind)
-            ir_arg.type_name = self._build_annotation(arg.type_name)
-            ir_arg.default_value = self._build_default_value(arg.default_value)
-            result.append(ir_arg)
+            result.append(
+                IRArgument(
+                    name=arg.name,
+                    type_name=arg.type_name,
+                    default_value=arg.default_value,
+                    has_default=arg.has_default,
+                    kind=arg.kind,
+                )
+            )
         return result
-
-    @staticmethod
-    def _build_annotation(type_name: str | None) -> str | None:
-        """清理提取结果里的注解文本，仅过滤空白值。"""
-        if type_name is None:
-            return None
-        text = type_name.strip()
-        if not text:
-            return None
-        return text
-
-    @staticmethod
-    def _build_default_value(default_value: str | None) -> str | None:
-        """清理提取结果里的默认值文本，仅过滤空白值。"""
-        if default_value is None:
-            return None
-        expr = default_value.strip()
-        if expr == "":
-            return None
-        return expr
 
     def _match_extracted_module(
         self,

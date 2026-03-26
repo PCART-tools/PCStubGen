@@ -321,7 +321,12 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
                             arguments=[
                                 ExtractedArgument(name="self", type_name="object"),
                                 ExtractedArgument(name="x", type_name="int"),
-                                ExtractedArgument(name="flag", type_name="bool", default_value="False"),
+                                ExtractedArgument(
+                                    name="flag",
+                                    type_name="bool",
+                                    default_value="False",
+                                    has_default=True,
+                                ),
                             ],
                             return_type_name="int",
                         )
@@ -344,10 +349,98 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     assert signature.args[1].type_name == "bool"
     assert signature.args[1].default_value is not None
     assert signature.args[1].default_value == "False"
+    assert signature.args[1].has_default is True
     assert signature.return_type_name is not None
     assert signature.return_type_name == "int"
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 1
+
+
+def test_c_ast_visitor_preserves_has_default_without_default_text(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    func = _unknown_function("foo")
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[
+                                ExtractedArgument(
+                                    name="flag",
+                                    type_name="bool",
+                                    has_default=True,
+                                )
+                            ]
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    signature = module.functions[0].signatures[0]
+    assert signature.args[0].has_default is True
+    assert signature.args[0].default_value is None
+
+
+def test_c_ast_visitor_preserves_raw_argument_and_return_text(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    func = _unknown_function("foo")
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[
+                                ExtractedArgument(
+                                    name="value",
+                                    type_name="  int  ",
+                                    default_value="  keep_raw()  ",
+                                    has_default=True,
+                                )
+                            ],
+                            return_type_name="  bool  ",
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor.visit_module(module)
+
+    signature = module.functions[0].signatures[0]
+    assert signature.args[0].type_name == "  int  "
+    assert signature.args[0].default_value == "  keep_raw()  "
+    assert signature.return_type_name == "  bool  "
 
 
 def test_c_ast_visitor_preserves_extracted_argument_kinds(

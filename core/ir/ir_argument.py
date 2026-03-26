@@ -17,6 +17,7 @@ class IRArgument:
     name: str | None
     type_name: str | None = field(default=None)
     default_value: str | None = field(default=None)
+    has_default: bool = field(default=False)
     kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
 
     def __str__(self) -> str:
@@ -31,5 +32,7 @@ class IRArgument:
             result.append(f": {self.type_name}")
         if self.default_value is not None:
             result.append(f" = {self.default_value}")
+        elif self.has_default:
+            result.append(" = ...")
 
         return "".join(result)

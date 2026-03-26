@@ -203,6 +203,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 IRArgument(
                     name=name,
                     default_value=default_str,
+                    has_default=default_str is not None,
                     type_name=type_name,
                     kind=kind,
                 )

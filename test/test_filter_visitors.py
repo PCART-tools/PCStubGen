@@ -90,6 +90,13 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         "None",
         "2.0",
     ]
+    assert [arg.has_default for arg in signature.args] == [
+        False,
+        False,
+        True,
+        True,
+        True,
+    ]
     assert signature.return_type_name == "numpy.ndarray"
 
 
@@ -225,6 +232,7 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
         '{"a": 1, "b": 2}',
         '"x"',
     ]
+    assert [arg.has_default for arg in parsed] == [False, True, True, True]
     assert [arg.kind for arg in parsed] == [
         IRArgumentKind.POSITIONAL_ONLY,
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -247,6 +255,7 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
         "tuple[str, ...]",
         "object",
     ]
+    assert [arg.has_default for arg in parsed] == [False, False, False]
     assert [arg.kind for arg in parsed] == [
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
         IRArgumentKind.VAR_POSITIONAL,
@@ -270,6 +279,7 @@ def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None
         "int",
         "object",
     ]
+    assert [arg.has_default for arg in parsed] == [False, False, False, False, False]
     assert [arg.kind for arg in parsed] == [
         IRArgumentKind.POSITIONAL_ONLY,
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -290,6 +300,7 @@ def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None
     assert [arg.name for arg in parsed] == ["a", "b", "c", "d"]
     assert [arg.type_name for arg in parsed] == ["int", "int", "str", "str"]
     assert [arg.default_value for arg in parsed] == [None, "1", None, '"x"']
+    assert [arg.has_default for arg in parsed] == [False, True, False, True]
     assert [arg.kind for arg in parsed] == [
         IRArgumentKind.POSITIONAL_ONLY,
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -317,6 +328,7 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
         "bool",
     ]
     assert [arg.default_value for arg in parsed_with_markers] == [None, '"x"', "True"]
+    assert [arg.has_default for arg in parsed_with_markers] == [False, True, True]
     assert [arg.kind for arg in parsed_with_markers] == [
         IRArgumentKind.POSITIONAL_ONLY,
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -332,6 +344,7 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
         "object",
     ]
     assert [arg.default_value for arg in parsed_with_var_args] == [None, None, "True", None]
+    assert [arg.has_default for arg in parsed_with_var_args] == [False, False, True, False]
     assert [arg.kind for arg in parsed_with_var_args] == [
         IRArgumentKind.POSITIONAL_OR_KEYWORD,
         IRArgumentKind.VAR_POSITIONAL,
@@ -393,6 +406,7 @@ def test_module_builder_keeps_default_values_as_strings() -> None:
     assert len(parsed.signatures) == 1
     signature = parsed.signatures[0]
     assert [arg.default_value for arg in signature.args] == ["False", "(1, 2)"]
+    assert [arg.has_default for arg in signature.args] == [True, True]
 
 
 def test_module_builder_uses_empty_signatures_when_inspect_fails(
@@ -445,6 +459,24 @@ def test_printer_prints_default_values_as_is() -> None:
 
     assert lines == [
         "def foo(value = unknown_default()):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_ellipsis_for_unknown_default_value() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[IRArgument(name="value", has_default=True)],
+            )
+        ],
+    )
+
+    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(value = ...):",
         "    ...",
     ]
 

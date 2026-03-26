@@ -115,6 +115,8 @@ class PrinterVisitor:
             parts.append(f": {arg.type_name}")
         if arg.default_value is not None:
             parts.append(f" = {arg.default_value}")
+        elif arg.has_default:
+            parts.append(" = ...")
 
         return "".join(parts)
 
