@@ -95,8 +95,6 @@ def inject_python_include_directories(include_directories: list[Path]) -> list[P
         sysconfig.get_path("platinclude"),
     ]
     for include_dir in include_candidates:
-        if not include_dir:
-            continue
         include_path = Path(include_dir)
         if include_path in directories:
             continue

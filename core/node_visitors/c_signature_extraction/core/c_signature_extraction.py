@@ -34,14 +34,9 @@ def extract_c_signature_modules(
     """
     _check(source_root.exists())
 
-    normalized_clang_include = list(clang_include)
-    normalized_include_dirs = translation_unit.inject_python_include_directories(
-        list(clang_include_directory)
-    )
+    normalized_include_dirs = translation_unit.inject_python_include_directories(clang_include_directory)
 
     source_files = translation_unit.find_candidate_files(source_root)
-    if not source_files:
-        return {}
 
     index = Index.create()
     translation_units = []
@@ -50,7 +45,7 @@ def extract_c_signature_modules(
             index,
             file_path,
             source_root=source_root,
-            clang_include=normalized_clang_include,
+            clang_include=clang_include,
             clang_include_directory=normalized_include_dirs,
             clang_c_std=clang_c_std,
             clang_cpp_std=clang_cpp_std,

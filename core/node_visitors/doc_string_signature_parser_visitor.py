@@ -7,7 +7,6 @@ from enum import Enum, auto
 from ..ir import (
     IRArgument,
     IRArgumentKind,
-    IRClass,
     IRFunction,
     IRModule,
     IRSignature,
@@ -29,34 +28,20 @@ class DocStringSignatureParserVisitor(NodeVisitor):
     解析文档字符串中的函数和方法签名。
     """
 
-    def visit_module(self, node: IRModule) -> None:
-        """在模块层原地补全文档字符串签名。"""
-        for func in node.functions:
-            self._parse_function(func)
-
-        super().visit_module(node)
-
-    def visit_class(self, node: IRClass, module: IRModule) -> None:
-        """在类层原地补全文档字符串签名。"""
-        for method in node.methods:
-            self._parse_function(method.function)
-
-        super().visit_class(node, module)
-
-    def _parse_function(self, func: IRFunction) -> None:
-        """就地解析仍缺失签名的函数节点。"""
-        if func.signatures:
+    def visit_function(self, node: IRFunction, module: IRModule) -> None:
+        """在函数层原地补全文档字符串签名。"""
+        if node.signatures:
             return
 
-        if not func.doc:
+        if not node.doc:
             return
 
         parsed_signatures = self.parse_function_docstring(
-            func_name=func.name,
-            doc_lines=func.doc.splitlines(),
+            func_name=node.name,
+            doc_lines=node.doc.splitlines(),
         )
         if parsed_signatures:
-            func.signatures = parsed_signatures
+            node.signatures = parsed_signatures
 
     def parse_function_docstring(
         self, func_name: str, doc_lines: list[str]

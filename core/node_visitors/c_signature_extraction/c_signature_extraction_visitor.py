@@ -78,8 +78,6 @@ class CSignatureExtractionVisitor(NodeVisitor):
                         module_full_name=module_full_name,
                     )
 
-        super().visit_module(node)
-
     def log_summary(self) -> None:
         """输出一次项目级 C AST 签名补全统计。"""
         if self._stats.total_unknown_signatures <= 0:

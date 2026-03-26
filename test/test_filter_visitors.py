@@ -20,6 +20,7 @@ from core.node_visitors.doc_string_signature_parser_visitor import (
     DocStringSignatureParserVisitor,
 )
 from core.node_visitors.node_visitor import NodeVisitor
+from core.pipeline import Pipeline
 from core.printer_visitor import PrinterVisitor
 
 
@@ -45,18 +46,15 @@ def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
 def test_docstring_parser_parses_generic_function_signature() -> None:
     visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
-    ir_module.functions = [
-        _unknown_function(
-            "foo",
-            doc="foo(x: int, y: str) -> str\n\nparsed from docstring",
-        )
-    ]
+    func = _unknown_function(
+        "foo",
+        doc="foo(x: int, y: str) -> str\n\nparsed from docstring",
+    )
 
-    visitor.visit_module(ir_module)
+    visitor.visit_function(func, ir_module)
 
-    parsed = ir_module.functions[0]
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
+    assert len(func.signatures) == 1
+    signature = func.signatures[0]
     assert [arg.name for arg in signature.args] == ["x", "y"]
     assert signature.return_type_name == "str"
     assert signature.doc == "parsed from docstring"
@@ -65,21 +63,18 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
     visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
-    ir_module.functions = [
-        _unknown_function(
-            "cdist_minkowski",
-            doc=(
-                "cdist_minkowski(x: object, y: object, w: object = None, "
-                "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
-            ),
-        )
-    ]
+    func = _unknown_function(
+        "cdist_minkowski",
+        doc=(
+            "cdist_minkowski(x: object, y: object, w: object = None, "
+            "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
+        ),
+    )
 
-    visitor.visit_module(ir_module)
+    visitor.visit_function(func, ir_module)
 
-    parsed = ir_module.functions[0]
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
+    assert len(func.signatures) == 1
+    signature = func.signatures[0]
     assert [arg.name for arg in signature.args] == ["x", "y", "w", "out", "p"]
     assert [arg.type_name for arg in signature.args] == [
         "object",
@@ -101,18 +96,15 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
     visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
-    ir_module.functions = [
-        _unknown_function(
-            "foo",
-            doc="foo(value: object = <demo.Color.RED: 1>) -> None",
-        )
-    ]
+    func = _unknown_function(
+        "foo",
+        doc="foo(value: object = <demo.Color.RED: 1>) -> None",
+    )
 
-    visitor.visit_module(ir_module)
+    visitor.visit_function(func, ir_module)
 
-    parsed = ir_module.functions[0]
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
+    assert len(func.signatures) == 1
+    signature = func.signatures[0]
     assert [arg.default_value for arg in signature.args] == ["<demo.Color.RED: 1>"]
     assert signature.return_type_name == "None"
 
@@ -120,26 +112,95 @@ def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
     visitor = DocStringSignatureParserVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
-    ir_module.functions = [
-        _unknown_function(
-            "foo",
-            doc=(
-                "foo(value: typing.Optional[list[int]], "
-                "item: dict[str, tuple[int, str]]) -> typing.Union[int, str]"
-            ),
-        )
-    ]
+    func = _unknown_function(
+        "foo",
+        doc=(
+            "foo(value: typing.Optional[list[int]], "
+            "item: dict[str, tuple[int, str]]) -> typing.Union[int, str]"
+        ),
+    )
 
-    visitor.visit_module(ir_module)
+    visitor.visit_function(func, ir_module)
 
-    parsed = ir_module.functions[0]
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
+    assert len(func.signatures) == 1
+    signature = func.signatures[0]
     assert [arg.type_name for arg in signature.args] == [
         "typing.Optional[list[int]]",
         "dict[str, tuple[int, str]]",
     ]
     assert signature.return_type_name == "typing.Union[int, str]"
+
+
+def test_docstring_parser_pipeline_still_parses_method_docstrings() -> None:
+    method = IRMethod(
+        function=_unknown_function(
+            "build",
+            doc="build(value: int) -> str\n\nparsed from method docstring",
+        ),
+        decorator=None,
+    )
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[IRClass(name="Builder", methods=[method])],
+    )
+
+    Pipeline([DocStringSignatureParserVisitor()]).run(ir_module)
+
+    assert len(method.function.signatures) == 1
+    signature = method.function.signatures[0]
+    assert [arg.name for arg in signature.args] == ["value"]
+    assert signature.return_type_name == "str"
+    assert signature.doc == "parsed from method docstring"
+
+
+def test_docstring_parser_visit_module_is_noop() -> None:
+    visitor = DocStringSignatureParserVisitor()
+    ir_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[_unknown_function("foo", doc="foo(x: int) -> int")],
+    )
+
+    visitor.visit_module(ir_module)
+
+    assert ir_module.functions[0].signatures == []
+
+
+def test_docstring_parser_visit_class_is_noop() -> None:
+    visitor = DocStringSignatureParserVisitor()
+    method = IRMethod(
+        function=_unknown_function("build", doc="build(x: int) -> int"),
+        decorator=None,
+    )
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    ir_class = IRClass(name="Builder", methods=[method])
+
+    visitor.visit_class(ir_class, ir_module)
+
+    assert method.function.signatures == []
+
+
+def test_docstring_parser_visit_function_keeps_known_function_unchanged() -> None:
+    visitor = DocStringSignatureParserVisitor()
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    func = IRFunction(
+        name="foo",
+        doc="foo(x: int) -> int",
+        signatures=[_signature(args=[IRArgument(name="existing")])],
+    )
+
+    visitor.visit_function(func, ir_module)
+
+    assert [arg.name for arg in func.signatures[0].args] == ["existing"]
+
+
+def test_docstring_parser_visit_function_skips_functions_without_doc() -> None:
+    visitor = DocStringSignatureParserVisitor()
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    func = _unknown_function("foo")
+
+    visitor.visit_function(func, ir_module)
+
+    assert func.signatures == []
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
@@ -455,14 +516,13 @@ def test_printer_repeats_method_decorator_for_each_overload() -> None:
     ]
 
 
-def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -> None:
+def test_pipeline_inplace_mutation_removes_classes_functions_and_methods() -> None:
     class DropByNameVisitor(NodeVisitor):
         def visit_module(self, node: IRModule) -> None:
             node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
             node.functions = [
                 func for func in node.functions if not func.name.startswith("drop")
             ]
-            super().visit_module(node)
 
         def visit_class(self, node: IRClass, module: IRModule) -> None:
             node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
@@ -471,7 +531,6 @@ def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -
                 for method in node.methods
                 if not method.function.name.startswith("drop")
             ]
-            super().visit_class(node, module)
 
     keep_class = IRClass(
         name="KeepClass",
@@ -487,7 +546,7 @@ def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -
         functions=[IRFunction(name="drop_func"), IRFunction(name="keep_func")],
     )
 
-    DropByNameVisitor().visit_module(ir_module)
+    Pipeline([DropByNameVisitor()]).run(ir_module)
 
     assert [cls.name for cls in ir_module.classes] == ["KeepClass"]
     assert [func.name for func in ir_module.functions] == ["keep_func"]
@@ -495,11 +554,11 @@ def test_node_visitor_inplace_mutation_removes_classes_functions_and_methods() -
     assert [method.function.name for method in keep_class.methods] == ["keep_method"]
 
 
-def test_node_visitor_visits_functions_in_module_and_methods() -> None:
+def test_pipeline_visits_functions_in_module_and_methods() -> None:
     class RenameVisitedFunctionsVisitor(NodeVisitor):
-        def visit_function(self, node: IRFunction) -> None:
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            assert module.full_name == QualifiedName.from_str("pkg.mod")
             node.name = f"visited_{node.name}"
-            super().visit_function(node)
 
     method = IRMethod(function=IRFunction(name="m"), decorator=None)
     ir_class = IRClass(name="C", methods=[method])
@@ -509,7 +568,121 @@ def test_node_visitor_visits_functions_in_module_and_methods() -> None:
         functions=[IRFunction(name="f")],
     )
 
-    RenameVisitedFunctionsVisitor().visit_module(ir_module)
+    Pipeline([RenameVisitedFunctionsVisitor()]).run(ir_module)
 
     assert [func.name for func in ir_module.functions] == ["visited_f"]
     assert [m.function.name for m in ir_class.methods] == ["visited_m"]
+
+
+def test_node_visitor_visit_module_only_handles_current_node() -> None:
+    visited: list[str] = []
+
+    class RecordingVisitor(NodeVisitor):
+        def visit_module(self, node: IRModule) -> None:
+            visited.append(f"module:{node.full_name}")
+
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
+            visited.append(f"class:{node.name}@{module.full_name}")
+
+        def visit_method(self, node: IRMethod, module: IRModule) -> None:
+            visited.append(f"method:{node.function.name}@{module.full_name}")
+
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            visited.append(f"function:{node.name}@{module.full_name}")
+
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        sub_modules=[IRModule(full_name=QualifiedName.from_str("pkg.mod.child"))],
+        classes=[
+            IRClass(
+                name="C",
+                classes=[IRClass(name="Nested")],
+                methods=[IRMethod(function=IRFunction(name="m"), decorator=None)],
+            )
+        ],
+        functions=[IRFunction(name="f")],
+    )
+
+    RecordingVisitor().visit_module(module)
+
+    assert visited == ["module:pkg.mod"]
+
+
+def test_node_visitor_visit_class_only_handles_current_node() -> None:
+    visited: list[str] = []
+
+    class RecordingVisitor(NodeVisitor):
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
+            visited.append(f"class:{node.name}@{module.full_name}")
+
+        def visit_method(self, node: IRMethod, module: IRModule) -> None:
+            visited.append(f"method:{node.function.name}@{module.full_name}")
+
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            visited.append(f"function:{node.name}@{module.full_name}")
+
+    module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    ir_class = IRClass(
+        name="C",
+        classes=[IRClass(name="Nested")],
+        methods=[IRMethod(function=IRFunction(name="m"), decorator=None)],
+    )
+
+    RecordingVisitor().visit_class(ir_class, module)
+
+    assert visited == ["class:C@pkg.mod"]
+
+
+def test_pipeline_recurses_in_expected_order() -> None:
+    visited: list[str] = []
+
+    class RecordingVisitor(NodeVisitor):
+        def visit_module(self, node: IRModule) -> None:
+            visited.append(f"module:{node.full_name}")
+
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
+            visited.append(f"class:{node.name}@{module.full_name}")
+
+        def visit_method(self, node: IRMethod, module: IRModule) -> None:
+            visited.append(f"method:{node.function.name}@{module.full_name}")
+
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            visited.append(f"function:{node.name}@{module.full_name}")
+
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        sub_modules=[
+            IRModule(
+                full_name=QualifiedName.from_str("pkg.mod.child"),
+                functions=[IRFunction(name="child_f")],
+            )
+        ],
+        classes=[
+            IRClass(
+                name="C",
+                classes=[
+                    IRClass(
+                        name="Nested",
+                        methods=[IRMethod(function=IRFunction(name="nested_m"), decorator=None)],
+                    )
+                ],
+                methods=[IRMethod(function=IRFunction(name="m"), decorator=None)],
+            )
+        ],
+        functions=[IRFunction(name="f")],
+    )
+
+    Pipeline([RecordingVisitor()]).run(module)
+
+    assert visited == [
+        "module:pkg.mod",
+        "module:pkg.mod.child",
+        "function:child_f@pkg.mod.child",
+        "class:C@pkg.mod",
+        "class:Nested@pkg.mod",
+        "method:nested_m@pkg.mod",
+        "function:nested_m@pkg.mod",
+        "method:m@pkg.mod",
+        "function:m@pkg.mod",
+        "function:f@pkg.mod",
+    ]
