@@ -238,14 +238,18 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 return None
 
             nametype = nametype_default_parts[0]
-            default = nametype_default_parts[1] if len(nametype_default_parts) == 2 else None
+            default = (
+                nametype_default_parts[1].strip()
+                if len(nametype_default_parts) == 2
+                else None
+            )
 
             name_type_parts = self._split_top_level(nametype, ":")
             if name_type_parts is None or len(name_type_parts) > 2:
                 return None
 
             name = name_type_parts[0].strip()
-            type_ = name_type_parts[1] if len(name_type_parts) == 2 else None
+            type_ = name_type_parts[1].strip() if len(name_type_parts) == 2 else None
             result.append((name, type_, default))
 
         return result
