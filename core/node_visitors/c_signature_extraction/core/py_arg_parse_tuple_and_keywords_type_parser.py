@@ -49,7 +49,6 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._char_index = 0
         self._arg_index = 0
         self._python_arg_index = 0
-        self._validate_kwlist()
 
         arguments: list[ExtractedArgument] = []
         section = _ArgumentSection.REQUIRED
@@ -119,20 +118,6 @@ class PyArgParseTupleAndKeywordsTypeParser:
             has_default=has_default,
             kind=kind,
         )
-
-    def _validate_kwlist(self) -> None:
-        """校验关键字名列表是否满足唯一且合法的约束。"""
-        seen: set[str] = set()
-        for keyword_name in self._kwlist:
-            if not keyword_name or not looks_like_identifier(keyword_name):
-                raise PyArgParseTupleAndKeywordsTypeParserError(
-                    f"无效的 keyword name: {keyword_name!r}。"
-                )
-            if keyword_name in seen:
-                raise PyArgParseTupleAndKeywordsTypeParserError(
-                    f"重复的 keyword name: {keyword_name!r}。"
-                )
-            seen.add(keyword_name)
 
     def _validate_counts(self) -> None:
         """在解析结束后统一校验 Python 参数和 C 槽位计数。"""

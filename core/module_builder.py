@@ -5,6 +5,8 @@ import inspect
 import types
 from typing import Any
 
+from loguru import logger
+
 from .reflection_helpers import (
     get_doc,
     get_module_name,
@@ -24,11 +26,12 @@ from .ir import (
 
 
 def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
+    module_type = _detect_module_type(module)
     irmodule = IRModule(
         full_name=path,
         doc=get_doc(module),
         is_package=is_package(module),
-        module_type=_detect_module_type(module),
+        module_type=module_type,
     )
     for name, member in inspect.getmembers(module):
         member_path = irmodule.full_name.concat(name)
@@ -39,9 +42,13 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             continue
 
         if inspect.isroutine(member):
-            irmodule.functions.append(build_function(member_path, member))
+            irmodule.functions.append(
+                build_function(member_path, member, module_type=module_type)
+            )
         elif inspect.isclass(member):
-            irmodule.classes.append(build_class(member_path, member))
+            irmodule.classes.append(
+                build_class(member_path, member, module_type=module_type)
+            )
         elif inspect.ismodule(member):
             irmodule.sub_modules.append(build_module(member_path, member))
 
@@ -49,20 +56,20 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
 
 
 def _detect_module_type(module: types.ModuleType) -> IRModuleType:
-    spec = getattr(module, "__spec__", None)
+    spec = module.__spec__
     loader = getattr(spec, "loader", None) if spec is not None else None
 
-    if loader is importlib.machinery.BuiltinImporter:
+    if loader is importlib.machinery.BuiltinImporter: # 编译进Python
         return IRModuleType.BUILTIN
 
-    if isinstance(loader, importlib.machinery.ExtensionFileLoader):
+    if isinstance(loader, importlib.machinery.ExtensionFileLoader): # .pyd .so
         return IRModuleType.EXTENSION
 
     if isinstance(
         loader,
         (
-            importlib.machinery.SourcelessFileLoader,
-            importlib.machinery.SourceFileLoader,
+            importlib.machinery.SourcelessFileLoader, # .pyc
+            importlib.machinery.SourceFileLoader, # .py
         ),
     ):
         return IRModuleType.PYTHON
@@ -70,7 +77,12 @@ def _detect_module_type(module: types.ModuleType) -> IRModuleType:
     return IRModuleType.UNKNOWN
 
 
-def build_class(path: QualifiedName, class_: type) -> IRClass:
+def build_class(
+    path: QualifiedName,
+    class_: type,
+    *,
+    module_type: IRModuleType = IRModuleType.UNKNOWN,
+) -> IRClass:
     irclass = IRClass(name=path.name, doc=get_doc(class_))
     irclass.bases = build_bases(class_)
 
@@ -84,14 +96,23 @@ def build_class(path: QualifiedName, class_: type) -> IRClass:
             continue
 
         if inspect.isroutine(member):
-            irclass.methods.append(build_method(member_path, member))
+            irclass.methods.append(
+                build_method(member_path, member, module_type=module_type)
+            )
         elif inspect.isclass(member):
-            irclass.classes.append(build_class(member_path, member))
+            irclass.classes.append(
+                build_class(member_path, member, module_type=module_type)
+            )
 
     return irclass
 
 
-def build_function(path: QualifiedName, func: Any) -> IRFunction:
+def build_function(
+    path: QualifiedName,
+    func: Any,
+    *,
+    module_type: IRModuleType = IRModuleType.UNKNOWN,
+) -> IRFunction:
     irfunc = IRFunction(name=path.name, doc=get_doc(func))
 
     try:
@@ -127,14 +148,36 @@ def build_function(path: QualifiedName, func: Any) -> IRFunction:
                 doc=irfunc.doc,
             )
         )
-    except (TypeError, ValueError):
+        if module_type is IRModuleType.EXTENSION:
+            logger.info("EXTENSION 模块签名获取成功, function: {}", path)
+    except (TypeError, ValueError) as ex:
+        if module_type is IRModuleType.EXTENSION:
+            logger.warning(
+                "EXTENSION 模块签名获取失败, function: {}, error_type: {}, error: {}",
+                path,
+                type(ex).__name__,
+                ex,
+            )
         # inspect.signature 失败时保留空签名，后续可由其它链路补全
-        pass
+    except Exception as ex:
+        if module_type is not IRModuleType.EXTENSION:
+            raise
+        logger.warning(
+            "EXTENSION 模块签名获取失败, function: {}, error_type: {}, error: {}",
+            path,
+            type(ex).__name__,
+            ex,
+        )
     return irfunc
 
 
-def build_method(path: QualifiedName, method: Any) -> IRMethod:
-    func = build_function(path, method)
+def build_method(
+    path: QualifiedName,
+    method: Any,
+    *,
+    module_type: IRModuleType = IRModuleType.UNKNOWN,
+) -> IRMethod:
+    func = build_function(path, method, module_type=module_type)
     return IRMethod(function=func, decorator=None)
 
 

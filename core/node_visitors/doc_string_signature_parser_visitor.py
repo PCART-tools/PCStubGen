@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import keyword
 import re
+from enum import Enum, auto
 
 from ..ir import (
     IRArgument,
@@ -13,14 +15,19 @@ from ..ir import (
 from .node_visitor import NodeVisitor
 
 
+class _ArgsParseState(Enum):
+    """参数头解析阶段。"""
+
+    POSITIONAL = auto()
+    POSITIONAL_OR_KEYWORD = auto()
+    KEYWORD_ONLY = auto()
+    FINISHED = auto()
+
+
 class DocStringSignatureParserVisitor(NodeVisitor):
     """
     解析文档字符串中的函数和方法签名。
     """
-
-    _arg_star_name_regex = re.compile(
-        r"^\s*(?P<stars>\*{1,2})?" r"\s*(?P<name>\w+)\s*$"
-    )
 
     def visit_module(self, node: IRModule) -> None:
         """在模块层原地补全文档字符串签名。"""
@@ -78,12 +85,13 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         if match is None:
             return []
 
+        # 单条
         if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
             args = self.parse_args_str(match.group("args"))
             if args is None:
                 return []
 
-            returns = self.parse_annotation_str(match.group("returns") or "")
+            returns = match.group("returns").strip() or ""
             return [
                 IRSignature(
                     args=args,
@@ -92,6 +100,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
                 )
             ]
 
+        # 多条overload
         overload_signature_regex = re.compile(
             rf"^(\s*(?P<overload_number>\d+).\s*)"
             rf"{re.escape(func_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
@@ -136,45 +145,80 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             return None
 
         result: list[IRArgument] = []
-        kw_only_section = False
-        for arg_str, annotation_str, default_str in split_args:
-            if arg_str.strip() == "/":
+        state = _ArgsParseState.POSITIONAL
+
+        for arg_decl, type_name, default_str in split_args:
+            if state is _ArgsParseState.FINISHED:
+                return None
+
+            if arg_decl == "/":
+                if (
+                    state is not _ArgsParseState.POSITIONAL
+                    or type_name is not None
+                    or default_str is not None
+                ):
+                    return None
+
+                # 不允许 f(/, a)
+                if not any(
+                    arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
+                ):
+                    return None
+
                 for arg in result:
                     if arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD:
                         arg.kind = IRArgumentKind.POSITIONAL_ONLY
+                state = _ArgsParseState.POSITIONAL_OR_KEYWORD
                 continue
-            if arg_str.strip() == "*":
-                kw_only_section = True
-                continue
-            match = self._arg_star_name_regex.match(arg_str)
-            if match is None:
-                return None
-            name = match.group("name")
 
-            stars = match.group("stars")
-            if stars == "*":
-                kind = IRArgumentKind.VAR_POSITIONAL
-                kw_only_section = True
-            elif stars == "**":
+            if arg_decl == "*":
+                if (
+                    state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD)
+                    or type_name is not None
+                    or default_str is not None
+                ):
+                    return None
+
+                state = _ArgsParseState.KEYWORD_ONLY
+                continue
+
+            if arg_decl.startswith("**"):
+                if default_str is not None:
+                    return None
+
+                name = arg_decl[2:]
+                if name is None:
+                    return None
+
                 kind = IRArgumentKind.VAR_KEYWORD
-            elif kw_only_section:
-                kind = IRArgumentKind.KEYWORD_ONLY
+                state = _ArgsParseState.FINISHED
+            elif arg_decl.startswith("*"):
+                if state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD):
+                    return None
+                if default_str is not None:
+                    return None
+
+                name = arg_decl[1:]
+                if name is None:
+                    return None
+
+                kind = IRArgumentKind.VAR_POSITIONAL
+                state = _ArgsParseState.KEYWORD_ONLY
             else:
-                kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
+                name = arg_decl
+                if name is None:
+                    return None
 
-            annotation = None
-            if annotation_str is not None:
-                annotation = self.parse_annotation_str(annotation_str)
-
-            default = None
-            if default_str is not None:
-                default = self.parse_value_str(default_str)
+                if state is _ArgsParseState.KEYWORD_ONLY:
+                    kind = IRArgumentKind.KEYWORD_ONLY
+                else:
+                    kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
 
             result.append(
                 IRArgument(
                     name=name,
-                    default_value=default,
-                    type_name=annotation,
+                    default_value=default_str,
+                    type_name=type_name,
                     kind=kind,
                 )
             )
@@ -186,83 +230,90 @@ class DocStringSignatureParserVisitor(NodeVisitor):
         text = annotation_str.strip()
         return text or None
 
-    def parse_value_str(self, value: str) -> str | None:
-        """解析参数默认值文本。"""
-        strip_expr = value.strip()
-        if not strip_expr:
-            return None
-        return strip_expr
-
     def _split_args_str(
         self, args_str: str
     ) -> list[tuple[str, str | None, str | None]] | None:
-        """按顶层逗号分割参数串。"""
-        result = []
-        closing = {"(": ")", "{": "}", "[": "]"}
-        stack = []
-        i = 0
-        arg_begin = 0
-        semicolon_pos: int | None = None
-        eq_sign_pos: int | None = None
+        """按顶层逗号拆参数，再分阶段解析注解和默认值。"""
+        if not args_str.strip():
+            return []
 
-        def add_arg() -> None:
-            nonlocal semicolon_pos
-            nonlocal eq_sign_pos
-            annotation = None
-            default = None
-
-            arg_end = i
-
-            if eq_sign_pos is not None:
-                arg_end = eq_sign_pos
-                default = args_str[eq_sign_pos + 1 : i]
-
-            if semicolon_pos is not None:
-                annotation = args_str[semicolon_pos + 1 : arg_end]
-                arg_end = semicolon_pos
-
-            name = args_str[arg_begin:arg_end]
-            result.append((name, annotation, default))
-            semicolon_pos = None
-            eq_sign_pos = None
-
-        while i < len(args_str):
-            c = args_str[i]
-            if c in "\"'":
-                str_end = self._find_str_end(args_str, i)
-                if str_end is None:
-                    return None
-                i = str_end
-            elif c in closing:
-                stack.append(closing[c])
-            elif len(stack) == 0:
-                if c == ",":
-                    add_arg()
-                    arg_begin = i + 1
-                elif c == ":" and semicolon_pos is None:
-                    semicolon_pos = i
-                elif c == "=" and args_str[i : i + 2] != "==":
-                    eq_sign_pos = i
-            elif stack[-1] == c:
-                stack.pop()
-            i += 1
-
-        if len(stack) != 0:
+        arg_blocks = self._split_top_level(args_str, ",")
+        if arg_blocks is None:
             return None
 
-        if len(args_str[arg_begin:i].strip()) != 0:
-            add_arg()
+        result: list[tuple[str, str | None, str | None]] = []
+        for arg_block in arg_blocks:
+            if not arg_block.strip():
+                return None
+
+            # 先拆=号，再拆:
+            nametype_default_parts = self._split_top_level(arg_block, "=")
+            if nametype_default_parts is None or len(nametype_default_parts) > 2:
+                return None
+
+            nametype = nametype_default_parts[0]
+            default = nametype_default_parts[1] if len(nametype_default_parts) == 2 else None
+
+            name_type_parts = self._split_top_level(nametype, ":")
+            if name_type_parts is None or len(name_type_parts) > 2:
+                return None
+
+            name = name_type_parts[0].strip()
+            type_ = name_type_parts[1] if len(name_type_parts) == 2 else None
+            result.append((name, type_, default))
 
         return result
 
+    def _split_top_level(self, text: str, delim: str) -> list[str] | None:
+        """仅在顶层按单字符分隔，忽略括号和字符串内部的分隔符。"""
+        if len(delim) != 1:
+            raise ValueError("delim must be a single character")
+
+        left_to_right = {"(": ")", "{": "}", "[": "]"}
+        rights = left_to_right.values()
+        stack: list[str] = []
+        parts: list[str] = []
+        start = 0
+        idx = 0
+
+        while idx < len(text):
+            ch = text[idx]
+            if ch in "\"'":
+                str_end = self._find_str_end(text, idx)
+                if str_end is None:
+                    return None
+                idx = str_end + 1
+                continue
+
+            if ch in left_to_right:
+                stack.append(left_to_right[ch]) # 进右侧符号
+            elif ch in rights:
+                # 栈为空或ch不为栈顶
+                if not stack or ch != stack[-1]:
+                    return None
+                stack.pop()
+            elif not stack and ch == delim:
+                parts.append(text[start:idx])
+                start = idx + 1
+            idx += 1
+
+        if stack:
+            return None
+
+        parts.append(text[start:])
+        return parts
+
     def _find_str_end(self, s: str, start: int) -> int | None:
         """查找字符串字面量的结束位置。"""
-        for i in range(start + 1, len(s)):
-            c = s[i]
-            if c == "\\":
+        quote = s[start]
+        i = start + 1
+        while i < len(s):
+            if s[i] == "\\":
+                i += 2
                 continue
-            if c == s[start]:
+            if s[i] == quote:
                 return i
+            i += 1
         return None
 
     def _strip_empty_lines(self, doc_lines: list[str]) -> str | None:

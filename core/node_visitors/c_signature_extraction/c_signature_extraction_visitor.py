@@ -224,6 +224,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         modules: dict[str, ExtractedModule],
     ) -> ExtractedModule | None:
         """在提取结果里匹配当前模块节点。"""
+        # 先按全名查找C模块，再按全名的最后一节查找
         full_name = str(node.full_name)
         exact_matches = [
             module
@@ -232,8 +233,6 @@ class CSignatureExtractionVisitor(NodeVisitor):
         ]
         if len(exact_matches) == 1:
             return exact_matches[0]
-        if len(exact_matches) > 1:
-            return None
 
         leaf_name = node.full_name.name
         leaf_matches = [

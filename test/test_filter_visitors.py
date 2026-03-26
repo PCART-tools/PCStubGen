@@ -142,6 +142,172 @@ def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
     assert signature.return_type_name == "typing.Union[int, str]"
 
 
+def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    parsed = visitor.parse_args_str(
+        'a: int, /, x: tuple[int, int] = (1, 2), *, '
+        'mapping: dict[str, int] = {"a": 1, "b": 2}, flag: str = "x"'
+    )
+
+    assert parsed is not None
+    assert [arg.name for arg in parsed] == ["a", "x", "mapping", "flag"]
+    assert [arg.type_name for arg in parsed] == [
+        "int",
+        "tuple[int, int]",
+        "dict[str, int]",
+        "str",
+    ]
+    assert [arg.default_value for arg in parsed] == [
+        None,
+        "(1, 2)",
+        '{"a": 1, "b": 2}',
+        '"x"',
+    ]
+    assert [arg.kind for arg in parsed] == [
+        IRArgumentKind.POSITIONAL_ONLY,
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.KEYWORD_ONLY,
+        IRArgumentKind.KEYWORD_ONLY,
+    ]
+
+
+def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    parsed = visitor.parse_args_str(
+        "value: typing.Optional[list[int]], *args: tuple[str, ...], **kwargs: object"
+    )
+
+    assert parsed is not None
+    assert [arg.name for arg in parsed] == ["value", "args", "kwargs"]
+    assert [arg.type_name for arg in parsed] == [
+        "typing.Optional[list[int]]",
+        "tuple[str, ...]",
+        "object",
+    ]
+    assert [arg.kind for arg in parsed] == [
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.VAR_POSITIONAL,
+        IRArgumentKind.VAR_KEYWORD,
+    ]
+
+
+def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    parsed = visitor.parse_args_str(
+        "a, /, b, *args: tuple[str, ...], c: int, **kwargs: object"
+    )
+
+    assert parsed is not None
+    assert [arg.name for arg in parsed] == ["a", "b", "args", "c", "kwargs"]
+    assert [arg.type_name for arg in parsed] == [
+        None,
+        None,
+        "tuple[str, ...]",
+        "int",
+        "object",
+    ]
+    assert [arg.kind for arg in parsed] == [
+        IRArgumentKind.POSITIONAL_ONLY,
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.VAR_POSITIONAL,
+        IRArgumentKind.KEYWORD_ONLY,
+        IRArgumentKind.VAR_KEYWORD,
+    ]
+
+
+def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    parsed = visitor.parse_args_str(
+        'a: int, /, b: int = 1, *, c: str, d: str = "x"'
+    )
+
+    assert parsed is not None
+    assert [arg.name for arg in parsed] == ["a", "b", "c", "d"]
+    assert [arg.type_name for arg in parsed] == ["int", "int", "str", "str"]
+    assert [arg.default_value for arg in parsed] == [None, "1", None, '"x"']
+    assert [arg.kind for arg in parsed] == [
+        IRArgumentKind.POSITIONAL_ONLY,
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.KEYWORD_ONLY,
+        IRArgumentKind.KEYWORD_ONLY,
+    ]
+
+
+def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    parsed_with_markers = visitor.parse_args_str(
+        ' value : int ,  /  ,  named : str = "x" ,  *  ,  kw : bool = True '
+    )
+    parsed_with_var_args = visitor.parse_args_str(
+        ' value : int ,  *args : tuple[str, ...] ,  kw : bool = True ,'
+        '  **kwargs : object '
+    )
+
+    assert parsed_with_markers is not None
+    assert [arg.name for arg in parsed_with_markers] == ["value", "named", "kw"]
+    assert [arg.type_name for arg in parsed_with_markers] == [
+        "int",
+        "str",
+        "bool",
+    ]
+    assert [arg.default_value for arg in parsed_with_markers] == [None, '"x"', "True"]
+    assert [arg.kind for arg in parsed_with_markers] == [
+        IRArgumentKind.POSITIONAL_ONLY,
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.KEYWORD_ONLY,
+    ]
+
+    assert parsed_with_var_args is not None
+    assert [arg.name for arg in parsed_with_var_args] == ["value", "args", "kw", "kwargs"]
+    assert [arg.type_name for arg in parsed_with_var_args] == [
+        "int",
+        "tuple[str, ...]",
+        "bool",
+        "object",
+    ]
+    assert [arg.default_value for arg in parsed_with_var_args] == [None, None, "True", None]
+    assert [arg.kind for arg in parsed_with_var_args] == [
+        IRArgumentKind.POSITIONAL_OR_KEYWORD,
+        IRArgumentKind.VAR_POSITIONAL,
+        IRArgumentKind.KEYWORD_ONLY,
+        IRArgumentKind.VAR_KEYWORD,
+    ]
+
+
+@pytest.mark.parametrize(
+    "args_str",
+    [
+        "value: tuple[int, str",
+        'value: str = "unterminated',
+        "x: int,, y: int",
+        "x: int: str",
+        "x = 1 = 2",
+        "/, a: int",
+        "a: int, /, /",
+        "a: int, *, *",
+        "a: int, *: int",
+        "a: int, **kwargs: object, b: int",
+        "*: int",
+        "**: int",
+        "*1x",
+        "**class",
+        "*args = ()",
+        "**kwargs = {}",
+        "a: int, *, /, b: int",
+        "a: int, *args: tuple[int, ...], *, b: int",
+    ],
+)
+def test_docstring_parser_parse_args_str_rejects_invalid_input(args_str: str) -> None:
+    visitor = DocStringSignatureParserVisitor()
+
+    assert visitor.parse_args_str(args_str) is None
+
+
 def test_module_builder_keeps_raw_annotation_strings() -> None:
     def sample(a: int, b: list[int]) -> typing.Optional[int]:
         raise NotImplementedError
