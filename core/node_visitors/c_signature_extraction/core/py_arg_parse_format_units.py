@@ -12,7 +12,7 @@ class _FormatUnitSpec:
     unit: str
     type_name: str
     c_arg_count: int
-    default_arg_offset: int
+    decl_ref_offset: int
     object_type_arg_offset: int | None = None
 
 

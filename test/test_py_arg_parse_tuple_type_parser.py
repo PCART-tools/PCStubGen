@@ -90,10 +90,10 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
         seen_name_calls.append(names)
         return {
             ("count",): "count",
-            ("encoding", "text_buffer", "text_len"): "text",
-            ("type", "typed_result"): "typed",
-            ("converter", "converted_result"): "converted",
-            ("raw_buffer", "raw_len"): "raw",
+            ("text_buffer",): "text",
+            ("typed_result",): "typed",
+            ("converted_result",): "converted",
+            ("raw_buffer",): "raw",
             ("maybe_buffer",): "maybe",
         }[tuple(names)]
 
@@ -136,10 +136,10 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
 
     assert seen_name_calls == [
         ["count"],
-        ["encoding", "text_buffer", "text_len"],
-        ["type", "typed_result"],
-        ["converter", "converted_result"],
-        ["raw_buffer", "raw_len"],
+        ["text_buffer"],
+        ["typed_result"],
+        ["converted_result"],
+        ["raw_buffer"],
         ["maybe_buffer"],
     ]
     assert seen_object_cursors == [type_cursor, converter_cursor]
@@ -194,8 +194,8 @@ def test_parse_falls_back_to_object_for_unresolved_object_units() -> None:
     def resolve_name(c_args: list[Cursor]) -> str:
         first_name = cast(_FakeCursor, c_args[0]).name
         return {
-            "type": "typed",
-            "converter": "converted",
+            "typed_result": "typed",
+            "converted_result": "converted",
         }[first_name]
 
     parsed = _parse(
@@ -226,7 +226,7 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
         seen_name_calls.append(names)
         return {
             ("one",): "single",
-            ("text", "text_len", "type", "value", "buffer"): "nested",
+            ("text", "value", "buffer"): "nested",
         }[tuple(names)]
 
     parsed = _parse(
@@ -238,7 +238,7 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
 
     assert seen_name_calls == [
         ["one"],
-        ["text", "text_len", "type", "value", "buffer"],
+        ["text", "value", "buffer"],
     ]
     assert parsed == [
         ExtractedArgument(name="single", type_name="tuple[int,]"),

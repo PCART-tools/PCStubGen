@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import ast
 from collections.abc import Iterable
 
 from clang.cindex import Cursor, CursorKind
 
 from .cursor_utils import (
-    looks_like_identifier,
     unwrap_transparent,
     var_decl_to_init_list_expr,
     walk_cursor,
+    is_nullptr_or_zero,
 )
 from .models import ExtractedArgument, ExtractedFunction, ExtractedSignature
 from .py_arg_parse_tuple_and_keywords_type_parser import (
@@ -22,6 +21,10 @@ from .py_arg_parse_tuple_type_parser import (
 )
 from .py_build_value_type_nodes import AnyTypeNode, NamedTypeNode, TypeNode, UnionTypeNode
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
+
+from .clang_eval import eval_int
+
+from loguru import logger
 
 _OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "Py_None": "None",
@@ -177,6 +180,7 @@ _PYARG_OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "PyFrozenSet_Type": "frozenset",
     "PyType_Type": "type",
     "PyBaseObject_Type": "object",
+    "PyArray_Type": "numpy.ndarray"
 }
 
 _DEFAULT_IDENTIFIER_TO_VALUE: dict[str, str] = {
@@ -220,7 +224,10 @@ def infer_argument_signatures(func_cursor: Cursor) -> list[ExtractedSignature]:
     inferred_signatures: list[ExtractedSignature] = []
     seen_keys: set[tuple[tuple[str, str | None, str | None, bool, object], ...]] = set()
 
-    for call_expr in _iter_call_exprs(func_cursor):
+    for call_expr in walk_cursor(func_cursor):
+        if call_expr.kind != CursorKind.CALL_EXPR:
+            continue
+
         signature = _infer_signature_from_pyarg_call(call_expr)
         if signature is None:
             continue
@@ -250,16 +257,10 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
     merged_type = _merge_inferred_type_nodes(inferred_types)
     if merged_type is None:
         return None
+    if isinstance(merged_type, UnionTypeNode):
+        if len(merged_type.members) > 1:
+            logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
     return merged_type.render()
-
-
-def _iter_call_exprs(func_cursor: Cursor) -> Iterable[Cursor]:
-    """按前序遍历函数子树中的所有调用表达式。"""
-    for cursor in walk_cursor(func_cursor):
-        if cursor.kind == CursorKind.CALL_EXPR:
-            yield cursor
-
-
 def _infer_signature_from_pyarg_call(call_expr: Cursor) -> ExtractedSignature | None:
     """从单个支持的 `PyArg_*` 调用解析参数签名。"""
     assert call_expr.kind == CursorKind.CALL_EXPR
@@ -464,49 +465,38 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
         parsed_type = PyBuildValueTypeParser(
             format_string,
             args[1:],
-            resolve_object_type_func=_resolve_expr_python_type_for_buildvalue,
+            resolve_object_type_func=infer_expr_type,
         ).parse()
         return parsed_type.canonicalize()
     except PyBuildValueTypeParserError:
         return None
 
 
-def _resolve_expr_python_type_for_buildvalue(cursor: Cursor) -> TypeNode | None:
-    """给 `Py_BuildValue` 的对象位提供表达式类型解析。"""
-    return infer_expr_type(cursor)
-
-
 def _resolve_argument_name(c_args: list[Cursor]) -> str | None:
-    """从 parser 提供的 C 槽位中挑选最像 Python 参数名的输出变量。"""
+    """将 parser 提供的 decl-ref 槽位变量名按顺序拼接为参数名。"""
+    names: list[str] = []
     for c_arg in c_args:
         candidate = _resolve_decl_candidate(c_arg)
         if candidate is None:
-            continue
+            return None
 
-        name = _get_cursor_name(candidate)
-        if name is None or not looks_like_identifier(name):
-            continue
-        if _looks_like_type_or_converter_name(name):
-            continue
-        return name
+        name = candidate.spelling
+        names.append(name)
 
-    return None
+    if not names:
+        return None
+    return "_".join(names)
 
 
 def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
     target = _unwrap_pointer_target(cursor)
-    target_name = _get_cursor_name(target)
+    target_name = target.spelling
     if target_name is not None:
         mapped = _PYARG_OBJECT_NAME_TO_TYPE.get(target_name)
         if mapped is not None:
             return mapped
-
-    target_decl = _resolve_decl_candidate(cursor)
-    if target_decl is None or target_decl.kind != CursorKind.VAR_DECL:
-        return None
-
-    return _extract_python_type_name_from_type_object(target_decl)
+    return None
 
 
 def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
@@ -545,17 +535,6 @@ def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
     return normalized
 
 
-def _looks_like_type_or_converter_name(name: str) -> bool:
-    """过滤明显不是 Python 参数名的类型对象与转换器符号。"""
-    if name.endswith("_Type"):
-        return True
-    if name.endswith("Type"):
-        return True
-    if "Converter" in name:
-        return True
-    return False
-
-
 def _extract_kwlist(node: Cursor) -> list[str] | None:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
     kwlist_decl = _resolve_decl_candidate(node)
@@ -569,7 +548,7 @@ def _extract_kwlist(node: Cursor) -> list[str] | None:
     result: list[str] = []
     for child in init_list_expr.get_children():
         entry = unwrap_transparent(child)
-        if _is_null_like_expr(entry):
+        if is_nullptr_or_zero(entry):
             break
 
         keyword_name = _extract_string_literal(entry)
@@ -578,35 +557,6 @@ def _extract_kwlist(node: Cursor) -> list[str] | None:
         result.append(keyword_name)
 
     return result
-
-
-def _extract_python_type_name_from_type_object(type_decl: Cursor) -> str | None:
-    """从 `PyTypeObject` 变量初始化中提取 Python 侧类型名。"""
-    init_list_expr = var_decl_to_init_list_expr(type_decl)
-    if init_list_expr is None:
-        return None
-
-    tp_name = _extract_tp_name_from_init_list(init_list_expr)
-    if tp_name is None or tp_name == "":
-        return None
-    return tp_name.rsplit(".", 1)[-1]
-
-
-def _extract_tp_name_from_init_list(init_list_expr: Cursor) -> str | None:
-    """从类型对象初始化列表里读取 `.tp_name` 字符串。"""
-    for entry in init_list_expr.get_children():
-        entry_children = list(entry.get_children())
-        if len(entry_children) < 2:
-            continue
-
-        member_ref = unwrap_transparent(entry_children[0])
-        if member_ref.kind != CursorKind.MEMBER_REF:
-            continue
-        if _get_cursor_name(member_ref) != "tp_name":
-            continue
-
-        return _extract_string_literal(entry_children[1])
-    return None
 
 
 def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor | None:
@@ -619,29 +569,23 @@ def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor | None:
 
 def _render_default_expr(expr_cursor: Cursor) -> str | None:
     """将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
-    normalized_expr = unwrap_transparent(expr_cursor)
+    expr_cursor = unwrap_transparent(expr_cursor)
 
-    if _is_null_like_expr(normalized_expr):
+    # todo)) logic error
+    if is_nullptr_or_zero(expr_cursor):
         return "None"
 
-    if normalized_expr.kind == CursorKind.DECL_REF_EXPR:
-        name = _get_cursor_name(normalized_expr)
-        if name is None:
-            return None
-        return _DEFAULT_IDENTIFIER_TO_VALUE.get(name)
+    if expr_cursor.kind == CursorKind.DECL_REF_EXPR:
+        return _DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
 
-    if normalized_expr.kind == CursorKind.STRING_LITERAL:
-        decoded = _extract_string_literal(normalized_expr)
-        if decoded is None:
-            return None
-        return repr(decoded)
+    if expr_cursor.kind == CursorKind.STRING_LITERAL:
+        decoded = _extract_string_literal(expr_cursor)
+        return decoded
 
-    literal_text = _render_numeric_literal(normalized_expr)
-    if literal_text is not None:
-        return literal_text
+    if expr_cursor.kind == CursorKind.INTEGER_LITERAL:
+        return str(eval_int(expr_cursor))
 
-    if normalized_expr.kind == CursorKind.UNARY_OPERATOR:
-        return _render_unary_numeric_literal(normalized_expr)
+    # todo)) float...
 
     return None
 
@@ -675,38 +619,6 @@ def _render_unary_numeric_literal(expr_cursor: Cursor) -> str | None:
     return None
 
 
-def _is_null_like_expr(expr_cursor: Cursor) -> bool:
-    """识别空指针、零值和保留为标识符的 `NULL`。"""
-    if expr_cursor.kind in {
-        CursorKind.CXX_NULL_PTR_LITERAL_EXPR,
-        CursorKind.GNU_NULL_EXPR,
-    }:
-        return True
-
-    if _is_zero_integer_literal(expr_cursor):
-        return True
-
-    for name in _iter_subtree_names(expr_cursor):
-        if name in {"NULL", "nullptr"}:
-            return True
-    return False
-
-
-def _is_zero_integer_literal(expr_cursor: Cursor) -> bool:
-    """在不依赖 libclang 常量求值的前提下识别字面量 `0`。"""
-    if expr_cursor.kind != CursorKind.INTEGER_LITERAL:
-        return False
-
-    tokens = list(expr_cursor.get_tokens())
-    if not tokens:
-        return False
-
-    try:
-        return int(str(tokens[0].spelling), 0) == 0
-    except ValueError:
-        return False
-
-
 def _merge_inferred_type_nodes(type_nodes: Iterable[TypeNode]) -> TypeNode | None:
     """合并推断结果，并统一复用联合类型的规范化语义。"""
     members = tuple(type_nodes)
@@ -721,27 +633,5 @@ def _extract_string_literal(node: Cursor) -> str | None:
         if cursor.kind != CursorKind.STRING_LITERAL:
             continue
 
-        if not cursor.spelling:
-            continue
-
-        decoded = _decode_string_literal(str(cursor.spelling))
-        if decoded is not None:
-            return decoded
-    return None
-
-
-def _decode_string_literal(text: str) -> str | None:
-    """将 C 风格字符串字面量近似解码为 Python 字符串。"""
-    quote_positions = [index for index, char in enumerate(text) if char in {'"', "'"}]
-    if not quote_positions:
-        return None
-
-    literal = text[min(quote_positions):]
-    try:
-        value = ast.literal_eval(literal)
-    except (SyntaxError, ValueError):
-        stripped = literal.strip("\"'")
-        return stripped
-    if isinstance(value, str):
-        return value
+        return cursor.spelling.strip('"')
     return None

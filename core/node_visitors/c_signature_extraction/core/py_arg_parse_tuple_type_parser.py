@@ -18,6 +18,7 @@ class PyArgParseTupleTypeParserError(ValueError):
 class _ParsedValue:
     """表示一个已完成格式串消费、但尚未包装成参数的值节点。"""
 
+    # 仅保留真正接收 ParseTuple 输出值的 decl-ref 槽位。
     c_args: tuple[Cursor, ...]
 
     def render_type_name(self) -> str:
@@ -197,14 +198,17 @@ class PyArgParseTupleTypeParser:
         for spec in _FORMAT_UNIT_SPECS:
             if self._format.startswith(spec.unit, self._char_index):
                 self._char_index += len(spec.unit)
-                c_args = self._advance_c_args_required(spec.c_arg_count)
+                raw_c_args = self._advance_c_args_required(spec.c_arg_count)
                 type_name = spec.type_name
                 if spec.object_type_arg_offset is not None:
-                    type_name = self._resolve_object_type(c_args[spec.object_type_arg_offset])
+                    type_name = self._resolve_object_type(
+                        raw_c_args[spec.object_type_arg_offset]
+                    )
+                decl_ref_cursor = raw_c_args[spec.decl_ref_offset]
                 return _ScalarParsedValue(
                     type_name=type_name,
-                    c_args=c_args,
-                    default_value_cursor=c_args[spec.default_arg_offset],
+                    c_args=(decl_ref_cursor,),
+                    default_value_cursor=decl_ref_cursor,
                 )
 
         raise PyArgParseTupleTypeParserError(

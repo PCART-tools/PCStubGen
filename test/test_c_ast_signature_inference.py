@@ -3018,7 +3018,10 @@ def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
 def _kwlist_decl(name: str, *keywords: str) -> _FakeNode:
     return _var_decl(
         name,
-        _init_list(*[_string_literal(keyword) for keyword in keywords], _int_literal("0")),
+        _init_list(
+            *[_string_literal(keyword) for keyword in keywords],
+            _FakeNode(kind=clang.cindex.CursorKind.GNU_NULL_EXPR),
+        ),
     )
 
 
@@ -3545,6 +3548,30 @@ def test_infer_argument_signatures_resolves_builtin_and_custom_o_bang_types() ->
             arguments=[
                 ExtractedArgument(name="items", type_name="list"),
                 ExtractedArgument(name="point", type_name="Point"),
+            ]
+        )
+    ]
+
+
+def test_infer_argument_signatures_joins_decl_ref_names_for_tuple_arguments() -> None:
+    left_decl = _var_decl("left")
+    right_decl = _var_decl("right")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("(ii)"),
+            _address_of("left", referenced=left_decl),
+            _address_of("right", referenced=right_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(name="left_right", type_name="tuple[int, int]")
             ]
         )
     ]

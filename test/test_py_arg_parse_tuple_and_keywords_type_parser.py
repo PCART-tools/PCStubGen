@@ -203,18 +203,18 @@ def test_parse_raises_for_unsupported_units_or_structure(
         _parse(format_string, kwlist, args)
 
 
-@pytest.mark.parametrize("kwlist", [[""], ["value", "value"]])
-def test_parse_raises_for_invalid_keyword_names(kwlist: list[str]) -> None:
-    with pytest.raises(PyArgParseTupleAndKeywordsTypeParserError):
-        _parse("i" * len(kwlist), kwlist, [_cursor(f"arg_{index}") for index in range(len(kwlist))])
+def test_parse_accepts_empty_invalid_and_duplicate_keyword_names() -> None:
+    parsed = _parse(
+        "iii",
+        ["", "same", "same"],
+        [_cursor("arg_0"), _cursor("arg_1"), _cursor("arg_2")],
+    )
 
-
-def test_parse_raises_with_chinese_message_for_invalid_keyword_name() -> None:
-    with pytest.raises(
-        PyArgParseTupleAndKeywordsTypeParserError,
-        match=r"无效的 keyword name: ''。",
-    ):
-        _parse("i", [""], [_cursor("arg_0")])
+    assert parsed == [
+        ExtractedArgument(name="", type_name="int"),
+        ExtractedArgument(name="same", type_name="int"),
+        ExtractedArgument(name="same", type_name="int"),
+    ]
 
 
 @pytest.mark.parametrize(

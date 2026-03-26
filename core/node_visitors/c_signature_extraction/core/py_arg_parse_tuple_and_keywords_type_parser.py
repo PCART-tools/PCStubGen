@@ -8,7 +8,6 @@ from typing import Callable
 from clang.cindex import Cursor
 
 from ....ir import IRArgumentKind
-from .cursor_utils import looks_like_identifier
 from .models import ExtractedArgument
 from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 
@@ -105,7 +104,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
 
         default_value: str | None = None
         if has_default:
-            default_value = self._resolve_default_value(c_args[spec.default_arg_offset])
+            default_value = self._resolve_default_value(c_args[spec.decl_ref_offset])
 
         kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
         if section is _ArgumentSection.KEYWORD_ONLY:

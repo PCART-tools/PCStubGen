@@ -91,7 +91,7 @@ class DocStringSignatureParserVisitor(NodeVisitor):
             if args is None:
                 return []
 
-            returns = match.group("returns").strip() or ""
+            returns = (match.group("returns") or "").strip('"')
             return [
                 IRSignature(
                     args=args,
