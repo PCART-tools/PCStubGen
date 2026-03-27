@@ -16,21 +16,22 @@ class Pipeline:
             self._visit_module(visitor, module)
         return module
 
-    def _visit_module(self, visitor: NodeVisitor, module: IRModule) -> None:
+    @staticmethod
+    def _visit_module(visitor: NodeVisitor, module: IRModule) -> None:
         """访问模块，再递归访问其子模块、类和函数。"""
         visitor.visit_module(module)
 
         for sub_module in module.sub_modules:
-            self._visit_module(visitor, sub_module)
+            Pipeline._visit_module(visitor, sub_module)
 
         for cls in module.classes:
-            self._visit_class(visitor, cls, module)
+            Pipeline._visit_class(visitor, cls, module)
 
         for func in module.functions:
             visitor.visit_function(func, module)
 
+    @staticmethod
     def _visit_class(
-        self,
         visitor: NodeVisitor,
         node: IRClass,
         module: IRModule,
@@ -39,14 +40,14 @@ class Pipeline:
         visitor.visit_class(node, module)
 
         for nested_cls in node.classes:
-            self._visit_class(visitor, nested_cls, module)
+            Pipeline._visit_class(visitor, nested_cls, module)
 
         for method in node.methods:
-            self._visit_method(visitor, method, module)
+            Pipeline._visit_method(visitor, method, module)
 
+    @staticmethod
     def _visit_method(
-        self,
-        visitor: NodeVisitor,
+            visitor: NodeVisitor,
         method: IRMethod,
         module: IRModule,
     ) -> None:

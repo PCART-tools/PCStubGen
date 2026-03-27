@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-
-from clang.cindex import Cursor, CursorKind, TokenKind
-
+from clang.cindex import Cursor, CursorKind
 from . import clang_eval
 
 _SINGLE_TRANSPARENT_CURSOR_KINDS = {

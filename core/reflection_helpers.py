@@ -16,22 +16,3 @@ def get_module_name(obj: Any) -> str | None:
     if isinstance(module_name, str):
         return module_name
     return None
-
-
-def get_module_qualname(obj: Any) -> tuple[str | None, str | None]:
-    module_name = get_module_name(obj)
-    qual_name = getattr(obj, "__qualname__", None)
-    if not isinstance(qual_name, str):
-        qual_name = None
-    return module_name, qual_name
-
-
-def is_package(module: types.ModuleType) -> bool:
-    return hasattr(module, "__path__")
-
-
-def get_generic_alias_type() -> type | None:
-    generic_alias = getattr(types, "GenericAlias", None)
-    if isinstance(generic_alias, type):
-        return generic_alias
-    return None
