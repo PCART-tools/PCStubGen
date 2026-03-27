@@ -1425,6 +1425,81 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
     ]
 
 
+def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "parse_tuple_extent_text.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct _typeobject PyTypeObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyTypeObject PyArray_Type;",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    /* 中文注释，验证 extent offset 按字节切片 */",
+                "    PyObject* array = (PyObject*)0;",
+                "    if (!PyArg_ParseTuple(args, \"O!\", &PyArray_Type, &array)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"parse_tuple_extent_text\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source_root=tmp_path,
+        c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["parse_tuple_extent_text"].functions["foo"].signatures
+    assert signatures == [
+        ExtractedSignature(
+            arguments=[
+                ExtractedArgument(name="array", type_name="numpy.ndarray"),
+            ]
+        )
+    ]
+
+
 def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures_for_multiple_pyarg_calls(
     tmp_path: Path,
 ) -> None:
@@ -2793,8 +2868,20 @@ class _FakeToken:
 
 
 class _FakeCursorLocation:
-    def __init__(self, file: str | None = None) -> None:
-        self.file = file
+    def __init__(self, file: str | None = None, offset: int = 0) -> None:
+        self.file = _FakeCursorFile(file) if file is not None else None
+        self.offset = offset
+
+
+class _FakeCursorFile:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _FakeSourceRange:
+    def __init__(self, start: _FakeCursorLocation, end: _FakeCursorLocation) -> None:
+        self.start = start
+        self.end = end
 
 
 class _FakeNode:
@@ -2806,6 +2893,7 @@ class _FakeNode:
         children: list[object] | None = None,
         spelling: str = "",
         location: object | None = None,
+        extent: object | None = None,
         referenced: object | None = None,
     ) -> None:
         self.kind = kind
@@ -2813,6 +2901,7 @@ class _FakeNode:
         self._children = children or []
         self.spelling = spelling
         self.location = location if location is not None else _FakeCursorLocation()
+        self.extent = extent
         self.referenced = referenced
         self.type = None
 
@@ -2922,6 +3011,17 @@ def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
         children=[_token_identifier_node(name, referenced=referenced)],
+    )
+
+
+def _extent_for_source_snippet(source_path: Path, snippet: str) -> _FakeSourceRange:
+    source_bytes = source_path.read_bytes()
+    snippet_bytes = snippet.encode("utf-8")
+    start_offset = source_bytes.index(snippet_bytes)
+    end_offset = start_offset + len(snippet_bytes)
+    return _FakeSourceRange(
+        _FakeCursorLocation(str(source_path), start_offset),
+        _FakeCursorLocation(str(source_path), end_offset),
     )
 
 
@@ -3488,6 +3588,48 @@ def test_infer_argument_signatures_parses_pyarg_parsetuple() -> None:
                     has_default=True,
                 ),
             ]
+        )
+    ]
+
+
+def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
+    source = tmp_path / "object_type_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent=_extent_for_source_snippet(source, "(&PyUnicode_Type)"),
+    )
+
+    inferred = signature_rules_module._resolve_object_type_for_pyarg(cursor)
+
+    assert inferred == "str"
+
+
+def test_infer_argument_signatures_keeps_object_without_extent_fallback_for_o_bang() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O!"),
+            _address_of("PyList_Type"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_signatures(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[ExtractedArgument(name="value", type_name="object")]
         )
     ]
 

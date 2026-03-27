@@ -245,6 +245,11 @@ def _cursor_literal_text(cursor: Cursor) -> str | None:
     return " ".join(literal_tokens)
 
 
+def _format_cursor_tokens(cursor: Cursor) -> str:
+    token_spellings = [str(token.spelling) for token in cursor.get_tokens()]
+    return f"tokens={_format_string_list(token_spellings)}"
+
+
 def _format_cursor_line(cursor: Cursor) -> str:
     parts = [_kind_name(cursor.kind)]
     spelling = _cursor_spelling_for_display(cursor)
@@ -256,6 +261,7 @@ def _format_cursor_line(cursor: Cursor) -> str:
     literal = _cursor_literal_text(cursor)
     if literal is not None:
         parts.append(f"literal={literal}")
+    parts.append(_format_cursor_tokens(cursor))
     return " ".join(parts)
 
 

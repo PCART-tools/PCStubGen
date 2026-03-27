@@ -343,13 +343,14 @@ def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
     assert 'parse_args: ["--std", "c11"]' in output
     assert "diagnostics:\n- <none>\nast:\n" in output
     assert "TRANSLATION_UNIT spelling=" in output
-    assert "└─ CALL_EXPR spelling=PyModule_Create2 type=PyObject *" in output
-    assert "   ├─ UNEXPOSED_EXPR type=PyObject *" in output
-    assert "   │  └─ DECL_REF_EXPR spelling=PyModule_Create2 type=PyObject *" in output
-    assert "   ├─ PAREN_EXPR type=PyModuleDef *" in output
-    assert "   │  └─ UNARY_OPERATOR type=PyModuleDef *" in output
-    assert "   │     └─ DECL_REF_EXPR spelling=defs type=PyModuleDef" in output
-    assert "   └─ INTEGER_LITERAL type=int literal=3" in output
+    assert "tokens=[]" in output
+    assert "└─ CALL_EXPR spelling=PyModule_Create2 type=PyObject * tokens=[]" in output
+    assert "   ├─ UNEXPOSED_EXPR type=PyObject * tokens=[]" in output
+    assert "   │  └─ DECL_REF_EXPR spelling=PyModule_Create2 type=PyObject * tokens=[]" in output
+    assert "   ├─ PAREN_EXPR type=PyModuleDef * tokens=[]" in output
+    assert "   │  └─ UNARY_OPERATOR type=PyModuleDef * tokens=[]" in output
+    assert "   │     └─ DECL_REF_EXPR spelling=defs type=PyModuleDef tokens=[]" in output
+    assert "   └─ INTEGER_LITERAL type=int literal=3 tokens=[\"3\"]" in output
     assert "Python.h" not in output
 
 
@@ -377,6 +378,51 @@ def test_build_ast_payload_formats_diagnostics() -> None:
     )
 
     assert f"- [WARNING] {source_path}:12:8: unused value" in output
+
+
+def test_format_cursor_line_appends_empty_tokens_for_spelling_only_cursor() -> None:
+    cursor = _FakeCursor(
+        kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+        spelling="PyModule_Create2",
+        type_spelling="PyObject *",
+    )
+
+    output = clang_ast._format_cursor_line(cursor)
+
+    assert output == "DECL_REF_EXPR spelling=PyModule_Create2 type=PyObject * tokens=[]"
+
+
+def test_format_cursor_line_renders_tokens_without_spelling() -> None:
+    cursor = _FakeCursor(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        type_spelling="int",
+        tokens=[
+            _FakeToken(kind=clang.cindex.TokenKind.PUNCTUATION, spelling="-"),
+            _FakeToken(kind=clang.cindex.TokenKind.LITERAL, spelling="1"),
+        ],
+    )
+
+    output = clang_ast._format_cursor_line(cursor)
+
+    assert output == "UNARY_OPERATOR type=int tokens=[\"-\", \"1\"]"
+
+
+def test_format_cursor_line_escapes_token_spellings() -> None:
+    cursor = _FakeCursor(
+        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+        type_spelling="const char *",
+        tokens=[
+            _FakeToken(kind=clang.cindex.TokenKind.LITERAL, spelling='"a"'),
+            _FakeToken(kind=clang.cindex.TokenKind.IDENTIFIER, spelling=r"C:\tmp"),
+        ],
+    )
+
+    output = clang_ast._format_cursor_line(cursor)
+
+    assert output == (
+        "UNEXPOSED_EXPR type=const char * "
+        "tokens=[\"\\\"a\\\"\", \"C:\\\\tmp\"]"
+    )
 
 
 def test_build_clang_ast_dump_command_uses_expected_flags() -> None:

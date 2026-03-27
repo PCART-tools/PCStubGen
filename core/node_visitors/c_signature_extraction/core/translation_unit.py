@@ -52,7 +52,7 @@ def format_diagnostics_message(
     lines = [
         "翻译单元诊断信息",
         f"文件路径: {file_path}",
-        f"解析参数: {parse_args}",
+        f"解析参数: {' '.join(parse_args)}",
         "诊断:",
     ]
     lines.extend(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)

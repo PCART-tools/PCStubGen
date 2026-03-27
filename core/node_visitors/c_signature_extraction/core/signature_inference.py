@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
+from pathlib import Path
 
 from clang.cindex import Cursor, CursorKind
 
@@ -182,6 +184,8 @@ _PYARG_OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "PyBaseObject_Type": "object",
     "PyArray_Type": "numpy.ndarray"
 }
+
+_IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
 
 _DEFAULT_IDENTIFIER_TO_VALUE: dict[str, str] = {
     "Py_None": "None",
@@ -421,8 +425,6 @@ def _infer_call_expr_type(call_expr_cursor: Cursor) -> TypeNode | None:
     """从调用表达式推断返回类型。"""
     assert call_expr_cursor.kind == CursorKind.CALL_EXPR
     call_name = call_expr_cursor.spelling
-    if call_name is None:
-        return None
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(call_expr_cursor)
@@ -490,13 +492,14 @@ def _resolve_argument_name(c_args: list[Cursor]) -> str | None:
 
 def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
-    target = _unwrap_pointer_target(cursor)
-    target_name = target.spelling
-    if target_name is not None:
-        mapped = _PYARG_OBJECT_NAME_TO_TYPE.get(target_name)
-        if mapped is not None:
-            return mapped
-    return None
+    source_text = _extract_cursor_source_text(cursor)
+    if source_text is None:
+        return None
+
+    match = _IDENTIFIER_RE.search(source_text)
+    if match is None:
+        return None
+    return _PYARG_OBJECT_NAME_TO_TYPE.get(match.group(0))
 
 
 def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
@@ -625,6 +628,32 @@ def _merge_inferred_type_nodes(type_nodes: Iterable[TypeNode]) -> TypeNode | Non
     if not members:
         return None
     return UnionTypeNode(members).canonicalize()
+
+
+def _extract_cursor_source_text(cursor: Cursor) -> str | None:
+    """按 cursor extent 从源文件中截取原始源码文本。"""
+    extent = cursor.extent
+    if extent is None:
+        return None
+
+    start = extent.start
+    end = extent.end
+    if start.file is None or end.file is None:
+        return None
+
+    start_file = Path(start.file.name)
+    end_file = Path(end.file.name)
+    if start_file != end_file:
+        return None
+
+    try:
+        source_bytes = start_file.read_bytes()
+    except OSError:
+        return None
+
+    if start.offset < 0 or end.offset < start.offset or end.offset > len(source_bytes):
+        return None
+    return source_bytes[start.offset:end.offset].decode("utf-8", errors="ignore")
 
 
 def _extract_string_literal(node: Cursor) -> str | None:
