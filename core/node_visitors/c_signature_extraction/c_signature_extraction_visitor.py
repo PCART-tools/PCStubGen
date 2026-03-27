@@ -10,7 +10,6 @@ from .core import (
     ExtractedModule,
     extract_c_signature_modules,
 )
-from .core.constants import METH_CLASS, METH_STATIC
 from ..node_visitor import NodeVisitor
 from ...ir import (
     IRArgument,
@@ -137,11 +136,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         rewritten_signatures: list[IRSignature] = []
         for sig in selected.signatures:
-            args = self._build_ir_arguments(
-                arguments=sig.arguments,
-                is_method=is_method,
-                ml_flags=selected.ml_flags,
-            )
+            args = [self._build_ir_argument(arg) for arg in sig.arguments]
             rewritten_signatures.append(
                 IRSignature(
                     args=args,
@@ -159,50 +154,19 @@ class CSignatureExtractionVisitor(NodeVisitor):
         )
         self._stats.success += 1
 
-    def _build_ir_arguments(
-        self,
-        *,
-        arguments: list[ExtractedArgument],
-        is_method: bool,
-        ml_flags: int,
-    ) -> list[IRArgument]:
-        """
-        将提取参数转换为 IR 参数，并修正方法首参语义。
+    @staticmethod
+    def _build_ir_argument(argument: ExtractedArgument) -> IRArgument:
+        """将单个提取参数转换为 IR 参数。"""
+        return IRArgument(
+            name=argument.name,
+            type_name=argument.type_name,
+            default_value=argument.default_value,
+            has_default=argument.has_default,
+            kind=argument.kind,
+        )
 
-        对模块函数会剔除误带的 `self/cls`，避免生成错误 API。
-        """
-        normalized = list(arguments)
-
-        if is_method:
-            if ml_flags & METH_STATIC:
-                while normalized and normalized[0].name in {"self", "cls"}:
-                    normalized.pop(0)
-            if not normalized:
-                if ml_flags & METH_STATIC:
-                    normalized = []
-                elif ml_flags & METH_CLASS:
-                    normalized = [ExtractedArgument(name="cls", type_name="type")]
-                else:
-                    normalized = [ExtractedArgument(name="self", type_name="object")]
-        else:
-            while normalized and normalized[0].name in {"self", "cls"}:
-                normalized.pop(0)
-
-        result: list[IRArgument] = []
-        for arg in normalized:
-            result.append(
-                IRArgument(
-                    name=arg.name,
-                    type_name=arg.type_name,
-                    default_value=arg.default_value,
-                    has_default=arg.has_default,
-                    kind=arg.kind,
-                )
-            )
-        return result
-
+    @staticmethod
     def _match_extracted_module(
-        self,
         node: IRModule,
         modules: dict[str, ExtractedModule],
     ) -> ExtractedModule | None:

@@ -299,7 +299,7 @@ def _has_std_arg(args: list[str], std_value: str) -> bool:
     return False
 
 
-def test_c_ast_visitor_rewrites_module_function_and_drops_self(
+def test_c_ast_visitor_rewrites_module_function_without_normalizing_arguments(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     func = _unknown_function("foo")
@@ -344,12 +344,13 @@ def test_c_ast_visitor_rewrites_module_function_and_drops_self(
     rewritten = module.functions[0]
     assert len(rewritten.signatures) == 1
     signature = rewritten.signatures[0]
-    assert [arg.name for arg in signature.args] == ["x", "flag"]
-    assert signature.args[0].type_name == "int"
-    assert signature.args[1].type_name == "bool"
-    assert signature.args[1].default_value is not None
-    assert signature.args[1].default_value == "False"
-    assert signature.args[1].has_default is True
+    assert [arg.name for arg in signature.args] == ["self", "x", "flag"]
+    assert signature.args[0].type_name == "object"
+    assert signature.args[1].type_name == "int"
+    assert signature.args[2].type_name == "bool"
+    assert signature.args[2].default_value is not None
+    assert signature.args[2].default_value == "False"
+    assert signature.args[2].has_default is True
     assert signature.return_type_name is not None
     assert signature.return_type_name == "int"
     assert visitor._stats.total_unknown_signatures == 1
