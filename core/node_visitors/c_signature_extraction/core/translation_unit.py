@@ -115,13 +115,13 @@ def resolve_missing_include_dir(source_root: Path, *, include_literal: str) -> P
     return None
 
 
-def append_include_args(clang_include_directory: list[Path], include_args: list[Path]) -> list[Path]:
+def append_include_args(include_directory: list[Path], include_args: list[Path]) -> list[Path]:
     """将新发现的 include 目录追加到 clang 参数中，并返回实际新增项。"""
     added: list[Path] = []
     for include_dir in include_args:
-        if include_dir in clang_include_directory or include_dir in added:
+        if include_dir in include_directory or include_dir in added:
             continue
-        clang_include_directory.append(include_dir)
+        include_directory.append(include_dir)
         added.append(include_dir)
     return added
 
@@ -131,7 +131,7 @@ def discover_missing_include_args(
     file_path: Path,
     diagnostics: list[Diagnostic],
     source_root: Path,
-    clang_include_directory: list[Path],
+    include_directory: list[Path],
 ) -> list[Path]:
     """基于缺失头文件诊断自动补全 clang include 目录。"""
     resolved_pairs: list[tuple[str, Path]] = []
@@ -143,7 +143,7 @@ def discover_missing_include_args(
         resolved_pairs.append((include_literal, include_dir))
 
     added = append_include_args(
-        clang_include_directory,
+        include_directory,
         [include_dir for _, include_dir in resolved_pairs],
     )
     if not added:
@@ -153,7 +153,7 @@ def discover_missing_include_args(
         if include_dir not in added:
             continue
         logger.info(
-            "补全clang include path: {}, parse 文件: {}, include 字面量: {}",
+            "补全 include path: {}, parse 文件: {}, include 字面量: {}",
             include_dir,
             file_path,
             include_literal,
@@ -176,34 +176,34 @@ def find_candidate_files(source_root: Path) -> list[Path]:
 def get_std_value_for_file(
     file_path: Path,
     *,
-    clang_c_std: str,
-    clang_cpp_std: str,
+    c_std: str,
+    cpp_std: str,
 ) -> str:
     """按后缀为源码文件选择 C 或 C++ 标准值。"""
     if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES:
-        return clang_cpp_std
-    return clang_c_std
+        return cpp_std
+    return c_std
 
 
 def build_clang_parse_args(
     file_path: Path,
     *,
-    clang_include: list[str],
-    clang_include_directory: list[Path],
-    clang_c_std: str,
-    clang_cpp_std: str,
+    include: list[str],
+    include_directory: list[Path],
+    c_std: str,
+    cpp_std: str,
 ) -> list[str]:
     """为指定源码文件构建 clang 解析参数列表。"""
     parse_args: list[str] = []
     std_value = get_std_value_for_file(
         file_path,
-        clang_c_std=clang_c_std,
-        clang_cpp_std=clang_cpp_std,
+        c_std=c_std,
+        cpp_std=cpp_std,
     )
     parse_args.extend(["--std", std_value])
-    for include_value in clang_include:
+    for include_value in include:
         parse_args.extend(["--include", include_value])
-    for include_dir in clang_include_directory:
+    for include_dir in include_directory:
         parse_args.extend(["--include-directory", str(include_dir)])
     return parse_args
 
@@ -221,10 +221,10 @@ def parse_translation_unit(
     file_path: Path,
     *,
     source_root: Path,
-    clang_include: list[str],
-    clang_include_directory: list[Path],
-    clang_c_std: str,
-    clang_cpp_std: str,
+    include: list[str],
+    include_directory: list[Path],
+    c_std: str,
+    cpp_std: str,
 ) -> TranslationUnit:
     """解析单个源码文件为 clang translation unit。"""
     translation_unit: TranslationUnit | None = None
@@ -233,10 +233,10 @@ def parse_translation_unit(
     for _ in range(10):
         parse_args = build_clang_parse_args(
             file_path,
-            clang_include=clang_include,
-            clang_include_directory=clang_include_directory,
-            clang_c_std=clang_c_std,
-            clang_cpp_std=clang_cpp_std,
+            include=include,
+            include_directory=include_directory,
+            c_std=c_std,
+            cpp_std=cpp_std,
         )
         translation_unit = index.parse(str(file_path), args=parse_args)
         diagnostics = translation_unit.diagnostics
@@ -244,7 +244,7 @@ def parse_translation_unit(
             file_path=file_path,
             diagnostics=diagnostics,
             source_root=source_root,
-            clang_include_directory=clang_include_directory,
+            include_directory=include_directory,
         )
         if not added:
             break

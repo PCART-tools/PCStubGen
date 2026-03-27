@@ -96,19 +96,19 @@ def _module_fixture(
 def _make_extraction_config(
     *,
     source_root: Path,
-    clang_include: list[str] = (),
-    clang_include_directory: list[Path] = (),
-    clang_c_std: str = "c11",
-    clang_cpp_std: str = "c++17",
+    include: list[str] = (),
+    include_directory: list[Path] = (),
+    c_std: str = "c11",
+    cpp_std: str = "c++17",
 ) -> dict[str, object]:
     return {
         "source_root": source_root,
-        "clang_include": list(clang_include),
-        "clang_include_directory": translation_unit_module.inject_python_include_directories(
-            list(clang_include_directory)
+        "include": list(include),
+        "include_directory": translation_unit_module.inject_python_include_directories(
+            list(include_directory)
         ),
-        "clang_c_std": clang_c_std,
-        "clang_cpp_std": clang_cpp_std,
+        "c_std": c_std,
+        "cpp_std": cpp_std,
     }
 
 
@@ -117,26 +117,26 @@ class CSignatureExtractor:
         self,
         source_root: Path,
         *,
-        clang_include: list[str] = (),
-        clang_include_directory: list[Path] = (),
-        clang_c_std: str = "c11",
-        clang_cpp_std: str = "c++17",
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
     ) -> None:
         self._source_root = source_root
-        self._clang_include = list(clang_include)
-        self._clang_include_directory = translation_unit_module.inject_python_include_directories(
-            list(clang_include_directory)
+        self._include = list(include)
+        self._include_directory = translation_unit_module.inject_python_include_directories(
+            list(include_directory)
         )
-        self._clang_c_std = clang_c_std
-        self._clang_cpp_std = clang_cpp_std
+        self._c_std = c_std
+        self._cpp_std = cpp_std
 
     def extract_modules(self) -> dict[str, ExtractedModule]:
         return extract_c_signature_modules(
             self._source_root,
-            clang_include=self._clang_include,
-            clang_include_directory=self._clang_include_directory,
-            clang_c_std=self._clang_c_std,
-            clang_cpp_std=self._clang_cpp_std,
+            include=self._include,
+            include_directory=self._include_directory,
+            c_std=self._c_std,
+            cpp_std=self._cpp_std,
         )
 
 
@@ -162,12 +162,12 @@ def _patch_c_signature_extractor(
     def _patched_extract_c_signature_modules(
         source_root: Path,
         *,
-        clang_include: list[str] = (),
-        clang_include_directory: list[Path] = (),
-        clang_c_std: str = "c11",
-        clang_cpp_std: str = "c++17",
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
-        _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+        _ = (source_root, include, include_directory, c_std, cpp_std)
         return extractor.extract_modules()
 
     import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
@@ -183,12 +183,12 @@ def _patch_raising_c_signature_extractor(
     def _patched_extract_c_signature_modules(
         source_root: Path,
         *,
-        clang_include: list[str] = (),
-        clang_include_directory: list[Path] = (),
-        clang_c_std: str = "c11",
-        clang_cpp_std: str = "c++17",
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
-        _ = (source_root, clang_include, clang_include_directory, clang_c_std, clang_cpp_std)
+        _ = (source_root, include, include_directory, c_std, cpp_std)
         raise error
 
     import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
@@ -626,7 +626,7 @@ def test_c_ast_visitor_records_empty_extraction_as_missing_module_match(
 
 
 def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path: Path) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, c_std="c11")
     source = tmp_path / "module.c"
     translation_unit = _FakeTranslationUnit(
         diagnostics=[
@@ -658,17 +658,17 @@ def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path
         index=_FakeIndex(translation_unit),
         file_path=source,
         source_root=config["source_root"],
-        clang_include=config["clang_include"],
-        clang_include_directory=config["clang_include_directory"],
-        clang_c_std=config["clang_c_std"],
-        clang_cpp_std=config["clang_cpp_std"],
+        include=config["include"],
+        include_directory=config["include_directory"],
+        c_std=config["c_std"],
+        cpp_std=config["cpp_std"],
     )
 
     assert result is translation_unit
 
 
 def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_path: Path) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, c_std="c11")
     source = tmp_path / "src" / "module.c"
     header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
     header_path.parent.mkdir(parents=True, exist_ok=True)
@@ -692,23 +692,23 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
         index=index,
         file_path=source,
         source_root=config["source_root"],
-        clang_include=config["clang_include"],
-        clang_include_directory=config["clang_include_directory"],
-        clang_c_std=config["clang_c_std"],
-        clang_cpp_std=config["clang_cpp_std"],
+        include=config["include"],
+        include_directory=config["include_directory"],
+        c_std=config["c_std"],
+        cpp_std=config["cpp_std"],
     )
 
     assert result is second
     expected_include_root = header_path.parents[1]
-    assert expected_include_root in config["clang_include_directory"]
-    assert header_path.parent not in config["clang_include_directory"]
+    assert expected_include_root in config["include_directory"]
+    assert header_path.parent not in config["include_directory"]
     assert len(index.calls) == 2
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
 
 
 def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Path) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, c_std="c11")
     source = tmp_path / "pkg" / "src" / "module.c"
 
     include_one = tmp_path / "vendor1" / "include"
@@ -747,15 +747,15 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
         index=index,
         file_path=source,
         source_root=config["source_root"],
-        clang_include=config["clang_include"],
-        clang_include_directory=config["clang_include_directory"],
-        clang_c_std=config["clang_c_std"],
-        clang_cpp_std=config["clang_cpp_std"],
+        include=config["include"],
+        include_directory=config["include_directory"],
+        c_std=config["c_std"],
+        cpp_std=config["cpp_std"],
     )
 
     assert result is third
-    assert include_one in config["clang_include_directory"]
-    assert include_two in config["clang_include_directory"]
+    assert include_one in config["include_directory"]
+    assert include_two in config["include_directory"]
     assert len(index.calls) == 3
     assert _has_std_arg(index.calls[0][1], "c11")
     assert _has_std_arg(index.calls[1][1], "c11")
@@ -768,9 +768,9 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
 
 
 def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
-    config = _make_extraction_config(source_root=tmp_path, clang_c_std="c11")
+    config = _make_extraction_config(source_root=tmp_path, c_std="c11")
     source = tmp_path / "src" / "module.c"
-    initial_include_dirs = list(config["clang_include_directory"])
+    initial_include_dirs = list(config["include_directory"])
 
     unrelated_header = tmp_path / "include" / "numpy" / "arrayobject.h"
     unrelated_header.parent.mkdir(parents=True, exist_ok=True)
@@ -793,14 +793,14 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
         index=index,
         file_path=source,
         source_root=config["source_root"],
-        clang_include=config["clang_include"],
-        clang_include_directory=config["clang_include_directory"],
-        clang_c_std=config["clang_c_std"],
-        clang_cpp_std=config["clang_cpp_std"],
+        include=config["include"],
+        include_directory=config["include_directory"],
+        c_std=config["c_std"],
+        cpp_std=config["cpp_std"],
     )
 
     assert result is unresolved
-    assert config["clang_include_directory"] == initial_include_dirs
+    assert config["include_directory"] == initial_include_dirs
     assert len(index.calls) == 1
 
 
@@ -1274,7 +1274,7 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1339,7 +1339,7 @@ def test_c_signature_extraction_engine_extract_modules_populates_inferred_return
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1410,7 +1410,7 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1489,7 +1489,7 @@ def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1577,7 +1577,7 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_modulede
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1651,7 +1651,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1737,7 +1737,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1812,7 +1812,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1883,7 +1883,7 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -1975,7 +1975,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2060,7 +2060,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addobje
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2140,7 +2140,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addtype
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2199,7 +2199,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2266,7 +2266,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2333,7 +2333,7 @@ def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_withou
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2385,7 +2385,7 @@ def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_witho
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2448,7 +2448,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_withou
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_c_std="c11",
+        c_std="c11",
     )
     extracted = engine.extract_modules()
 
@@ -2502,7 +2502,7 @@ def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_
 
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_cpp_std="c++17",
+        cpp_std="c++17",
     )
     extracted = engine.extract_modules()
 
@@ -2512,23 +2512,23 @@ def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_
 def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {
         "extract_calls": 0,
-        "clang_include": None,
+        "include": None,
     }
 
     def _record_extract_c_signature_modules(
         source_root: Path,
         *,
-        clang_include: list[str] = (),
-        clang_include_directory: list[Path] = (),
-        clang_c_std: str = "c11",
-        clang_cpp_std: str = "c++17",
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
         captured["extract_calls"] = int(captured["extract_calls"]) + 1
         captured["source_root"] = source_root
-        captured["clang_include"] = list(clang_include)
-        captured["clang_include_directory"] = list(clang_include_directory)
-        captured["clang_c_std"] = clang_c_std
-        captured["clang_cpp_std"] = clang_cpp_std
+        captured["include"] = list(include)
+        captured["include_directory"] = list(include_directory)
+        captured["c_std"] = c_std
+        captured["cpp_std"] = cpp_std
         return {}
 
     import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
@@ -2541,10 +2541,10 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
     visitor = CSignatureExtractionVisitor(
         source_root=tmp_path,
-        clang_include=["Python.h"],
-        clang_include_directory=[Path("C:/MyInclude")],
-        clang_c_std="c99",
-        clang_cpp_std="c++20",
+        include=["Python.h"],
+        include_directory=[Path("C:/MyInclude")],
+        c_std="c99",
+        cpp_std="c++20",
     )
 
     assert captured["extract_calls"] == 0
@@ -2558,10 +2558,10 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
 
     assert captured["extract_calls"] == 1
     assert captured["source_root"] == tmp_path
-    assert captured["clang_include"] == ["Python.h"]
-    assert captured["clang_include_directory"] == [Path("C:/MyInclude")]
-    assert captured["clang_c_std"] == "c99"
-    assert captured["clang_cpp_std"] == "c++20"
+    assert captured["include"] == ["Python.h"]
+    assert captured["include_directory"] == [Path("C:/MyInclude")]
+    assert captured["c_std"] == "c99"
+    assert captured["cpp_std"] == "c++20"
 
 
 def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_path: Path) -> None:
@@ -2653,21 +2653,21 @@ def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_
 
 def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(source_root=tmp_path)
-    assert engine._clang_include_directory is not None
-    assert Path("-std=c11") not in engine._clang_include_directory
+    assert engine._include_directory is not None
+    assert Path("-std=c11") not in engine._include_directory
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.c",
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            c_std=engine._c_std,
+            cpp_std=engine._cpp_std,
         )
         == "c11"
     )
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.cxx",
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            c_std=engine._c_std,
+            cpp_std=engine._cpp_std,
         )
         == "c++17"
     )
@@ -2676,32 +2676,32 @@ def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) ->
 def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_include_directory=[Path("C:/MyInclude")],
-        clang_c_std="-std=c99",
-        clang_cpp_std="--std=c++20",
+        include_directory=[Path("C:/MyInclude")],
+        c_std="-std=c99",
+        cpp_std="--std=c++20",
     )
 
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.c",
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            c_std=engine._c_std,
+            cpp_std=engine._cpp_std,
         )
         == "-std=c99"
     )
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.cxx",
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            c_std=engine._c_std,
+            cpp_std=engine._cpp_std,
         )
         == "--std=c++20"
     )
     assert (
         translation_unit_module.get_std_value_for_file(
             tmp_path / "module.hpp",
-            clang_c_std=engine._clang_c_std,
-            clang_cpp_std=engine._clang_cpp_std,
+            c_std=engine._c_std,
+            cpp_std=engine._cpp_std,
         )
         == "-std=c99"
     )
@@ -2712,8 +2712,8 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
 ) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_include=["Python.h"],
-        clang_include_directory=[Path("C:/MyInclude")],
+        include=["Python.h"],
+        include_directory=[Path("C:/MyInclude")],
     )
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [])
@@ -2729,27 +2729,27 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
                 continue
             expected_include_dirs.append(include_path)
 
-        assert engine._clang_include == ["Python.h"]
-        assert engine._clang_include_directory == expected_include_dirs
+        assert engine._include == ["Python.h"]
+        assert engine._include_directory == expected_include_dirs
     finally:
         monkeypatch.undo()
 
 
 def test_c_signature_engine_build_parse_args_uses_only_external_include_values(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, clang_c_std="c11")
+    engine = CSignatureExtractor(source_root=tmp_path, c_std="c11")
 
     assert translation_unit_module.build_clang_parse_args(
         tmp_path / "module.c",
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        include=engine._include,
+        include_directory=engine._include_directory,
+        c_std=engine._c_std,
+        cpp_std=engine._cpp_std,
     ) == [
         "--std",
         "c11",
         *[
             item
-            for include_dir in engine._clang_include_directory
+            for include_dir in engine._include_directory
             for item in ("--include-directory", str(include_dir))
         ],
     ]
@@ -2758,17 +2758,17 @@ def test_c_signature_engine_build_parse_args_uses_only_external_include_values(t
 def test_c_signature_engine_build_parse_args_places_include_before_include_directory(tmp_path: Path) -> None:
     engine = CSignatureExtractor(
         source_root=tmp_path,
-        clang_include=["Python.h", "numpy/arrayobject.h"],
-        clang_include_directory=[Path("C:/MyInclude")],
-        clang_c_std="c11",
+        include=["Python.h", "numpy/arrayobject.h"],
+        include_directory=[Path("C:/MyInclude")],
+        c_std="c11",
     )
 
     assert translation_unit_module.build_clang_parse_args(
         tmp_path / "module.c",
-        clang_include=engine._clang_include,
-        clang_include_directory=engine._clang_include_directory,
-        clang_c_std=engine._clang_c_std,
-        clang_cpp_std=engine._clang_cpp_std,
+        include=engine._include,
+        include_directory=engine._include_directory,
+        c_std=engine._c_std,
+        cpp_std=engine._cpp_std,
     ) == [
         "--std",
         "c11",
@@ -2780,7 +2780,7 @@ def test_c_signature_engine_build_parse_args_places_include_before_include_direc
         str(Path("C:/MyInclude")),
         *[
             item
-            for include_dir in engine._clang_include_directory[1:]
+            for include_dir in engine._include_directory[1:]
             for item in ("--include-directory", str(include_dir))
         ],
     ]
@@ -3985,6 +3985,4 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     )
     assert calls == [method_1, non_sentinel, method_2]
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
-
-
 

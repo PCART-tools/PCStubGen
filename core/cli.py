@@ -19,28 +19,28 @@ MY_LOGURU_FORMAT = (
 app = typer.Typer(add_completion=False)
 
 
-def _normalize_clang_include(includes: list[str]) -> list[str]:
+def _normalize_include(includes: list[str]) -> list[str]:
     normalized: list[str] = []
     for raw_include in includes:
         if raw_include is None:
-            raise TypeError("clang_include 条目必须是非空的 include header")
+            raise TypeError("include 条目必须是非空的 include header")
 
         include = str(raw_include).strip()
         if not include:
-            raise ValueError("clang_include 条目必须是非空的 include header")
+            raise ValueError("include 条目必须是非空的 include header")
         if include.startswith("-"):
             raise ValueError(
-                f"clang_include 条目必须是 header，不能是类似选项的值: {include!r}"
+                f"include 条目必须是 header，不能是类似选项的值: {include!r}"
             )
         if include not in normalized:
             normalized.append(include)
     return normalized
 
 
-def _validate_clang_include(value: list[str] | None) -> list[str]:
+def _validate_include(value: list[str] | None) -> list[str]:
     values = [] if value is None else list(value)
     try:
-        _normalize_clang_include(values)
+        _normalize_include(values)
     except (TypeError, ValueError) as ex:
         raise typer.BadParameter(str(ex)) from ex
     return values
@@ -50,10 +50,10 @@ def _build_options(
     *,
     enable_docstring_signature_parser: bool,
     source_root: Path | None,
-    clang_include: list[str] | None,
-    clang_include_directory: list[Path] | None,
-    clang_c_std: str | None,
-    clang_cpp_std: str | None,
+    include: list[str] | None,
+    include_directory: list[Path] | None,
+    c_std: str | None,
+    cpp_std: str | None,
     include_docstrings: bool,
     include_module_type_comment: bool,
 ) -> StubGenerationOptions:
@@ -65,10 +65,10 @@ def _build_options(
     return StubGenerationOptions(
         enable_docstring_signature_parser=enable_docstring_signature_parser,
         source_root=source_root,
-        clang_c_std=clang_c_std or default_options.clang_c_std,
-        clang_cpp_std=clang_cpp_std or default_options.clang_cpp_std,
-        clang_include=_normalize_clang_include(clang_include or []),
-        clang_include_directory=list(clang_include_directory or []),
+        c_std=c_std or default_options.c_std,
+        cpp_std=cpp_std or default_options.cpp_std,
+        include=_normalize_include(include or []),
+        include_directory=list(include_directory or []),
         include_docstrings=include_docstrings,
         include_module_type_comment=include_module_type_comment,
     )
@@ -93,25 +93,25 @@ def main(
         "--source-root",
         help="用于 C signature inference 的 C/C++ 源码根目录",
     ),
-    clang_include: list[str] | None = typer.Option(
+    include: list[str] | None = typer.Option(
         None,
-        "--clang-include",
-        callback=_validate_clang_include,
-        help="额外的 clang include 头文件，可重复指定",
+        "--include",
+        callback=_validate_include,
+        help="额外的 include 头文件，可重复指定",
     ),
-    clang_include_directory: list[Path] | None = typer.Option(
+    include_directory: list[Path] | None = typer.Option(
         None,
-        "--clang-include-directory",
-        help="额外的 clang include 目录路径，可重复指定",
+        "--include-directory",
+        help="额外的 include 目录路径，可重复指定",
     ),
-    clang_c_std: str | None = typer.Option(
+    c_std: str | None = typer.Option(
         None,
-        "--clang-c-std",
+        "--c-std",
         help="传给 clang 的 C standard，例如 c11",
     ),
-    clang_cpp_std: str | None = typer.Option(
+    cpp_std: str | None = typer.Option(
         None,
-        "--clang-cpp-std",
+        "--cpp-std",
         help="传给 clang 的 C++ standard，例如 c++17",
     ),
     include_docstrings: bool = typer.Option(
@@ -148,10 +148,10 @@ def main(
             options=_build_options(
                 enable_docstring_signature_parser=enable_docstring_signature_parser,
                 source_root=source_root,
-                clang_include=clang_include,
-                clang_include_directory=clang_include_directory,
-                clang_c_std=clang_c_std,
-                clang_cpp_std=clang_cpp_std,
+                include=include,
+                include_directory=include_directory,
+                c_std=c_std,
+                cpp_std=cpp_std,
                 include_docstrings=include_docstrings,
                 include_module_type_comment=include_module_type_comment,
             ),

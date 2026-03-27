@@ -18,7 +18,7 @@ from tool import clang_ast
 RUNNER = CliRunner()
 
 
-def test_cli_accepts_clang_include_and_include_directory(
+def test_cli_accepts_include_and_include_directory(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -36,23 +36,29 @@ def test_cli_accepts_clang_include_and_include_directory(
         clang_ast.app,
         [
             str(source_path),
-            "--clang-include",
+            "--include",
             "Python.h",
-            "--clang-include=numpy/arrayobject.h",
-            "--clang-include-directory",
+            "--include=numpy/arrayobject.h",
+            "--include-directory",
             "C:/IncludeA",
-            "--clang-include-directory=C:/IncludeB",
+            "--include-directory=C:/IncludeB",
+            "--c-std",
+            "c99",
+            "--cpp-std",
+            "c++20",
         ],
         prog_name="clang_ast",
     )
 
     assert result.exit_code == 0
     assert captured_kwargs["source_path"] == source_path.resolve()
-    assert captured_kwargs["clang_include"] == ["Python.h", "numpy/arrayobject.h"]
-    assert captured_kwargs["clang_include_directory"] == [
+    assert captured_kwargs["include"] == ["Python.h", "numpy/arrayobject.h"]
+    assert captured_kwargs["include_directory"] == [
         Path("C:/IncludeA"),
         Path("C:/IncludeB"),
     ]
+    assert captured_kwargs["c_std"] == "c99"
+    assert captured_kwargs["cpp_std"] == "c++20"
 
 
 def test_cli_rejects_removed_output_option(tmp_path: Path) -> None:
@@ -74,37 +80,40 @@ def test_cli_help_contains_chinese_text() -> None:
 
     assert result.exit_code == 0
     assert "使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。" in result.stdout
-    assert "--clang-include" in result.stdout
+    assert "--include" in result.stdout
+    assert "--include-directory" in result.stdout
+    assert "--c-std" in result.stdout
+    assert "--cpp-std" in result.stdout
     assert "追加 include 头文件，可重复传入。" in result.stdout
 
 
-def test_cli_invalid_clang_include_reports_bad_parameter(tmp_path: Path) -> None:
+def test_cli_invalid_include_reports_bad_parameter(tmp_path: Path) -> None:
     source_path = tmp_path / "sample.c"
     source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
 
     result = RUNNER.invoke(
         clang_ast.app,
-        [str(source_path), "--clang-include=-bad"],
+        [str(source_path), "--include=-bad"],
         prog_name="clang_ast",
     )
 
     assert result.exit_code == 2
-    assert "Invalid value for '--clang-include'" in result.stderr
+    assert "Invalid value for '--include'" in result.stderr
     assert "'-bad'" in result.stderr
 
 
-def test_cli_invalid_clang_include_directory_reports_bad_parameter(tmp_path: Path) -> None:
+def test_cli_invalid_include_directory_reports_bad_parameter(tmp_path: Path) -> None:
     source_path = tmp_path / "sample.c"
     source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
 
     result = RUNNER.invoke(
         clang_ast.app,
-        [str(source_path), "--clang-include-directory=-bad"],
+        [str(source_path), "--include-directory=-bad"],
         prog_name="clang_ast",
     )
 
     assert result.exit_code == 2
-    assert "Invalid value for '--clang-include-directory'" in result.stderr
+    assert "Invalid value for '--include-directory'" in result.stderr
     assert "'-bad'" in result.stderr
 
 
@@ -128,8 +137,8 @@ def test_build_parse_args_places_include_before_include_directory() -> None:
         clang_args=[],
         include_headers=["Python.h", "numpy/arrayobject.h"],
         include_paths=["C:/IncludeA"],
-        clang_c_std="c11",
-        clang_cpp_std="c++17",
+        c_std="c11",
+        cpp_std="c++17",
     )
 
     assert parse_args == [
@@ -149,18 +158,42 @@ def test_normalize_include_headers_rejects_option_like_values() -> None:
         clang_ast._normalize_include_headers(["-Winvalid"])
 
 
-def test_validate_clang_include_preserves_message() -> None:
+def test_validate_include_preserves_message() -> None:
     with pytest.raises(clang_ast.typer.BadParameter) as ex:
-        clang_ast._validate_clang_include(["-bad"])
+        clang_ast._validate_include(["-bad"])
 
-    assert str(ex.value) == "clang_include entry must be a header, got option-like value: '-bad'"
+    assert str(ex.value) == "include entry must be a header, got option-like value: '-bad'"
 
 
-def test_validate_clang_include_directory_preserves_message() -> None:
+def test_validate_include_directory_preserves_message() -> None:
     with pytest.raises(clang_ast.typer.BadParameter) as ex:
-        clang_ast._validate_clang_include_directory([Path("-bad")])
+        clang_ast._validate_include_directory([Path("-bad")])
 
-    assert str(ex.value) == "clang_include_directory entry must be a path, got option-like value: '-bad'"
+    assert str(ex.value) == "include_directory entry must be a path, got option-like value: '-bad'"
+
+
+def test_old_clang_prefixed_options_are_rejected(tmp_path: Path) -> None:
+    source_path = tmp_path / "sample.c"
+    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        clang_ast.app,
+        [
+            str(source_path),
+            "--clang-include",
+            "Python.h",
+            "--clang-include-directory",
+            "C:/IncludeA",
+            "--clang-c-std",
+            "c11",
+            "--clang-cpp-std",
+            "c++17",
+        ],
+        prog_name="clang_ast",
+    )
+
+    assert result.exit_code == 2
+    assert "No such option" in result.stderr
 
 
 class _FakeLocation:
@@ -410,10 +443,10 @@ def test_run_ast_export_writes_clang_stdout_even_when_clang_returns_error(
 
     errors = clang_ast.run_ast_export(
         source_path=source_path,
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         clang_library_path=None,
     )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
@@ -445,10 +478,10 @@ def test_run_ast_export_partial_success_when_clang_export_fails(
 
     errors = clang_ast.run_ast_export(
         source_path=source_path,
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         clang_library_path=None,
     )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
@@ -482,10 +515,10 @@ def test_run_ast_export_partial_success_when_libclang_export_fails(
 
     errors = clang_ast.run_ast_export(
         source_path=source_path,
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         clang_library_path=None,
     )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
@@ -516,10 +549,10 @@ def test_run_ast_export_writes_both_outputs_when_exports_succeed(
 
     errors = clang_ast.run_ast_export(
         source_path=source_path,
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         clang_library_path=None,
     )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())

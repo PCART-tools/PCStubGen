@@ -16,3 +16,7 @@ def get_module_name(obj: Any) -> str | None:
     if isinstance(module_name, str):
         return module_name
     return None
+
+
+def is_package(module: types.ModuleType) -> bool:
+    return hasattr(module, "__path__")

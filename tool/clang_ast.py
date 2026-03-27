@@ -82,12 +82,12 @@ def _normalize_include_paths(include_paths: Sequence[str]) -> list[str]:
     normalized_paths: list[str] = []
     for raw_path in include_paths:
         if raw_path is None:
-            raise TypeError("clang_include_directory entries must be non-empty include paths")
+            raise TypeError("include_directory entries must be non-empty include paths")
         include_path = str(raw_path).strip()
         if not include_path:
-            raise ValueError("clang_include_directory entries must be non-empty include paths")
+            raise ValueError("include_directory entries must be non-empty include paths")
         if include_path.startswith("-"):
-            raise ValueError(f"clang_include_directory entry must be a path, got option-like value: {include_path!r}")
+            raise ValueError(f"include_directory entry must be a path, got option-like value: {include_path!r}")
         if include_path not in normalized_paths:
             normalized_paths.append(include_path)
     return normalized_paths
@@ -97,18 +97,18 @@ def _normalize_include_headers(include_headers: Sequence[str]) -> list[str]:
     normalized_headers: list[str] = []
     for raw_header in include_headers:
         if raw_header is None:
-            raise TypeError("clang_include entries must be non-empty include headers")
+            raise TypeError("include entries must be non-empty include headers")
         include_header = str(raw_header).strip()
         if not include_header:
-            raise ValueError("clang_include entries must be non-empty include headers")
+            raise ValueError("include entries must be non-empty include headers")
         if include_header.startswith("-"):
-            raise ValueError(f"clang_include entry must be a header, got option-like value: {include_header!r}")
+            raise ValueError(f"include entry must be a header, got option-like value: {include_header!r}")
         if include_header not in normalized_headers:
             normalized_headers.append(include_header)
     return normalized_headers
 
 
-def _validate_clang_include(value: list[str] | None) -> list[str]:
+def _validate_include(value: list[str] | None) -> list[str]:
     values = [] if value is None else list(value)
     try:
         _normalize_include_headers(values)
@@ -117,7 +117,7 @@ def _validate_clang_include(value: list[str] | None) -> list[str]:
     return values
 
 
-def _validate_clang_include_directory(value: list[Path] | None) -> list[Path]:
+def _validate_include_directory(value: list[Path] | None) -> list[Path]:
     values = [] if value is None else list(value)
     try:
         _normalize_include_paths([str(path) for path in values])
@@ -138,13 +138,13 @@ def build_clang_args(
 def _resolve_std_value_for_source(
     *,
     source_path: Path,
-    clang_c_std: str | None,
-    clang_cpp_std: str | None,
+    c_std: str | None,
+    cpp_std: str | None,
 ) -> str:
     suffix = source_path.suffix.lower()
     if suffix in CPP_SOURCE_SUFFIXES:
-        return _normalize_std_value(clang_cpp_std or "c++17") or "c++17"
-    return _normalize_std_value(clang_c_std or "c11") or "c11"
+        return _normalize_std_value(cpp_std or "c++17") or "c++17"
+    return _normalize_std_value(c_std or "c11") or "c11"
 
 
 def _build_parse_args(
@@ -153,14 +153,14 @@ def _build_parse_args(
     clang_args: Sequence[str],
     include_headers: Sequence[str],
     include_paths: Sequence[str],
-    clang_c_std: str | None,
-    clang_cpp_std: str | None,
+    c_std: str | None,
+    cpp_std: str | None,
 ) -> list[str]:
     parse_args = list(clang_args)
     std_value = _resolve_std_value_for_source(
         source_path=source_path,
-        clang_c_std=clang_c_std,
-        clang_cpp_std=clang_cpp_std,
+        c_std=c_std,
+        cpp_std=cpp_std,
     )
     parse_args.extend(["--std", std_value])
     for include_header in include_headers:
@@ -406,10 +406,10 @@ def _build_clang_failure(result: ClangAstDumpResult) -> RuntimeError | None:
 def run_ast_export(
     *,
     source_path: Path,
-    clang_include: Sequence[str],
-    clang_include_directory: Sequence[Path],
-    clang_c_std: str | None,
-    clang_cpp_std: str | None,
+    include: Sequence[str],
+    include_directory: Sequence[Path],
+    c_std: str | None,
+    cpp_std: str | None,
     clang_library_path: str | None,
 ) -> list[Exception]:
     """
@@ -420,22 +420,22 @@ def run_ast_export(
 
     libclang_output_path, clang_output_path = resolve_output_paths(source_path)
     library_path = _safe_str(clang_library_path)
-    normalized_clang_include = _normalize_include_headers([str(header) for header in clang_include])
-    normalized_clang_include_directory = _normalize_include_paths(
-        [str(path) for path in clang_include_directory]
+    normalized_include = _normalize_include_headers([str(header) for header in include])
+    normalized_include_directory = _normalize_include_paths(
+        [str(path) for path in include_directory]
     )
-    normalized_clang_c_std = _safe_str(clang_c_std)
-    normalized_clang_cpp_std = _safe_str(clang_cpp_std)
+    normalized_c_std = _safe_str(c_std)
+    normalized_cpp_std = _safe_str(cpp_std)
     clang_args = build_clang_args(
         source_path=source_path,
     )
     clang_parse_args = _build_parse_args(
         source_path=source_path,
         clang_args=clang_args,
-        include_headers=normalized_clang_include,
-        include_paths=normalized_clang_include_directory,
-        clang_c_std=normalized_clang_c_std,
-        clang_cpp_std=normalized_clang_cpp_std,
+        include_headers=normalized_include,
+        include_paths=normalized_include_directory,
+        c_std=normalized_c_std,
+        cpp_std=normalized_cpp_std,
     )
 
     errors: list[Exception] = []
@@ -487,26 +487,26 @@ def command(
         metavar="SOURCE_PATH",
         help="待解析的 C/C++ 源文件路径。",
     ),
-    clang_include: list[str] | None = typer.Option(
+    include: list[str] | None = typer.Option(
         None,
-        "--clang-include",
-        callback=_validate_clang_include,
+        "--include",
+        callback=_validate_include,
         help="追加 include 头文件，可重复传入。",
     ),
-    clang_include_directory: list[Path] | None = typer.Option(
+    include_directory: list[Path] | None = typer.Option(
         None,
-        "--clang-include-directory",
-        callback=_validate_clang_include_directory,
+        "--include-directory",
+        callback=_validate_include_directory,
         help="追加 include 目录路径，可重复传入。",
     ),
-    clang_c_std: str | None = typer.Option(
+    c_std: str | None = typer.Option(
         None,
-        "--clang-c-std",
+        "--c-std",
         help="指定 C 标准（如 c11 或 -std=c11）。",
     ),
-    clang_cpp_std: str | None = typer.Option(
+    cpp_std: str | None = typer.Option(
         None,
-        "--clang-cpp-std",
+        "--cpp-std",
         help="指定 C++ 标准（如 c++17 或 -std=c++17）。",
     ),
     clang_library_path: str | None = typer.Option(
@@ -517,10 +517,10 @@ def command(
 ) -> None:
     errors = run_ast_export(
         source_path=source_path,
-        clang_include=clang_include or [],
-        clang_include_directory=clang_include_directory or [],
-        clang_c_std=clang_c_std,
-        clang_cpp_std=clang_cpp_std,
+        include=include or [],
+        include_directory=include_directory or [],
+        c_std=c_std,
+        cpp_std=cpp_std,
         clang_library_path=clang_library_path,
     )
     if errors:

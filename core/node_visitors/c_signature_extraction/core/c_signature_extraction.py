@@ -20,10 +20,10 @@ def _check(condition: bool, message: str = "前置条件检查失败。") -> Non
 def extract_c_signature_modules(
     source_root: Path,
     *,
-    clang_include: list[str] = (),
-    clang_include_directory: list[Path] = (),
-    clang_c_std: str = "c11",
-    clang_cpp_std: str = "c++17",
+    include: list[str] = (),
+    include_directory: list[Path] = (),
+    c_std: str = "c11",
+    cpp_std: str = "c++17",
 ) -> dict[str, ExtractedModule]:
     """
     基于 libclang 提取模块级 C 签名。
@@ -34,7 +34,7 @@ def extract_c_signature_modules(
     """
     _check(source_root.exists())
 
-    normalized_include_dirs = translation_unit.inject_python_include_directories(clang_include_directory)
+    normalized_include_dirs = translation_unit.inject_python_include_directories(include_directory)
 
     source_files = translation_unit.find_candidate_files(source_root)
 
@@ -45,10 +45,10 @@ def extract_c_signature_modules(
             index,
             file_path,
             source_root=source_root,
-            clang_include=clang_include,
-            clang_include_directory=normalized_include_dirs,
-            clang_c_std=clang_c_std,
-            clang_cpp_std=clang_cpp_std,
+            include=include,
+            include_directory=normalized_include_dirs,
+            c_std=c_std,
+            cpp_std=cpp_std,
         )
         translation_units.append(tu)
 

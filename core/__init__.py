@@ -53,10 +53,10 @@ def write_stubs(
     if options.source_root is not None:
         c_ast_visitor = CSignatureExtractionVisitor(
             source_root=options.source_root,
-            clang_include=options.clang_include,
-            clang_include_directory=options.clang_include_directory,
-            clang_c_std=options.clang_c_std,
-            clang_cpp_std=options.clang_cpp_std,
+            include=options.include,
+            include_directory=options.include_directory,
+            c_std=options.c_std,
+            cpp_std=options.cpp_std,
         )
         visitors.append(c_ast_visitor)
 

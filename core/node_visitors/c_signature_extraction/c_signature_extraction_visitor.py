@@ -43,17 +43,17 @@ class CSignatureExtractionVisitor(NodeVisitor):
         self,
         *,
         source_root: Path,
-        clang_include: list[str] = (),
-        clang_include_directory: list[Path] = (),
-        clang_c_std: str = "c11",
-        clang_cpp_std: str = "c++17",
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
     ) -> None:
         """初始化 Visitor 运行配置与提取结果缓存。"""
         self._source_root = source_root
-        self._clang_include = list(clang_include)
-        self._clang_include_directory = list(clang_include_directory)
-        self._clang_c_std = clang_c_std
-        self._clang_cpp_std = clang_cpp_std
+        self._include = list(include)
+        self._include_directory = list(include_directory)
+        self._c_std = c_std
+        self._cpp_std = cpp_std
         self._stats = _InferenceStats()
         self._signature_modules: dict[str, ExtractedModule] | None = None
 
@@ -202,10 +202,10 @@ class CSignatureExtractionVisitor(NodeVisitor):
 
         self._signature_modules = extract_c_signature_modules(
             self._source_root,
-            clang_include=self._clang_include,
-            clang_include_directory=self._clang_include_directory,
-            clang_c_std=self._clang_c_std,
-            clang_cpp_std=self._clang_cpp_std,
+            include=self._include,
+            include_directory=self._include_directory,
+            c_std=self._c_std,
+            cpp_std=self._cpp_std,
         )
         return self._signature_modules
 

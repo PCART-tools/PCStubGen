@@ -70,10 +70,10 @@ def test_build_options_keeps_none_source_root() -> None:
     options = cli._build_options(
         enable_docstring_signature_parser=True,
         source_root=None,
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         include_docstrings=True,
         include_module_type_comment=False,
     )
@@ -85,10 +85,10 @@ def test_build_options_keeps_path_source_root() -> None:
     options = cli._build_options(
         enable_docstring_signature_parser=True,
         source_root=Path("C:/tmp/src"),
-        clang_include=[],
-        clang_include_directory=[],
-        clang_c_std=None,
-        clang_cpp_std=None,
+        include=[],
+        include_directory=[],
+        c_std=None,
+        cpp_std=None,
         include_docstrings=True,
         include_module_type_comment=False,
     )
@@ -96,7 +96,7 @@ def test_build_options_keeps_path_source_root() -> None:
     assert options.source_root == Path("C:/tmp/src")
 
 
-def test_cli_passes_repeated_clang_include_directory(
+def test_cli_passes_repeated_include_directory(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -118,9 +118,13 @@ def test_cli_passes_repeated_clang_include_directory(
             "math",
             "--output-dir",
             str(tmp_path),
-            "--clang-include-directory",
+            "--include-directory",
             "C:/IncludeA",
-            "--clang-include-directory=C:/IncludeB",
+            "--include-directory=C:/IncludeB",
+            "--c-std",
+            "c99",
+            "--cpp-std",
+            "c++20",
         ],
         prog_name="pcstubgen",
     )
@@ -129,10 +133,12 @@ def test_cli_passes_repeated_clang_include_directory(
     assert captured_module_name == "math"
     assert captured_output_dir == tmp_path
     assert captured_options is not None
-    assert captured_options.clang_include_directory == [
+    assert captured_options.include_directory == [
         Path("C:/IncludeA"),
         Path("C:/IncludeB"),
     ]
+    assert captured_options.c_std == "c99"
+    assert captured_options.cpp_std == "c++20"
 
 
 def test_cli_passes_source_root_as_path(
@@ -165,7 +171,7 @@ def test_cli_passes_source_root_as_path(
     assert captured_options.source_root == tmp_path / "src"
 
 
-def test_cli_passes_repeated_clang_include(
+def test_cli_passes_repeated_include(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -187,9 +193,9 @@ def test_cli_passes_repeated_clang_include(
             "math",
             "--output-dir",
             str(tmp_path),
-            "--clang-include",
+            "--include",
             "Python.h",
-            "--clang-include=numpy/arrayobject.h",
+            "--include=numpy/arrayobject.h",
         ],
         prog_name="pcstubgen",
     )
@@ -198,7 +204,7 @@ def test_cli_passes_repeated_clang_include(
     assert captured_module_name == "math"
     assert captured_output_dir == tmp_path
     assert captured_options is not None
-    assert captured_options.clang_include == ["Python.h", "numpy/arrayobject.h"]
+    assert captured_options.include == ["Python.h", "numpy/arrayobject.h"]
 
 
 def test_help_contains_chinese_project_text() -> None:
@@ -207,26 +213,51 @@ def test_help_contains_chinese_project_text() -> None:
     assert result.exit_code == 0
     assert "使用 pcstubgen 为模块生成 Python stub。" in result.stdout
     assert "--output-dir" in result.stdout
+    assert "--include" in result.stdout
+    assert "--include-directory" in result.stdout
+    assert "--c-std" in result.stdout
+    assert "--cpp-std" in result.stdout
     assert "输出 stub 的根目录" in result.stdout
 
 
-def test_invalid_clang_include_reports_chinese_validation_error() -> None:
+def test_invalid_include_reports_chinese_validation_error() -> None:
     result = RUNNER.invoke(
         cli.app,
-        ["math", "--clang-include=-bad"],
+        ["math", "--include=-bad"],
         prog_name="pcstubgen",
     )
 
     assert result.exit_code == 2
-    assert "Invalid value for '--clang-include'" in result.stderr
+    assert "Invalid value for '--include'" in result.stderr
     assert "'-bad'" in result.stderr
 
 
-def test_validate_clang_include_preserves_chinese_error_message() -> None:
+def test_validate_include_preserves_chinese_error_message() -> None:
     with pytest.raises(cli.typer.BadParameter) as ex:
-        cli._validate_clang_include(["-bad"])
+        cli._validate_include(["-bad"])
 
-    assert str(ex.value) == "clang_include 条目必须是 header，不能是类似选项的值: '-bad'"
+    assert str(ex.value) == "include 条目必须是 header，不能是类似选项的值: '-bad'"
+
+
+def test_old_clang_prefixed_options_are_rejected() -> None:
+    result = RUNNER.invoke(
+        cli.app,
+        [
+            "math",
+            "--clang-include",
+            "Python.h",
+            "--clang-include-directory",
+            "C:/IncludeA",
+            "--clang-c-std",
+            "c11",
+            "--clang-cpp-std",
+            "c++17",
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 2
+    assert "No such option" in result.stderr
 
 
 def test_removed_stub_extension_flag_is_rejected() -> None:
