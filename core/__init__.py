@@ -57,6 +57,7 @@ def write_stubs(
             include_directory=options.include_directory,
             c_std=options.c_std,
             cpp_std=options.cpp_std,
+            include_c_inferred_source_comment=options.include_c_inferred_source_comment,
         )
         visitors.append(c_ast_visitor)
 
@@ -72,5 +73,6 @@ def write_stubs(
     printer = PrinterVisitor(
         include_docstrings=options.include_docstrings,
         include_module_type_comment=options.include_module_type_comment,
+        include_c_inferred_source_comment=options.include_c_inferred_source_comment,
     )
     _writer.write(ir_module, printer, to=output_dir)

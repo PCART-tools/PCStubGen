@@ -56,6 +56,7 @@ def _build_options(
     cpp_std: str | None,
     include_docstrings: bool,
     include_module_type_comment: bool,
+    include_c_inferred_source_comment: bool,
 ) -> StubGenerationOptions:
     """
     将 CLI 入参归一化并转换为 stub 生成配置。
@@ -71,6 +72,7 @@ def _build_options(
         include_directory=list(include_directory or []),
         include_docstrings=include_docstrings,
         include_module_type_comment=include_module_type_comment,
+        include_c_inferred_source_comment=include_c_inferred_source_comment,
     )
 
 
@@ -124,6 +126,11 @@ def main(
         "--include-module-type-comment",
         help="在生成的 stub 中包含 module type comment",
     ),
+    include_c_inferred_source_comment: bool = typer.Option(
+        False,
+        "--include-c-inferred-source-comment",
+        help="在函数 stub 后包含 C AST 推断签名对应的源码注释",
+    ),
 ) -> None:
     """
     使用 pcstubgen 为模块生成 Python stub。
@@ -154,6 +161,7 @@ def main(
                 cpp_std=cpp_std,
                 include_docstrings=include_docstrings,
                 include_module_type_comment=include_module_type_comment,
+                include_c_inferred_source_comment=include_c_inferred_source_comment,
             ),
         )
     finally:

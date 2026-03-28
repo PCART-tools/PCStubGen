@@ -137,6 +137,36 @@ def test_cli_passes_source_root_as_path(
     assert result.exit_code == 0
     assert captured_options is not None
     assert captured_options.source_root == tmp_path / "src"
+    assert captured_options.include_c_inferred_source_comment is False
+
+
+def test_cli_passes_include_c_inferred_source_comment_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_options
+        _ = (module_name, output_dir)
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        cli.app,
+        [
+            "math",
+            "--output-dir",
+            str(tmp_path),
+            "--include-c-inferred-source-comment",
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert captured_options is not None
+    assert captured_options.include_c_inferred_source_comment is True
 
 
 def test_cli_passes_repeated_include(

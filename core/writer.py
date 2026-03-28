@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .printer_visitor import PrinterVisitor
 from .ir import IRModule
+from .ir.ir_module import IRModuleType
 
 
 class Writer:
@@ -24,9 +25,10 @@ class Writer:
             module_dir = to
             module_file = to / f"{module.Name}.pyi"
 
-        with open(module_file, "w", encoding="utf-8") as f:
-            for line in printer.visit_module(module):
-                f.write(line + "\n")
+        if module.module_type == IRModuleType.EXTENSION:
+            with open(module_file, "w", encoding="utf-8") as f:
+                for line in printer.print_module(module):
+                    f.write(line + "\n")
 
         for sub_module in module.sub_modules:
             self.write(sub_module, printer, module_dir)

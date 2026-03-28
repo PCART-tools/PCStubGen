@@ -12,6 +12,7 @@ class IRFunction:
     name: str
     signatures: list[IRSignature] = field(default_factory=list)
     doc: str | None = field(default=None)
+    c_inferred_source_comment: str | None = field(default=None)
 
     def __str__(self) -> str:
         """返回函数节点的调试字符串。"""

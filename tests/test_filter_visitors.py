@@ -461,6 +461,72 @@ def test_printer_prints_placeholder_signature_for_unknown_function() -> None:
     ]
 
 
+def test_printer_prints_c_inferred_source_comment_after_function() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="value", type_name="int")])],
+        c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
+    )
+
+    lines = PrinterVisitor(
+        include_docstrings=False,
+        include_c_inferred_source_comment=True,
+    ).print_function(func)
+
+    assert lines == [
+        "def foo(value: int):",
+        "    ...",
+        "# C inferred source for foo:",
+        "# static int foo_impl(int value) {",
+        "#     return value;",
+        "# }",
+    ]
+
+
+def test_printer_prints_c_inferred_source_comment_once_after_overloads() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(args=[IRArgument(name="value", type_name="int")], return_type_name="int"),
+            _signature(args=[IRArgument(name="value", type_name="str")], return_type_name="str"),
+        ],
+        c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
+    )
+
+    lines = PrinterVisitor(
+        include_docstrings=False,
+        include_c_inferred_source_comment=True,
+    ).print_function(func)
+
+    assert lines == [
+        "@typing.overload",
+        "def foo(value: int) -> int:",
+        "    ...",
+        "@typing.overload",
+        "def foo(value: str) -> str:",
+        "    ...",
+        "# C inferred source for foo:",
+        "# static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+        "#     return self;",
+        "# }",
+    ]
+
+
+def test_printer_skips_c_inferred_source_comment_when_disabled() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="value", type_name="int")])],
+        c_inferred_source_comment="static int foo_impl(int value) { return value; }",
+    )
+
+    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(value: int):",
+        "    ...",
+    ]
+
+
 def test_printer_adds_typing_import_for_overloads() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -478,7 +544,7 @@ def test_printer_adds_typing_import_for_overloads() -> None:
         ],
     )
 
-    lines = PrinterVisitor(include_docstrings=False).visit_module(module)
+    lines = PrinterVisitor(include_docstrings=False).print_module(module)
 
     assert lines == [
         "import typing",

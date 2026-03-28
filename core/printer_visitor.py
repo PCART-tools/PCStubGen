@@ -21,16 +21,18 @@ class PrinterVisitor:
         self,
         include_docstrings: bool = True,
         include_module_type_comment: bool = False,
+        include_c_inferred_source_comment: bool = False,
     ):
         self.include_docstrings = include_docstrings
         self.include_module_type_comment = include_module_type_comment
+        self.include_c_inferred_source_comment = include_c_inferred_source_comment
 
     @staticmethod
     def indent_lines(lines: list[str], by: int = 4) -> list[str]:
         """按指定空格数缩进多行文本。"""
         return [" " * by + line for line in lines]
 
-    def visit_module(self, node: IRModule) -> list[str]:
+    def print_module(self, node: IRModule) -> list[str]:
         """渲染整个模块。"""
         result: list[str] = []
 
@@ -141,6 +143,24 @@ class PrinterVisitor:
                     method_decorator=None,
                 )
             )
+
+        if self.include_c_inferred_source_comment and func.c_inferred_source_comment is not None:
+            result.extend(
+                self.print_c_inferred_source_comment(
+                    func_name=func.name,
+                    source_text=func.c_inferred_source_comment,
+                )
+            )
+        return result
+
+    def print_c_inferred_source_comment(self, *, func_name: str, source_text: str) -> list[str]:
+        """渲染由 C AST 推断签名来源的源码注释。"""
+        result = [f"#   C inferred source for {func_name}:"]
+        for line in source_text.splitlines():
+            if line:
+                result.append(f"#   {line}")
+            else:
+                result.append("#")
         return result
 
     def _print_function_block(

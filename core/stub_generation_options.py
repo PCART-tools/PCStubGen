@@ -18,3 +18,4 @@ class StubGenerationOptions:
     # 输出选项
     include_docstrings: bool = True
     include_module_type_comment: bool = False
+    include_c_inferred_source_comment: bool = False

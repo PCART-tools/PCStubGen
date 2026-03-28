@@ -10,6 +10,7 @@ from .core import (
     ExtractedModule,
     extract_c_signature_modules,
 )
+from .core.cursor_utils import source_range_get_text
 from ..node_visitor import NodeVisitor
 from ...ir import (
     IRArgument,
@@ -47,6 +48,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
+        include_c_inferred_source_comment: bool = False,
     ) -> None:
         """初始化 Visitor 运行配置与提取结果缓存。"""
         self._source_root = source_root
@@ -54,6 +56,7 @@ class CSignatureExtractionVisitor(NodeVisitor):
         self._include_directory = list(include_directory)
         self._c_std = c_std
         self._cpp_std = cpp_std
+        self._include_c_inferred_source_comment = include_c_inferred_source_comment
         self._stats = _InferenceStats()
         self._signature_modules: dict[str, ExtractedModule] | None = None
 
@@ -146,6 +149,8 @@ class CSignatureExtractionVisitor(NodeVisitor):
             )
 
         func.signatures = rewritten_signatures
+        if self._include_c_inferred_source_comment:
+            self._record_c_inferred_source_comment(func=func, extracted_function=selected)
         logger.info(
             "重写签名成功, func_name: {}, is_method: {}: generated_signatures={}",
             func.name,
@@ -164,6 +169,21 @@ class CSignatureExtractionVisitor(NodeVisitor):
             has_default=argument.has_default,
             kind=argument.kind,
         )
+
+    @staticmethod
+    def _record_c_inferred_source_comment(
+        *,
+        func: IRFunction,
+        extracted_function: ExtractedFunction,
+    ) -> None:
+        """记录 C AST 重写签名对应的原始源码文本。"""
+        extent = extracted_function.function_cursor.extent
+        if extent is None:
+            return
+
+        source_text = source_range_get_text(extent)
+        if source_text:
+            func.c_inferred_source_comment = source_text
 
     @staticmethod
     def _match_extracted_module(

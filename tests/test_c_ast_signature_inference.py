@@ -352,8 +352,101 @@ def test_c_ast_visitor_rewrites_module_function_without_normalizing_arguments(
     assert signature.args[2].has_default is True
     assert signature.return_type_name is not None
     assert signature.return_type_name == "int"
+    assert rewritten.c_inferred_source_comment is None
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 1
+
+
+def test_c_ast_visitor_records_c_inferred_source_comment_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "foo_impl.c"
+    snippet = "\n".join(
+        [
+            "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+            "    return (PyObject*)0;",
+            "}",
+        ]
+    )
+    source.write_text(snippet, encoding="utf-8", newline="\n")
+    func_cursor = cast(
+        clang.cindex.Cursor,
+        _FakeNode(
+            kind=clang.cindex.CursorKind.FUNCTION_DECL,
+            spelling="foo_impl",
+            extent=_extent_for_source_snippet(source, snippet),
+        ),
+    )
+
+    func = _unknown_function("foo")
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=func_cursor,
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[ExtractedArgument(name="value", type_name="int")]
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(
+        source_root=tmp_path,
+        include_c_inferred_source_comment=True,
+    )
+    visitor.visit_module(module)
+
+    assert module.functions[0].c_inferred_source_comment == snippet
+
+
+def test_c_ast_visitor_skips_c_inferred_source_comment_when_extent_text_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    func = _unknown_function("foo")
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[func],
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[ExtractedArgument(name="value", type_name="int")]
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    visitor = CSignatureExtractionVisitor(
+        source_root=tmp_path,
+        include_c_inferred_source_comment=True,
+    )
+    visitor.visit_module(module)
+
+    assert module.functions[0].c_inferred_source_comment is None
 
 
 def test_c_ast_visitor_preserves_has_default_without_default_text(
@@ -530,6 +623,7 @@ def test_c_ast_visitor_keeps_known_function_unchanged(
     assert module.functions[0] is func
     assert func.signatures[0].args[0].name == "x"
     assert func.signatures[0].args[0].type_name is None
+    assert func.c_inferred_source_comment is None
     assert visitor._stats.total_unknown_signatures == 0
     assert visitor._stats.success == 0
 
@@ -1065,6 +1159,118 @@ def test_write_stubs_propagates_extract_errors(
     )
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
+
+
+def test_write_stubs_passes_c_inferred_source_comment_option(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import core as stubgen_module
+
+    captured: dict[str, object] = {}
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+
+    class FakeCSignatureExtractionVisitor:
+        def __init__(
+            self,
+            *,
+            source_root: Path,
+            include: list[str] = (),
+            include_directory: list[Path] = (),
+            c_std: str = "c11",
+            cpp_std: str = "c++17",
+            include_c_inferred_source_comment: bool = False,
+        ) -> None:
+            captured["visitor_source_root"] = source_root
+            captured["visitor_include"] = list(include)
+            captured["visitor_include_directory"] = list(include_directory)
+            captured["visitor_c_std"] = c_std
+            captured["visitor_cpp_std"] = cpp_std
+            captured["visitor_include_c_inferred_source_comment"] = (
+                include_c_inferred_source_comment
+            )
+
+        def visit_module(self, node: IRModule) -> None:
+            _ = node
+
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
+            _ = (node, module)
+
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            _ = (node, module)
+
+        def visit_method(self, node: IRMethod, module: IRModule) -> None:
+            _ = (node, module)
+
+        def log_summary(self) -> None:
+            captured["visitor_log_summary_called"] = True
+
+    class FakePrinterVisitor:
+        def __init__(
+            self,
+            include_docstrings: bool = True,
+            include_module_type_comment: bool = False,
+            include_c_inferred_source_comment: bool = False,
+        ) -> None:
+            captured["printer_include_docstrings"] = include_docstrings
+            captured["printer_include_module_type_comment"] = include_module_type_comment
+            captured["printer_include_c_inferred_source_comment"] = (
+                include_c_inferred_source_comment
+            )
+
+        def visit_module(self, node: IRModule) -> list[str]:
+            _ = node
+            return []
+
+    class FakeWriter:
+        def write(
+            self,
+            module: IRModule,
+            printer: FakePrinterVisitor,
+            to: Path,
+        ) -> None:
+            captured["written_module"] = module
+            captured["written_printer"] = printer
+            captured["written_to"] = to
+
+    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
+    monkeypatch.setattr(
+        stubgen_module,
+        "CSignatureExtractionVisitor",
+        FakeCSignatureExtractionVisitor,
+    )
+    monkeypatch.setattr(stubgen_module, "PrinterVisitor", FakePrinterVisitor)
+
+    options = StubGenerationOptions(
+        source_root=tmp_path,
+        include=["Python.h"],
+        include_directory=[tmp_path / "include"],
+        c_std="c99",
+        cpp_std="c++20",
+        include_docstrings=False,
+        include_module_type_comment=True,
+        include_c_inferred_source_comment=True,
+    )
+
+    stubgen_module.write_stubs(
+        "math",
+        tmp_path,
+        options=options,
+        _writer=FakeWriter(),
+    )
+
+    assert captured["visitor_source_root"] == tmp_path
+    assert captured["visitor_include"] == ["Python.h"]
+    assert captured["visitor_include_directory"] == [tmp_path / "include"]
+    assert captured["visitor_c_std"] == "c99"
+    assert captured["visitor_cpp_std"] == "c++20"
+    assert captured["visitor_include_c_inferred_source_comment"] is True
+    assert captured["visitor_log_summary_called"] is True
+    assert captured["printer_include_docstrings"] is False
+    assert captured["printer_include_module_type_comment"] is True
+    assert captured["printer_include_c_inferred_source_comment"] is True
+    assert captured["written_module"] is ir_module
+    assert captured["written_to"] == tmp_path
 
 
 def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
