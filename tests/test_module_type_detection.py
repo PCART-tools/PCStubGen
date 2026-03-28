@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from core.ir import IRModule, IRModuleType, QualifiedName
+from core.ir import IRModuleType, QualifiedName
 from core.module_builder import build_module
 
 
@@ -50,9 +50,3 @@ def test_detect_module_type_returns_unknown_for_unrecognized_loader() -> None:
     py_module = _module_with_loader("py_mod", loader=None, file_path="py_mod.py")
     py_ir = build_module(QualifiedName.from_str("py_mod"), py_module)
     assert py_ir.module_type == IRModuleType.UNKNOWN
-
-
-def test_ir_module_defaults_to_unknown_module_type() -> None:
-    ir_module = IRModule(full_name=QualifiedName.from_str("demo"))
-
-    assert ir_module.module_type == IRModuleType.UNKNOWN

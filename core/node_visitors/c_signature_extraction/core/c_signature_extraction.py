@@ -68,6 +68,6 @@ def extract_c_signature_modules(
 
     for module in result.values():
         for function in module.functions.values():
-            signature_inference.infer_signature(function)
+            function.signatures = signature_inference.infer_signature(function.function_cursor)
 
     return result

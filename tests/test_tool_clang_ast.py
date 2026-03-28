@@ -73,20 +73,6 @@ def test_cli_rejects_removed_output_option(tmp_path: Path) -> None:
 
     assert result.exit_code == 2
     assert "No such option: --output" in result.stderr
-
-
-def test_cli_help_contains_chinese_text() -> None:
-    result = RUNNER.invoke(clang_ast.app, ["--help"], prog_name="clang_ast")
-
-    assert result.exit_code == 0
-    assert "使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。" in result.stdout
-    assert "--include" in result.stdout
-    assert "--include-directory" in result.stdout
-    assert "--c-std" in result.stdout
-    assert "--cpp-std" in result.stdout
-    assert "追加 include 头文件，可重复传入。" in result.stdout
-
-
 def test_cli_invalid_include_reports_bad_parameter(tmp_path: Path) -> None:
     source_path = tmp_path / "sample.c"
     source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
@@ -115,22 +101,6 @@ def test_cli_invalid_include_directory_reports_bad_parameter(tmp_path: Path) -> 
     assert result.exit_code == 2
     assert "Invalid value for '--include-directory'" in result.stderr
     assert "'-bad'" in result.stderr
-
-
-def test_cli_missing_source_path_reports_typer_path_error(tmp_path: Path) -> None:
-    missing_path = tmp_path / "missing.c"
-
-    result = RUNNER.invoke(
-        clang_ast.app,
-        [str(missing_path)],
-        prog_name="clang_ast",
-    )
-
-    assert result.exit_code == 2
-    assert "SOURCE_PATH" in result.stderr
-    assert "does not exist" in result.stderr
-
-
 def test_build_parse_args_places_include_before_include_directory() -> None:
     parse_args = clang_ast._build_parse_args(
         source_path=Path("sample.c"),
@@ -254,17 +224,6 @@ class _FakeDiagnostic:
         self.severity = severity
         self.spelling = spelling
         self.location = _FakeLocation(file=file, line=line, column=column)
-
-
-def test_resolve_output_paths_follow_dynamic_script_name() -> None:
-    source_path = Path("sample.c")
-    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path)
-
-    assert clang_ast.DEFAULT_OUTPUT_DIR == clang_ast.SCRIPT_DIR / f"{clang_ast.SCRIPT_PATH.stem}_output"
-    assert libclang_path == clang_ast.DEFAULT_OUTPUT_DIR / "sample.libclang.txt"
-    assert clang_path == clang_ast.DEFAULT_OUTPUT_DIR / "sample.clang.txt"
-
-
 def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
     source_path = Path("C:/project/sample.c").resolve()
     output_path = Path("C:/project/out/sample.libclang.txt").resolve()

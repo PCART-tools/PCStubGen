@@ -16,7 +16,7 @@ from .cursor_utils import (
     IDENTIFIER_RE,
     DECL_CURSOR_KINDS
 )
-from .models import ExtractedArgument, ExtractedFunction, ExtractedSignature
+from .models import ExtractedArgument, ExtractedSignature
 from .name_to_type import *
 from .py_arg_parse_tuple_and_keywords_type_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
@@ -29,44 +29,47 @@ from .py_arg_parse_tuple_type_parser import (
 from .py_build_value_type_nodes import NamedTypeNode, TypeNode, UnionTypeNode
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
-def infer_signature(function: ExtractedFunction) -> None:
-    """汇合参数推断与返回值推断结果，生成函数签名。"""
-    inferred_argument_signatures = infer_argument_signatures(function.function_cursor)
-    if inferred_argument_signatures:
-        function.signatures = inferred_argument_signatures
+def infer_signature(func_cursor: Cursor) -> list[ExtractedSignature]:
+    """汇合参数推断与返回值推断结果，生成函数签名列表。"""
+    inferred_argument_lists = infer_argument_lists(func_cursor)
+    inferred_return_type = infer_return_type(func_cursor)
 
-    inferred_return_type = infer_return_type(function.function_cursor)
+    if inferred_argument_lists:
+        return [
+            ExtractedSignature(
+                arguments=arguments,
+                return_type_name=inferred_return_type,
+            )
+            for arguments in inferred_argument_lists
+        ]
+
     if inferred_return_type is None:
-        return
-
-    if not function.signatures:
-        function.signatures.append(ExtractedSignature())
-
-    for signature in function.signatures:
-        if signature.return_type_name is None:
-            signature.return_type_name = inferred_return_type
+        return []
+    return [ExtractedSignature(return_type_name=inferred_return_type)]
 
 
-def infer_argument_signatures(func_cursor: Cursor) -> list[ExtractedSignature]:
-    """遍历函数体内支持的 `PyArg_*` 调用并收集参数签名。"""
-    inferred_signatures: list[ExtractedSignature] = []
-    seen_keys: set[tuple[tuple[str, str | None, str | None, bool, object], ...]] = set()
+def infer_argument_lists(func_cursor: Cursor) -> list[list[ExtractedArgument]]:
+    """遍历函数体内支持的 `PyArg_*` 调用并收集参数列表。"""
+    inferred_argument_lists: list[list[ExtractedArgument]] = []
 
     for call_expr in walk_cursor(func_cursor):
         if call_expr.kind != CursorKind.CALL_EXPR:
             continue
 
-        signature = _infer_signature_from_pyarg_call(call_expr)
-        if signature is None:
+        call_name = call_expr.spelling
+        args = list(call_expr.get_children())[1:]
+        if call_name == "PyArg_ParseTuple":
+            arguments = _infer_pyarg_parsetuple_arguments(args)
+        elif call_name == "PyArg_ParseTupleAndKeywords":
+            arguments = _infer_pyarg_parsetuple_and_keywords_arguments(args)
+        else:
+            arguments = None
+        if arguments is None:
             continue
 
-        signature_key = _make_signature_argument_key(signature.arguments)
-        if signature_key in seen_keys:
-            continue
-        seen_keys.add(signature_key)
-        inferred_signatures.append(signature)
+        inferred_argument_lists.append(arguments)
 
-    return inferred_signatures
+    return inferred_argument_lists
 
 
 def infer_return_type(func_cursor: Cursor) -> str | None:
@@ -90,24 +93,9 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
             logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
     return merged_type.render()
 
-def _infer_signature_from_pyarg_call(call_expr: Cursor) -> ExtractedSignature | None:
-    """从单个支持的 `PyArg_*` 调用解析参数签名。"""
-    assert call_expr.kind == CursorKind.CALL_EXPR
-    call_name = call_expr.spelling
 
-    args = _extract_call_arguments(call_expr)
-    if call_name == "PyArg_ParseTuple":
-        return _infer_pyarg_parsetuple_signature(args)
-    if call_name == "PyArg_ParseTupleAndKeywords":
-        return _infer_pyarg_parsetuple_and_keywords_signature(args)
-    return None
-
-
-def _infer_pyarg_parsetuple_signature(args: list[Cursor]) -> ExtractedSignature | None:
-    """调用 `PyArg_ParseTuple` parser 解析参数签名。"""
-    if len(args) < 2:
-        return None
-
+def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[ExtractedArgument] | None:
+    """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
     format_string = extract_string_literal(args[1])
 
     try:
@@ -121,14 +109,13 @@ def _infer_pyarg_parsetuple_signature(args: list[Cursor]) -> ExtractedSignature 
     except PyArgParseTupleTypeParserError:
         return None
 
-    return ExtractedSignature(arguments=arguments)
+    return arguments
 
 
-def _infer_pyarg_parsetuple_and_keywords_signature(args: list[Cursor]) -> ExtractedSignature | None:
-    """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数签名。"""
-    if len(args) < 4:
-        return None
-
+def _infer_pyarg_parsetuple_and_keywords_arguments(
+    args: list[Cursor],
+) -> list[ExtractedArgument] | None:
+    """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
     format_string = extract_string_literal(args[2])
 
     kwlist = _extract_kwlist(args[3])
@@ -146,24 +133,7 @@ def _infer_pyarg_parsetuple_and_keywords_signature(args: list[Cursor]) -> Extrac
     except PyArgParseTupleAndKeywordsTypeParserError:
         return None
 
-    return ExtractedSignature(arguments=arguments)
-
-
-def _make_signature_argument_key(
-    arguments: list[ExtractedArgument],
-) -> tuple[tuple[str, str | None, str | None, bool, object], ...]:
-    """构造仅基于参数内容的稳定签名去重键。"""
-    return tuple(
-        (
-            argument.name,
-            argument.type_name,
-            argument.default_value,
-            argument.has_default,
-            argument.kind,
-        )
-        for argument in arguments
-    )
-
+    return arguments
 
 def _infer_type_from_return_stmt(return_stmt: Cursor) -> TypeNode | None:
     """从单条 return 语句推断返回类型。"""
@@ -263,18 +233,9 @@ def _get_cursor_name(cursor: Cursor) -> str | None:
         return str(referenced.spelling)
     return None
 
-
-def _extract_call_arguments(call_cursor: Cursor) -> list[Cursor]:
-    """提取调用表达式的实参游标列表。"""
-    children = list(call_cursor.get_children())
-    if len(children) <= 1:
-        return []
-    return children[1:]
-
-
 def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
-    args = _extract_call_arguments(call_cursor)
+    args = list(call_cursor.get_children())[1:]
     if not args:
         return None
 
@@ -372,6 +333,8 @@ def _extract_kwlist(node: Cursor) -> list[str] | None:
             break
 
         keyword_name = extract_string_literal(entry)
+        if keyword_name is None:
+            return None
         result.append(keyword_name)
 
     return result

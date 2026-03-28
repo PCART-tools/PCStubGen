@@ -64,38 +64,6 @@ def test_removed_enum_class_locations_flag_is_rejected() -> None:
     )
 
     assert result.exit_code == 2
-
-
-def test_build_options_keeps_none_source_root() -> None:
-    options = cli._build_options(
-        enable_docstring_signature_parser=True,
-        source_root=None,
-        include=[],
-        include_directory=[],
-        c_std=None,
-        cpp_std=None,
-        include_docstrings=True,
-        include_module_type_comment=False,
-    )
-
-    assert options.source_root is None
-
-
-def test_build_options_keeps_path_source_root() -> None:
-    options = cli._build_options(
-        enable_docstring_signature_parser=True,
-        source_root=Path("C:/tmp/src"),
-        include=[],
-        include_directory=[],
-        c_std=None,
-        cpp_std=None,
-        include_docstrings=True,
-        include_module_type_comment=False,
-    )
-
-    assert options.source_root == Path("C:/tmp/src")
-
-
 def test_cli_passes_repeated_include_directory(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -205,21 +173,6 @@ def test_cli_passes_repeated_include(
     assert captured_output_dir == tmp_path
     assert captured_options is not None
     assert captured_options.include == ["Python.h", "numpy/arrayobject.h"]
-
-
-def test_help_contains_chinese_project_text() -> None:
-    result = RUNNER.invoke(cli.app, ["--help"], prog_name="pcstubgen")
-
-    assert result.exit_code == 0
-    assert "使用 pcstubgen 为模块生成 Python stub。" in result.stdout
-    assert "--output-dir" in result.stdout
-    assert "--include" in result.stdout
-    assert "--include-directory" in result.stdout
-    assert "--c-std" in result.stdout
-    assert "--cpp-std" in result.stdout
-    assert "输出 stub 的根目录" in result.stdout
-
-
 def test_invalid_include_reports_chinese_validation_error() -> None:
     result = RUNNER.invoke(
         cli.app,

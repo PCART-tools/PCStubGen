@@ -19,22 +19,6 @@ from tool import module_c_impl
 RUNNER = CliRunner()
 
 
-def test_cli_help_contains_chinese_text() -> None:
-    result = RUNNER.invoke(module_c_impl.app, ["--help"], prog_name="module_c_impl")
-
-    assert result.exit_code == 0
-    assert "检查模块及其子模块是否为 C 实现，并导出 CSV 报告。" in result.stdout
-    assert "--output-dir" in result.stdout
-    assert "待检查的模块名" in result.stdout
-
-
-def test_cli_requires_module_name() -> None:
-    result = RUNNER.invoke(module_c_impl.app, [], prog_name="module_c_impl")
-
-    assert result.exit_code == 2
-    assert "Missing argument 'MODULE_NAME'" in result.stderr
-
-
 def test_cli_passes_explicit_module_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

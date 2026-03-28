@@ -13,7 +13,19 @@ PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, str] = {
     "PyFrozenSet_Type": "frozenset",
     "PyType_Type": "type",
     "PyBaseObject_Type": "object",
+
+    # numpy
     "PyArray_Type": "numpy.ndarray"
+}
+
+# 参数类型推导，O& converter
+PARSE_CONVERTER_NAME_TO_TYPE: dict[str, str] = {
+    # scipy
+    "NI_ObjectToInputArray": "",
+    "NI_ObjectToOptionalInputArray": "",
+    "NI_ObjectToOutputArray": "",
+    "NI_ObjectToOptionalOutputArray": "",
+    "NI_ObjectToIoArray": ""
 }
 
 # 参数默认值推导
@@ -148,6 +160,10 @@ FUNCTION_NAME_TO_TYPE: dict[str, str] = {
 
     # frozenset
     "PyFrozenSet_New": "frozenset",
+}
+
+BUILD_CONVERTER_NAME_TO_TYPE: dict[str, str] = {
+
 }
 
 OBJECT_NAME_TO_TYPE: dict[str, str] = {

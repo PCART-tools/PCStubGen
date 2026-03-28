@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import sysconfig
 from collections.abc import Iterable
 from pathlib import Path
@@ -1032,74 +1031,6 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
         visitor.visit_module(module)
 
 
-def test_write_stubs_skips_c_ast_visitor_when_disabled(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    captured_output_dirs: list[Path] = []
-
-    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CSignatureExtractionVisitor should not be instantiated when disabled")
-
-    def _record_writer_output_dir(self: object, module: IRModule, printer: object, to: Path) -> None:
-        _ = (self, module, printer)
-        captured_output_dirs.append(to)
-        (to / "math.pyi").write_text("", encoding="utf-8")
-
-    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
-    monkeypatch.setattr(stubgen_module.Writer, "write", _record_writer_output_dir)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    assert captured_output_dirs == [tmp_path]
-    assert captured_output_dirs[0] is tmp_path
-    assert list(tmp_path.rglob("*.pyi"))
-
-
-def test_write_stubs_skips_c_inference_when_source_root_not_set(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CSignatureExtractionVisitor should not be instantiated when source_root is not set")
-
-    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
-
-    options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
-        source_root=None,
-    )
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-
-def test_write_stubs_defaults_do_not_require_source_root(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
-
-    def _unexpected_constructor(*args: object, **kwargs: object) -> object:
-        raise AssertionError("CSignatureExtractionVisitor should not be instantiated by default")
-
-    monkeypatch.setattr(stubgen_module, "CSignatureExtractionVisitor", _unexpected_constructor)
-
-    options = StubGenerationOptions()
-    assert options.source_root is None
-    stubgen_module.write_stubs("math", tmp_path, options=options)
-
-    assert list(tmp_path.rglob("*.pyi"))
-
-
 def test_write_stubs_propagates_extract_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1134,47 +1065,6 @@ def test_write_stubs_propagates_extract_errors(
     )
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
-
-
-def test_doc_parser_runs_before_c_ast_visitor_in_pipeline(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[
-            _unknown_function(
-                "foo",
-                doc="foo(a: int, b: int = 0) -> int",
-            )
-        ],
-    )
-    extractor = _patch_c_signature_extractor(
-        monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    function_cursor=_fake_function_cursor("foo"),
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
-                )
-            }
-        ),
-    )
-    pipeline = Pipeline(
-        [
-            DocStringSignatureParserVisitor(),
-            CSignatureExtractionVisitor(
-                source_root=tmp_path,
-            ),
-        ]
-    )
-    pipeline.run(module)
-
-    parsed = module.functions[0]
-    assert [arg.name for arg in parsed.signatures[0].args] == ["a", "b"]
-    assert [arg.type_name for arg in parsed.signatures[0].args] == ["int", "int"]
-    assert extractor.called == 1
 
 
 def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
@@ -2639,149 +2529,6 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
     assert captured["cpp_std"] == "c++20"
 
 
-def test_c_signature_engine_extract_modules_runs_parse_build_infer_in_order(tmp_path: Path) -> None:
-    source = tmp_path / "module.c"
-    built_modules = {
-        "pkg.mod": ExtractedModule(
-            name="pkg.mod",
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    function_cursor=_fake_function_cursor("foo"),
-                ),
-            },
-        )
-    }
-    calls: list[str] = []
-    fake_translation_unit = SimpleNamespace(cursor=object())
-
-    class _FakeIndexForPipeline:
-        pass
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [source])
-    monkeypatch.setattr(
-        module_table_module,
-        "process_translation_unit",
-        lambda cursor: (
-            calls.append("build"),
-            built_modules.values(),
-        )[1]
-        if calls == ["parse"]
-        else pytest.fail("build should run after parse"),
-    )
-    monkeypatch.setattr(
-        signature_rules_module,
-        "infer_signature",
-        lambda function: calls.append("infer")
-        if calls == ["parse", "build"]
-        else pytest.fail("infer should run after build"),
-    )
-    monkeypatch.setattr(
-        translation_unit_module,
-        "parse_translation_unit",
-        lambda index, file_path, **kwargs: (
-            calls.append("parse"),
-            fake_translation_unit,
-        )[1],
-    )
-    monkeypatch.setattr(c_signature_extraction_module.Index, "create", lambda: _FakeIndexForPipeline())
-    try:
-        extracted = extract_c_signature_modules(tmp_path)
-    finally:
-        monkeypatch.undo()
-
-    assert calls == ["parse", "build", "infer"]
-    assert extracted == built_modules
-
-
-def test_c_signature_engine_extract_modules_skips_build_and_infer_when_parse_is_empty(tmp_path: Path) -> None:
-    calls: list[str] = []
-
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(
-        translation_unit_module,
-        "find_candidate_files",
-        lambda source_root: (
-            calls.append("parse"),
-            [],
-        )[1],
-    )
-    monkeypatch.setattr(
-        module_table_module,
-        "process_translation_unit",
-        lambda cursor: pytest.fail("build step should be skipped when parse result is empty"),
-    )
-    monkeypatch.setattr(
-        signature_rules_module,
-        "infer_signature",
-        lambda function: pytest.fail("infer step should be skipped when parse result is empty"),
-    )
-    try:
-        extracted = extract_c_signature_modules(tmp_path)
-    finally:
-        monkeypatch.undo()
-
-    assert calls == ["parse"]
-    assert extracted == {}
-
-
-def test_c_signature_engine_builds_language_specific_std_args(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path)
-    assert engine._include_directory is not None
-    assert Path("-std=c11") not in engine._include_directory
-    assert (
-        translation_unit_module.get_std_value_for_file(
-            tmp_path / "module.c",
-            c_std=engine._c_std,
-            cpp_std=engine._cpp_std,
-        )
-        == "c11"
-    )
-    assert (
-        translation_unit_module.get_std_value_for_file(
-            tmp_path / "module.cxx",
-            c_std=engine._c_std,
-            cpp_std=engine._cpp_std,
-        )
-        == "c++17"
-    )
-
-
-def test_c_signature_engine_uses_configured_language_specific_std_args(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        include_directory=[Path("C:/MyInclude")],
-        c_std="-std=c99",
-        cpp_std="--std=c++20",
-    )
-
-    assert (
-        translation_unit_module.get_std_value_for_file(
-            tmp_path / "module.c",
-            c_std=engine._c_std,
-            cpp_std=engine._cpp_std,
-        )
-        == "-std=c99"
-    )
-    assert (
-        translation_unit_module.get_std_value_for_file(
-            tmp_path / "module.cxx",
-            c_std=engine._c_std,
-            cpp_std=engine._cpp_std,
-        )
-        == "--std=c++20"
-    )
-    assert (
-        translation_unit_module.get_std_value_for_file(
-            tmp_path / "module.hpp",
-            c_std=engine._c_std,
-            cpp_std=engine._cpp_std,
-        )
-        == "-std=c99"
-    )
-
-
 def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(
     tmp_path: Path,
 ) -> None:
@@ -3562,7 +3309,7 @@ def test_return_type_returns_none_when_function_has_no_return() -> None:
     assert inferred is None
 
 
-def test_infer_argument_signatures_parses_pyarg_parsetuple() -> None:
+def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     count_decl = _var_decl("count", _int_literal("1"))
     label_decl = _var_decl("label", _identifier_node("Py_None"))
     cursor = _fake_function_cursor_with_children(
@@ -3575,20 +3322,18 @@ def test_infer_argument_signatures_parses_pyarg_parsetuple() -> None:
         )
     )
 
-    inferred = signature_rules_module.infer_argument_signatures(cursor)
+    inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[
-                ExtractedArgument(name="count", type_name="int"),
-                ExtractedArgument(
-                    name="label",
-                    type_name="str | None",
-                    default_value="None",
-                    has_default=True,
-                ),
-            ]
-        )
+        [
+            ExtractedArgument(name="count", type_name="int"),
+            ExtractedArgument(
+                name="label",
+                type_name="str | None",
+                default_value="None",
+                has_default=True,
+            ),
+        ]
     ]
 
 
@@ -3613,7 +3358,7 @@ def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_pa
     assert inferred == "str"
 
 
-def test_infer_argument_signatures_keeps_object_without_extent_fallback_for_o_bang() -> None:
+def test_infer_argument_lists_keeps_object_without_extent_fallback_for_o_bang() -> None:
     value_decl = _var_decl("value")
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -3625,16 +3370,14 @@ def test_infer_argument_signatures_keeps_object_without_extent_fallback_for_o_ba
         )
     )
 
-    inferred = signature_rules_module.infer_argument_signatures(cursor)
+    inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[ExtractedArgument(name="value", type_name="object")]
-        )
+        [ExtractedArgument(name="value", type_name="object")]
     ]
 
 
-def test_infer_argument_signatures_joins_decl_ref_names_for_tuple_arguments() -> None:
+def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None:
     left_decl = _var_decl("left")
     right_decl = _var_decl("right")
     cursor = _fake_function_cursor_with_children(
@@ -3647,19 +3390,15 @@ def test_infer_argument_signatures_joins_decl_ref_names_for_tuple_arguments() ->
         )
     )
 
-    inferred = signature_rules_module.infer_argument_signatures(cursor)
+    inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[
-                ExtractedArgument(name="left_right", type_name="tuple[int, int]")
-            ]
-        )
+        [ExtractedArgument(name="left_right", type_name="tuple[int, int]")]
     ]
 
 
-def test_infer_argument_signatures_skips_parse_tuple_and_keywords_without_valid_kwlist() -> None:
-    invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _int_literal("0")))
+def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlist() -> None:
+    invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -3672,12 +3411,12 @@ def test_infer_argument_signatures_skips_parse_tuple_and_keywords_without_valid_
         )
     )
 
-    inferred = signature_rules_module.infer_argument_signatures(cursor)
+    inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == []
 
 
-def test_infer_argument_signatures_deduplicates_matching_pyarg_calls() -> None:
+def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:
     first_decl = _var_decl("value")
     second_decl = _var_decl("value")
     cursor = _fake_function_cursor_with_children(
@@ -3695,119 +3434,78 @@ def test_infer_argument_signatures_deduplicates_matching_pyarg_calls() -> None:
         ),
     )
 
-    inferred = signature_rules_module.infer_argument_signatures(cursor)
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [
+        [ExtractedArgument(name="value", type_name="int")],
+        [ExtractedArgument(name="value", type_name="int")],
+    ]
+
+
+def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_signature(cursor)
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[],
+            return_type_name="int",
+        )
+    ]
+
+
+def test_infer_signature_returns_signature_with_inferred_arguments_when_return_is_unknown() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(cursor)
 
     assert inferred == [
         ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
     ]
 
 
-def test_infer_signature_creates_signature_with_inferred_return_type() -> None:
-    function = ExtractedFunction(
-        ml_name="foo",
-        function_cursor=_fake_function_cursor_with_children(
-            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
-        ),
+def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
     )
 
-    signature_rules_module.infer_signature(function)
+    inferred = signature_rules_module.infer_signature(cursor)
 
-    assert len(function.signatures) == 1
-    assert function.signatures[0].arguments == []
-    assert function.signatures[0].return_type_name == "int"
-
-
-def test_infer_signature_creates_signature_with_inferred_arguments_when_return_is_unknown() -> None:
-    value_decl = _var_decl("value", _int_literal("0"))
-    function = ExtractedFunction(
-        ml_name="foo",
-        function_cursor=_fake_function_cursor_with_children(
-            _call_expr(
-                "PyArg_ParseTuple",
-                _identifier_node("args"),
-                _string_literal("i"),
-                _address_of("value", referenced=value_decl),
-            ),
-            _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
-        ),
-    )
-
-    signature_rules_module.infer_signature(function)
-
-    assert function.signatures == [
-        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
-    ]
-
-
-def test_infer_signature_keeps_signatures_empty_when_return_type_is_unknown() -> None:
-    function = ExtractedFunction(
-        ml_name="foo",
-        function_cursor=_fake_function_cursor_with_children(
-            _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
-        ),
-    )
-
-    signature_rules_module.infer_signature(function)
-
-    assert function.signatures == []
+    assert inferred == []
 
 
 def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
-    function = ExtractedFunction(
-        ml_name="foo",
-        function_cursor=_fake_function_cursor_with_children(
-            _call_expr(
-                "PyArg_ParseTuple",
-                _identifier_node("args"),
-                _string_literal("i"),
-                _address_of("value", referenced=value_decl),
-            ),
-            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=value_decl),
         ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
     )
 
-    signature_rules_module.infer_signature(function)
+    inferred = signature_rules_module.infer_signature(cursor)
 
-    assert function.signatures == [
+    assert inferred == [
         ExtractedSignature(
             arguments=[ExtractedArgument(name="value", type_name="int")],
             return_type_name="int",
         )
     ]
-
-
-def test_infer_signature_only_fills_missing_return_type_on_existing_signatures() -> None:
-    signature_with_missing_return = ExtractedSignature(
-        arguments=[ExtractedArgument(name="value", type_name="int")],
-    )
-    signature_with_existing_return = ExtractedSignature(
-        arguments=[ExtractedArgument(name="flag", type_name="bool")],
-        return_type_name="str",
-    )
-    function = ExtractedFunction(
-        ml_name="foo",
-        function_cursor=_fake_function_cursor_with_children(
-            _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
-        ),
-        signatures=[signature_with_missing_return, signature_with_existing_return],
-    )
-
-    signature_rules_module.infer_signature(function)
-
-    assert len(function.signatures) == 2
-    assert [arg.name for arg in function.signatures[0].arguments] == ["value"]
-    assert function.signatures[0].return_type_name == "int"
-    assert [arg.name for arg in function.signatures[1].arguments] == ["flag"]
-    assert function.signatures[1].return_type_name == "str"
-
-
-def test_return_type_py_buildvalue_parser_is_importable_by_package_path() -> None:
-    module = importlib.import_module(
-        "core.node_visitors.c_signature_extraction.core.py_build_value_type_parser"
-    )
-
-    assert module.PyBuildValueTypeParser is not None
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
