@@ -72,10 +72,10 @@ class UnionTypeNode(TypeNode):
             member_set.add(canonical_member)
 
         unique_members = list(member_set)
-        unique_members.sort(key=_union_sort_key)
-
         if len(unique_members) == 1:
             return unique_members[0]
+
+        unique_members.sort(key=_union_sort_key)
         return UnionTypeNode(tuple(unique_members))
 
     def render(self) -> str:

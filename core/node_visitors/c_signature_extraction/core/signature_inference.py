@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from pathlib import Path
 
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
@@ -13,6 +12,7 @@ from .cursor_utils import (
     walk_cursor,
     is_nullptr_or_zero,
     extract_string_literal,
+    source_range_get_text,
     IDENTIFIER_RE,
     DECL_CURSOR_KINDS
 )
@@ -85,9 +85,10 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
             continue
         inferred_types.append(inferred_type)
 
-    merged_type = _merge_inferred_type_nodes(inferred_types)
-    if merged_type is None:
+    if len(inferred_types) == 0:
         return None
+
+    merged_type = UnionTypeNode(tuple(inferred_types)).canonicalize()
     if isinstance(merged_type, UnionTypeNode):
         if len(merged_type.members) > 1:
             logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
@@ -173,7 +174,9 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> TypeNode | None:
         if inferred is None:
             continue
         branch_types.append(inferred)
-    return _merge_inferred_type_nodes(branch_types)
+    if len(branch_types) == 0:
+        return None
+    return UnionTypeNode(tuple(branch_types))
 
 
 def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
@@ -270,7 +273,7 @@ def _resolve_argument_name(c_args: list[Cursor]) -> str | None:
 
 def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
-    source_text = _extract_cursor_source_text(cursor)
+    source_text = source_range_get_text(cursor.extent)
     if source_text is None:
         return None
 
@@ -398,37 +401,3 @@ def _render_unary_numeric_literal(expr_cursor: Cursor) -> str | None:
         if spelling in {"+", "-"}:
             return f"{spelling}{value_text}"
     return None
-
-
-def _merge_inferred_type_nodes(type_nodes: Iterable[TypeNode]) -> TypeNode | None:
-    """合并推断结果，并统一复用联合类型的规范化语义。"""
-    members = tuple(type_nodes)
-    if not members:
-        return None
-    return UnionTypeNode(members).canonicalize()
-
-
-def _extract_cursor_source_text(cursor: Cursor) -> str | None:
-    """按 cursor extent 从源文件中截取原始源码文本。"""
-    extent = cursor.extent
-    if extent is None:
-        return None
-
-    start = extent.start
-    end = extent.end
-    if start.file is None or end.file is None:
-        return None
-
-    start_file = Path(start.file.name)
-    end_file = Path(end.file.name)
-    if start_file != end_file:
-        return None
-
-    try:
-        source_bytes = start_file.read_bytes()
-    except OSError:
-        return None
-
-    if start.offset < 0 or end.offset < start.offset or end.offset > len(source_bytes):
-        return None
-    return source_bytes[start.offset:end.offset].decode("utf-8", errors="ignore")

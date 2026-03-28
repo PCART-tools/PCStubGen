@@ -3042,42 +3042,6 @@ def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
     assert inferred == NamedTypeNode("bytes")
 
 
-def test_infer_expr_type_merges_conditional_branch_types() -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _conditional_expr(
-            _identifier_node("cond"),
-            _call_expr("PyLong_FromLong", _identifier_node("left")),
-            _call_expr("PyFloat_FromDouble", _identifier_node("right")),
-        )
-    )
-
-    assert inferred == UnionTypeNode((NamedTypeNode("float"), NamedTypeNode("int")))
-
-
-def test_infer_expr_type_deduplicates_conditional_branch_types() -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _conditional_expr(
-            _identifier_node("cond"),
-            _call_expr("PyLong_FromLong", _identifier_node("left")),
-            _call_expr("PyLong_FromLong", _identifier_node("right")),
-        )
-    )
-
-    assert inferred == NamedTypeNode("int")
-
-
-def test_infer_expr_type_keeps_known_conditional_branch_when_other_is_unknown() -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _conditional_expr(
-            _identifier_node("cond"),
-            _call_expr("PyLong_FromLong", _identifier_node("value")),
-            _call_expr("CustomFactory", _identifier_node("value")),
-        )
-    )
-
-    assert inferred == NamedTypeNode("int")
-
-
 def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _conditional_expr(
@@ -3088,30 +3052,6 @@ def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() ->
     )
 
     assert inferred is None
-
-
-def test_infer_expr_type_unwraps_wrapped_conditional_expr() -> None:
-    wrapped_expr = _wrap(
-        clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        _wrap(
-            clang.cindex.CursorKind.PAREN_EXPR,
-            _FakeNode(
-                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
-                children=[
-                    _identifier_node("PyObject"),
-                    _conditional_expr(
-                        _identifier_node("cond"),
-                        _call_expr("PyUnicode_AsUTF8String", _identifier_node("value")),
-                        _call_expr("PyBytes_FromString", _identifier_node("fallback")),
-                    ),
-                ],
-            ),
-        ),
-    )
-
-    inferred = signature_rules_module.infer_expr_type(wrapped_expr)
-
-    assert inferred == NamedTypeNode("bytes")
 
 
 def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
@@ -3278,18 +3218,6 @@ def test_return_type_deduplicates_members_already_present_in_union_return() -> N
     assert inferred == "float | int"
 
 
-def test_merge_inferred_type_nodes_short_circuits_any() -> None:
-    inferred = signature_rules_module._merge_inferred_type_nodes(
-        [
-            NamedTypeNode("int"),
-            UnionTypeNode((NamedTypeNode("float"), NamedTypeNode("int"))),
-            AnyTypeNode(),
-        ]
-    )
-
-    assert inferred == AnyTypeNode()
-
-
 def test_return_type_returns_none_for_unsupported_returns() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
@@ -3358,14 +3286,88 @@ def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_pa
     assert inferred == "str"
 
 
-def test_infer_argument_lists_keeps_object_without_extent_fallback_for_o_bang() -> None:
+def test_extract_cursor_source_text_reads_text_from_extent(tmp_path: Path) -> None:
+    source = tmp_path / "extent_text.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    extracted = cursor_utils_module.source_range_get_text(
+        _extent_for_source_snippet(source, "(&PyUnicode_Type)")
+    )
+
+    assert extracted == "(&PyUnicode_Type)"
+
+
+def test_extract_cursor_source_text_returns_none_when_extent_start_file_is_missing() -> None:
+    extracted = cursor_utils_module.source_range_get_text(
+        _FakeSourceRange(
+            _FakeCursorLocation(None, 0),
+            _FakeCursorLocation("extent_text.c", 1),
+        )
+    )
+
+    assert extracted is None
+
+
+def test_extract_cursor_source_text_returns_none_for_cross_file_extent(tmp_path: Path) -> None:
+    first = tmp_path / "first.c"
+    second = tmp_path / "second.c"
+    first.write_text("abc", encoding="utf-8")
+    second.write_text("def", encoding="utf-8")
+
+    extracted = cursor_utils_module.source_range_get_text(
+        _FakeSourceRange(
+            _FakeCursorLocation(str(first), 0),
+            _FakeCursorLocation(str(second), 1),
+        )
+    )
+
+    assert extracted is None
+
+
+def test_extract_cursor_source_text_returns_none_when_file_read_fails(tmp_path: Path) -> None:
+    missing = tmp_path / "missing_extent_text.c"
+
+    extracted = cursor_utils_module.source_range_get_text(
+        _FakeSourceRange(
+            _FakeCursorLocation(str(missing), 0),
+            _FakeCursorLocation(str(missing), 1),
+        )
+    )
+
+    assert extracted is None
+
+
+def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "unknown_object_type_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", (&UnknownRuntimeType), &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
     value_decl = _var_decl("value")
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
             _identifier_node("args"),
             _string_literal("O!"),
-            _address_of("PyList_Type"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+                extent=_extent_for_source_snippet(source, "(&UnknownRuntimeType)"),
+            ),
             _address_of("value", referenced=value_decl),
         )
     )

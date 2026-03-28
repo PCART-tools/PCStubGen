@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from clang.cindex import Cursor, CursorKind
+from pathlib import Path
+
+from clang.cindex import Cursor, CursorKind, SourceRange
 from . import clang_eval
 
 _SINGLE_TRANSPARENT_CURSOR_KINDS = {
@@ -78,7 +80,31 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor | None:
             return child
     return None
 
+
+def source_range_get_text(extent: SourceRange) -> str | None:
+    """源文件中截取原始源码文本。"""
+    start = extent.start
+    end = extent.end
+    if start.file is None or end.file is None:
+        return None
+
+    start_file = Path(start.file.name)
+    end_file = Path(end.file.name)
+    if start_file != end_file:
+        return None
+
+    read_length = end.offset - start.offset
+    try:
+        with start_file.open("rb") as source_file:
+            source_file.seek(start.offset)
+            source_bytes = source_file.read(read_length)
+    except OSError:
+        return None
+    return source_bytes.decode("utf-8", errors="ignore")
+
+
 IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
+
 
 def extract_string_literal(node: Cursor) -> str | None:
     """从子树中提取首个字符串字面量的实际内容。"""
