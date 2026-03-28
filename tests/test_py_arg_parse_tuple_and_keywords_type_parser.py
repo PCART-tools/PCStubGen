@@ -6,9 +6,9 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from core.ir import IRArgumentKind
-from core.node_visitors.c_signature_extraction.core.models import ExtractedArgument
-from core.node_visitors.c_signature_extraction.core.py_arg_parse_tuple_and_keywords_type_parser import (
+from pcstubgen.ir import IRArgumentKind
+from pcstubgen.c_signature.models import ExtractedArgument
+from pcstubgen.c_signature.py_arg_parse_tuple_and_keywords_type_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
 )

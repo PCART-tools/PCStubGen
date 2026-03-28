@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcstubgen"
+version = "0.1.0"
+description = "Generate Python stubs for modules."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "libclang",
+    "loguru",
+    "typer",
+]
+
+[project.scripts]
+pcstubgen = "pcstubgen.__main__:main"
+
+[tool.setuptools]
+packages = ["pcstubgen", "pcstubgen.ir", "pcstubgen.visitors", "pcstubgen.c_signature"]

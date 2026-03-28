@@ -9,37 +9,37 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from core.node_visitors.c_signature_extraction.core import extract_c_signature_modules
-from core.node_visitors.c_signature_extraction.core.constants import (
+from pcstubgen.c_signature import extract_c_signature_modules
+from pcstubgen.c_signature.constants import (
     METH_KEYWORDS,
     METH_VARARGS,
 )
-from core.node_visitors.c_signature_extraction.core import (
+from pcstubgen.c_signature import (
     c_signature_extraction as c_signature_extraction_module,
 )
-from core.node_visitors.c_signature_extraction.core import cursor_utils as cursor_utils_module
-from core.node_visitors.c_signature_extraction.core import signature_inference as signature_rules_module
-from core.node_visitors.c_signature_extraction.core import module_table as module_table_module
-from core.node_visitors.c_signature_extraction.core import translation_unit as translation_unit_module
-from core.node_visitors.c_signature_extraction.core.py_build_value_type_nodes import (
+from pcstubgen.c_signature import cursor_utils as cursor_utils_module
+from pcstubgen.c_signature import signature_inference as signature_rules_module
+from pcstubgen.c_signature import module_table as module_table_module
+from pcstubgen.c_signature import translation_unit as translation_unit_module
+from pcstubgen.c_signature.py_build_value_type_nodes import (
     AnyTypeNode,
     ListTypeNode,
     NamedTypeNode,
     TupleTypeNode,
     UnionTypeNode,
 )
-from core.node_visitors.c_signature_extraction.core.module_table import (
+from pcstubgen.c_signature.module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
-from core.node_visitors.c_signature_extraction.core.models import (
+from pcstubgen.c_signature.models import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
     ExtractedSignature,
 )
-from core.ir import (
+from pcstubgen.ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -50,14 +50,14 @@ from core.ir import (
     IRSignature,
     QualifiedName,
 )
-from core.node_visitors.c_signature_extraction.c_signature_extraction_visitor import (
-    CSignatureExtractionVisitor,
+from pcstubgen.visitors.c_signature_visitor import (
+    CSignatureVisitor,
 )
-from core.node_visitors.doc_string_signature_parser_visitor import (
-    DocStringSignatureParserVisitor,
+from pcstubgen.visitors.docstring_signature_visitor import (
+    DocstringSignatureVisitor,
 )
-from core.pipeline import Pipeline
-from core.stub_generation_options import StubGenerationOptions
+from pcstubgen.pipeline import Pipeline
+from pcstubgen.stub_generation_options import StubGenerationOptions
 
 
 def _signature(
@@ -169,7 +169,7 @@ def _patch_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         return extractor.extract_modules()
 
-    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
+    import pcstubgen.visitors.c_signature_visitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
     return extractor
@@ -190,7 +190,7 @@ def _patch_raising_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         raise error
 
-    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
+    import pcstubgen.visitors.c_signature_visitor as visitor_module
 
     monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
 
@@ -335,7 +335,7 @@ def test_c_ast_visitor_rewrites_module_function_without_normalizing_arguments(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -403,7 +403,7 @@ def test_c_ast_visitor_records_c_inferred_source_comment_when_enabled(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
         include_c_inferred_source_comment=True,
     )
@@ -440,7 +440,7 @@ def test_c_ast_visitor_skips_c_inferred_source_comment_when_extent_text_is_unava
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
         include_c_inferred_source_comment=True,
     )
@@ -483,7 +483,7 @@ def test_c_ast_visitor_preserves_has_default_without_default_text(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     signature = module.functions[0].signatures[0]
@@ -527,7 +527,7 @@ def test_c_ast_visitor_preserves_raw_argument_and_return_text(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     signature = module.functions[0].signatures[0]
@@ -577,7 +577,7 @@ def test_c_ast_visitor_preserves_extracted_argument_kinds(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     signature = module.functions[0].signatures[0]
@@ -592,7 +592,7 @@ def test_c_ast_visitor_keeps_known_function_unchanged(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
     func = IRFunction(
@@ -651,7 +651,7 @@ def test_c_ast_visitor_records_missing_function_match_stats(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     assert module.functions[0].signatures == []
@@ -685,7 +685,7 @@ def test_c_ast_visitor_records_matched_function_without_signatures_stats(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     assert module.functions[0].signatures == []
@@ -707,7 +707,7 @@ def test_c_ast_visitor_records_empty_extraction_as_missing_module_match(
     )
     _patch_c_signature_extractor(monkeypatch, modules={})
 
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
     visitor.visit_module(module)
 
     assert module.functions[0].signatures == []
@@ -928,7 +928,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
             ),
         },
     )
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
     first_module = IRModule(
@@ -980,7 +980,7 @@ def test_c_ast_visitor_falls_back_to_unique_leaf_module_match(
         module_type=IRModuleType.EXTENSION,
         functions=[_unknown_function("foo")],
     )
-    visitor = CSignatureExtractionVisitor(source_root=tmp_path)
+    visitor = CSignatureVisitor(source_root=tmp_path)
 
     visitor.visit_module(module)
 
@@ -1025,7 +1025,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
         module_type=IRModuleType.EXTENSION,
         functions=[_unknown_function("foo")],
     )
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
 
@@ -1069,7 +1069,7 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
         ),
     )
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -1097,7 +1097,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
             }
         ),
     )
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
     visitor.visit_module(module)
@@ -1117,7 +1117,7 @@ def test_c_ast_visitor_propagates_signature_extraction_errors(
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
     )
 
@@ -1129,8 +1129,8 @@ def test_write_stubs_propagates_extract_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import core as stubgen_module
-    from core.stub_generation_options import StubGenerationOptions
+    import pcstubgen as stubgen_module
+    from pcstubgen.stub_generation_options import StubGenerationOptions
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -1165,12 +1165,12 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import core as stubgen_module
+    import pcstubgen as stubgen_module
 
     captured: dict[str, object] = {}
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
 
-    class FakeCSignatureExtractionVisitor:
+    class FakeCSignatureVisitor:
         def __init__(
             self,
             *,
@@ -1205,7 +1205,7 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
         def log_summary(self) -> None:
             captured["visitor_log_summary_called"] = True
 
-    class FakePrinterVisitor:
+    class FakeStubPrinter:
         def __init__(
             self,
             include_docstrings: bool = True,
@@ -1226,7 +1226,7 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
         def write(
             self,
             module: IRModule,
-            printer: FakePrinterVisitor,
+            printer: FakeStubPrinter,
             to: Path,
         ) -> None:
             captured["written_module"] = module
@@ -1236,10 +1236,10 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     monkeypatch.setattr(
         stubgen_module,
-        "CSignatureExtractionVisitor",
-        FakeCSignatureExtractionVisitor,
+        "CSignatureVisitor",
+        FakeCSignatureVisitor,
     )
-    monkeypatch.setattr(stubgen_module, "PrinterVisitor", FakePrinterVisitor)
+    monkeypatch.setattr(stubgen_module, "StubPrinter", FakeStubPrinter)
 
     options = StubGenerationOptions(
         source_root=tmp_path,
@@ -1294,8 +1294,8 @@ def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
 
     Pipeline(
         [
-            DocStringSignatureParserVisitor(),
-            CSignatureExtractionVisitor(
+            DocstringSignatureVisitor(),
+            CSignatureVisitor(
                 source_root=tmp_path,
             ),
         ]
@@ -2702,7 +2702,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         captured["cpp_std"] = cpp_std
         return {}
 
-    import core.node_visitors.c_signature_extraction.c_signature_extraction_visitor as visitor_module
+    import pcstubgen.visitors.c_signature_visitor as visitor_module
 
     monkeypatch.setattr(
         visitor_module,
@@ -2710,7 +2710,7 @@ def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.Mon
         _record_extract_c_signature_modules,
     )
 
-    visitor = CSignatureExtractionVisitor(
+    visitor = CSignatureVisitor(
         source_root=tmp_path,
         include=["Python.h"],
         include_directory=[Path("C:/MyInclude")],
@@ -4033,4 +4033,5 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     )
     assert calls == [method_1, non_sentinel, method_2]
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
+
 

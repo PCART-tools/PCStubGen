@@ -23,7 +23,7 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-class DocStringSignatureParserVisitor(NodeVisitor):
+class DocstringSignatureVisitor(NodeVisitor):
     """
     解析文档字符串中的函数和方法签名。
     """

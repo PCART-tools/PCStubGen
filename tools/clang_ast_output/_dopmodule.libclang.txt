@@ -1,0 +1,2295 @@
+source_file: C:\Things\third_package_source\scipy_scipy\scipy\integrate\_dopmodule.c
+output_file: C:\Things\Code\Python\PCStubGen\tool\clang_ast_output\_dopmodule.libclang.txt
+parse_args: ["--std", "c11", "--include", "Python.h", "--include-directory", "C:\\Users\\Mojuko\\miniforge3\\envs\\CStubAutoGen\\Lib\\site-packages\\numpy\\_core\\include", "--include-directory", "C:\\Users\\Mojuko\\miniforge3\\envs\\CStubAutoGen\\Include", "--include-directory", "C:\\Things\\third_package_source\\scipy_scipy\\scipy\\_lib\\src"]
+diagnostics:
+- [FATAL] C:\Things\third_package_source\scipy_scipy\scipy\_lib\src\ccallback.h:25:10: 'scipy_config.h' file not found
+ast:
+TRANSLATION_UNIT spelling=C:\Things\third_package_source\scipy_scipy\scipy\integrate\_dopmodule.c
+├─ MACRO_DEFINITION spelling=__llvm__
+├─ MACRO_DEFINITION spelling=__clang__
+├─ MACRO_DEFINITION spelling=__clang_major__
+├─ MACRO_DEFINITION spelling=__clang_minor__
+├─ MACRO_DEFINITION spelling=__clang_patchlevel__
+├─ MACRO_DEFINITION spelling=__clang_version__
+├─ MACRO_DEFINITION spelling=__ATOMIC_RELAXED
+├─ MACRO_DEFINITION spelling=__ATOMIC_CONSUME
+├─ MACRO_DEFINITION spelling=__ATOMIC_ACQUIRE
+├─ MACRO_DEFINITION spelling=__ATOMIC_RELEASE
+├─ MACRO_DEFINITION spelling=__ATOMIC_ACQ_REL
+├─ MACRO_DEFINITION spelling=__ATOMIC_SEQ_CST
+├─ MACRO_DEFINITION spelling=__MEMORY_SCOPE_SYSTEM
+├─ MACRO_DEFINITION spelling=__MEMORY_SCOPE_DEVICE
+├─ MACRO_DEFINITION spelling=__MEMORY_SCOPE_WRKGRP
+├─ MACRO_DEFINITION spelling=__MEMORY_SCOPE_WVFRNT
+├─ MACRO_DEFINITION spelling=__MEMORY_SCOPE_SINGLE
+├─ MACRO_DEFINITION spelling=__OPENCL_MEMORY_SCOPE_WORK_ITEM
+├─ MACRO_DEFINITION spelling=__OPENCL_MEMORY_SCOPE_WORK_GROUP
+├─ MACRO_DEFINITION spelling=__OPENCL_MEMORY_SCOPE_DEVICE
+├─ MACRO_DEFINITION spelling=__OPENCL_MEMORY_SCOPE_ALL_SVM_DEVICES
+├─ MACRO_DEFINITION spelling=__OPENCL_MEMORY_SCOPE_SUB_GROUP
+├─ MACRO_DEFINITION spelling=__FPCLASS_SNAN
+├─ MACRO_DEFINITION spelling=__FPCLASS_QNAN
+├─ MACRO_DEFINITION spelling=__FPCLASS_NEGINF
+├─ MACRO_DEFINITION spelling=__FPCLASS_NEGNORMAL
+├─ MACRO_DEFINITION spelling=__FPCLASS_NEGSUBNORMAL
+├─ MACRO_DEFINITION spelling=__FPCLASS_NEGZERO
+├─ MACRO_DEFINITION spelling=__FPCLASS_POSZERO
+├─ MACRO_DEFINITION spelling=__FPCLASS_POSSUBNORMAL
+├─ MACRO_DEFINITION spelling=__FPCLASS_POSNORMAL
+├─ MACRO_DEFINITION spelling=__FPCLASS_POSINF
+├─ MACRO_DEFINITION spelling=__PRAGMA_REDEFINE_EXTNAME
+├─ MACRO_DEFINITION spelling=__VERSION__
+├─ MACRO_DEFINITION spelling=__OBJC_BOOL_IS_BOOL
+├─ MACRO_DEFINITION spelling=__CONSTANT_CFSTRINGS__
+├─ MACRO_DEFINITION spelling=__clang_literal_encoding__
+├─ MACRO_DEFINITION spelling=__clang_wide_literal_encoding__
+├─ MACRO_DEFINITION spelling=__ORDER_LITTLE_ENDIAN__
+├─ MACRO_DEFINITION spelling=__ORDER_BIG_ENDIAN__
+├─ MACRO_DEFINITION spelling=__ORDER_PDP_ENDIAN__
+├─ MACRO_DEFINITION spelling=__BYTE_ORDER__
+├─ MACRO_DEFINITION spelling=__LITTLE_ENDIAN__
+├─ MACRO_DEFINITION spelling=__CHAR_BIT__
+├─ MACRO_DEFINITION spelling=__BOOL_WIDTH__
+├─ MACRO_DEFINITION spelling=__SHRT_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_WIDTH__
+├─ MACRO_DEFINITION spelling=__LONG_WIDTH__
+├─ MACRO_DEFINITION spelling=__LLONG_WIDTH__
+├─ MACRO_DEFINITION spelling=__BITINT_MAXWIDTH__
+├─ MACRO_DEFINITION spelling=__SCHAR_MAX__
+├─ MACRO_DEFINITION spelling=__SHRT_MAX__
+├─ MACRO_DEFINITION spelling=__INT_MAX__
+├─ MACRO_DEFINITION spelling=__LONG_MAX__
+├─ MACRO_DEFINITION spelling=__LONG_LONG_MAX__
+├─ MACRO_DEFINITION spelling=__WCHAR_MAX__
+├─ MACRO_DEFINITION spelling=__WCHAR_WIDTH__
+├─ MACRO_DEFINITION spelling=__WINT_MAX__
+├─ MACRO_DEFINITION spelling=__WINT_WIDTH__
+├─ MACRO_DEFINITION spelling=__INTMAX_MAX__
+├─ MACRO_DEFINITION spelling=__INTMAX_WIDTH__
+├─ MACRO_DEFINITION spelling=__SIZE_MAX__
+├─ MACRO_DEFINITION spelling=__SIZE_WIDTH__
+├─ MACRO_DEFINITION spelling=__UINTMAX_MAX__
+├─ MACRO_DEFINITION spelling=__UINTMAX_WIDTH__
+├─ MACRO_DEFINITION spelling=__PTRDIFF_MAX__
+├─ MACRO_DEFINITION spelling=__PTRDIFF_WIDTH__
+├─ MACRO_DEFINITION spelling=__INTPTR_MAX__
+├─ MACRO_DEFINITION spelling=__INTPTR_WIDTH__
+├─ MACRO_DEFINITION spelling=__UINTPTR_MAX__
+├─ MACRO_DEFINITION spelling=__UINTPTR_WIDTH__
+├─ MACRO_DEFINITION spelling=__SIZEOF_DOUBLE__
+├─ MACRO_DEFINITION spelling=__SIZEOF_FLOAT__
+├─ MACRO_DEFINITION spelling=__SIZEOF_INT__
+├─ MACRO_DEFINITION spelling=__SIZEOF_LONG__
+├─ MACRO_DEFINITION spelling=__SIZEOF_LONG_DOUBLE__
+├─ MACRO_DEFINITION spelling=__SIZEOF_LONG_LONG__
+├─ MACRO_DEFINITION spelling=__SIZEOF_POINTER__
+├─ MACRO_DEFINITION spelling=__SIZEOF_SHORT__
+├─ MACRO_DEFINITION spelling=__SIZEOF_PTRDIFF_T__
+├─ MACRO_DEFINITION spelling=__SIZEOF_SIZE_T__
+├─ MACRO_DEFINITION spelling=__SIZEOF_WCHAR_T__
+├─ MACRO_DEFINITION spelling=__SIZEOF_WINT_T__
+├─ MACRO_DEFINITION spelling=__SIZEOF_INT128__
+├─ MACRO_DEFINITION spelling=__INTMAX_TYPE__
+├─ MACRO_DEFINITION spelling=__INTMAX_FMTd__
+├─ MACRO_DEFINITION spelling=__INTMAX_FMTi__
+├─ MACRO_DEFINITION spelling=__INTMAX_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINTMAX_TYPE__
+├─ MACRO_DEFINITION spelling=__UINTMAX_FMTo__
+├─ MACRO_DEFINITION spelling=__UINTMAX_FMTu__
+├─ MACRO_DEFINITION spelling=__UINTMAX_FMTx__
+├─ MACRO_DEFINITION spelling=__UINTMAX_FMTX__
+├─ MACRO_DEFINITION spelling=__UINTMAX_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__PTRDIFF_TYPE__
+├─ MACRO_DEFINITION spelling=__PTRDIFF_FMTd__
+├─ MACRO_DEFINITION spelling=__PTRDIFF_FMTi__
+├─ MACRO_DEFINITION spelling=__INTPTR_TYPE__
+├─ MACRO_DEFINITION spelling=__INTPTR_FMTd__
+├─ MACRO_DEFINITION spelling=__INTPTR_FMTi__
+├─ MACRO_DEFINITION spelling=__SIZE_TYPE__
+├─ MACRO_DEFINITION spelling=__SIZE_FMTo__
+├─ MACRO_DEFINITION spelling=__SIZE_FMTu__
+├─ MACRO_DEFINITION spelling=__SIZE_FMTx__
+├─ MACRO_DEFINITION spelling=__SIZE_FMTX__
+├─ MACRO_DEFINITION spelling=__WCHAR_TYPE__
+├─ MACRO_DEFINITION spelling=__WINT_TYPE__
+├─ MACRO_DEFINITION spelling=__SIG_ATOMIC_MAX__
+├─ MACRO_DEFINITION spelling=__SIG_ATOMIC_WIDTH__
+├─ MACRO_DEFINITION spelling=__CHAR16_TYPE__
+├─ MACRO_DEFINITION spelling=__CHAR32_TYPE__
+├─ MACRO_DEFINITION spelling=__UINTPTR_TYPE__
+├─ MACRO_DEFINITION spelling=__UINTPTR_FMTo__
+├─ MACRO_DEFINITION spelling=__UINTPTR_FMTu__
+├─ MACRO_DEFINITION spelling=__UINTPTR_FMTx__
+├─ MACRO_DEFINITION spelling=__UINTPTR_FMTX__
+├─ MACRO_DEFINITION spelling=__FLT16_DENORM_MIN__
+├─ MACRO_DEFINITION spelling=__FLT16_HAS_DENORM__
+├─ MACRO_DEFINITION spelling=__FLT16_DIG__
+├─ MACRO_DEFINITION spelling=__FLT16_DECIMAL_DIG__
+├─ MACRO_DEFINITION spelling=__FLT16_EPSILON__
+├─ MACRO_DEFINITION spelling=__FLT16_HAS_INFINITY__
+├─ MACRO_DEFINITION spelling=__FLT16_HAS_QUIET_NAN__
+├─ MACRO_DEFINITION spelling=__FLT16_MANT_DIG__
+├─ MACRO_DEFINITION spelling=__FLT16_MAX_10_EXP__
+├─ MACRO_DEFINITION spelling=__FLT16_MAX_EXP__
+├─ MACRO_DEFINITION spelling=__FLT16_MAX__
+├─ MACRO_DEFINITION spelling=__FLT16_MIN_10_EXP__
+├─ MACRO_DEFINITION spelling=__FLT16_MIN_EXP__
+├─ MACRO_DEFINITION spelling=__FLT16_MIN__
+├─ MACRO_DEFINITION spelling=__FLT_DENORM_MIN__
+├─ MACRO_DEFINITION spelling=__FLT_HAS_DENORM__
+├─ MACRO_DEFINITION spelling=__FLT_DIG__
+├─ MACRO_DEFINITION spelling=__FLT_DECIMAL_DIG__
+├─ MACRO_DEFINITION spelling=__FLT_EPSILON__
+├─ MACRO_DEFINITION spelling=__FLT_HAS_INFINITY__
+├─ MACRO_DEFINITION spelling=__FLT_HAS_QUIET_NAN__
+├─ MACRO_DEFINITION spelling=__FLT_MANT_DIG__
+├─ MACRO_DEFINITION spelling=__FLT_MAX_10_EXP__
+├─ MACRO_DEFINITION spelling=__FLT_MAX_EXP__
+├─ MACRO_DEFINITION spelling=__FLT_MAX__
+├─ MACRO_DEFINITION spelling=__FLT_MIN_10_EXP__
+├─ MACRO_DEFINITION spelling=__FLT_MIN_EXP__
+├─ MACRO_DEFINITION spelling=__FLT_MIN__
+├─ MACRO_DEFINITION spelling=__DBL_DENORM_MIN__
+├─ MACRO_DEFINITION spelling=__DBL_HAS_DENORM__
+├─ MACRO_DEFINITION spelling=__DBL_DIG__
+├─ MACRO_DEFINITION spelling=__DBL_DECIMAL_DIG__
+├─ MACRO_DEFINITION spelling=__DBL_EPSILON__
+├─ MACRO_DEFINITION spelling=__DBL_HAS_INFINITY__
+├─ MACRO_DEFINITION spelling=__DBL_HAS_QUIET_NAN__
+├─ MACRO_DEFINITION spelling=__DBL_MANT_DIG__
+├─ MACRO_DEFINITION spelling=__DBL_MAX_10_EXP__
+├─ MACRO_DEFINITION spelling=__DBL_MAX_EXP__
+├─ MACRO_DEFINITION spelling=__DBL_MAX__
+├─ MACRO_DEFINITION spelling=__DBL_MIN_10_EXP__
+├─ MACRO_DEFINITION spelling=__DBL_MIN_EXP__
+├─ MACRO_DEFINITION spelling=__DBL_MIN__
+├─ MACRO_DEFINITION spelling=__LDBL_DENORM_MIN__
+├─ MACRO_DEFINITION spelling=__LDBL_HAS_DENORM__
+├─ MACRO_DEFINITION spelling=__LDBL_DIG__
+├─ MACRO_DEFINITION spelling=__LDBL_DECIMAL_DIG__
+├─ MACRO_DEFINITION spelling=__LDBL_EPSILON__
+├─ MACRO_DEFINITION spelling=__LDBL_HAS_INFINITY__
+├─ MACRO_DEFINITION spelling=__LDBL_HAS_QUIET_NAN__
+├─ MACRO_DEFINITION spelling=__LDBL_MANT_DIG__
+├─ MACRO_DEFINITION spelling=__LDBL_MAX_10_EXP__
+├─ MACRO_DEFINITION spelling=__LDBL_MAX_EXP__
+├─ MACRO_DEFINITION spelling=__LDBL_MAX__
+├─ MACRO_DEFINITION spelling=__LDBL_MIN_10_EXP__
+├─ MACRO_DEFINITION spelling=__LDBL_MIN_EXP__
+├─ MACRO_DEFINITION spelling=__LDBL_MIN__
+├─ MACRO_DEFINITION spelling=__POINTER_WIDTH__
+├─ MACRO_DEFINITION spelling=__BIGGEST_ALIGNMENT__
+├─ MACRO_DEFINITION spelling=__WCHAR_UNSIGNED__
+├─ MACRO_DEFINITION spelling=__WINT_UNSIGNED__
+├─ MACRO_DEFINITION spelling=__INT8_TYPE__
+├─ MACRO_DEFINITION spelling=__INT8_FMTd__
+├─ MACRO_DEFINITION spelling=__INT8_FMTi__
+├─ MACRO_DEFINITION spelling=__INT8_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__INT16_TYPE__
+├─ MACRO_DEFINITION spelling=__INT16_FMTd__
+├─ MACRO_DEFINITION spelling=__INT16_FMTi__
+├─ MACRO_DEFINITION spelling=__INT16_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__INT32_TYPE__
+├─ MACRO_DEFINITION spelling=__INT32_FMTd__
+├─ MACRO_DEFINITION spelling=__INT32_FMTi__
+├─ MACRO_DEFINITION spelling=__INT32_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__INT64_TYPE__
+├─ MACRO_DEFINITION spelling=__INT64_FMTd__
+├─ MACRO_DEFINITION spelling=__INT64_FMTi__
+├─ MACRO_DEFINITION spelling=__INT64_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINT8_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT8_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT8_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT8_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT8_FMTX__
+├─ MACRO_DEFINITION spelling=__UINT8_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINT8_MAX__
+├─ MACRO_DEFINITION spelling=__INT8_MAX__
+├─ MACRO_DEFINITION spelling=__UINT16_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT16_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT16_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT16_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT16_FMTX__
+├─ MACRO_DEFINITION spelling=__UINT16_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINT16_MAX__
+├─ MACRO_DEFINITION spelling=__INT16_MAX__
+├─ MACRO_DEFINITION spelling=__UINT32_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT32_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT32_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT32_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT32_FMTX__
+├─ MACRO_DEFINITION spelling=__UINT32_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINT32_MAX__
+├─ MACRO_DEFINITION spelling=__INT32_MAX__
+├─ MACRO_DEFINITION spelling=__UINT64_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT64_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT64_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT64_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT64_FMTX__
+├─ MACRO_DEFINITION spelling=__UINT64_C_SUFFIX__
+├─ MACRO_DEFINITION spelling=__UINT64_MAX__
+├─ MACRO_DEFINITION spelling=__INT64_MAX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST8_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_LEAST8_MAX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST8_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_LEAST8_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_LEAST8_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST8_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST16_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_LEAST16_MAX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST16_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_LEAST16_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_LEAST16_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST16_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST32_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_LEAST32_MAX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST32_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_LEAST32_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_LEAST32_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST32_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST64_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_LEAST64_MAX__
+├─ MACRO_DEFINITION spelling=__INT_LEAST64_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_LEAST64_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_LEAST64_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_LEAST64_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_FAST8_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_FAST8_MAX__
+├─ MACRO_DEFINITION spelling=__INT_FAST8_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_FAST8_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_FAST8_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_FAST8_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_FAST16_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_FAST16_MAX__
+├─ MACRO_DEFINITION spelling=__INT_FAST16_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_FAST16_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_FAST16_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_FAST16_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_FAST32_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_FAST32_MAX__
+├─ MACRO_DEFINITION spelling=__INT_FAST32_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_FAST32_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_FAST32_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_FAST32_FMTX__
+├─ MACRO_DEFINITION spelling=__INT_FAST64_TYPE__
+├─ MACRO_DEFINITION spelling=__INT_FAST64_MAX__
+├─ MACRO_DEFINITION spelling=__INT_FAST64_WIDTH__
+├─ MACRO_DEFINITION spelling=__INT_FAST64_FMTd__
+├─ MACRO_DEFINITION spelling=__INT_FAST64_FMTi__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_TYPE__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_MAX__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_FMTo__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_FMTu__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_FMTx__
+├─ MACRO_DEFINITION spelling=__UINT_FAST64_FMTX__
+├─ MACRO_DEFINITION spelling=__USER_LABEL_PREFIX__
+├─ MACRO_DEFINITION spelling=__FINITE_MATH_ONLY__
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_BOOL_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_CHAR_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_CHAR16_T_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_CHAR32_T_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_WCHAR_T_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_SHORT_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_INT_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_LONG_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_LLONG_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__CLANG_ATOMIC_POINTER_LOCK_FREE
+├─ MACRO_DEFINITION spelling=__NO_INLINE__
+├─ MACRO_DEFINITION spelling=__PIC__
+├─ MACRO_DEFINITION spelling=__pic__
+├─ MACRO_DEFINITION spelling=__FLT_RADIX__
+├─ MACRO_DEFINITION spelling=__DECIMAL_DIG__
+├─ MACRO_DEFINITION spelling=__GCC_ASM_FLAG_OUTPUTS__
+├─ MACRO_DEFINITION spelling=__code_model_small__
+├─ MACRO_DEFINITION spelling=__amd64__
+├─ MACRO_DEFINITION spelling=__amd64
+├─ MACRO_DEFINITION spelling=__x86_64
+├─ MACRO_DEFINITION spelling=__x86_64__
+├─ MACRO_DEFINITION spelling=__SEG_GS
+├─ MACRO_DEFINITION spelling=__SEG_FS
+├─ MACRO_DEFINITION spelling=__seg_gs
+├─ MACRO_DEFINITION spelling=__seg_fs
+├─ MACRO_DEFINITION spelling=__k8
+├─ MACRO_DEFINITION spelling=__k8__
+├─ MACRO_DEFINITION spelling=__tune_k8__
+├─ MACRO_DEFINITION spelling=__REGISTER_PREFIX__
+├─ MACRO_DEFINITION spelling=__NO_MATH_INLINES
+├─ MACRO_DEFINITION spelling=__FXSR__
+├─ MACRO_DEFINITION spelling=__SSE2__
+├─ MACRO_DEFINITION spelling=__SSE2_MATH__
+├─ MACRO_DEFINITION spelling=__SSE__
+├─ MACRO_DEFINITION spelling=__SSE_MATH__
+├─ MACRO_DEFINITION spelling=__MMX__
+├─ MACRO_DEFINITION spelling=__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1
+├─ MACRO_DEFINITION spelling=__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2
+├─ MACRO_DEFINITION spelling=__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4
+├─ MACRO_DEFINITION spelling=__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8
+├─ MACRO_DEFINITION spelling=_WIN32
+├─ MACRO_DEFINITION spelling=_WIN64
+├─ MACRO_DEFINITION spelling=_M_FP_CONTRACT
+├─ MACRO_DEFINITION spelling=_M_FP_PRECISE
+├─ MACRO_DEFINITION spelling=_MSC_VER
+├─ MACRO_DEFINITION spelling=_MSC_FULL_VER
+├─ MACRO_DEFINITION spelling=_MSC_BUILD
+├─ MACRO_DEFINITION spelling=_MSVC_CONSTEXPR_ATTRIBUTE
+├─ MACRO_DEFINITION spelling=_MSC_EXTENSIONS
+├─ MACRO_DEFINITION spelling=_ISO_VOLATILE
+├─ MACRO_DEFINITION spelling=_INTEGRAL_MAX_BITS
+├─ MACRO_DEFINITION spelling=__STDC_NO_THREADS__
+├─ MACRO_DEFINITION spelling=_MSVC_EXECUTION_CHARACTER_SET
+├─ MACRO_DEFINITION spelling=_M_X64
+├─ MACRO_DEFINITION spelling=_M_AMD64
+├─ MACRO_DEFINITION spelling=__STDC_HOSTED__
+├─ MACRO_DEFINITION spelling=__STDC_VERSION__
+├─ MACRO_DEFINITION spelling=__STDC_UTF_16__
+├─ MACRO_DEFINITION spelling=__STDC_UTF_32__
+├─ INCLUSION_DIRECTIVE spelling=Python.h
+├─ MACRO_DEFINITION spelling=PY_SSIZE_T_CLEAN
+├─ INCLUSION_DIRECTIVE spelling=Python.h
+├─ INCLUSION_DIRECTIVE spelling=numpy/arrayobject.h
+├─ INCLUSION_DIRECTIVE spelling=ccallback.h
+├─ INCLUSION_DIRECTIVE spelling=src/dop.h
+├─ INCLUSION_DIRECTIVE spelling=math.h
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_SimpleNewFromData
+├─ MACRO_INSTANTIATION spelling=NPY_FLOAT64
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=PyArray_SetBaseObject
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=PyArray_FROM_OTF
+├─ MACRO_INSTANTIATION spelling=NPY_ARRAY_IN_ARRAY
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_SimpleNewFromData
+├─ MACRO_INSTANTIATION spelling=NPY_FLOAT64
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=PyArray_SetBaseObject
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=PyLong_Check
+├─ MACRO_INSTANTIATION spelling=Py_IsNone
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=Py_UNUSED
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_NewCopy
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyTuple_Check
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_Return
+├─ MACRO_INSTANTIATION spelling=Py_UNUSED
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=PyArray_Type
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_NewCopy
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyTuple_Check
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=Py_INCREF
+├─ MACRO_INSTANTIATION spelling=Py_None
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyArray_Return
+├─ MACRO_INSTANTIATION spelling=METH_VARARGS
+├─ MACRO_INSTANTIATION spelling=METH_VARARGS
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=Py_DECREF
+├─ MACRO_INSTANTIATION spelling=Py_mod_exec
+├─ MACRO_INSTANTIATION spelling=Py_mod_multiple_interpreters
+├─ MACRO_INSTANTIATION spelling=Py_MOD_PER_INTERPRETER_GIL_SUPPORTED
+├─ MACRO_INSTANTIATION spelling=PY_VERSION_HEX
+├─ MACRO_INSTANTIATION spelling=NULL
+├─ MACRO_INSTANTIATION spelling=PyModuleDef_HEAD_INIT
+├─ MACRO_INSTANTIATION spelling=PyMODINIT_FUNC
+├─ VAR_DECL spelling=dop_error type=PyObject *
+│  └─ TYPE_REF spelling=PyObject type=PyObject
+├─ VAR_DECL spelling=doc_dopri853 type=char[105]
+│  └─ STRING_LITERAL spelling="x,y,iwork,idid = dop853(fcn,x,y,xend,rtol,atol,solout,iout,work,iwork,nsteps,verbosity,[fcn_extra_args])" type=char[105]
+├─ VAR_DECL spelling=doc_dopri5 type=char[105]
+│  └─ STRING_LITERAL spelling="x,y,iwork,idid = dopri5(fcn,x,y,xend,rtol,atol,solout,iout,work,iwork,nsteps,verbosity,[fcn_extra_args])" type=char[105]
+├─ STRUCT_DECL spelling=callback_info_t type=callback_info_t
+│  ├─ FIELD_DECL spelling=func type=PyObject *
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  ├─ FIELD_DECL spelling=solout type=PyObject *
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  └─ FIELD_DECL spelling=func_args type=PyObject *
+│     └─ TYPE_REF spelling=PyObject type=PyObject
+├─ TYPEDEF_DECL spelling=callback_info_t type=callback_info_t
+│  └─ STRUCT_DECL spelling=callback_info_t type=callback_info_t
+│     ├─ FIELD_DECL spelling=func type=PyObject *
+│     │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     ├─ FIELD_DECL spelling=solout type=PyObject *
+│     │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     └─ FIELD_DECL spelling=func_args type=PyObject *
+│        └─ TYPE_REF spelling=PyObject type=PyObject
+├─ VAR_DECL spelling=callback_info_t type=int
+├─ FUNCTION_DECL spelling=func_thunk type=void (int, double, double *, double *, double *, int *)
+│  ├─ PARM_DECL spelling=n type=int
+│  ├─ PARM_DECL spelling=t type=double
+│  ├─ PARM_DECL spelling=y type=double *
+│  ├─ PARM_DECL spelling=f type=double *
+│  ├─ PARM_DECL spelling=rpar type=double *
+│  ├─ PARM_DECL spelling=ipar type=int *
+│  └─ COMPOUND_STMT
+│     ├─ CSTYLE_CAST_EXPR type=void
+│     │  └─ UNEXPOSED_EXPR spelling=rpar type=double *
+│     │     └─ DECL_REF_EXPR spelling=rpar type=double *
+│     ├─ CSTYLE_CAST_EXPR type=void
+│     │  └─ UNEXPOSED_EXPR spelling=ipar type=int *
+│     │     └─ DECL_REF_EXPR spelling=ipar type=int *
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR type=_Bool
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=dims type=npy_intp[1]
+│     │     ├─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │     ├─ INTEGER_LITERAL type=int literal=1
+│     │     └─ INIT_LIST_EXPR type=npy_intp[1]
+│     │        └─ UNEXPOSED_EXPR spelling=n type=npy_intp
+│     │           └─ UNEXPOSED_EXPR spelling=n type=int
+│     │              └─ DECL_REF_EXPR spelling=n type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=capsule type=PyObject *
+│     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     └─ CALL_EXPR spelling=PyCapsule_New type=PyObject *
+│     │        ├─ UNEXPOSED_EXPR spelling=PyCapsule_New type=PyObject *(*)(void *, const char *, PyCapsule_Destructor)
+│     │        │  └─ DECL_REF_EXPR spelling=PyCapsule_New type=PyObject *(void *, const char *, PyCapsule_Destructor)
+│     │        ├─ CSTYLE_CAST_EXPR type=void *
+│     │        │  └─ UNEXPOSED_EXPR spelling=y type=double *
+│     │        │     └─ DECL_REF_EXPR spelling=y type=double *
+│     │        ├─ UNEXPOSED_EXPR type=const char *
+│     │        │  └─ PAREN_EXPR type=void *
+│     │        │     └─ CSTYLE_CAST_EXPR type=void *
+│     │        │        └─ INTEGER_LITERAL type=int
+│     │        └─ UNEXPOSED_EXPR type=PyCapsule_Destructor
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=capsule type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=py_y type=PyObject *
+│     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     └─ CALL_EXPR type=PyObject *
+│     │        ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │  └─ PAREN_EXPR type=PyObject *(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │     └─ UNARY_OPERATOR type=PyObject *(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │        │           ├─ PARM_DECL type=PyTypeObject *
+│     │        │           │  └─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=const npy_intp *
+│     │        │           │  └─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=const npy_intp *
+│     │        │           │  └─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │        │           ├─ PARM_DECL type=void *
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=PyObject *
+│     │        │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │        │           └─ UNEXPOSED_EXPR type=void *
+│     │        │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │        │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │        │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │        │                 └─ INTEGER_LITERAL type=int
+│     │        ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │        │  └─ PAREN_EXPR type=PyTypeObject
+│     │        │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │        │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │        │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │        │           └─ UNEXPOSED_EXPR type=void *
+│     │        │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │        │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │        │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │        │                 └─ INTEGER_LITERAL type=int
+│     │        ├─ INTEGER_LITERAL type=int literal=1
+│     │        ├─ UNEXPOSED_EXPR spelling=dims type=const npy_intp *
+│     │        │  └─ UNEXPOSED_EXPR spelling=dims type=npy_intp *
+│     │        │     └─ DECL_REF_EXPR spelling=dims type=npy_intp[1]
+│     │        ├─ DECL_REF_EXPR spelling=NPY_DOUBLE type=int
+│     │        ├─ UNEXPOSED_EXPR type=const npy_intp *
+│     │        │  └─ PAREN_EXPR type=void *
+│     │        │     └─ CSTYLE_CAST_EXPR type=void *
+│     │        │        └─ INTEGER_LITERAL type=int
+│     │        ├─ CSTYLE_CAST_EXPR type=void *
+│     │        │  └─ UNEXPOSED_EXPR spelling=y type=double *
+│     │        │     └─ DECL_REF_EXPR spelling=y type=double *
+│     │        ├─ INTEGER_LITERAL type=int
+│     │        ├─ PAREN_EXPR type=int
+│     │        │  └─ BINARY_OPERATOR type=int
+│     │        │     ├─ INTEGER_LITERAL type=int
+│     │        │     └─ PAREN_EXPR type=int
+│     │        │        └─ BINARY_OPERATOR type=int
+│     │        │           ├─ INTEGER_LITERAL type=int
+│     │        │           └─ INTEGER_LITERAL type=int
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=py_y type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     ├─ CALL_EXPR spelling=Py_DECREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │     └─ RETURN_STMT
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ CALL_EXPR type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR type=int (*)(PyArrayObject *, PyObject *)
+│     │  │  │  │  └─ PAREN_EXPR type=int (PyArrayObject *, PyObject *)
+│     │  │  │  │     └─ UNARY_OPERATOR type=int (PyArrayObject *, PyObject *)
+│     │  │  │  │        └─ CSTYLE_CAST_EXPR type=int (*)(PyArrayObject *, PyObject *)
+│     │  │  │  │           ├─ PARM_DECL type=PyArrayObject *
+│     │  │  │  │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  │  │           ├─ PARM_DECL type=PyObject *
+│     │  │  │  │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │  │           └─ UNEXPOSED_EXPR type=void *
+│     │  │  │  │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │  │  │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │  │  │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │  │  │                 └─ INTEGER_LITERAL type=int
+│     │  │  │  ├─ CSTYLE_CAST_EXPR type=PyArrayObject *
+│     │  │  │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  │  │  └─ UNEXPOSED_EXPR spelling=py_y type=PyObject *
+│     │  │  │  │     └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │  │  │  └─ UNEXPOSED_EXPR spelling=capsule type=PyObject *
+│     │  │  │     └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ COMPOUND_STMT
+│     │     ├─ CALL_EXPR spelling=Py_DECREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=result type=PyObject *
+│     │     └─ TYPE_REF spelling=PyObject type=PyObject
+│     └─ IF_STMT
+│        ├─ UNEXPOSED_EXPR spelling=result type=PyObject *
+│        │  └─ DECL_REF_EXPR spelling=result type=PyObject *
+│        └─ COMPOUND_STMT
+│           ├─ DECL_STMT
+│           │  └─ VAR_DECL spelling=result_array type=PyArrayObject *
+│           │     ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│           │     └─ CSTYLE_CAST_EXPR type=PyArrayObject *
+│           │        ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│           │        └─ CALL_EXPR type=PyObject *
+│           │           ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyObject *, PyArray_Descr *, int, int, int, PyObject *)
+│           │           │  └─ PAREN_EXPR type=PyObject *(PyObject *, PyArray_Descr *, int, int, int, PyObject *)
+│           │           │     └─ UNARY_OPERATOR type=PyObject *(PyObject *, PyArray_Descr *, int, int, int, PyObject *)
+│           │           │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyObject *, PyArray_Descr *, int, int, int, PyObject *)
+│           │           │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│           │           │           ├─ PARM_DECL type=PyObject *
+│           │           │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│           │           │           ├─ PARM_DECL type=PyArray_Descr *
+│           │           │           │  └─ TYPE_REF spelling=PyArray_Descr type=PyArray_Descr
+│           │           │           ├─ PARM_DECL type=int
+│           │           │           ├─ PARM_DECL type=int
+│           │           │           ├─ PARM_DECL type=int
+│           │           │           ├─ PARM_DECL type=PyObject *
+│           │           │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│           │           │           └─ UNEXPOSED_EXPR type=void *
+│           │           │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│           │           │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│           │           │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│           │           │                 └─ INTEGER_LITERAL type=int
+│           │           ├─ UNEXPOSED_EXPR spelling=result type=PyObject *
+│           │           │  └─ DECL_REF_EXPR spelling=result type=PyObject *
+│           │           ├─ CALL_EXPR type=PyArray_Descr *
+│           │           │  ├─ UNEXPOSED_EXPR type=PyArray_Descr *(*)(int)
+│           │           │  │  └─ PAREN_EXPR type=PyArray_Descr *(int)
+│           │           │  │     └─ UNARY_OPERATOR type=PyArray_Descr *(int)
+│           │           │  │        └─ CSTYLE_CAST_EXPR type=PyArray_Descr *(*)(int)
+│           │           │  │           ├─ TYPE_REF spelling=PyArray_Descr type=PyArray_Descr
+│           │           │  │           ├─ PARM_DECL type=int
+│           │           │  │           └─ UNEXPOSED_EXPR type=void *
+│           │           │  │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│           │           │  │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│           │           │  │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│           │           │  │                 └─ INTEGER_LITERAL type=int
+│           │           │  └─ DECL_REF_EXPR spelling=NPY_DOUBLE type=int
+│           │           ├─ INTEGER_LITERAL type=int
+│           │           ├─ INTEGER_LITERAL type=int
+│           │           ├─ PAREN_EXPR type=int
+│           │           │  └─ CONDITIONAL_OPERATOR type=int
+│           │           │     ├─ PAREN_EXPR type=int
+│           │           │     │  └─ BINARY_OPERATOR type=int
+│           │           │     │     ├─ PAREN_EXPR type=int
+│           │           │     │     │  └─ PAREN_EXPR type=int
+│           │           │     │     │     └─ PAREN_EXPR type=int
+│           │           │     │     │        └─ BINARY_OPERATOR type=int
+│           │           │     │     │           ├─ INTEGER_LITERAL type=int literal=0x0001
+│           │           │     │     │           └─ INTEGER_LITERAL type=int literal=0x0100
+│           │           │     │     └─ INTEGER_LITERAL type=int
+│           │           │     ├─ PAREN_EXPR type=int
+│           │           │     │  └─ BINARY_OPERATOR type=int
+│           │           │     │     ├─ PAREN_EXPR type=int
+│           │           │     │     │  └─ PAREN_EXPR type=int
+│           │           │     │     │     └─ PAREN_EXPR type=int
+│           │           │     │     │        └─ BINARY_OPERATOR type=int
+│           │           │     │     │           ├─ INTEGER_LITERAL type=int literal=0x0001
+│           │           │     │     │           └─ INTEGER_LITERAL type=int literal=0x0100
+│           │           │     │     └─ PAREN_EXPR type=int
+│           │           │     │        └─ PAREN_EXPR type=int
+│           │           │     │           └─ BINARY_OPERATOR type=int
+│           │           │     │              ├─ INTEGER_LITERAL type=int
+│           │           │     │              └─ PAREN_EXPR type=int
+│           │           │     │                 └─ BINARY_OPERATOR type=int
+│           │           │     │                    ├─ INTEGER_LITERAL type=int
+│           │           │     │                    └─ INTEGER_LITERAL type=int
+│           │           │     └─ PAREN_EXPR type=int
+│           │           │        └─ PAREN_EXPR type=int
+│           │           │           └─ PAREN_EXPR type=int
+│           │           │              └─ BINARY_OPERATOR type=int
+│           │           │                 ├─ INTEGER_LITERAL type=int literal=0x0001
+│           │           │                 └─ INTEGER_LITERAL type=int literal=0x0100
+│           │           └─ UNEXPOSED_EXPR type=PyObject *
+│           │              └─ PAREN_EXPR type=void *
+│           │                 └─ CSTYLE_CAST_EXPR type=void *
+│           │                    └─ INTEGER_LITERAL type=int
+│           ├─ IF_STMT
+│           │  ├─ UNEXPOSED_EXPR spelling=result_array type=PyArrayObject *
+│           │  │  └─ DECL_REF_EXPR spelling=result_array type=PyArrayObject *
+│           │  └─ COMPOUND_STMT
+│           │     ├─ DECL_STMT
+│           │     │  └─ VAR_DECL spelling=result_data type=double *
+│           │     │     └─ CSTYLE_CAST_EXPR type=double *
+│           │     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│           │     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│           │     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│           │     │           └─ UNEXPOSED_EXPR spelling=result_array type=const PyArrayObject *
+│           │     │              └─ UNEXPOSED_EXPR spelling=result_array type=PyArrayObject *
+│           │     │                 └─ DECL_REF_EXPR spelling=result_array type=PyArrayObject *
+│           │     ├─ FOR_STMT
+│           │     │  ├─ DECL_STMT
+│           │     │  │  └─ VAR_DECL spelling=i type=int
+│           │     │  │     └─ INTEGER_LITERAL type=int literal=0
+│           │     │  ├─ BINARY_OPERATOR type=int
+│           │     │  │  ├─ UNEXPOSED_EXPR spelling=i type=int
+│           │     │  │  │  └─ DECL_REF_EXPR spelling=i type=int
+│           │     │  │  └─ UNEXPOSED_EXPR spelling=n type=int
+│           │     │  │     └─ DECL_REF_EXPR spelling=n type=int
+│           │     │  ├─ UNARY_OPERATOR type=int
+│           │     │  │  └─ DECL_REF_EXPR spelling=i type=int
+│           │     │  └─ COMPOUND_STMT
+│           │     │     └─ BINARY_OPERATOR type=double
+│           │     │        ├─ ARRAY_SUBSCRIPT_EXPR type=double
+│           │     │        │  ├─ UNEXPOSED_EXPR spelling=f type=double *
+│           │     │        │  │  └─ DECL_REF_EXPR spelling=f type=double *
+│           │     │        │  └─ UNEXPOSED_EXPR spelling=i type=int
+│           │     │        │     └─ DECL_REF_EXPR spelling=i type=int
+│           │     │        └─ UNEXPOSED_EXPR type=double
+│           │     │           └─ ARRAY_SUBSCRIPT_EXPR type=double
+│           │     │              ├─ UNEXPOSED_EXPR spelling=result_data type=double *
+│           │     │              │  └─ DECL_REF_EXPR spelling=result_data type=double *
+│           │     │              └─ UNEXPOSED_EXPR spelling=i type=int
+│           │     │                 └─ DECL_REF_EXPR spelling=i type=int
+│           │     └─ CALL_EXPR spelling=Py_DECREF type=void
+│           │        ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│           │        │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│           │        └─ PAREN_EXPR type=PyObject *
+│           │           └─ CSTYLE_CAST_EXPR type=PyObject *
+│           │              ├─ TYPE_REF spelling=PyObject type=PyObject
+│           │              └─ UNEXPOSED_EXPR type=PyArrayObject *
+│           │                 └─ PAREN_EXPR type=PyArrayObject *
+│           │                    └─ PAREN_EXPR type=PyArrayObject *
+│           │                       └─ DECL_REF_EXPR spelling=result_array type=PyArrayObject *
+│           └─ CALL_EXPR spelling=Py_DECREF type=void
+│              ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│              │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│              └─ PAREN_EXPR type=PyObject *
+│                 └─ CSTYLE_CAST_EXPR type=PyObject *
+│                    ├─ TYPE_REF spelling=PyObject type=PyObject
+│                    └─ UNEXPOSED_EXPR type=PyObject *
+│                       └─ PAREN_EXPR type=PyObject *
+│                          └─ PAREN_EXPR type=PyObject *
+│                             └─ DECL_REF_EXPR spelling=result type=PyObject *
+├─ FUNCTION_DECL spelling=solout_thunk type=void (int, double, double, double *, int, double *, int *, int, double *, int *, int *)
+│  ├─ PARM_DECL spelling=nr type=int
+│  ├─ PARM_DECL spelling=xold type=double
+│  ├─ PARM_DECL spelling=x type=double
+│  ├─ PARM_DECL spelling=y type=double *
+│  ├─ PARM_DECL spelling=n type=int
+│  ├─ PARM_DECL spelling=con type=double *
+│  ├─ PARM_DECL spelling=icomp type=int *
+│  ├─ PARM_DECL spelling=nd type=int
+│  ├─ PARM_DECL spelling=rpar type=double *
+│  ├─ PARM_DECL spelling=ipar type=int *
+│  ├─ PARM_DECL spelling=irtrn type=int *
+│  └─ COMPOUND_STMT
+│     ├─ CSTYLE_CAST_EXPR type=void
+│     │  └─ UNEXPOSED_EXPR spelling=rpar type=double *
+│     │     └─ DECL_REF_EXPR spelling=rpar type=double *
+│     ├─ CSTYLE_CAST_EXPR type=void
+│     │  └─ UNEXPOSED_EXPR spelling=ipar type=int *
+│     │     └─ DECL_REF_EXPR spelling=ipar type=int *
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR type=_Bool
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=dims type=npy_intp[1]
+│     │     ├─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │     ├─ INTEGER_LITERAL type=int literal=1
+│     │     └─ INIT_LIST_EXPR type=npy_intp[1]
+│     │        └─ UNEXPOSED_EXPR spelling=n type=npy_intp
+│     │           └─ UNEXPOSED_EXPR spelling=n type=int
+│     │              └─ DECL_REF_EXPR spelling=n type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=capsule type=PyObject *
+│     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     └─ CALL_EXPR spelling=PyCapsule_New type=PyObject *
+│     │        ├─ UNEXPOSED_EXPR spelling=PyCapsule_New type=PyObject *(*)(void *, const char *, PyCapsule_Destructor)
+│     │        │  └─ DECL_REF_EXPR spelling=PyCapsule_New type=PyObject *(void *, const char *, PyCapsule_Destructor)
+│     │        ├─ CSTYLE_CAST_EXPR type=void *
+│     │        │  └─ UNEXPOSED_EXPR spelling=y type=double *
+│     │        │     └─ DECL_REF_EXPR spelling=y type=double *
+│     │        ├─ UNEXPOSED_EXPR type=const char *
+│     │        │  └─ PAREN_EXPR type=void *
+│     │        │     └─ CSTYLE_CAST_EXPR type=void *
+│     │        │        └─ INTEGER_LITERAL type=int
+│     │        └─ UNEXPOSED_EXPR type=PyCapsule_Destructor
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=capsule type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=py_y type=PyObject *
+│     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     └─ CALL_EXPR type=PyObject *
+│     │        ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │  └─ PAREN_EXPR type=PyObject *(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │     └─ UNARY_OPERATOR type=PyObject *(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyTypeObject *, int, const npy_intp *, int, const npy_intp *, void *, int, int, PyObject *)
+│     │        │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │        │           ├─ PARM_DECL type=PyTypeObject *
+│     │        │           │  └─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=const npy_intp *
+│     │        │           │  └─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=const npy_intp *
+│     │        │           │  └─ TYPE_REF spelling=npy_intp type=npy_intp
+│     │        │           ├─ PARM_DECL type=void *
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=int
+│     │        │           ├─ PARM_DECL type=PyObject *
+│     │        │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │        │           └─ UNEXPOSED_EXPR type=void *
+│     │        │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │        │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │        │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │        │                 └─ INTEGER_LITERAL type=int
+│     │        ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │        │  └─ PAREN_EXPR type=PyTypeObject
+│     │        │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │        │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │        │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │        │           └─ UNEXPOSED_EXPR type=void *
+│     │        │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │        │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │        │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │        │                 └─ INTEGER_LITERAL type=int
+│     │        ├─ INTEGER_LITERAL type=int literal=1
+│     │        ├─ UNEXPOSED_EXPR spelling=dims type=const npy_intp *
+│     │        │  └─ UNEXPOSED_EXPR spelling=dims type=npy_intp *
+│     │        │     └─ DECL_REF_EXPR spelling=dims type=npy_intp[1]
+│     │        ├─ DECL_REF_EXPR spelling=NPY_DOUBLE type=int
+│     │        ├─ UNEXPOSED_EXPR type=const npy_intp *
+│     │        │  └─ PAREN_EXPR type=void *
+│     │        │     └─ CSTYLE_CAST_EXPR type=void *
+│     │        │        └─ INTEGER_LITERAL type=int
+│     │        ├─ CSTYLE_CAST_EXPR type=void *
+│     │        │  └─ UNEXPOSED_EXPR spelling=y type=double *
+│     │        │     └─ DECL_REF_EXPR spelling=y type=double *
+│     │        ├─ INTEGER_LITERAL type=int
+│     │        ├─ PAREN_EXPR type=int
+│     │        │  └─ BINARY_OPERATOR type=int
+│     │        │     ├─ INTEGER_LITERAL type=int
+│     │        │     └─ PAREN_EXPR type=int
+│     │        │        └─ BINARY_OPERATOR type=int
+│     │        │           ├─ INTEGER_LITERAL type=int
+│     │        │           └─ INTEGER_LITERAL type=int
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=py_y type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     ├─ CALL_EXPR spelling=Py_DECREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │     └─ RETURN_STMT
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ CALL_EXPR type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR type=int (*)(PyArrayObject *, PyObject *)
+│     │  │  │  │  └─ PAREN_EXPR type=int (PyArrayObject *, PyObject *)
+│     │  │  │  │     └─ UNARY_OPERATOR type=int (PyArrayObject *, PyObject *)
+│     │  │  │  │        └─ CSTYLE_CAST_EXPR type=int (*)(PyArrayObject *, PyObject *)
+│     │  │  │  │           ├─ PARM_DECL type=PyArrayObject *
+│     │  │  │  │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  │  │           ├─ PARM_DECL type=PyObject *
+│     │  │  │  │           │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │  │           └─ UNEXPOSED_EXPR type=void *
+│     │  │  │  │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │  │  │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │  │  │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │  │  │                 └─ INTEGER_LITERAL type=int
+│     │  │  │  ├─ CSTYLE_CAST_EXPR type=PyArrayObject *
+│     │  │  │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  │  │  └─ UNEXPOSED_EXPR spelling=py_y type=PyObject *
+│     │  │  │  │     └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │  │  │  └─ UNEXPOSED_EXPR spelling=capsule type=PyObject *
+│     │  │  │     └─ DECL_REF_EXPR spelling=capsule type=PyObject *
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ COMPOUND_STMT
+│     │     ├─ CALL_EXPR spelling=Py_DECREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ PAREN_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │                 ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │                 └─ UNEXPOSED_EXPR spelling=py_y type=PyObject *
+│     │     │                    └─ DECL_REF_EXPR spelling=py_y type=PyObject *
+│     │     └─ RETURN_STMT
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=result type=PyObject *
+│     │     └─ TYPE_REF spelling=PyObject type=PyObject
+│     └─ IF_STMT
+│        ├─ UNEXPOSED_EXPR spelling=result type=PyObject *
+│        │  └─ DECL_REF_EXPR spelling=result type=PyObject *
+│        └─ COMPOUND_STMT
+│           ├─ IF_STMT
+│           │  ├─ CALL_EXPR spelling=PyType_HasFeature type=int
+│           │  │  ├─ UNEXPOSED_EXPR spelling=PyType_HasFeature type=int (*)(PyTypeObject *, unsigned long)
+│           │  │  │  └─ DECL_REF_EXPR spelling=PyType_HasFeature type=int (PyTypeObject *, unsigned long)
+│           │  │  ├─ PAREN_EXPR type=PyTypeObject *
+│           │  │  │  └─ CALL_EXPR spelling=Py_TYPE type=PyTypeObject *
+│           │  │  │     ├─ UNEXPOSED_EXPR spelling=Py_TYPE type=PyTypeObject *(*)(PyObject *)
+│           │  │  │     │  └─ DECL_REF_EXPR spelling=Py_TYPE type=PyTypeObject *(PyObject *)
+│           │  │  │     └─ PAREN_EXPR type=PyObject *
+│           │  │  │        └─ CSTYLE_CAST_EXPR type=PyObject *
+│           │  │  │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│           │  │  │           └─ UNEXPOSED_EXPR type=PyObject *
+│           │  │  │              └─ PAREN_EXPR type=PyObject *
+│           │  │  │                 └─ PAREN_EXPR type=PyObject *
+│           │  │  │                    └─ DECL_REF_EXPR spelling=result type=PyObject *
+│           │  │  └─ PAREN_EXPR type=unsigned long
+│           │  │     └─ PAREN_EXPR type=unsigned long
+│           │  │        └─ BINARY_OPERATOR type=unsigned long
+│           │  │           ├─ INTEGER_LITERAL type=unsigned long literal=1UL
+│           │  │           └─ INTEGER_LITERAL type=int literal=24
+│           │  ├─ COMPOUND_STMT
+│           │  │  └─ BINARY_OPERATOR type=int
+│           │  │     ├─ UNARY_OPERATOR type=int
+│           │  │     │  └─ UNEXPOSED_EXPR spelling=irtrn type=int *
+│           │  │     │     └─ DECL_REF_EXPR spelling=irtrn type=int *
+│           │  │     └─ CSTYLE_CAST_EXPR type=int
+│           │  │        └─ CALL_EXPR spelling=PyLong_AsLong type=long
+│           │  │           ├─ UNEXPOSED_EXPR spelling=PyLong_AsLong type=long (*)(PyObject *)
+│           │  │           │  └─ DECL_REF_EXPR spelling=PyLong_AsLong type=long (PyObject *)
+│           │  │           └─ UNEXPOSED_EXPR spelling=result type=PyObject *
+│           │  │              └─ DECL_REF_EXPR spelling=result type=PyObject *
+│           │  └─ IF_STMT
+│           │     ├─ PAREN_EXPR type=int
+│           │     │  └─ BINARY_OPERATOR type=int
+│           │     │     ├─ UNEXPOSED_EXPR type=PyObject *
+│           │     │     │  └─ PAREN_EXPR type=PyObject *
+│           │     │     │     └─ PAREN_EXPR type=PyObject *
+│           │     │     │        └─ DECL_REF_EXPR spelling=result type=PyObject *
+│           │     │     └─ PAREN_EXPR type=PyObject *
+│           │     │        └─ PAREN_EXPR type=PyObject *
+│           │     │           └─ UNARY_OPERATOR type=PyObject *
+│           │     │              └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│           │     ├─ COMPOUND_STMT
+│           │     │  └─ BINARY_OPERATOR type=int
+│           │     │     ├─ UNARY_OPERATOR type=int
+│           │     │     │  └─ UNEXPOSED_EXPR spelling=irtrn type=int *
+│           │     │     │     └─ DECL_REF_EXPR spelling=irtrn type=int *
+│           │     │     └─ INTEGER_LITERAL type=int literal=0
+│           │     └─ COMPOUND_STMT
+│           │        └─ CALL_EXPR spelling=PyErr_SetString type=void
+│           │           ├─ UNEXPOSED_EXPR spelling=PyErr_SetString type=void (*)(PyObject *, const char *)
+│           │           │  └─ DECL_REF_EXPR spelling=PyErr_SetString type=void (PyObject *, const char *)
+│           │           ├─ UNEXPOSED_EXPR spelling=PyExc_TypeError type=PyObject *
+│           │           │  └─ DECL_REF_EXPR spelling=PyExc_TypeError type=PyObject *
+│           │           └─ UNEXPOSED_EXPR type=const char *
+│           │              └─ UNEXPOSED_EXPR type=char *
+│           │                 └─ STRING_LITERAL spelling="scipy.integrate: solout function must return -1 for stopping, and otherwise 0, 1 or None." type=char[90]
+│           └─ CALL_EXPR spelling=Py_DECREF type=void
+│              ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│              │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│              └─ PAREN_EXPR type=PyObject *
+│                 └─ CSTYLE_CAST_EXPR type=PyObject *
+│                    ├─ TYPE_REF spelling=PyObject type=PyObject
+│                    └─ UNEXPOSED_EXPR type=PyObject *
+│                       └─ PAREN_EXPR type=PyObject *
+│                          └─ PAREN_EXPR type=PyObject *
+│                             └─ DECL_REF_EXPR spelling=result type=PyObject *
+├─ FUNCTION_DECL spelling=dopri853_wrap type=PyObject *(PyObject *, PyObject *)
+│  ├─ TYPE_REF spelling=PyObject type=PyObject
+│  ├─ PARM_DECL spelling=_unused_self type=PyObject *
+│  │  ├─ UNEXPOSED_ATTR
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  ├─ PARM_DECL spelling=args type=PyObject *
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  └─ COMPOUND_STMT
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=x type=double
+│     │  ├─ VAR_DECL spelling=xend type=double
+│     │  ├─ VAR_DECL spelling=rtol type=double
+│     │  └─ VAR_DECL spelling=atol type=double
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=ierr type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=itol type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=iout type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=nsteps type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ VAR_DECL spelling=verbosity type=int
+│     │     └─ INTEGER_LITERAL type=int literal=0
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=py_func type=PyObject *
+│     │  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  ├─ VAR_DECL spelling=solout type=PyObject *
+│     │  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  └─ VAR_DECL spelling=func_args type=PyObject *
+│     │     └─ TYPE_REF spelling=PyObject type=PyObject
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=ap_work type=PyArrayObject *
+│     │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │  │     └─ PAREN_EXPR type=void *
+│     │  │        └─ CSTYLE_CAST_EXPR type=void *
+│     │  │           └─ INTEGER_LITERAL type=int
+│     │  ├─ VAR_DECL spelling=ap_iwork type=PyArrayObject *
+│     │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │  │     └─ PAREN_EXPR type=void *
+│     │  │        └─ CSTYLE_CAST_EXPR type=void *
+│     │  │           └─ INTEGER_LITERAL type=int
+│     │  └─ VAR_DECL spelling=ap_y0 type=PyArrayObject *
+│     │     ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │     └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │        └─ PAREN_EXPR type=void *
+│     │           └─ CSTYLE_CAST_EXPR type=void *
+│     │              └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ CALL_EXPR spelling=PyArg_ParseTuple type=int
+│     │  │     ├─ UNEXPOSED_EXPR spelling=PyArg_ParseTuple type=int (*)(PyObject *, const char *, ...)
+│     │  │     │  └─ DECL_REF_EXPR spelling=PyArg_ParseTuple type=int (PyObject *, const char *, ...)
+│     │  │     ├─ UNEXPOSED_EXPR spelling=args type=PyObject *
+│     │  │     │  └─ DECL_REF_EXPR spelling=args type=PyObject *
+│     │  │     ├─ UNEXPOSED_EXPR type=const char *
+│     │  │     │  └─ UNEXPOSED_EXPR type=char *
+│     │  │     │     └─ STRING_LITERAL spelling="OdO!dddOiO!O!ii|O" type=char[18]
+│     │  │     ├─ UNARY_OPERATOR type=PyObject **
+│     │  │     │  └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=x type=double
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=xend type=double
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=rtol type=double
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=atol type=double
+│     │  │     ├─ UNARY_OPERATOR type=PyObject **
+│     │  │     │  └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=iout type=int
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_work type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_iwork type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=nsteps type=int
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=verbosity type=int
+│     │  │     └─ UNARY_OPERATOR type=PyObject **
+│     │  │        └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=ap_y type=PyArrayObject *
+│     │     ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │     └─ CSTYLE_CAST_EXPR type=PyArrayObject *
+│     │        ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │        └─ CALL_EXPR type=PyObject *
+│     │           ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyArrayObject *, NPY_ORDER)
+│     │           │  └─ PAREN_EXPR type=PyObject *(PyArrayObject *, NPY_ORDER)
+│     │           │     └─ UNARY_OPERATOR type=PyObject *(PyArrayObject *, NPY_ORDER)
+│     │           │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyArrayObject *, NPY_ORDER)
+│     │           │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │           │           ├─ PARM_DECL type=PyArrayObject *
+│     │           │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │           │           ├─ PARM_DECL type=NPY_ORDER
+│     │           │           │  └─ TYPE_REF spelling=NPY_ORDER type=NPY_ORDER
+│     │           │           └─ UNEXPOSED_EXPR type=void *
+│     │           │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │           │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │           │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │           │                 └─ INTEGER_LITERAL type=int
+│     │           ├─ UNEXPOSED_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │           │  └─ DECL_REF_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │           └─ UNEXPOSED_EXPR spelling=NPY_CORDER type=NPY_ORDER
+│     │              └─ DECL_REF_EXPR spelling=NPY_CORDER type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │  │     └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=y type=double *
+│     │     └─ CSTYLE_CAST_EXPR type=double *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_y type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=work type=double *
+│     │     └─ CSTYLE_CAST_EXPR type=double *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_work type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_work type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_work type=PyArrayObject *
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=iwork type=int *
+│     │     └─ CSTYLE_CAST_EXPR type=int *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_iwork type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_iwork type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_iwork type=PyArrayObject *
+│     ├─ BINARY_OPERATOR type=int
+│     │  ├─ ARRAY_SUBSCRIPT_EXPR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ UNEXPOSED_EXPR spelling=nsteps type=int
+│     │     └─ DECL_REF_EXPR spelling=nsteps type=int
+│     ├─ BINARY_OPERATOR type=int
+│     │  ├─ ARRAY_SUBSCRIPT_EXPR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  │  └─ INTEGER_LITERAL type=int literal=2
+│     │  └─ UNEXPOSED_EXPR spelling=verbosity type=int
+│     │     └─ DECL_REF_EXPR spelling=verbosity type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=n type=int
+│     │     └─ UNEXPOSED_EXPR type=int
+│     │        └─ UNEXPOSED_EXPR type=npy_intp
+│     │           └─ ARRAY_SUBSCRIPT_EXPR type=npy_intp
+│     │              ├─ CALL_EXPR spelling=PyArray_DIMS type=npy_intp *
+│     │              │  ├─ UNEXPOSED_EXPR spelling=PyArray_DIMS type=npy_intp *(*)(const PyArrayObject *)
+│     │              │  │  └─ DECL_REF_EXPR spelling=PyArray_DIMS type=npy_intp *(const PyArrayObject *)
+│     │              │  └─ UNEXPOSED_EXPR spelling=ap_y type=const PyArrayObject *
+│     │              │     └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │              │        └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     │              └─ INTEGER_LITERAL type=int literal=0
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=func_callback type=callback_info_t
+│     │     └─ TYPE_REF spelling=callback_info_t type=callback_info_t
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=func type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR spelling=py_func type=PyObject *
+│     │     └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  └─ PAREN_EXPR type=PyObject *
+│     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=PyObject *
+│     │              └─ PAREN_EXPR type=PyObject *
+│     │                 └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=solout type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR spelling=solout type=PyObject *
+│     │     └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR spelling=solout type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ CALL_EXPR spelling=Py_INCREF type=void
+│     │        ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │        │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │        └─ PAREN_EXPR type=PyObject *
+│     │           └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │              ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │              └─ UNEXPOSED_EXPR type=PyObject *
+│     │                 └─ PAREN_EXPR type=PyObject *
+│     │                    └─ PAREN_EXPR type=PyObject *
+│     │                       └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR type=PyObject *
+│     │     └─ PAREN_EXPR type=void *
+│     │        └─ CSTYLE_CAST_EXPR type=void *
+│     │           └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │  └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ CALL_EXPR spelling=PyType_HasFeature type=int
+│     │  │     ├─ UNEXPOSED_EXPR spelling=PyType_HasFeature type=int (*)(PyTypeObject *, unsigned long)
+│     │  │     │  └─ DECL_REF_EXPR spelling=PyType_HasFeature type=int (PyTypeObject *, unsigned long)
+│     │  │     ├─ PAREN_EXPR type=PyTypeObject *
+│     │  │     │  └─ CALL_EXPR spelling=Py_TYPE type=PyTypeObject *
+│     │  │     │     ├─ UNEXPOSED_EXPR spelling=Py_TYPE type=PyTypeObject *(*)(PyObject *)
+│     │  │     │     │  └─ DECL_REF_EXPR spelling=Py_TYPE type=PyTypeObject *(PyObject *)
+│     │  │     │     └─ PAREN_EXPR type=PyObject *
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=PyObject *
+│     │  │     │              └─ PAREN_EXPR type=PyObject *
+│     │  │     │                 └─ PAREN_EXPR type=PyObject *
+│     │  │     │                    └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     └─ PAREN_EXPR type=unsigned long
+│     │  │        └─ PAREN_EXPR type=unsigned long
+│     │  │           └─ BINARY_OPERATOR type=unsigned long
+│     │  │              ├─ INTEGER_LITERAL type=unsigned long literal=1UL
+│     │  │              └─ INTEGER_LITERAL type=int literal=26
+│     │  ├─ COMPOUND_STMT
+│     │  │  ├─ DECL_STMT
+│     │  │  │  └─ VAR_DECL spelling=extra_size type=Py_ssize_t
+│     │  │  │     ├─ TYPE_REF spelling=Py_ssize_t type=Py_ssize_t
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_Size type=Py_ssize_t
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_Size type=Py_ssize_t (*)(PyObject *)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_Size type=Py_ssize_t (PyObject *)
+│     │  │  │        └─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │           └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  ├─ DECL_STMT
+│     │  │  │  └─ VAR_DECL spelling=args_tuple type=PyObject *
+│     │  │  │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_New type=PyObject *
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_New type=PyObject *(*)(Py_ssize_t)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_New type=PyObject *(Py_ssize_t)
+│     │  │  │        └─ BINARY_OPERATOR type=Py_ssize_t
+│     │  │  │           ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │           │  └─ INTEGER_LITERAL type=int literal=2
+│     │  │  │           └─ UNEXPOSED_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │              └─ DECL_REF_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │        └─ PAREN_EXPR type=PyObject *
+│     │  │  │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │                 └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │  └─ INTEGER_LITERAL type=int literal=1
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │        └─ PAREN_EXPR type=PyObject *
+│     │  │  │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │                 └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ FOR_STMT
+│     │  │  │  ├─ DECL_STMT
+│     │  │  │  │  └─ VAR_DECL spelling=i type=Py_ssize_t
+│     │  │  │  │     ├─ TYPE_REF spelling=Py_ssize_t type=Py_ssize_t
+│     │  │  │  │     └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │        └─ INTEGER_LITERAL type=int literal=0
+│     │  │  │  ├─ BINARY_OPERATOR type=int
+│     │  │  │  │  ├─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  │  │  └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  │  └─ UNEXPOSED_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │  │     └─ DECL_REF_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │  ├─ UNARY_OPERATOR type=Py_ssize_t
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  └─ COMPOUND_STMT
+│     │  │  │     ├─ DECL_STMT
+│     │  │  │     │  └─ VAR_DECL spelling=item type=PyObject *
+│     │  │  │     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     │     └─ CALL_EXPR spelling=PyTuple_GetItem type=PyObject *
+│     │  │  │     │        ├─ UNEXPOSED_EXPR spelling=PyTuple_GetItem type=PyObject *(*)(PyObject *, Py_ssize_t)
+│     │  │  │     │        │  └─ DECL_REF_EXPR spelling=PyTuple_GetItem type=PyObject *(PyObject *, Py_ssize_t)
+│     │  │  │     │        ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │     │        │  └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  │     │        └─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │     │           └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │     │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │  │  │     │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │                 └─ DECL_REF_EXPR spelling=item type=PyObject *
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │        ├─ BINARY_OPERATOR type=Py_ssize_t
+│     │  │  │        │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │        │  │  └─ INTEGER_LITERAL type=int literal=2
+│     │  │  │        │  └─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │        │     └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │        └─ UNEXPOSED_EXPR spelling=item type=PyObject *
+│     │  │  │           └─ DECL_REF_EXPR spelling=item type=PyObject *
+│     │  │  └─ BINARY_OPERATOR type=PyObject *
+│     │  │     ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  │     └─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │        └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     ├─ DECL_STMT
+│     │     │  └─ VAR_DECL spelling=args_tuple type=PyObject *
+│     │     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │     └─ CALL_EXPR spelling=PyTuple_New type=PyObject *
+│     │     │        ├─ UNEXPOSED_EXPR spelling=PyTuple_New type=PyObject *(*)(Py_ssize_t)
+│     │     │        │  └─ DECL_REF_EXPR spelling=PyTuple_New type=PyObject *(Py_ssize_t)
+│     │     │        └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │           └─ INTEGER_LITERAL type=int literal=2
+│     │     ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │     │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │     │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │     │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │     │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ UNARY_OPERATOR type=PyObject *
+│     │     │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ PAREN_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ UNARY_OPERATOR type=PyObject *
+│     │     │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │     │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │     │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │     │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │     │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  │  └─ INTEGER_LITERAL type=int literal=1
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ UNARY_OPERATOR type=PyObject *
+│     │     │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ PAREN_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ UNARY_OPERATOR type=PyObject *
+│     │     │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     └─ BINARY_OPERATOR type=PyObject *
+│     │        ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │        │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │        └─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │           └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     ├─ CALL_EXPR spelling=dopri853 type=void
+│     │  ├─ UNEXPOSED_EXPR spelling=dopri853 type=void (*)(const int, dopri_fcn *, double *, double *, double *, double *, double *, const int, dopri_solout *, const int, double *, int *, double *, int *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=dopri853 type=void (const int, dopri_fcn *, double *, double *, double *, double *, double *, const int, dopri_solout *, const int, double *, int *, double *, int *, int *)
+│     │  ├─ UNEXPOSED_EXPR spelling=n type=int
+│     │  │  └─ DECL_REF_EXPR spelling=n type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=func_thunk type=void (*)(int, double, double *, double *, double *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=func_thunk type=void (int, double, double *, double *, double *, int *)
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=x type=double
+│     │  ├─ UNEXPOSED_EXPR spelling=y type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=y type=double *
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=xend type=double
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=rtol type=double
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=atol type=double
+│     │  ├─ UNEXPOSED_EXPR spelling=itol type=int
+│     │  │  └─ DECL_REF_EXPR spelling=itol type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=solout_thunk type=void (*)(int, double, double, double *, int, double *, int *, int, double *, int *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=solout_thunk type=void (int, double, double, double *, int, double *, int *, int, double *, int *, int *)
+│     │  ├─ UNEXPOSED_EXPR spelling=iout type=int
+│     │  │  └─ DECL_REF_EXPR spelling=iout type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=work type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=work type=double *
+│     │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  ├─ UNEXPOSED_EXPR type=double *
+│     │  │  └─ PAREN_EXPR type=void *
+│     │  │     └─ CSTYLE_CAST_EXPR type=void *
+│     │  │        └─ INTEGER_LITERAL type=int
+│     │  ├─ UNEXPOSED_EXPR type=int *
+│     │  │  └─ PAREN_EXPR type=void *
+│     │  │     └─ CSTYLE_CAST_EXPR type=void *
+│     │  │        └─ INTEGER_LITERAL type=int
+│     │  └─ UNARY_OPERATOR type=int *
+│     │     └─ DECL_REF_EXPR spelling=ierr type=int
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ COMPOUND_STMT
+│     │     └─ CALL_EXPR spelling=Py_DECREF type=void
+│     │        ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │        │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │        └─ PAREN_EXPR type=PyObject *
+│     │           └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │              ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │              └─ UNEXPOSED_EXPR type=PyObject *
+│     │                 └─ PAREN_EXPR type=PyObject *
+│     │                    └─ PAREN_EXPR type=PyObject *
+│     │                       └─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │                          └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     └─ RETURN_STMT
+│        └─ CALL_EXPR spelling=Py_BuildValue type=PyObject *
+│           ├─ UNEXPOSED_EXPR spelling=Py_BuildValue type=PyObject *(*)(const char *, ...)
+│           │  └─ DECL_REF_EXPR spelling=Py_BuildValue type=PyObject *(const char *, ...)
+│           ├─ UNEXPOSED_EXPR type=const char *
+│           │  └─ UNEXPOSED_EXPR type=char *
+│           │     └─ STRING_LITERAL spelling="dNi" type=char[4]
+│           ├─ UNEXPOSED_EXPR spelling=x type=double
+│           │  └─ DECL_REF_EXPR spelling=x type=double
+│           ├─ CALL_EXPR type=PyObject *
+│           │  ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyArrayObject *)
+│           │  │  └─ PAREN_EXPR type=PyObject *(PyArrayObject *)
+│           │  │     └─ UNARY_OPERATOR type=PyObject *(PyArrayObject *)
+│           │  │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyArrayObject *)
+│           │  │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│           │  │           ├─ PARM_DECL type=PyArrayObject *
+│           │  │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│           │  │           └─ UNEXPOSED_EXPR type=void *
+│           │  │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│           │  │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│           │  │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│           │  │                 └─ INTEGER_LITERAL type=int
+│           │  └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│           │     └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│           └─ UNEXPOSED_EXPR spelling=ierr type=int
+│              └─ DECL_REF_EXPR spelling=ierr type=int
+├─ FUNCTION_DECL spelling=dopri5_wrap type=PyObject *(PyObject *, PyObject *)
+│  ├─ TYPE_REF spelling=PyObject type=PyObject
+│  ├─ PARM_DECL spelling=_unused_self type=PyObject *
+│  │  ├─ UNEXPOSED_ATTR
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  ├─ PARM_DECL spelling=args type=PyObject *
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  └─ COMPOUND_STMT
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=x type=double
+│     │  ├─ VAR_DECL spelling=xend type=double
+│     │  ├─ VAR_DECL spelling=rtol type=double
+│     │  └─ VAR_DECL spelling=atol type=double
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=ierr type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=itol type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=iout type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  ├─ VAR_DECL spelling=nsteps type=int
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ VAR_DECL spelling=verbosity type=int
+│     │     └─ INTEGER_LITERAL type=int literal=0
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=py_func type=PyObject *
+│     │  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  ├─ VAR_DECL spelling=solout type=PyObject *
+│     │  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│     │  └─ VAR_DECL spelling=func_args type=PyObject *
+│     │     └─ TYPE_REF spelling=PyObject type=PyObject
+│     ├─ DECL_STMT
+│     │  ├─ VAR_DECL spelling=ap_work type=PyArrayObject *
+│     │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │  │     └─ PAREN_EXPR type=void *
+│     │  │        └─ CSTYLE_CAST_EXPR type=void *
+│     │  │           └─ INTEGER_LITERAL type=int
+│     │  ├─ VAR_DECL spelling=ap_iwork type=PyArrayObject *
+│     │  │  ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │  │  └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │  │     └─ PAREN_EXPR type=void *
+│     │  │        └─ CSTYLE_CAST_EXPR type=void *
+│     │  │           └─ INTEGER_LITERAL type=int
+│     │  └─ VAR_DECL spelling=ap_y0 type=PyArrayObject *
+│     │     ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │     └─ UNEXPOSED_EXPR type=PyArrayObject *
+│     │        └─ PAREN_EXPR type=void *
+│     │           └─ CSTYLE_CAST_EXPR type=void *
+│     │              └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ CALL_EXPR spelling=PyArg_ParseTuple type=int
+│     │  │     ├─ UNEXPOSED_EXPR spelling=PyArg_ParseTuple type=int (*)(PyObject *, const char *, ...)
+│     │  │     │  └─ DECL_REF_EXPR spelling=PyArg_ParseTuple type=int (PyObject *, const char *, ...)
+│     │  │     ├─ UNEXPOSED_EXPR spelling=args type=PyObject *
+│     │  │     │  └─ DECL_REF_EXPR spelling=args type=PyObject *
+│     │  │     ├─ UNEXPOSED_EXPR type=const char *
+│     │  │     │  └─ UNEXPOSED_EXPR type=char *
+│     │  │     │     └─ STRING_LITERAL spelling="OdO!dddOiO!O!ii|O" type=char[18]
+│     │  │     ├─ UNARY_OPERATOR type=PyObject **
+│     │  │     │  └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=x type=double
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=xend type=double
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=rtol type=double
+│     │  │     ├─ UNARY_OPERATOR type=double *
+│     │  │     │  └─ DECL_REF_EXPR spelling=atol type=double
+│     │  │     ├─ UNARY_OPERATOR type=PyObject **
+│     │  │     │  └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=iout type=int
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_work type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=PyTypeObject *
+│     │  │     │  └─ PAREN_EXPR type=PyTypeObject
+│     │  │     │     └─ UNARY_OPERATOR type=PyTypeObject
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyTypeObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyTypeObject type=PyTypeObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=void *
+│     │  │     │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │  │     │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │  │     │                 └─ INTEGER_LITERAL type=int
+│     │  │     ├─ CSTYLE_CAST_EXPR type=PyObject **
+│     │  │     │  ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │  └─ UNARY_OPERATOR type=PyArrayObject **
+│     │  │     │     └─ DECL_REF_EXPR spelling=ap_iwork type=PyArrayObject *
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=nsteps type=int
+│     │  │     ├─ UNARY_OPERATOR type=int *
+│     │  │     │  └─ DECL_REF_EXPR spelling=verbosity type=int
+│     │  │     └─ UNARY_OPERATOR type=PyObject **
+│     │  │        └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=ap_y type=PyArrayObject *
+│     │     ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │     └─ CSTYLE_CAST_EXPR type=PyArrayObject *
+│     │        ├─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │        └─ CALL_EXPR type=PyObject *
+│     │           ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyArrayObject *, NPY_ORDER)
+│     │           │  └─ PAREN_EXPR type=PyObject *(PyArrayObject *, NPY_ORDER)
+│     │           │     └─ UNARY_OPERATOR type=PyObject *(PyArrayObject *, NPY_ORDER)
+│     │           │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyArrayObject *, NPY_ORDER)
+│     │           │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │           │           ├─ PARM_DECL type=PyArrayObject *
+│     │           │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│     │           │           ├─ PARM_DECL type=NPY_ORDER
+│     │           │           │  └─ TYPE_REF spelling=NPY_ORDER type=NPY_ORDER
+│     │           │           └─ UNEXPOSED_EXPR type=void *
+│     │           │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│     │           │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│     │           │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│     │           │                 └─ INTEGER_LITERAL type=int
+│     │           ├─ UNEXPOSED_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │           │  └─ DECL_REF_EXPR spelling=ap_y0 type=PyArrayObject *
+│     │           └─ UNEXPOSED_EXPR spelling=NPY_CORDER type=NPY_ORDER
+│     │              └─ DECL_REF_EXPR spelling=NPY_CORDER type=int
+│     ├─ IF_STMT
+│     │  ├─ UNARY_OPERATOR type=int
+│     │  │  └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │  │     └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=void *
+│     │              └─ CSTYLE_CAST_EXPR type=void *
+│     │                 └─ INTEGER_LITERAL type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=y type=double *
+│     │     └─ CSTYLE_CAST_EXPR type=double *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_y type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=work type=double *
+│     │     └─ CSTYLE_CAST_EXPR type=double *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_work type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_work type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_work type=PyArrayObject *
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=iwork type=int *
+│     │     └─ CSTYLE_CAST_EXPR type=int *
+│     │        └─ CALL_EXPR spelling=PyArray_DATA type=void *
+│     │           ├─ UNEXPOSED_EXPR spelling=PyArray_DATA type=void *(*)(const PyArrayObject *)
+│     │           │  └─ DECL_REF_EXPR spelling=PyArray_DATA type=void *(const PyArrayObject *)
+│     │           └─ UNEXPOSED_EXPR spelling=ap_iwork type=const PyArrayObject *
+│     │              └─ UNEXPOSED_EXPR spelling=ap_iwork type=PyArrayObject *
+│     │                 └─ DECL_REF_EXPR spelling=ap_iwork type=PyArrayObject *
+│     ├─ BINARY_OPERATOR type=int
+│     │  ├─ ARRAY_SUBSCRIPT_EXPR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ UNEXPOSED_EXPR spelling=nsteps type=int
+│     │     └─ DECL_REF_EXPR spelling=nsteps type=int
+│     ├─ BINARY_OPERATOR type=int
+│     │  ├─ ARRAY_SUBSCRIPT_EXPR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  │  └─ INTEGER_LITERAL type=int literal=2
+│     │  └─ UNEXPOSED_EXPR spelling=verbosity type=int
+│     │     └─ DECL_REF_EXPR spelling=verbosity type=int
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=n type=int
+│     │     └─ UNEXPOSED_EXPR type=int
+│     │        └─ UNEXPOSED_EXPR type=npy_intp
+│     │           └─ ARRAY_SUBSCRIPT_EXPR type=npy_intp
+│     │              ├─ CALL_EXPR spelling=PyArray_DIMS type=npy_intp *
+│     │              │  ├─ UNEXPOSED_EXPR spelling=PyArray_DIMS type=npy_intp *(*)(const PyArrayObject *)
+│     │              │  │  └─ DECL_REF_EXPR spelling=PyArray_DIMS type=npy_intp *(const PyArrayObject *)
+│     │              │  └─ UNEXPOSED_EXPR spelling=ap_y type=const PyArrayObject *
+│     │              │     └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│     │              │        └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│     │              └─ INTEGER_LITERAL type=int literal=0
+│     ├─ DECL_STMT
+│     │  └─ VAR_DECL spelling=func_callback type=callback_info_t
+│     │     └─ TYPE_REF spelling=callback_info_t type=callback_info_t
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=func type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR spelling=py_func type=PyObject *
+│     │     └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  └─ PAREN_EXPR type=PyObject *
+│     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │           └─ PAREN_EXPR type=PyObject *
+│     │              └─ PAREN_EXPR type=PyObject *
+│     │                 └─ DECL_REF_EXPR spelling=py_func type=PyObject *
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=solout type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR spelling=solout type=PyObject *
+│     │     └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR spelling=solout type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     └─ CALL_EXPR spelling=Py_INCREF type=void
+│     │        ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │        │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │        └─ PAREN_EXPR type=PyObject *
+│     │           └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │              ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │              └─ UNEXPOSED_EXPR type=PyObject *
+│     │                 └─ PAREN_EXPR type=PyObject *
+│     │                    └─ PAREN_EXPR type=PyObject *
+│     │                       └─ DECL_REF_EXPR spelling=solout type=PyObject *
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ UNEXPOSED_EXPR type=PyObject *
+│     │     └─ PAREN_EXPR type=void *
+│     │        └─ CSTYLE_CAST_EXPR type=void *
+│     │           └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │  └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ CALL_EXPR spelling=PyType_HasFeature type=int
+│     │  │     ├─ UNEXPOSED_EXPR spelling=PyType_HasFeature type=int (*)(PyTypeObject *, unsigned long)
+│     │  │     │  └─ DECL_REF_EXPR spelling=PyType_HasFeature type=int (PyTypeObject *, unsigned long)
+│     │  │     ├─ PAREN_EXPR type=PyTypeObject *
+│     │  │     │  └─ CALL_EXPR spelling=Py_TYPE type=PyTypeObject *
+│     │  │     │     ├─ UNEXPOSED_EXPR spelling=Py_TYPE type=PyTypeObject *(*)(PyObject *)
+│     │  │     │     │  └─ DECL_REF_EXPR spelling=Py_TYPE type=PyTypeObject *(PyObject *)
+│     │  │     │     └─ PAREN_EXPR type=PyObject *
+│     │  │     │        └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │     │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │     │           └─ UNEXPOSED_EXPR type=PyObject *
+│     │  │     │              └─ PAREN_EXPR type=PyObject *
+│     │  │     │                 └─ PAREN_EXPR type=PyObject *
+│     │  │     │                    └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     └─ PAREN_EXPR type=unsigned long
+│     │  │        └─ PAREN_EXPR type=unsigned long
+│     │  │           └─ BINARY_OPERATOR type=unsigned long
+│     │  │              ├─ INTEGER_LITERAL type=unsigned long literal=1UL
+│     │  │              └─ INTEGER_LITERAL type=int literal=26
+│     │  ├─ COMPOUND_STMT
+│     │  │  ├─ DECL_STMT
+│     │  │  │  └─ VAR_DECL spelling=extra_size type=Py_ssize_t
+│     │  │  │     ├─ TYPE_REF spelling=Py_ssize_t type=Py_ssize_t
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_Size type=Py_ssize_t
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_Size type=Py_ssize_t (*)(PyObject *)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_Size type=Py_ssize_t (PyObject *)
+│     │  │  │        └─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │           └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  ├─ DECL_STMT
+│     │  │  │  └─ VAR_DECL spelling=args_tuple type=PyObject *
+│     │  │  │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_New type=PyObject *
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_New type=PyObject *(*)(Py_ssize_t)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_New type=PyObject *(Py_ssize_t)
+│     │  │  │        └─ BINARY_OPERATOR type=Py_ssize_t
+│     │  │  │           ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │           │  └─ INTEGER_LITERAL type=int literal=2
+│     │  │  │           └─ UNEXPOSED_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │              └─ DECL_REF_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │        └─ PAREN_EXPR type=PyObject *
+│     │  │  │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │                 └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │  └─ INTEGER_LITERAL type=int literal=1
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │        └─ PAREN_EXPR type=PyObject *
+│     │  │  │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │                 └─ UNARY_OPERATOR type=PyObject *
+│     │  │  │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │  │  ├─ FOR_STMT
+│     │  │  │  ├─ DECL_STMT
+│     │  │  │  │  └─ VAR_DECL spelling=i type=Py_ssize_t
+│     │  │  │  │     ├─ TYPE_REF spelling=Py_ssize_t type=Py_ssize_t
+│     │  │  │  │     └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │  │        └─ INTEGER_LITERAL type=int literal=0
+│     │  │  │  ├─ BINARY_OPERATOR type=int
+│     │  │  │  │  ├─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  │  │  └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  │  └─ UNEXPOSED_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │  │     └─ DECL_REF_EXPR spelling=extra_size type=Py_ssize_t
+│     │  │  │  ├─ UNARY_OPERATOR type=Py_ssize_t
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │  └─ COMPOUND_STMT
+│     │  │  │     ├─ DECL_STMT
+│     │  │  │     │  └─ VAR_DECL spelling=item type=PyObject *
+│     │  │  │     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     │     └─ CALL_EXPR spelling=PyTuple_GetItem type=PyObject *
+│     │  │  │     │        ├─ UNEXPOSED_EXPR spelling=PyTuple_GetItem type=PyObject *(*)(PyObject *, Py_ssize_t)
+│     │  │  │     │        │  └─ DECL_REF_EXPR spelling=PyTuple_GetItem type=PyObject *(PyObject *, Py_ssize_t)
+│     │  │  │     │        ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  │     │        │  └─ DECL_REF_EXPR spelling=func_args type=PyObject *
+│     │  │  │     │        └─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │     │           └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │  │  │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │  │  │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │  │  │     │  └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │  │  │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │  │  │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │  │  │     │           └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │              └─ PAREN_EXPR type=PyObject *
+│     │  │  │     │                 └─ DECL_REF_EXPR spelling=item type=PyObject *
+│     │  │  │     └─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │  │  │        ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │        │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  │  │        ├─ BINARY_OPERATOR type=Py_ssize_t
+│     │  │  │        │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │  │  │        │  │  └─ INTEGER_LITERAL type=int literal=2
+│     │  │  │        │  └─ UNEXPOSED_EXPR spelling=i type=Py_ssize_t
+│     │  │  │        │     └─ DECL_REF_EXPR spelling=i type=Py_ssize_t
+│     │  │  │        └─ UNEXPOSED_EXPR spelling=item type=PyObject *
+│     │  │  │           └─ DECL_REF_EXPR spelling=item type=PyObject *
+│     │  │  └─ BINARY_OPERATOR type=PyObject *
+│     │  │     ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  │     └─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │  │        └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │  └─ COMPOUND_STMT
+│     │     ├─ DECL_STMT
+│     │     │  └─ VAR_DECL spelling=args_tuple type=PyObject *
+│     │     │     ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │     └─ CALL_EXPR spelling=PyTuple_New type=PyObject *
+│     │     │        ├─ UNEXPOSED_EXPR spelling=PyTuple_New type=PyObject *(*)(Py_ssize_t)
+│     │     │        │  └─ DECL_REF_EXPR spelling=PyTuple_New type=PyObject *(Py_ssize_t)
+│     │     │        └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │           └─ INTEGER_LITERAL type=int literal=2
+│     │     ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │     │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │     │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │     │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │     │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ UNARY_OPERATOR type=PyObject *
+│     │     │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ PAREN_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ UNARY_OPERATOR type=PyObject *
+│     │     │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=PyTuple_SetItem type=int
+│     │     │  ├─ UNEXPOSED_EXPR spelling=PyTuple_SetItem type=int (*)(PyObject *, Py_ssize_t, PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=PyTuple_SetItem type=int (PyObject *, Py_ssize_t, PyObject *)
+│     │     │  ├─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │     │  │  └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     │     │  ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  │  └─ INTEGER_LITERAL type=int literal=1
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ UNARY_OPERATOR type=PyObject *
+│     │     │        └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     ├─ CALL_EXPR spelling=Py_INCREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_INCREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_INCREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ PAREN_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ UNARY_OPERATOR type=PyObject *
+│     │     │                    └─ DECL_REF_EXPR spelling=_Py_NoneStruct type=PyObject
+│     │     └─ BINARY_OPERATOR type=PyObject *
+│     │        ├─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │        │  └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │        └─ UNEXPOSED_EXPR spelling=args_tuple type=PyObject *
+│     │           └─ DECL_REF_EXPR spelling=args_tuple type=PyObject *
+│     ├─ CALL_EXPR spelling=dopri5 type=void
+│     │  ├─ UNEXPOSED_EXPR spelling=dopri5 type=void (*)(const int, dopri_fcn *, double *, double *, double *, double *, double *, const int, dopri_solout *, const int, double *, int *, double *, int *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=dopri5 type=void (const int, dopri_fcn *, double *, double *, double *, double *, double *, const int, dopri_solout *, const int, double *, int *, double *, int *, int *)
+│     │  ├─ UNEXPOSED_EXPR spelling=n type=int
+│     │  │  └─ DECL_REF_EXPR spelling=n type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=func_thunk type=void (*)(int, double, double *, double *, double *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=func_thunk type=void (int, double, double *, double *, double *, int *)
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=x type=double
+│     │  ├─ UNEXPOSED_EXPR spelling=y type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=y type=double *
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=xend type=double
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=rtol type=double
+│     │  ├─ UNARY_OPERATOR type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=atol type=double
+│     │  ├─ UNEXPOSED_EXPR spelling=itol type=int
+│     │  │  └─ DECL_REF_EXPR spelling=itol type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=solout_thunk type=void (*)(int, double, double, double *, int, double *, int *, int, double *, int *, int *)
+│     │  │  └─ DECL_REF_EXPR spelling=solout_thunk type=void (int, double, double, double *, int, double *, int *, int, double *, int *, int *)
+│     │  ├─ UNEXPOSED_EXPR spelling=iout type=int
+│     │  │  └─ DECL_REF_EXPR spelling=iout type=int
+│     │  ├─ UNEXPOSED_EXPR spelling=work type=double *
+│     │  │  └─ DECL_REF_EXPR spelling=work type=double *
+│     │  ├─ UNEXPOSED_EXPR spelling=iwork type=int *
+│     │  │  └─ DECL_REF_EXPR spelling=iwork type=int *
+│     │  ├─ UNEXPOSED_EXPR type=double *
+│     │  │  └─ PAREN_EXPR type=void *
+│     │  │     └─ CSTYLE_CAST_EXPR type=void *
+│     │  │        └─ INTEGER_LITERAL type=int
+│     │  ├─ UNEXPOSED_EXPR type=int *
+│     │  │  └─ PAREN_EXPR type=void *
+│     │  │     └─ CSTYLE_CAST_EXPR type=void *
+│     │  │        └─ INTEGER_LITERAL type=int
+│     │  └─ UNARY_OPERATOR type=int *
+│     │     └─ DECL_REF_EXPR spelling=ierr type=int
+│     ├─ IF_STMT
+│     │  ├─ UNEXPOSED_EXPR spelling=func_args type=PyObject *
+│     │  │  └─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │  │     └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     │  └─ COMPOUND_STMT
+│     │     └─ CALL_EXPR spelling=Py_DECREF type=void
+│     │        ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │        │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │        └─ PAREN_EXPR type=PyObject *
+│     │           └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │              ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │              └─ UNEXPOSED_EXPR type=PyObject *
+│     │                 └─ PAREN_EXPR type=PyObject *
+│     │                    └─ PAREN_EXPR type=PyObject *
+│     │                       └─ MEMBER_REF_EXPR spelling=func_args type=PyObject *
+│     │                          └─ DECL_REF_EXPR spelling=func_callback type=callback_info_t
+│     └─ RETURN_STMT
+│        └─ CALL_EXPR spelling=Py_BuildValue type=PyObject *
+│           ├─ UNEXPOSED_EXPR spelling=Py_BuildValue type=PyObject *(*)(const char *, ...)
+│           │  └─ DECL_REF_EXPR spelling=Py_BuildValue type=PyObject *(const char *, ...)
+│           ├─ UNEXPOSED_EXPR type=const char *
+│           │  └─ UNEXPOSED_EXPR type=char *
+│           │     └─ STRING_LITERAL spelling="dNi" type=char[4]
+│           ├─ UNEXPOSED_EXPR spelling=x type=double
+│           │  └─ DECL_REF_EXPR spelling=x type=double
+│           ├─ CALL_EXPR type=PyObject *
+│           │  ├─ UNEXPOSED_EXPR type=PyObject *(*)(PyArrayObject *)
+│           │  │  └─ PAREN_EXPR type=PyObject *(PyArrayObject *)
+│           │  │     └─ UNARY_OPERATOR type=PyObject *(PyArrayObject *)
+│           │  │        └─ CSTYLE_CAST_EXPR type=PyObject *(*)(PyArrayObject *)
+│           │  │           ├─ TYPE_REF spelling=PyObject type=PyObject
+│           │  │           ├─ PARM_DECL type=PyArrayObject *
+│           │  │           │  └─ TYPE_REF spelling=PyArrayObject type=PyArrayObject
+│           │  │           └─ UNEXPOSED_EXPR type=void *
+│           │  │              └─ ARRAY_SUBSCRIPT_EXPR type=void *
+│           │  │                 ├─ UNEXPOSED_EXPR spelling=PyArray_API type=void **
+│           │  │                 │  └─ DECL_REF_EXPR spelling=PyArray_API type=void **
+│           │  │                 └─ INTEGER_LITERAL type=int
+│           │  └─ UNEXPOSED_EXPR spelling=ap_y type=PyArrayObject *
+│           │     └─ DECL_REF_EXPR spelling=ap_y type=PyArrayObject *
+│           └─ UNEXPOSED_EXPR spelling=ierr type=int
+│              └─ DECL_REF_EXPR spelling=ierr type=int
+├─ VAR_DECL spelling=doplib_module_methods type=struct PyMethodDef[3]
+│  ├─ TYPE_REF spelling=struct PyMethodDef type=struct PyMethodDef
+│  └─ INIT_LIST_EXPR type=struct PyMethodDef[3]
+│     ├─ INIT_LIST_EXPR type=struct PyMethodDef
+│     │  ├─ UNEXPOSED_EXPR type=const char *
+│     │  │  └─ UNEXPOSED_EXPR type=char *
+│     │  │     └─ STRING_LITERAL spelling="dopri853" type=char[9]
+│     │  ├─ UNEXPOSED_EXPR spelling=dopri853_wrap type=PyObject *(*)(PyObject *, PyObject *)
+│     │  │  └─ DECL_REF_EXPR spelling=dopri853_wrap type=PyObject *(PyObject *, PyObject *)
+│     │  ├─ INTEGER_LITERAL type=int
+│     │  └─ UNEXPOSED_EXPR spelling=doc_dopri853 type=const char *
+│     │     └─ UNEXPOSED_EXPR spelling=doc_dopri853 type=char *
+│     │        └─ DECL_REF_EXPR spelling=doc_dopri853 type=char[105]
+│     ├─ INIT_LIST_EXPR type=struct PyMethodDef
+│     │  ├─ UNEXPOSED_EXPR type=const char *
+│     │  │  └─ UNEXPOSED_EXPR type=char *
+│     │  │     └─ STRING_LITERAL spelling="dopri5" type=char[7]
+│     │  ├─ UNEXPOSED_EXPR spelling=dopri5_wrap type=PyObject *(*)(PyObject *, PyObject *)
+│     │  │  └─ DECL_REF_EXPR spelling=dopri5_wrap type=PyObject *(PyObject *, PyObject *)
+│     │  ├─ INTEGER_LITERAL type=int
+│     │  └─ UNEXPOSED_EXPR spelling=doc_dopri5 type=const char *
+│     │     └─ UNEXPOSED_EXPR spelling=doc_dopri5 type=char *
+│     │        └─ DECL_REF_EXPR spelling=doc_dopri5 type=char[105]
+│     └─ INIT_LIST_EXPR type=struct PyMethodDef
+│        ├─ UNEXPOSED_EXPR type=const char *
+│        │  └─ PAREN_EXPR type=void *
+│        │     └─ CSTYLE_CAST_EXPR type=void *
+│        │        └─ INTEGER_LITERAL type=int
+│        ├─ UNEXPOSED_EXPR type=PyCFunction
+│        │  └─ PAREN_EXPR type=void *
+│        │     └─ CSTYLE_CAST_EXPR type=void *
+│        │        └─ INTEGER_LITERAL type=int
+│        ├─ INTEGER_LITERAL type=int literal=0
+│        └─ UNEXPOSED_EXPR type=const char *
+│           └─ PAREN_EXPR type=void *
+│              └─ CSTYLE_CAST_EXPR type=void *
+│                 └─ INTEGER_LITERAL type=int
+├─ FUNCTION_DECL spelling=doplib_module_exec type=int (PyObject *)
+│  ├─ PARM_DECL spelling=module type=PyObject *
+│  │  └─ TYPE_REF spelling=PyObject type=PyObject
+│  └─ COMPOUND_STMT
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ CALL_EXPR spelling=_import_array type=int
+│     │  │  │  └─ UNEXPOSED_EXPR spelling=_import_array type=int (*)(void)
+│     │  │  │     └─ DECL_REF_EXPR spelling=_import_array type=int (void)
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNARY_OPERATOR type=int
+│     │           └─ INTEGER_LITERAL type=int literal=1
+│     ├─ BINARY_OPERATOR type=PyObject *
+│     │  ├─ DECL_REF_EXPR spelling=dop_error type=PyObject *
+│     │  └─ CALL_EXPR spelling=PyErr_NewException type=PyObject *
+│     │     ├─ UNEXPOSED_EXPR spelling=PyErr_NewException type=PyObject *(*)(const char *, PyObject *, PyObject *)
+│     │     │  └─ DECL_REF_EXPR spelling=PyErr_NewException type=PyObject *(const char *, PyObject *, PyObject *)
+│     │     ├─ UNEXPOSED_EXPR type=const char *
+│     │     │  └─ UNEXPOSED_EXPR type=char *
+│     │     │     └─ STRING_LITERAL spelling="_dop.error" type=char[11]
+│     │     ├─ UNEXPOSED_EXPR type=PyObject *
+│     │     │  └─ PAREN_EXPR type=void *
+│     │     │     └─ CSTYLE_CAST_EXPR type=void *
+│     │     │        └─ INTEGER_LITERAL type=int
+│     │     └─ UNEXPOSED_EXPR type=PyObject *
+│     │        └─ PAREN_EXPR type=void *
+│     │           └─ CSTYLE_CAST_EXPR type=void *
+│     │              └─ INTEGER_LITERAL type=int
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ UNEXPOSED_EXPR spelling=dop_error type=PyObject *
+│     │  │  │  └─ DECL_REF_EXPR spelling=dop_error type=PyObject *
+│     │  │  └─ UNEXPOSED_EXPR type=PyObject *
+│     │  │     └─ PAREN_EXPR type=void *
+│     │  │        └─ CSTYLE_CAST_EXPR type=void *
+│     │  │           └─ INTEGER_LITERAL type=int
+│     │  └─ COMPOUND_STMT
+│     │     └─ RETURN_STMT
+│     │        └─ UNARY_OPERATOR type=int
+│     │           └─ INTEGER_LITERAL type=int literal=1
+│     ├─ IF_STMT
+│     │  ├─ BINARY_OPERATOR type=int
+│     │  │  ├─ CALL_EXPR spelling=PyModule_AddObject type=int
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=PyModule_AddObject type=int (*)(PyObject *, const char *, PyObject *)
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=PyModule_AddObject type=int (PyObject *, const char *, PyObject *)
+│     │  │  │  ├─ UNEXPOSED_EXPR spelling=module type=PyObject *
+│     │  │  │  │  └─ DECL_REF_EXPR spelling=module type=PyObject *
+│     │  │  │  ├─ UNEXPOSED_EXPR type=const char *
+│     │  │  │  │  └─ UNEXPOSED_EXPR type=char *
+│     │  │  │  │     └─ STRING_LITERAL spelling="error" type=char[6]
+│     │  │  │  └─ UNEXPOSED_EXPR spelling=dop_error type=PyObject *
+│     │  │  │     └─ DECL_REF_EXPR spelling=dop_error type=PyObject *
+│     │  │  └─ INTEGER_LITERAL type=int literal=0
+│     │  └─ COMPOUND_STMT
+│     │     ├─ CALL_EXPR spelling=Py_DECREF type=void
+│     │     │  ├─ UNEXPOSED_EXPR spelling=Py_DECREF type=void (*)(PyObject *)
+│     │     │  │  └─ DECL_REF_EXPR spelling=Py_DECREF type=void (PyObject *)
+│     │     │  └─ PAREN_EXPR type=PyObject *
+│     │     │     └─ CSTYLE_CAST_EXPR type=PyObject *
+│     │     │        ├─ TYPE_REF spelling=PyObject type=PyObject
+│     │     │        └─ UNEXPOSED_EXPR type=PyObject *
+│     │     │           └─ PAREN_EXPR type=PyObject *
+│     │     │              └─ PAREN_EXPR type=PyObject *
+│     │     │                 └─ DECL_REF_EXPR spelling=dop_error type=PyObject *
+│     │     └─ RETURN_STMT
+│     │        └─ UNARY_OPERATOR type=int
+│     │           └─ INTEGER_LITERAL type=int literal=1
+│     └─ RETURN_STMT
+│        └─ INTEGER_LITERAL type=int literal=0
+├─ VAR_DECL spelling=doplib_module_slots type=struct PyModuleDef_Slot[3]
+│  ├─ TYPE_REF spelling=struct PyModuleDef_Slot type=struct PyModuleDef_Slot
+│  └─ INIT_LIST_EXPR type=struct PyModuleDef_Slot[3]
+│     ├─ INIT_LIST_EXPR type=struct PyModuleDef_Slot
+│     │  ├─ INTEGER_LITERAL type=int
+│     │  └─ UNEXPOSED_EXPR spelling=doplib_module_exec type=void *
+│     │     └─ UNEXPOSED_EXPR spelling=doplib_module_exec type=int (*)(PyObject *)
+│     │        └─ DECL_REF_EXPR spelling=doplib_module_exec type=int (PyObject *)
+│     ├─ INIT_LIST_EXPR type=struct PyModuleDef_Slot
+│     │  ├─ INTEGER_LITERAL type=int
+│     │  └─ PAREN_EXPR type=void *
+│     │     └─ CSTYLE_CAST_EXPR type=void *
+│     │        └─ INTEGER_LITERAL type=int
+│     └─ INIT_LIST_EXPR type=struct PyModuleDef_Slot
+│        ├─ INTEGER_LITERAL type=int literal=0
+│        └─ PAREN_EXPR type=void *
+│           └─ CSTYLE_CAST_EXPR type=void *
+│              └─ INTEGER_LITERAL type=int
+├─ VAR_DECL spelling=moduledef type=struct PyModuleDef
+│  ├─ TYPE_REF spelling=struct PyModuleDef type=struct PyModuleDef
+│  └─ INIT_LIST_EXPR type=struct PyModuleDef
+│     ├─ UNEXPOSED_EXPR type=void
+│     │  ├─ MEMBER_REF spelling=m_base type=PyModuleDef_Base
+│     │  └─ INIT_LIST_EXPR type=PyModuleDef_Base
+│     │     ├─ INIT_LIST_EXPR type=PyObject
+│     │     │  ├─ INIT_LIST_EXPR type=union _object::(anonymous at C:\Users\Mojuko\miniforge3\envs\CStubAutoGen\Include\object.h:180:5)
+│     │     │  │  └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  │     └─ INTEGER_LITERAL type=int
+│     │     │  └─ UNEXPOSED_EXPR type=PyTypeObject *
+│     │     │     └─ PAREN_EXPR type=void *
+│     │     │        └─ PAREN_EXPR type=void *
+│     │     │           └─ CSTYLE_CAST_EXPR type=void *
+│     │     │              └─ INTEGER_LITERAL type=int literal=0
+│     │     ├─ UNEXPOSED_EXPR type=PyObject *(*)(void)
+│     │     │  └─ PAREN_EXPR type=void *
+│     │     │     └─ CSTYLE_CAST_EXPR type=void *
+│     │     │        └─ INTEGER_LITERAL type=int
+│     │     ├─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     │  └─ INTEGER_LITERAL type=int
+│     │     └─ UNEXPOSED_EXPR type=PyObject *
+│     │        └─ PAREN_EXPR type=void *
+│     │           └─ CSTYLE_CAST_EXPR type=void *
+│     │              └─ INTEGER_LITERAL type=int
+│     ├─ UNEXPOSED_EXPR type=void
+│     │  ├─ MEMBER_REF spelling=m_name type=const char *
+│     │  └─ UNEXPOSED_EXPR type=const char *
+│     │     └─ UNEXPOSED_EXPR type=char *
+│     │        └─ STRING_LITERAL spelling="_dop" type=char[5]
+│     ├─ UNEXPOSED_EXPR type=void
+│     │  ├─ MEMBER_REF spelling=m_size type=Py_ssize_t
+│     │  └─ UNEXPOSED_EXPR type=Py_ssize_t
+│     │     └─ INTEGER_LITERAL type=int literal=0
+│     ├─ UNEXPOSED_EXPR type=void
+│     │  ├─ MEMBER_REF spelling=m_methods type=PyMethodDef *
+│     │  └─ UNEXPOSED_EXPR spelling=doplib_module_methods type=struct PyMethodDef *
+│     │     └─ DECL_REF_EXPR spelling=doplib_module_methods type=struct PyMethodDef[3]
+│     └─ UNEXPOSED_EXPR type=void
+│        ├─ MEMBER_REF spelling=m_slots type=PyModuleDef_Slot *
+│        └─ UNEXPOSED_EXPR spelling=doplib_module_slots type=struct PyModuleDef_Slot *
+│           └─ DECL_REF_EXPR spelling=doplib_module_slots type=struct PyModuleDef_Slot[3]
+└─ FUNCTION_DECL spelling=PyInit__dop type=PyObject *(void)
+   ├─ DLLEXPORT_ATTR
+   ├─ TYPE_REF spelling=PyObject type=PyObject
+   └─ COMPOUND_STMT
+      └─ RETURN_STMT
+         └─ CALL_EXPR spelling=PyModuleDef_Init type=PyObject *
+            ├─ UNEXPOSED_EXPR spelling=PyModuleDef_Init type=PyObject *(*)(PyModuleDef *)
+            │  └─ DECL_REF_EXPR spelling=PyModuleDef_Init type=PyObject *(PyModuleDef *)
+            └─ UNARY_OPERATOR type=struct PyModuleDef *
+               └─ DECL_REF_EXPR spelling=moduledef type=struct PyModuleDef

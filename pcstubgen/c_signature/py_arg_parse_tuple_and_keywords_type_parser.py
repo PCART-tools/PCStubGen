@@ -7,7 +7,7 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from ....ir import IRArgumentKind
+from ..ir import IRArgumentKind
 from .models import ExtractedArgument
 from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 

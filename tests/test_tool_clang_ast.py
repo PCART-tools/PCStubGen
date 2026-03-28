@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import subprocess
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,11 +8,7 @@ import clang.cindex
 import pytest
 from typer.testing import CliRunner
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from tool import clang_ast
+from tools import clang_ast
 
 RUNNER = CliRunner()
 

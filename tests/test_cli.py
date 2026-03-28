@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from core import cli
-from core.stub_generation_options import StubGenerationOptions
+from pcstubgen import cli
+from pcstubgen.stub_generation_options import StubGenerationOptions
 
 RUNNER = CliRunner()
 

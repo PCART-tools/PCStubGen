@@ -2,9 +2,9 @@
 工具：输入模块名，输出模块与子模块是否为 C 实现。
 
 示例:
-    python -m tool.module_c_impl
-    python -m tool.module_c_impl numpy.random
-    python tool/module_c_impl.py math
+    python -m tools.module_c_impl
+    python -m tools.module_c_impl numpy.random
+    python tools/module_c_impl.py math
 """
 
 from __future__ import annotations

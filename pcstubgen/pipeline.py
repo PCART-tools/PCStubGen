@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Sequence
 
 from .ir import IRClass, IRMethod, IRModule
-from .node_visitors.node_visitor import NodeVisitor
+from .visitors.node_visitor import NodeVisitor
 
 
 class Pipeline:

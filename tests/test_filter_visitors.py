@@ -4,7 +4,7 @@ import typing
 
 import pytest
 
-from core.ir import (
+from pcstubgen.ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,
@@ -14,14 +14,14 @@ from core.ir import (
     IRSignature,
     QualifiedName,
 )
-import core.module_builder as module_builder_module
-from core.module_builder import build_function
-from core.node_visitors.doc_string_signature_parser_visitor import (
-    DocStringSignatureParserVisitor,
+import pcstubgen.module_builder as module_builder_module
+from pcstubgen.module_builder import build_function
+from pcstubgen.visitors.docstring_signature_visitor import (
+    DocstringSignatureVisitor,
 )
-from core.node_visitors.node_visitor import NodeVisitor
-from core.pipeline import Pipeline
-from core.printer_visitor import PrinterVisitor
+from pcstubgen.visitors.node_visitor import NodeVisitor
+from pcstubgen.pipeline import Pipeline
+from pcstubgen.stub_printer import StubPrinter
 
 
 def _signature(
@@ -44,7 +44,7 @@ def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
 
 
 def test_docstring_parser_parses_generic_function_signature() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = _unknown_function(
         "foo",
@@ -61,7 +61,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = _unknown_function(
         "cdist_minkowski",
@@ -101,7 +101,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
 
 def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = _unknown_function(
         "foo",
@@ -117,7 +117,7 @@ def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
 
 
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = _unknown_function(
         "foo",
@@ -151,7 +151,7 @@ def test_docstring_parser_pipeline_still_parses_method_docstrings() -> None:
         classes=[IRClass(name="Builder", methods=[method])],
     )
 
-    Pipeline([DocStringSignatureParserVisitor()]).run(ir_module)
+    Pipeline([DocstringSignatureVisitor()]).run(ir_module)
 
     assert len(method.function.signatures) == 1
     signature = method.function.signatures[0]
@@ -159,7 +159,7 @@ def test_docstring_parser_pipeline_still_parses_method_docstrings() -> None:
     assert signature.return_type_name == "str"
     assert signature.doc == "parsed from method docstring"
 def test_docstring_parser_visit_function_keeps_known_function_unchanged() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = IRFunction(
         name="foo",
@@ -173,7 +173,7 @@ def test_docstring_parser_visit_function_keeps_known_function_unchanged() -> Non
 
 
 def test_docstring_parser_visit_function_skips_functions_without_doc() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
     func = _unknown_function("foo")
 
@@ -183,7 +183,7 @@ def test_docstring_parser_visit_function_skips_functions_without_doc() -> None:
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     parsed = visitor.parse_args_str(
         'a: int, /, x: tuple[int, int] = (1, 2), *, '
@@ -214,7 +214,7 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
 
 
 def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     parsed = visitor.parse_args_str(
         "value: typing.Optional[list[int]], *args: tuple[str, ...], **kwargs: object"
@@ -236,7 +236,7 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
 
 
 def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     parsed = visitor.parse_args_str(
         "a, /, b, *args: tuple[str, ...], c: int, **kwargs: object"
@@ -262,7 +262,7 @@ def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None
 
 
 def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     parsed = visitor.parse_args_str(
         'a: int, /, b: int = 1, *, c: str, d: str = "x"'
@@ -282,7 +282,7 @@ def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None
 
 
 def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     parsed_with_markers = visitor.parse_args_str(
         ' value : int ,  /  ,  named : str = "x" ,  *  ,  kw : bool = True '
@@ -346,7 +346,7 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
     ],
 )
 def test_docstring_parser_parse_args_str_rejects_invalid_input(args_str: str) -> None:
-    visitor = DocStringSignatureParserVisitor()
+    visitor = DocstringSignatureVisitor()
 
     assert visitor.parse_args_str(args_str) is None
 
@@ -406,7 +406,7 @@ def test_printer_preserves_raw_optional_annotation_text() -> None:
         ],
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+    lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
         "def foo(value: typing.Optional[int]) -> typing.Optional[int]:",
@@ -424,7 +424,7 @@ def test_printer_prints_default_values_as_is() -> None:
         ],
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+    lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
         "def foo(value = unknown_default()):",
@@ -442,7 +442,7 @@ def test_printer_prints_ellipsis_for_unknown_default_value() -> None:
         ],
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+    lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
         "def foo(value = ...):",
@@ -453,7 +453,7 @@ def test_printer_prints_ellipsis_for_unknown_default_value() -> None:
 def test_printer_prints_placeholder_signature_for_unknown_function() -> None:
     func = IRFunction(name="foo")
 
-    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+    lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
         "def foo(*args, **kwargs):",
@@ -468,7 +468,7 @@ def test_printer_prints_c_inferred_source_comment_after_function() -> None:
         c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
     )
 
-    lines = PrinterVisitor(
+    lines = StubPrinter(
         include_docstrings=False,
         include_c_inferred_source_comment=True,
     ).print_function(func)
@@ -476,10 +476,10 @@ def test_printer_prints_c_inferred_source_comment_after_function() -> None:
     assert lines == [
         "def foo(value: int):",
         "    ...",
-        "# C inferred source for foo:",
-        "# static int foo_impl(int value) {",
-        "#     return value;",
-        "# }",
+        "#   C inferred source for foo:",
+        "#   static int foo_impl(int value) {",
+        "#       return value;",
+        "#   }",
     ]
 
 
@@ -493,7 +493,7 @@ def test_printer_prints_c_inferred_source_comment_once_after_overloads() -> None
         c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
     )
 
-    lines = PrinterVisitor(
+    lines = StubPrinter(
         include_docstrings=False,
         include_c_inferred_source_comment=True,
     ).print_function(func)
@@ -505,10 +505,10 @@ def test_printer_prints_c_inferred_source_comment_once_after_overloads() -> None
         "@typing.overload",
         "def foo(value: str) -> str:",
         "    ...",
-        "# C inferred source for foo:",
-        "# static PyObject* foo_impl(PyObject* self, PyObject* args) {",
-        "#     return self;",
-        "# }",
+        "#   C inferred source for foo:",
+        "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+        "#       return self;",
+        "#   }",
     ]
 
 
@@ -519,7 +519,7 @@ def test_printer_skips_c_inferred_source_comment_when_disabled() -> None:
         c_inferred_source_comment="static int foo_impl(int value) { return value; }",
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_function(func)
+    lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
         "def foo(value: int):",
@@ -544,7 +544,7 @@ def test_printer_adds_typing_import_for_overloads() -> None:
         ],
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_module(module)
+    lines = StubPrinter(include_docstrings=False).print_module(module)
 
     assert lines == [
         "import typing",
@@ -569,7 +569,7 @@ def test_printer_repeats_method_decorator_for_each_overload() -> None:
         decorator="classmethod",
     )
 
-    lines = PrinterVisitor(include_docstrings=False).print_method(method)
+    lines = StubPrinter(include_docstrings=False).print_method(method)
 
     assert lines == [
         "@classmethod",
@@ -639,3 +639,4 @@ def test_pipeline_visits_functions_in_module_and_methods() -> None:
 
     assert [func.name for func in ir_module.functions] == ["visited_f"]
     assert [m.function.name for m in ir_class.methods] == ["visited_m"]
+

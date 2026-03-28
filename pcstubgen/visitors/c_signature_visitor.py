@@ -4,15 +4,15 @@ import dataclasses
 from pathlib import Path
 from loguru import logger
 
-from .core import (
+from ..c_signature import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
     extract_c_signature_modules,
 )
-from .core.cursor_utils import source_range_get_text
-from ..node_visitor import NodeVisitor
-from ...ir import (
+from ..c_signature.cursor_utils import source_range_get_text
+from .node_visitor import NodeVisitor
+from ..ir import (
     IRArgument,
     IRFunction,
     IRModule,
@@ -30,12 +30,12 @@ class _InferenceStats:
     matched_function_without_signatures: int = 0
 
 
-class CSignatureExtractionVisitor(NodeVisitor):
+class CSignatureVisitor(NodeVisitor):
     """
     使用 C AST 提取结果补全未知函数签名。
 
     执行顺序设计为：
-    1) DocStringSignatureParserVisitor
+    1) DocstringSignatureVisitor
     2) CAstSignatureInferenceVisitor（本 visitor）
     3) InferMethodModifierVisitor
     """

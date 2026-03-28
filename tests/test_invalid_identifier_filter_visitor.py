@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import types
 
-from core.ir import QualifiedName
-from core.module_builder import build_module
+from pcstubgen.ir import QualifiedName
+from pcstubgen.module_builder import build_module
 
 
 def test_module_builder_keeps_only_tree_functions_and_methods() -> None:

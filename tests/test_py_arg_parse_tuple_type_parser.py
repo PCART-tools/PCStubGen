@@ -6,8 +6,8 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from core.node_visitors.c_signature_extraction.core.models import ExtractedArgument
-from core.node_visitors.c_signature_extraction.core.py_arg_parse_tuple_type_parser import (
+from pcstubgen.c_signature.models import ExtractedArgument
+from pcstubgen.c_signature.py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .printer_visitor import PrinterVisitor
+from .stub_printer import StubPrinter
 from .ir import IRModule
 from .ir.ir_module import IRModuleType
 
@@ -11,7 +11,7 @@ class Writer:
     def write(
         self,
         module: IRModule,
-        printer: PrinterVisitor,
+        printer: StubPrinter,
         to: Path,
     ) -> None:
         assert to.exists()

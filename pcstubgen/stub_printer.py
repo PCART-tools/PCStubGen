@@ -14,7 +14,7 @@ from .ir import (
 )
 
 
-class PrinterVisitor:
+class StubPrinter:
     """将 IR 渲染为 stub 文本。"""
 
     def __init__(

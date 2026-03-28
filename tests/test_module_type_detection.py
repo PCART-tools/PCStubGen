@@ -3,8 +3,8 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from core.ir import IRModuleType, QualifiedName
-from core.module_builder import build_module
+from pcstubgen.ir import IRModuleType, QualifiedName
+from pcstubgen.module_builder import build_module
 
 
 def _module_with_loader(

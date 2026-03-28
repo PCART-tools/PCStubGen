@@ -3,18 +3,13 @@ from __future__ import annotations
 import csv
 import importlib
 import importlib.machinery
-import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from typer.testing import CliRunner
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
-from tool import module_c_impl
+from tools import module_c_impl
 
 RUNNER = CliRunner()
 
