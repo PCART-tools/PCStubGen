@@ -1,18 +1,23 @@
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 from pathlib import Path
 
 from clang.cindex import Cursor, CursorKind
+from loguru import logger
 
+from .clang_eval import eval_int
 from .cursor_utils import (
     unwrap_transparent,
     var_decl_to_init_list_expr,
     walk_cursor,
     is_nullptr_or_zero,
+    extract_string_literal,
+    IDENTIFIER_RE,
+    DECL_CURSOR_KINDS
 )
 from .models import ExtractedArgument, ExtractedFunction, ExtractedSignature
+from .name_to_type import *
 from .py_arg_parse_tuple_and_keywords_type_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
@@ -21,189 +26,8 @@ from .py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from .py_build_value_type_nodes import AnyTypeNode, NamedTypeNode, TypeNode, UnionTypeNode
+from .py_build_value_type_nodes import NamedTypeNode, TypeNode, UnionTypeNode
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
-
-from .clang_eval import eval_int
-
-from loguru import logger
-
-_OBJECT_NAME_TO_TYPE: dict[str, str] = {
-    "Py_None": "None",
-    "Py_True": "bool",
-    "Py_False": "bool",
-}
-
-_RETURN_MACRO_TO_TYPE: dict[str, str] = {
-    "Py_RETURN_NONE": "None",
-    "Py_RETURN_TRUE": "bool",
-    "Py_RETURN_FALSE": "bool",
-    "Py_RETURN_NAN": "float",
-    "Py_RETURN_INF": "float",
-}
-
-_FUNCTION_NAME_TO_TYPE: dict[str, str] = {
-    # bool
-    "PyBool_FromLong": "bool",
-
-    # int
-    "PyLong_FromLong": "int",
-    "PyLong_FromUnsignedLong": "int",
-    "PyLong_FromSsize_t": "int",
-    "PyLong_FromSize_t": "int",
-    "PyLong_FromLongLong": "int",
-    "PyLong_FromUnsignedLongLong": "int",
-    "PyLong_FromDouble": "int",
-    "PyLong_FromString": "int",
-    "PyLong_FromUnicodeObject": "int",
-    "PyLong_FromVoidPtr": "int",
-
-    # float
-    "PyFloat_FromString": "float",
-    "PyFloat_FromDouble": "float",
-
-    # complex
-    "PyComplex_FromCComplex": "complex",
-    "PyComplex_FromDoubles": "complex",
-
-    # str
-    "PyUnicode_New": "str",
-    "PyUnicode_FromKindAndData": "str",
-    "PyUnicode_FromString": "str",
-    "PyUnicode_FromStringAndSize": "str",
-    "PyUnicode_FromFormat": "str",
-    "PyUnicode_FromFormatV": "str",
-    "PyUnicode_FromObject": "str",
-    "PyUnicode_FromEncodedObject": "str",
-    "PyUnicode_FromWideChar": "str",
-    "PyUnicode_Decode": "str",
-    "PyUnicode_DecodeUTF8": "str",
-    "PyUnicode_DecodeUTF8Stateful": "str",
-    "PyUnicode_DecodeUTF32": "str",
-    "PyUnicode_DecodeUTF32Stateful": "str",
-    "PyUnicode_DecodeUTF16": "str",
-    "PyUnicode_DecodeUTF16Stateful": "str",
-    "PyUnicode_DecodeUTF7": "str",
-    "PyUnicode_DecodeUTF7Stateful": "str",
-    "PyUnicode_DecodeUnicodeEscape": "str",
-    "PyUnicode_DecodeRawUnicodeEscape": "str",
-    "PyUnicode_DecodeLatin1": "str",
-    "PyUnicode_DecodeASCII": "str",
-    "PyUnicode_DecodeCharmap": "str",
-    "PyUnicode_DecodeLocaleAndSize": "str",
-    "PyUnicode_DecodeLocale": "str",
-    "PyUnicode_DecodeFSDefaultAndSize": "str",
-    "PyUnicode_DecodeFSDefault": "str",
-    "PyUnicode_Translate": "str",
-    "PyUnicode_DecodeMBCS": "str",
-    "PyUnicode_DecodeMBCSStateful": "str",
-    "PyUnicode_DecodeCodePageStateful": "str",
-    "PyUnicode_Substring": "str",
-    "PyUnicode_Concat": "str",
-    "PyUnicode_Join": "str",
-    "PyUnicode_Replace": "str",
-    "PyUnicode_Format": "str",
-    "PyUnicode_InternFromString": "str",
-
-    # bytes
-    "PyBytes_FromString": "bytes",
-    "PyBytes_FromStringAndSize": "bytes",
-    "PyBytes_FromFormat": "bytes",
-    "PyBytes_FromFormatV": "bytes",
-    "PyBytes_FromObject": "bytes",
-    "PyUnicode_AsEncodedString": "bytes",
-    "PyUnicode_AsUTF8String": "bytes",
-    "PyUnicode_AsUTF32String": "bytes",
-    "PyUnicode_AsUTF16String": "bytes",
-    "PyUnicode_AsUnicodeEscapeString": "bytes",
-    "PyUnicode_AsRawUnicodeEscapeString": "bytes",
-    "PyUnicode_AsLatin1String": "bytes",
-    "PyUnicode_AsASCIIString": "bytes",
-    "PyUnicode_AsCharmapString": "bytes",
-    "PyUnicode_EncodeLocale": "bytes",
-    "PyUnicode_EncodeFSDefault": "bytes",
-    "PyUnicode_AsMBCSString": "bytes",
-    "PyUnicode_EncodeCodePage": "bytes",
-
-    # bytearray
-    "PyByteArray_FromObject": "bytearray",
-    "PyByteArray_FromStringAndSize": "bytearray",
-    "PyByteArray_Concat": "bytearray",
-
-    # slice
-    "PySlice_New": "slice",
-
-    # memoryview
-    "PyMemoryView_FromObject": "memoryview",
-    "PyMemoryView_FromMemory": "memoryview",
-    "PyMemoryView_FromBuffer": "memoryview",
-    "PyMemoryView_GetContiguous": "memoryview",
-
-    # tuple
-    "PyTuple_New": "tuple",
-    "PyTuple_Pack": "tuple",
-    "PyTuple_GetSlice": "tuple",
-    "PyList_AsTuple": "tuple",
-    "PyUnicode_Partition": "tuple",
-    "PyUnicode_RPartition": "tuple",
-
-    # list
-    "PyList_New": "list",
-    "PyList_GetSlice": "list",
-    "PyUnicode_Split": "list",
-    "PyUnicode_RSplit": "list",
-    "PyUnicode_Splitlines": "list",
-    "PyDict_Items": "list",
-    "PyDict_Keys": "list",
-    "PyDict_Values": "list",
-
-    # dict
-    "PyDict_New": "dict",
-    "PyDict_Copy": "dict",
-
-    # set
-    "PySet_New": "set",
-
-    # frozenset
-    "PyFrozenSet_New": "frozenset",
-}
-
-_PYARG_OBJECT_NAME_TO_TYPE: dict[str, str] = {
-    "PyList_Type": "list",
-    "PyTuple_Type": "tuple",
-    "PyDict_Type": "dict",
-    "PyUnicode_Type": "str",
-    "PyLong_Type": "int",
-    "PyFloat_Type": "float",
-    "PyBool_Type": "bool",
-    "PyBytes_Type": "bytes",
-    "PyByteArray_Type": "bytearray",
-    "PySet_Type": "set",
-    "PyFrozenSet_Type": "frozenset",
-    "PyType_Type": "type",
-    "PyBaseObject_Type": "object",
-    "PyArray_Type": "numpy.ndarray"
-}
-
-_IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
-
-_DEFAULT_IDENTIFIER_TO_VALUE: dict[str, str] = {
-    "Py_None": "None",
-    "Py_True": "True",
-    "Py_False": "False",
-}
-
-_SUPPORTED_PYARG_CALLS = {
-    "PyArg_ParseTuple",
-    "PyArg_ParseTupleAndKeywords",
-}
-
-_DECL_CURSOR_KINDS = {
-    CursorKind.VAR_DECL,
-    CursorKind.PARM_DECL,
-    CursorKind.FIELD_DECL,
-}
-
 
 def infer_signature(function: ExtractedFunction) -> None:
     """汇合参数推断与返回值推断结果，生成函数签名。"""
@@ -265,12 +89,11 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
         if len(merged_type.members) > 1:
             logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
     return merged_type.render()
+
 def _infer_signature_from_pyarg_call(call_expr: Cursor) -> ExtractedSignature | None:
     """从单个支持的 `PyArg_*` 调用解析参数签名。"""
     assert call_expr.kind == CursorKind.CALL_EXPR
     call_name = call_expr.spelling
-    if call_name not in _SUPPORTED_PYARG_CALLS:
-        return None
 
     args = _extract_call_arguments(call_expr)
     if call_name == "PyArg_ParseTuple":
@@ -285,9 +108,7 @@ def _infer_pyarg_parsetuple_signature(args: list[Cursor]) -> ExtractedSignature 
     if len(args) < 2:
         return None
 
-    format_string = _extract_string_literal(args[1])
-    if format_string is None:
-        return None
+    format_string = extract_string_literal(args[1])
 
     try:
         arguments = PyArgParseTupleTypeParser(
@@ -308,9 +129,7 @@ def _infer_pyarg_parsetuple_and_keywords_signature(args: list[Cursor]) -> Extrac
     if len(args) < 4:
         return None
 
-    format_string = _extract_string_literal(args[2])
-    if format_string is None:
-        return None
+    format_string = extract_string_literal(args[2])
 
     kwlist = _extract_kwlist(args[3])
     if kwlist is None:
@@ -398,7 +217,7 @@ def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
 def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> TypeNode | None:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
     identifier_name = _get_cursor_name(expr_cursor)
-    mapped = _OBJECT_NAME_TO_TYPE.get(identifier_name)
+    mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
         return NamedTypeNode(mapped)
     return None
@@ -407,7 +226,7 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> TypeNode | None:
 def _infer_macro_expr_type(expr_cursor: Cursor) -> TypeNode | None:
     """识别 AST 子树中可见名称对应的返回宏类型。"""
     for name in _iter_subtree_names(expr_cursor):
-        mapped = _RETURN_MACRO_TO_TYPE.get(name)
+        mapped = RETURN_MACRO_TO_TYPE.get(name)
         if mapped is not None:
             return NamedTypeNode(mapped)
     return None
@@ -428,7 +247,7 @@ def _infer_call_expr_type(call_expr_cursor: Cursor) -> TypeNode | None:
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(call_expr_cursor)
-    mapped = _FUNCTION_NAME_TO_TYPE.get(call_name)
+    mapped = FUNCTION_NAME_TO_TYPE.get(call_name)
     if mapped is None:
         return None
     return NamedTypeNode(mapped)
@@ -459,9 +278,7 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
     if not args:
         return None
 
-    format_string = _extract_string_literal(args[0])
-    if format_string is None:
-        return None
+    format_string = extract_string_literal(args[0])
 
     try:
         parsed_type = PyBuildValueTypeParser(
@@ -496,10 +313,10 @@ def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
     if source_text is None:
         return None
 
-    match = _IDENTIFIER_RE.search(source_text)
+    match = IDENTIFIER_RE.search(source_text)
     if match is None:
         return None
-    return _PYARG_OBJECT_NAME_TO_TYPE.get(match.group(0))
+    return PY_TYPE_OBJECT_NAME_TO_TYPE.get(match.group(0))
 
 
 def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
@@ -517,12 +334,12 @@ def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
 def _resolve_decl_candidate(cursor: Cursor) -> Cursor | None:
     """将实参槽位解析为被写入的目标声明节点。"""
     target = _unwrap_pointer_target(cursor)
-    if target.kind in _DECL_CURSOR_KINDS:
+    if target.kind in DECL_CURSOR_KINDS:
         return target
 
     if target.kind == CursorKind.DECL_REF_EXPR:
         referenced = target.referenced
-        if referenced is not None and referenced.kind in _DECL_CURSOR_KINDS:
+        if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
             return referenced
     return None
 
@@ -554,9 +371,7 @@ def _extract_kwlist(node: Cursor) -> list[str] | None:
         if is_nullptr_or_zero(entry):
             break
 
-        keyword_name = _extract_string_literal(entry)
-        if keyword_name is None:
-            return None
+        keyword_name = extract_string_literal(entry)
         result.append(keyword_name)
 
     return result
@@ -579,10 +394,10 @@ def _render_default_expr(expr_cursor: Cursor) -> str | None:
         return "None"
 
     if expr_cursor.kind == CursorKind.DECL_REF_EXPR:
-        return _DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
+        return DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
 
     if expr_cursor.kind == CursorKind.STRING_LITERAL:
-        decoded = _extract_string_literal(expr_cursor)
+        decoded = extract_string_literal(expr_cursor)
         return decoded
 
     if expr_cursor.kind == CursorKind.INTEGER_LITERAL:
@@ -654,13 +469,3 @@ def _extract_cursor_source_text(cursor: Cursor) -> str | None:
     if start.offset < 0 or end.offset < start.offset or end.offset > len(source_bytes):
         return None
     return source_bytes[start.offset:end.offset].decode("utf-8", errors="ignore")
-
-
-def _extract_string_literal(node: Cursor) -> str | None:
-    """从子树中提取首个字符串字面量的实际内容。"""
-    for cursor in walk_cursor(node):
-        if cursor.kind != CursorKind.STRING_LITERAL:
-            continue
-
-        return cursor.spelling.strip('"')
-    return None

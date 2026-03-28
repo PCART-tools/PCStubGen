@@ -26,6 +26,12 @@ _NULLPTR_CURSOR_KINDS = {
     CursorKind.GNU_NULL_EXPR,
 }
 
+DECL_CURSOR_KINDS = {
+    CursorKind.VAR_DECL,
+    CursorKind.PARM_DECL,
+    CursorKind.FIELD_DECL,
+}
+
 
 def unwrap_transparent(cursor: Cursor) -> Cursor:
     """剥离透明包装节点，定位到更有语义价值的底层表达式。"""
@@ -72,7 +78,11 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor | None:
             return child
     return None
 
+IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
 
-def looks_like_identifier(value: str) -> bool:
-    """判断文本是否符合标识符命名规则。"""
-    return bool(re.match(r"^[_A-Za-z]\w*$", value))
+def extract_string_literal(node: Cursor) -> str | None:
+    """从子树中提取首个字符串字面量的实际内容。"""
+    node = unwrap_transparent(node)
+    if node.kind == CursorKind.STRING_LITERAL:
+        return node.spelling.strip('"')
+    return None
