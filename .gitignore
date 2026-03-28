@@ -218,8 +218,6 @@ __marimo__/
 /reference/
 /out/
 /plans/
-/.cursor/rules/
-/tests/output/
 AGENTS.md
 /tool/*_output/
 /doc/
