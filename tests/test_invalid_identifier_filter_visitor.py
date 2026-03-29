@@ -46,7 +46,7 @@ def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
 
     assert [func.name for func in ir_module.functions] == ["root_function"]
     assert [cls.name for cls in ir_module.classes] == ["RootClass"]
-    assert [sub_mod.Name for sub_mod in ir_module.sub_modules] == ["sub"]
+    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["sub"]
 
     root_cls = ir_module.classes[0]
     assert [method.function.name for method in root_cls.methods] == ["method"]

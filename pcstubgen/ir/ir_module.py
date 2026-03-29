@@ -37,7 +37,3 @@ class IRModule:
 
     # 是否是包
     is_package: bool = field(default=False)
-
-    @property
-    def Name(self) -> str:
-        return self.full_name.name

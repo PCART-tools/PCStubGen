@@ -8,8 +8,8 @@ from loguru import logger
 from .._checks import check
 from .models import ExtractedModule
 from . import signature_inference
-from . import module_table as module_table
-from . import translation_unit as translation_unit
+from . import module_table
+from . import clang_parser
 
 
 def extract_c_signature_modules(
@@ -29,14 +29,14 @@ def extract_c_signature_modules(
     """
     check(source_root.exists())
 
-    normalized_include_dirs = translation_unit.inject_python_include_directories(include_directory)
+    normalized_include_dirs = clang_parser.inject_python_include_directories(include_directory)
 
-    source_files = translation_unit.find_candidate_files(source_root)
+    source_files = clang_parser.find_candidate_files(source_root)
 
     index = Index.create()
     translation_units = []
     for file_path in source_files:
-        tu = translation_unit.parse_translation_unit(
+        tu = clang_parser.parse(
             index,
             file_path,
             source_root=source_root,

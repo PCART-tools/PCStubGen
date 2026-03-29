@@ -42,23 +42,6 @@ def diagnostic_to_str(diagnostic: Diagnostic) -> str:
     return f"[{severity}] {filename}:{line}:{column}: {message}"
 
 
-def format_diagnostics_message(
-    *,
-    file_path: Path,
-    parse_args: list[str],
-    diagnostics: list[Diagnostic],
-) -> str:
-    """格式化 translation unit 的诊断日志块，便于统一输出和排查。"""
-    lines = [
-        "翻译单元诊断信息",
-        f"文件路径: {file_path}",
-        f"解析参数: {' '.join(parse_args)}",
-        "诊断:",
-    ]
-    lines.extend(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
-    return "\n".join(lines)
-
-
 def normalize_include_literal(include_literal: str) -> str:
     """规范化报错里的头文件字面量，便于后续路径匹配。"""
     normalized = include_literal.replace("\\", "/").strip()
@@ -216,7 +199,7 @@ def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
     return False
 
 
-def parse_translation_unit(
+def parse(
     index: Index,
     file_path: Path,
     *,
@@ -251,10 +234,21 @@ def parse_translation_unit(
 
     if has_error_diagnostics(diagnostics):
         logger.warning(
-            format_diagnostics_message(
-                file_path=file_path,
-                parse_args=parse_args,
-                diagnostics=diagnostics,
-            )
+            "Parse诊断\n"
+            "文件路径: {}\n"
+            "解析参数: {}\n"
+            "诊断: \n"
+            "{}",
+            file_path,
+            ' '.join(parse_args),
+            '\n'.join(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
+        )
+    else:
+        logger.info(
+            "Parse成功\n"
+            "文件路径: {}\n"
+            "解析参数: {}\n",
+            file_path,
+            ' '.join(parse_args),
         )
     return translation_unit

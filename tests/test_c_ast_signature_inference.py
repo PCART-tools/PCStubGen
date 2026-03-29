@@ -20,7 +20,7 @@ from pcstubgen.c_signature import (
 from pcstubgen.c_signature import cursor_utils as cursor_utils_module
 from pcstubgen.c_signature import signature_inference as signature_rules_module
 from pcstubgen.c_signature import module_table as module_table_module
-from pcstubgen.c_signature import translation_unit as translation_unit_module
+from pcstubgen.c_signature import clang_parser as translation_unit_module
 from pcstubgen.c_signature.types import (
     AnyType,
     ListType,
@@ -747,7 +747,7 @@ def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path
         ]
     )
 
-    result = translation_unit_module.parse_translation_unit(
+    result = translation_unit_module.parse(
         index=_FakeIndex(translation_unit),
         file_path=source,
         source_root=config["source_root"],
@@ -781,7 +781,7 @@ def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_
     second = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second])
 
-    result = translation_unit_module.parse_translation_unit(
+    result = translation_unit_module.parse(
         index=index,
         file_path=source,
         source_root=config["source_root"],
@@ -836,7 +836,7 @@ def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Pa
     third = _FakeTranslationUnit(diagnostics=[])
     index = _SequentialIndex([first, second, third])
 
-    result = translation_unit_module.parse_translation_unit(
+    result = translation_unit_module.parse(
         index=index,
         file_path=source,
         source_root=config["source_root"],
@@ -882,7 +882,7 @@ def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp
     )
     index = _SequentialIndex([unresolved])
 
-    result = translation_unit_module.parse_translation_unit(
+    result = translation_unit_module.parse(
         index=index,
         file_path=source,
         source_root=config["source_root"],

@@ -18,12 +18,12 @@ class Writer:
         assert to.is_dir()
 
         if module.sub_modules or module.is_package:
-            module_dir = to / module.Name
+            module_dir = to / module.full_name.name
             module_dir.mkdir(exist_ok=True)
             module_file = module_dir / "__init__.pyi"
         else:
             module_dir = to
-            module_file = to / f"{module.Name}.pyi"
+            module_file = to / f"{module.full_name.name}.pyi"
 
         if module.module_type == IRModuleType.EXTENSION:
             with open(module_file, "w", encoding="utf-8") as f:

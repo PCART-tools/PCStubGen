@@ -46,7 +46,7 @@ class StubPrinter:
             result.append("import typing")
 
         for sub_module in node.sub_modules:
-            result.extend(self.print_submodule_import(sub_module.Name))
+            result.extend(self.print_submodule_import(sub_module.full_name.name))
 
         for class_ in sorted(node.classes, key=lambda c: c.name):
             result.extend(self.print_class(class_))

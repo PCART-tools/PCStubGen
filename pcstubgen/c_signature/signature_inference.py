@@ -80,7 +80,12 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
         if cursor.kind != CursorKind.RETURN_STMT:
             continue
 
-        inferred_type = _infer_type_from_return_stmt(cursor)
+        return_children = list(cursor.get_children())
+        if not return_children:
+            continue
+        return_expr = return_children[0]
+
+        inferred_type = infer_expr_type(return_expr)
         if inferred_type is None:
             continue
         inferred_types.append(inferred_type)
@@ -135,14 +140,6 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(
         raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
 
 
-def _infer_type_from_return_stmt(return_stmt: Cursor) -> Type | None:
-    """从单条 return 语句推断返回类型。"""
-    return_expr = _get_return_expression(return_stmt)
-    if return_expr is None:
-        return None
-    return infer_expr_type(return_expr)
-
-
 def infer_expr_type(expr_cursor: Cursor) -> Type | None:
     """对单个表达式做 Python 类型推断。"""
     normalized_expr = unwrap_transparent(expr_cursor)
@@ -177,14 +174,6 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
     return UnionType(tuple(branch_types))
 
 
-def _get_return_expression(return_stmt: Cursor) -> Cursor | None:
-    """获取 return 语句中的返回表达式。"""
-    children = list(return_stmt.get_children())
-    if not children:
-        return None
-    return children[0]
-
-
 def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
     identifier_name = _get_cursor_name(expr_cursor)
@@ -199,6 +188,7 @@ def _infer_macro_expr_type(expr_cursor: Cursor) -> Type | None:
     for name in _iter_subtree_names(expr_cursor):
         mapped = RETURN_MACRO_TO_TYPE.get(name)
         if mapped is not None:
+            logger.info("发现宏RETURN {}", mapped)
             return NamedType(mapped)
     return None
 
