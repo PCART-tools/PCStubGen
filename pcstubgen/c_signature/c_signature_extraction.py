@@ -5,16 +5,11 @@ from pathlib import Path
 from clang.cindex import Index
 from loguru import logger
 
+from .._checks import check
 from .models import ExtractedModule
 from . import signature_inference
 from . import module_table as module_table
 from . import translation_unit as translation_unit
-
-
-def _check(condition: bool, message: str = "前置条件检查失败。") -> None:
-    """在核心前置条件不满足时抛出显式异常。"""
-    if not condition:
-        raise RuntimeError(message)
 
 
 def extract_c_signature_modules(
@@ -32,7 +27,7 @@ def extract_c_signature_modules(
     还原模块级 `PyMethodDef`，再结合 `PyArg_*` 调用和格式串规则推断
     Python 侧参数信息。
     """
-    _check(source_root.exists())
+    check(source_root.exists())
 
     normalized_include_dirs = translation_unit.inject_python_include_directories(include_directory)
 
@@ -68,6 +63,15 @@ def extract_c_signature_modules(
 
     for module in result.values():
         for function in module.functions.values():
-            function.signatures = signature_inference.infer_signature(function.function_cursor)
+            try:
+                function.signatures = signature_inference.infer_signature(
+                    function.function_cursor
+                )
+            except Exception:
+                logger.exception(
+                    "推断 C 函数签名失败, module_name: {}, func_name: {}",
+                    module.name,
+                    function.ml_name,
+                )
 
     return result

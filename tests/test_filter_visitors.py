@@ -15,6 +15,9 @@ from pcstubgen.ir import (
     QualifiedName,
 )
 import pcstubgen.module_builder as module_builder_module
+from pcstubgen.visitors import (
+    docstring_signature_visitor as docstring_signature_visitor_module,
+)
 from pcstubgen.module_builder import build_function
 from pcstubgen.visitors.docstring_signature_visitor import (
     DocstringSignatureVisitor,
@@ -182,6 +185,41 @@ def test_docstring_parser_visit_function_skips_functions_without_doc() -> None:
     assert func.signatures == []
 
 
+def test_docstring_parser_parse_function_docstring_returns_empty_for_non_signature_first_line() -> None:
+    visitor = DocstringSignatureVisitor()
+
+    parsed = visitor.parse_function_docstring(
+        "foo",
+        ["This is not a signature.", "still docs"],
+    )
+
+    assert parsed == []
+
+
+def test_docstring_parser_visit_function_warns_and_skips_invalid_docstring(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    visitor = DocstringSignatureVisitor()
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    func = _unknown_function(
+        "foo",
+        doc="foo(a: int,, b: int) -> int\n\nbroken",
+    )
+    warnings: list[str] = []
+
+    def _warning(message: str, *args: object) -> None:
+        warnings.append(message.format(*args))
+
+    monkeypatch.setattr(docstring_signature_visitor_module.logger, "warning", _warning)
+
+    visitor.visit_function(func, ir_module)
+
+    assert func.signatures == []
+    assert warnings == [
+        "解析 docstring 签名失败, module_name: pkg.mod, func_name: foo, error_type: ValueError, error: 参数列表中存在空参数块。"
+    ]
+
+
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
     visitor = DocstringSignatureVisitor()
 
@@ -190,7 +228,6 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
         'mapping: dict[str, int] = {"a": 1, "b": 2}, flag: str = "x"'
     )
 
-    assert parsed is not None
     assert [arg.name for arg in parsed] == ["a", "x", "mapping", "flag"]
     assert [arg.type_name for arg in parsed] == [
         "int",
@@ -220,7 +257,6 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
         "value: typing.Optional[list[int]], *args: tuple[str, ...], **kwargs: object"
     )
 
-    assert parsed is not None
     assert [arg.name for arg in parsed] == ["value", "args", "kwargs"]
     assert [arg.type_name for arg in parsed] == [
         "typing.Optional[list[int]]",
@@ -242,7 +278,6 @@ def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None
         "a, /, b, *args: tuple[str, ...], c: int, **kwargs: object"
     )
 
-    assert parsed is not None
     assert [arg.name for arg in parsed] == ["a", "b", "args", "c", "kwargs"]
     assert [arg.type_name for arg in parsed] == [
         None,
@@ -268,7 +303,6 @@ def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None
         'a: int, /, b: int = 1, *, c: str, d: str = "x"'
     )
 
-    assert parsed is not None
     assert [arg.name for arg in parsed] == ["a", "b", "c", "d"]
     assert [arg.type_name for arg in parsed] == ["int", "int", "str", "str"]
     assert [arg.default_value for arg in parsed] == [None, "1", None, '"x"']
@@ -292,7 +326,6 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
         '  **kwargs : object '
     )
 
-    assert parsed_with_markers is not None
     assert [arg.name for arg in parsed_with_markers] == ["value", "named", "kw"]
     assert [arg.type_name for arg in parsed_with_markers] == [
         "int",
@@ -307,7 +340,6 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
         IRArgumentKind.KEYWORD_ONLY,
     ]
 
-    assert parsed_with_var_args is not None
     assert [arg.name for arg in parsed_with_var_args] == ["value", "args", "kw", "kwargs"]
     assert [arg.type_name for arg in parsed_with_var_args] == [
         "int",
@@ -348,7 +380,8 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
 def test_docstring_parser_parse_args_str_rejects_invalid_input(args_str: str) -> None:
     visitor = DocstringSignatureVisitor()
 
-    assert visitor.parse_args_str(args_str) is None
+    with pytest.raises(ValueError):
+        visitor.parse_args_str(args_str)
 
 
 def test_module_builder_keeps_raw_annotation_strings() -> None:

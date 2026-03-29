@@ -3605,7 +3605,17 @@ def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None
     ]
 
 
-def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlist() -> None:
+def test_infer_argument_lists_returns_empty_when_no_supported_pyarg_calls_exist() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _call_expr("PyLong_FromLong", _identifier_node("value"))
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == []
+
+
+def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_kwlist() -> None:
     invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
     cursor = _fake_function_cursor_with_children(
@@ -3619,9 +3629,37 @@ def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlis
         )
     )
 
-    inferred = signature_rules_module.infer_argument_lists(cursor)
+    with pytest.raises(RuntimeError, match="kwlist"):
+        signature_rules_module.infer_argument_lists(cursor)
 
-    assert inferred == []
+
+def test_infer_argument_lists_raises_when_argument_name_cannot_be_resolved() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _int_literal("0"),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="C 参数槽位"):
+        signature_rules_module.infer_argument_lists(cursor)
+
+
+def test_infer_argument_lists_raises_when_parse_tuple_format_string_is_not_literal() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _identifier_node("fmt"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    with pytest.raises(RuntimeError, match="format string"):
+        signature_rules_module.infer_argument_lists(cursor)
 
 
 def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:
@@ -3713,6 +3751,86 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
             arguments=[ExtractedArgument(name="value", type_name="int")],
             return_type_name="int",
         )
+    ]
+
+
+def test_infer_expr_type_raises_when_conditional_operator_children_count_is_invalid() -> None:
+    expr = _FakeNode(
+        kind=clang.cindex.CursorKind.CONDITIONAL_OPERATOR,
+        children=[_identifier_node("cond"), _identifier_node("a")],
+    )
+
+    with pytest.raises(RuntimeError, match="CONDITIONAL_OPERATOR"):
+        signature_rules_module.infer_expr_type(cast(clang.cindex.Cursor, expr))
+
+
+def test_c_signature_extraction_engine_logs_exception_and_continues_next_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bad_cursor = object()
+    good_cursor = object()
+    bad_function = ExtractedFunction(ml_name="bad", function_cursor=bad_cursor)
+    good_function = ExtractedFunction(ml_name="good", function_cursor=good_cursor)
+    logged_messages: list[str] = []
+
+    monkeypatch.setattr(
+        c_signature_extraction_module.translation_unit,
+        "inject_python_include_directories",
+        lambda include_directory: list(include_directory),
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.translation_unit,
+        "find_candidate_files",
+        lambda source_root: [source_root / "sample.c"],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.Index,
+        "create",
+        staticmethod(lambda: object()),
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.translation_unit,
+        "parse_translation_unit",
+        lambda *args, **kwargs: SimpleNamespace(cursor="fake-tu"),
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.module_table,
+        "process_translation_unit",
+        lambda cursor: [
+            ExtractedModule(
+                name="pkg.mod",
+                functions={
+                    "bad": bad_function,
+                    "good": good_function,
+                },
+            )
+        ],
+    )
+
+    def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
+        if function_cursor is bad_cursor:
+            raise RuntimeError("broken inference")
+        return [ExtractedSignature(return_type_name="int")]
+
+    def _exception(message: str, *args: object) -> None:
+        logged_messages.append(message.format(*args))
+
+    monkeypatch.setattr(
+        c_signature_extraction_module.signature_inference,
+        "infer_signature",
+        _infer_signature,
+    )
+    monkeypatch.setattr(c_signature_extraction_module.logger, "exception", _exception)
+
+    extracted = c_signature_extraction_module.extract_c_signature_modules(tmp_path)
+
+    assert extracted["pkg.mod"].functions["bad"].signatures == []
+    assert extracted["pkg.mod"].functions["good"].signatures == [
+        ExtractedSignature(return_type_name="int")
+    ]
+    assert logged_messages == [
+        "推断 C 函数签名失败, module_name: pkg.mod, func_name: bad"
     ]
 
 

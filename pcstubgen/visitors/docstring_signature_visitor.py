@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import keyword
 import re
 from enum import Enum, auto
+
+from loguru import logger
 
 from ..ir import (
     IRArgument,
@@ -36,10 +37,21 @@ class DocstringSignatureVisitor(NodeVisitor):
         if not node.doc:
             return
 
-        parsed_signatures = self.parse_function_docstring(
-            func_name=node.name,
-            doc_lines=node.doc.splitlines(),
-        )
+        try:
+            parsed_signatures = self.parse_function_docstring(
+                func_name=node.name,
+                doc_lines=node.doc.splitlines(),
+            )
+        except ValueError as ex:
+            logger.warning(
+                "解析 docstring 签名失败, module_name: {}, func_name: {}, error_type: {}, error: {}",
+                str(module.full_name),
+                node.name,
+                type(ex).__name__,
+                ex,
+            )
+            return
+
         if parsed_signatures:
             node.signatures = parsed_signatures
 
@@ -73,9 +85,6 @@ class DocstringSignatureVisitor(NodeVisitor):
         # 单条
         if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
             args = self.parse_args_str(match.group("args"))
-            if args is None:
-                return []
-
             returns = (match.group("returns") or "").strip('"')
             return [
                 IRSignature(
@@ -106,9 +115,6 @@ class DocstringSignatureVisitor(NodeVisitor):
                 overloads[-1].doc = self._strip_empty_lines(doc_lines[doc_start:i])
 
             args = self.parse_args_str(match.group("args"))
-            if args is None:
-                return []
-
             overloads.append(
                 IRSignature(
                     args=args,
@@ -118,23 +124,21 @@ class DocstringSignatureVisitor(NodeVisitor):
             doc_start = i + 1
 
         if not overloads:
-            return []
+            raise ValueError("Overloaded function. 之后未找到有效重载签名。")
 
         overloads[-1].doc = self._strip_empty_lines(doc_lines[doc_start:])
         return overloads
 
-    def parse_args_str(self, args_str: str) -> list[IRArgument] | None:
+    def parse_args_str(self, args_str: str) -> list[IRArgument]:
         """解析签名中的参数串。"""
         split_args = self._split_args_str(args_str)
-        if split_args is None:
-            return None
 
         result: list[IRArgument] = []
         state = _ArgsParseState.POSITIONAL
 
         for arg_decl, type_name, default_str in split_args:
             if state is _ArgsParseState.FINISHED:
-                return None
+                raise ValueError("可变关键字参数之后不允许再出现其他参数。")
 
             if arg_decl == "/":
                 if (
@@ -142,13 +146,13 @@ class DocstringSignatureVisitor(NodeVisitor):
                     or type_name is not None
                     or default_str is not None
                 ):
-                    return None
+                    raise ValueError("位置参数分隔符 '/' 位置非法。")
 
                 # 不允许 f(/, a)
                 if not any(
                     arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
                 ):
-                    return None
+                    raise ValueError("位置参数分隔符 '/' 前必须至少有一个普通参数。")
 
                 for arg in result:
                     if arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD:
@@ -162,37 +166,37 @@ class DocstringSignatureVisitor(NodeVisitor):
                     or type_name is not None
                     or default_str is not None
                 ):
-                    return None
+                    raise ValueError("关键字专用分隔符 '*' 位置非法。")
 
                 state = _ArgsParseState.KEYWORD_ONLY
                 continue
 
             if arg_decl.startswith("**"):
                 if default_str is not None:
-                    return None
+                    raise ValueError("可变关键字参数不允许默认值。")
 
-                name = arg_decl[2:]
-                if name is None:
-                    return None
+                name = arg_decl[2:].strip()
+                if not name:
+                    raise ValueError("可变关键字参数名不能为空。")
 
                 kind = IRArgumentKind.VAR_KEYWORD
                 state = _ArgsParseState.FINISHED
             elif arg_decl.startswith("*"):
                 if state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD):
-                    return None
+                    raise ValueError("可变位置参数必须出现在普通参数之后。")
                 if default_str is not None:
-                    return None
+                    raise ValueError("可变位置参数不允许默认值。")
 
-                name = arg_decl[1:]
-                if name is None:
-                    return None
+                name = arg_decl[1:].strip()
+                if not name:
+                    raise ValueError("可变位置参数名不能为空。")
 
                 kind = IRArgumentKind.VAR_POSITIONAL
                 state = _ArgsParseState.KEYWORD_ONLY
             else:
-                name = arg_decl
-                if name is None:
-                    return None
+                name = arg_decl.strip()
+                if not name:
+                    raise ValueError("参数名不能为空。")
 
                 if state is _ArgsParseState.KEYWORD_ONLY:
                     kind = IRArgumentKind.KEYWORD_ONLY
@@ -218,24 +222,22 @@ class DocstringSignatureVisitor(NodeVisitor):
 
     def _split_args_str(
         self, args_str: str
-    ) -> list[tuple[str, str | None, str | None]] | None:
+    ) -> list[tuple[str, str | None, str | None]]:
         """按顶层逗号拆参数，再分阶段解析注解和默认值。"""
         if not args_str.strip():
             return []
 
         arg_blocks = self._split_top_level(args_str, ",")
-        if arg_blocks is None:
-            return None
 
         result: list[tuple[str, str | None, str | None]] = []
         for arg_block in arg_blocks:
             if not arg_block.strip():
-                return None
+                raise ValueError("参数列表中存在空参数块。")
 
             # 先拆=号，再拆:
             nametype_default_parts = self._split_top_level(arg_block, "=")
-            if nametype_default_parts is None or len(nametype_default_parts) > 2:
-                return None
+            if len(nametype_default_parts) > 2:
+                raise ValueError("参数默认值声明中包含多个 '='。")
 
             nametype = nametype_default_parts[0]
             default = (
@@ -245,8 +247,8 @@ class DocstringSignatureVisitor(NodeVisitor):
             )
 
             name_type_parts = self._split_top_level(nametype, ":")
-            if name_type_parts is None or len(name_type_parts) > 2:
-                return None
+            if len(name_type_parts) > 2:
+                raise ValueError("参数注解声明中包含多个 ':'。")
 
             name = name_type_parts[0].strip()
             type_ = name_type_parts[1].strip() if len(name_type_parts) == 2 else None
@@ -254,7 +256,7 @@ class DocstringSignatureVisitor(NodeVisitor):
 
         return result
 
-    def _split_top_level(self, text: str, delim: str) -> list[str] | None:
+    def _split_top_level(self, text: str, delim: str) -> list[str]:
         """仅在顶层按单字符分隔，忽略括号和字符串内部的分隔符。"""
         if len(delim) != 1:
             raise ValueError("delim must be a single character")
@@ -270,17 +272,15 @@ class DocstringSignatureVisitor(NodeVisitor):
             ch = text[idx]
             if ch in "\"'":
                 str_end = self._find_str_end(text, idx)
-                if str_end is None:
-                    return None
                 idx = str_end + 1
                 continue
 
             if ch in left_to_right:
-                stack.append(left_to_right[ch]) # 进右侧符号
+                stack.append(left_to_right[ch])  # 进右侧符号
             elif ch in rights:
                 # 栈为空或ch不为栈顶
                 if not stack or ch != stack[-1]:
-                    return None
+                    raise ValueError("括号不匹配。")
                 stack.pop()
             elif not stack and ch == delim:
                 parts.append(text[start:idx])
@@ -288,12 +288,12 @@ class DocstringSignatureVisitor(NodeVisitor):
             idx += 1
 
         if stack:
-            return None
+            raise ValueError("存在未闭合的括号。")
 
         parts.append(text[start:])
         return parts
 
-    def _find_str_end(self, s: str, start: int) -> int | None:
+    def _find_str_end(self, s: str, start: int) -> int:
         """查找字符串字面量的结束位置。"""
         quote = s[start]
         i = start + 1
@@ -304,7 +304,7 @@ class DocstringSignatureVisitor(NodeVisitor):
             if s[i] == quote:
                 return i
             i += 1
-        return None
+        raise ValueError("字符串字面量未闭合。")
 
     def _strip_empty_lines(self, doc_lines: list[str]) -> str | None:
         """去掉文档前后的空行。"""

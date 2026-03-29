@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
+from .._checks import check
 from .clang_eval import eval_int
 from .cursor_utils import (
     unwrap_transparent,
@@ -28,6 +29,7 @@ from .py_arg_parse_tuple_type_parser import (
 )
 from .py_build_value_type_nodes import NamedTypeNode, TypeNode, UnionTypeNode
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
+
 
 def infer_signature(func_cursor: Cursor) -> list[ExtractedSignature]:
     """汇合参数推断与返回值推断结果，生成函数签名列表。"""
@@ -59,15 +61,13 @@ def infer_argument_lists(func_cursor: Cursor) -> list[list[ExtractedArgument]]:
         call_name = call_expr.spelling
         args = list(call_expr.get_children())[1:]
         if call_name == "PyArg_ParseTuple":
-            arguments = _infer_pyarg_parsetuple_arguments(args)
+            inferred_argument_lists.append(_infer_pyarg_parsetuple_arguments(args))
         elif call_name == "PyArg_ParseTupleAndKeywords":
-            arguments = _infer_pyarg_parsetuple_and_keywords_arguments(args)
+            inferred_argument_lists.append(
+                _infer_pyarg_parsetuple_and_keywords_arguments(args)
+            )
         else:
-            arguments = None
-        if arguments is None:
             continue
-
-        inferred_argument_lists.append(arguments)
 
     return inferred_argument_lists
 
@@ -95,46 +95,45 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
     return merged_type.render()
 
 
-def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[ExtractedArgument] | None:
+def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[ExtractedArgument]:
     """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
     format_string = extract_string_literal(args[1])
+    check(format_string is not None, "PyArg_ParseTuple format string 必须是字符串字面量。")
 
     try:
-        arguments = PyArgParseTupleTypeParser(
+        return PyArgParseTupleTypeParser(
             format_string,
             args[2:],
             resolve_name_func=_resolve_argument_name,
             resolve_object_type_func=_resolve_object_type_for_pyarg,
             resolve_default_value_func=_resolve_default_value_for_pyarg,
         ).parse()
-    except PyArgParseTupleTypeParserError:
-        return None
-
-    return arguments
+    except PyArgParseTupleTypeParserError as ex:
+        raise RuntimeError("解析 PyArg_ParseTuple 参数失败。") from ex
 
 
 def _infer_pyarg_parsetuple_and_keywords_arguments(
     args: list[Cursor],
-) -> list[ExtractedArgument] | None:
+) -> list[ExtractedArgument]:
     """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
     format_string = extract_string_literal(args[2])
-
+    check(
+        format_string is not None,
+        "PyArg_ParseTupleAndKeywords format string 必须是字符串字面量。",
+    )
     kwlist = _extract_kwlist(args[3])
-    if kwlist is None:
-        return None
 
     try:
-        arguments = PyArgParseTupleAndKeywordsTypeParser(
+        return PyArgParseTupleAndKeywordsTypeParser(
             format_string,
             kwlist,
             args[4:],
             resolve_object_type_func=_resolve_object_type_for_pyarg,
             resolve_default_value_func=_resolve_default_value_for_pyarg,
         ).parse()
-    except PyArgParseTupleAndKeywordsTypeParserError:
-        return None
+    except PyArgParseTupleAndKeywordsTypeParserError as ex:
+        raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
 
-    return arguments
 
 def _infer_type_from_return_stmt(return_stmt: Cursor) -> TypeNode | None:
     """从单条 return 语句推断返回类型。"""
@@ -165,8 +164,7 @@ def infer_expr_type(expr_cursor: Cursor) -> TypeNode | None:
 def _infer_conditional_operator_type(expr_cursor: Cursor) -> TypeNode | None:
     """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
     children = list(expr_cursor.get_children())
-    if len(children) != 3:
-        return None
+    check(len(children) == 3, "CONDITIONAL_OPERATOR 必须包含 3 个子节点。")
 
     branch_types: list[TypeNode] = []
     for branch in children[1:]:
@@ -215,7 +213,10 @@ def _iter_subtree_names(node: Cursor) -> Iterable[str]:
 
 def _infer_call_expr_type(call_expr_cursor: Cursor) -> TypeNode | None:
     """从调用表达式推断返回类型。"""
-    assert call_expr_cursor.kind == CursorKind.CALL_EXPR
+    check(
+        call_expr_cursor.kind == CursorKind.CALL_EXPR,
+        "_infer_call_expr_type 只接受 CALL_EXPR。",
+    )
     call_name = call_expr_cursor.spelling
 
     if call_name == "Py_BuildValue":
@@ -255,19 +256,17 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> TypeNode | None:
         return None
 
 
-def _resolve_argument_name(c_args: list[Cursor]) -> str | None:
+def _resolve_argument_name(c_args: list[Cursor]) -> str:
     """将 parser 提供的 decl-ref 槽位变量名按顺序拼接为参数名。"""
     names: list[str] = []
     for c_arg in c_args:
         candidate = _resolve_decl_candidate(c_arg)
-        if candidate is None:
-            return None
+        check(candidate is not None, "无法将 C 参数槽位解析为声明节点。")
 
         name = candidate.spelling
         names.append(name)
 
-    if not names:
-        return None
+    check(bool(names), "参数槽位列表为空，无法生成参数名。")
     return "_".join(names)
 
 
@@ -319,15 +318,16 @@ def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
     return normalized
 
 
-def _extract_kwlist(node: Cursor) -> list[str] | None:
+def _extract_kwlist(node: Cursor) -> list[str]:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
     kwlist_decl = _resolve_decl_candidate(node)
-    if kwlist_decl is None or kwlist_decl.kind != CursorKind.VAR_DECL:
-        return None
+    check(
+        kwlist_decl is not None and kwlist_decl.kind == CursorKind.VAR_DECL,
+        "kwlist 必须引用 VAR_DECL。",
+    )
 
     init_list_expr = var_decl_to_init_list_expr(kwlist_decl)
-    if init_list_expr is None:
-        return None
+    check(init_list_expr is not None, "kwlist 必须使用初始化列表定义。")
 
     result: list[str] = []
     for child in init_list_expr.get_children():
@@ -336,8 +336,7 @@ def _extract_kwlist(node: Cursor) -> list[str] | None:
             break
 
         keyword_name = extract_string_literal(entry)
-        if keyword_name is None:
-            return None
+        check(keyword_name is not None, "kwlist 中的关键字名必须是字符串字面量。")
         result.append(keyword_name)
 
     return result
