@@ -483,13 +483,175 @@ def test_printer_prints_ellipsis_for_unknown_default_value() -> None:
     ]
 
 
+def test_printer_keeps_zero_argument_function_on_single_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature()],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo():",
+        "    ...",
+    ]
+
+
 def test_printer_prints_placeholder_signature_for_unknown_function() -> None:
     func = IRFunction(name="foo")
 
     lines = StubPrinter(include_docstrings=False).print_function(func)
 
     assert lines == [
-        "def foo(*args, **kwargs):",
+        "def foo(",
+        "    *args,",
+        "    **kwargs,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_multiple_arguments_one_per_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="str")],
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x: int,",
+        "    y: str,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_multiple_arguments_with_return_type_one_per_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="str")],
+                return_type_name="bool",
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x: int,",
+        "    y: str,",
+        ") -> bool:",
+        "    ...",
+    ]
+
+
+def test_printer_prints_multiple_arguments_with_defaults_one_per_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[
+                    IRArgument(name="x", default_value="1"),
+                    IRArgument(name="y", default_value="unknown_default()"),
+                ],
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x = 1,",
+        "    y = unknown_default(),",
+        "):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_positional_only_marker_on_its_own_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[
+                    IRArgument(name="x", kind=IRArgumentKind.POSITIONAL_ONLY),
+                    IRArgument(name="y"),
+                ],
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x,",
+        "    /,",
+        "    y,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_bare_star_on_its_own_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[
+                    IRArgument(name="x"),
+                    IRArgument(name="y", kind=IRArgumentKind.KEYWORD_ONLY),
+                    IRArgument(name="z", kind=IRArgumentKind.KEYWORD_ONLY),
+                ],
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x,",
+        "    *,",
+        "    y,",
+        "    z,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_printer_prints_var_args_and_var_kwargs_on_their_own_lines() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[
+                    IRArgument(name="x"),
+                    IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
+                    IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
+                ],
+            )
+        ],
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    x,",
+        "    *args,",
+        "    **kwargs,",
+        "):",
         "    ...",
     ]
 
@@ -512,6 +674,47 @@ def test_printer_prints_c_inferred_source_comment_after_function() -> None:
         "#   C inferred source for foo:",
         "#   static int foo_impl(int value) {",
         "#       return value;",
+        "#   }",
+    ]
+
+
+def test_printer_prints_c_inferred_source_comment_once_after_multiline_overloads() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[IRArgument(name="value", type_name="int"), IRArgument(name="flag", type_name="bool")],
+                return_type_name="int",
+            ),
+            _signature(
+                args=[IRArgument(name="value", type_name="str"), IRArgument(name="flag", type_name="bool")],
+                return_type_name="str",
+            ),
+        ],
+        c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
+    )
+
+    lines = StubPrinter(
+        include_docstrings=False,
+        include_c_inferred_source_comment=True,
+    ).print_function(func)
+
+    assert lines == [
+        "@typing.overload",
+        "def foo(",
+        "    value: int,",
+        "    flag: bool,",
+        ") -> int:",
+        "    ...",
+        "@typing.overload",
+        "def foo(",
+        "    value: str,",
+        "    flag: bool,",
+        ") -> str:",
+        "    ...",
+        "#   C inferred source for foo:",
+        "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+        "#       return self;",
         "#   }",
     ]
 
@@ -612,6 +815,44 @@ def test_printer_repeats_method_decorator_for_each_overload() -> None:
         "@classmethod",
         "@typing.overload",
         "def build(x: str) -> str:",
+        "    ...",
+    ]
+
+
+def test_printer_repeats_method_decorator_for_each_multiline_overload() -> None:
+    method = IRMethod(
+        function=IRFunction(
+            name="build",
+            signatures=[
+                _signature(
+                    args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="int")],
+                    return_type_name="int",
+                ),
+                _signature(
+                    args=[IRArgument(name="x", type_name="str"), IRArgument(name="y", type_name="str")],
+                    return_type_name="str",
+                ),
+            ],
+        ),
+        decorator="classmethod",
+    )
+
+    lines = StubPrinter(include_docstrings=False).print_method(method)
+
+    assert lines == [
+        "@classmethod",
+        "@typing.overload",
+        "def build(",
+        "    x: int,",
+        "    y: int,",
+        ") -> int:",
+        "    ...",
+        "@classmethod",
+        "@typing.overload",
+        "def build(",
+        "    x: str,",
+        "    y: str,",
+        ") -> str:",
         "    ...",
     ]
 

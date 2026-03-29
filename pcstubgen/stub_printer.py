@@ -177,7 +177,7 @@ class StubPrinter:
             result.append(f"@{method_decorator}")
         if overload:
             result.append("@typing.overload")
-        result.append(self._build_function_signature(func_name=func_name, signature=signature))
+        result.extend(self._build_function_signature(func_name=func_name, signature=signature))
 
         if self.include_docstrings and signature.doc is not None:
             body = self.print_docstring(signature.doc)
@@ -187,14 +187,45 @@ class StubPrinter:
         result.extend(self.indent_lines(body))
         return result
 
-    def _build_function_signature(self, *, func_name: str, signature: IRSignature) -> str:
+    def _build_function_signature(self, *, func_name: str, signature: IRSignature) -> list[str]:
         """构建单条 def 头。"""
         args = self._format_arguments(signature.args)
+        if len(signature.args) <= 1:
+            return [self._build_single_line_function_signature(func_name=func_name, args=args, signature=signature)]
+
+        return self._build_multiline_function_signature(func_name=func_name, args=args, signature=signature)
+
+    def _build_single_line_function_signature(
+        self,
+        *,
+        func_name: str,
+        args: list[str],
+        signature: IRSignature,
+    ) -> str:
+        """构建单行 def 头。"""
         rendered = [f"def {func_name}(", ", ".join(args), ")"]
         if signature.return_type_name is not None:
             rendered.append(f" -> {signature.return_type_name}")
         rendered.append(":")
         return "".join(rendered)
+
+    def _build_multiline_function_signature(
+        self,
+        *,
+        func_name: str,
+        args: list[str],
+        signature: IRSignature,
+    ) -> list[str]:
+        """构建多行 def 头，每个参数独占一行。"""
+        rendered = [f"def {func_name}("]
+        rendered.extend(self.indent_lines([f"{arg}," for arg in args]))
+
+        closing_line = ")"
+        if signature.return_type_name is not None:
+            closing_line += f" -> {signature.return_type_name}"
+        closing_line += ":"
+        rendered.append(closing_line)
+        return rendered
 
     def _format_arguments(self, args: list[IRArgument]) -> list[str]:
         """渲染函数参数列表。"""
