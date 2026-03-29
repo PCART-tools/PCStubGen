@@ -7,14 +7,14 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.c_signature.py_build_value_type_nodes import (
-    AnyTypeNode,
-    DictTypeNode,
-    ListTypeNode,
-    NamedTypeNode,
-    TupleTypeNode,
-    TypeNode,
-    UnionTypeNode,
+from pcstubgen.c_signature.types import (
+    AnyType,
+    DictType,
+    ListType,
+    NamedType,
+    TupleType,
+    Type,
+    UnionType,
 )
 from pcstubgen.c_signature.py_build_value_type_parser import (
     PyBuildValueTypeParser,
@@ -27,7 +27,7 @@ def _fake_args(count: int) -> list[Cursor]:
     return [cast(Cursor, object()) for _ in range(count)]
 
 
-def _parse(format_string: str, arg_count: int) -> TypeNode:
+def _parse(format_string: str, arg_count: int) -> Type:
     """解析格式串并返回原始类型树。"""
     return PyBuildValueTypeParser(format_string, _fake_args(arg_count)).parse()
 
@@ -40,175 +40,175 @@ def _canonical_render(format_string: str, arg_count: int) -> str:
 @pytest.mark.parametrize(
     ("node", "expected"),
     [
-        (AnyTypeNode(), "Any"),
-        (NamedTypeNode("int"), "int"),
-        (UnionTypeNode(()), "Never"),
-        (UnionTypeNode((NamedTypeNode("int"),)), "int"),
+        (AnyType(), "Any"),
+        (NamedType("int"), "int"),
+        (UnionType(()), "Never"),
+        (UnionType((NamedType("int"),)), "int"),
         (
-            TupleTypeNode((NamedTypeNode("int"), UnionTypeNode((NamedTypeNode("str"),)))),
+            TupleType((NamedType("int"), UnionType((NamedType("str"),)))),
             "tuple[int, str]",
         ),
-        (ListTypeNode(UnionTypeNode((NamedTypeNode("int"),))), "list[int]"),
+        (ListType(UnionType((NamedType("int"),))), "list[int]"),
         (
-            DictTypeNode(
-                UnionTypeNode((NamedTypeNode("str"),)),
-                UnionTypeNode((NamedTypeNode("int"),)),
+            DictType(
+                UnionType((NamedType("str"),)),
+                UnionType((NamedType("int"),)),
             ),
             "dict[str, int]",
         ),
     ],
 )
-def test_render_type_node_returns_expected_string(node: TypeNode, expected: str) -> None:
+def test_render_type_returns_expected_string(node: Type, expected: str) -> None:
     """显式渲染接口应按当前节点结构输出文本。"""
     assert node.render() == expected
 
 
-def test_canonicalize_type_node_turns_empty_union_into_never() -> None:
+def test_canonicalize_type_turns_empty_union_into_never() -> None:
     """空 union 在规范化后应保持为空 union 这一唯一 `Never` 表示。"""
-    canonical = UnionTypeNode(()).canonicalize()
+    canonical = UnionType(()).canonicalize()
 
-    assert canonical == UnionTypeNode(())
+    assert canonical == UnionType(())
 
 
-def test_union_type_node_is_empty_reports_whether_members_exist() -> None:
+def test_union_type_is_empty_reports_whether_members_exist() -> None:
     """空 union 判定应只取决于成员是否为空。"""
-    assert UnionTypeNode(()).is_empty() is True
-    assert UnionTypeNode((NamedTypeNode("int"),)).is_empty() is False
+    assert UnionType(()).is_empty() is True
+    assert UnionType((NamedType("int"),)).is_empty() is False
 
 
-def test_canonicalize_type_node_propagates_any_across_union_members() -> None:
+def test_canonicalize_type_propagates_any_across_union_members() -> None:
     """联合类型中只要出现显式 `Any`，整体就应规范化为 `Any`。"""
-    canonical = UnionTypeNode(
-        (AnyTypeNode(), NamedTypeNode("int"))
+    canonical = UnionType(
+        (AnyType(), NamedType("int"))
     ).canonicalize()
 
-    assert canonical == AnyTypeNode()
+    assert canonical == AnyType()
 
 
-def test_canonicalize_type_node_drops_never_from_union_members() -> None:
+def test_canonicalize_type_drops_never_from_union_members() -> None:
     """联合类型规范化时应移除空 union 这一 `Never` 幺元成员。"""
-    canonical = UnionTypeNode(
-        (UnionTypeNode(()), NamedTypeNode("int"))
+    canonical = UnionType(
+        (UnionType(()), NamedType("int"))
     ).canonicalize()
 
-    assert canonical == NamedTypeNode("int")
+    assert canonical == NamedType("int")
 
 
-def test_canonicalize_type_node_short_circuits_nested_any() -> None:
+def test_canonicalize_type_short_circuits_nested_any() -> None:
     """多层嵌套联合中出现 `Any` 时应直接短路为显式 `Any`。"""
-    canonical = UnionTypeNode(
+    canonical = UnionType(
         (
-            NamedTypeNode("str"),
-            UnionTypeNode((NamedTypeNode("int"), AnyTypeNode())),
+            NamedType("str"),
+            UnionType((NamedType("int"), AnyType())),
         )
     ).canonicalize()
 
-    assert canonical == AnyTypeNode()
+    assert canonical == AnyType()
 
 
-def test_canonicalize_type_node_flattens_deduplicates_and_sorts_unions() -> None:
+def test_canonicalize_type_flattens_deduplicates_and_sorts_unions() -> None:
     """规范化阶段应展平、去重并按渲染键排序联合类型成员。"""
-    canonical = UnionTypeNode(
+    canonical = UnionType(
         (
-            NamedTypeNode("str"),
-            UnionTypeNode((NamedTypeNode("float"), NamedTypeNode("int"))),
-            NamedTypeNode("bool"),
-            UnionTypeNode(
+            NamedType("str"),
+            UnionType((NamedType("float"), NamedType("int"))),
+            NamedType("bool"),
+            UnionType(
                 (
-                    NamedTypeNode("int"),
-                    UnionTypeNode((NamedTypeNode("bool"), UnionTypeNode(()))),
+                    NamedType("int"),
+                    UnionType((NamedType("bool"), UnionType(()))),
                 )
             ),
         )
     ).canonicalize()
 
-    assert canonical == UnionTypeNode(
+    assert canonical == UnionType(
         (
-            NamedTypeNode("bool"),
-            NamedTypeNode("float"),
-            NamedTypeNode("int"),
-            NamedTypeNode("str"),
+            NamedType("bool"),
+            NamedType("float"),
+            NamedType("int"),
+            NamedType("str"),
         )
     )
 
 
 def test_canonicalize_type_node_recurses_into_container_members() -> None:
     """规范化阶段应递归处理容器内部的联合类型。"""
-    canonical = ListTypeNode(
-        UnionTypeNode(
+    canonical = ListType(
+        UnionType(
             (
-                NamedTypeNode("str"),
-                UnionTypeNode((NamedTypeNode("int"), NamedTypeNode("bool"))),
-                NamedTypeNode("bool"),
+                NamedType("str"),
+                UnionType((NamedType("int"), NamedType("bool"))),
+                NamedType("bool"),
             )
         )
     ).canonicalize()
 
-    assert canonical == ListTypeNode(
-        UnionTypeNode((NamedTypeNode("bool"), NamedTypeNode("int"), NamedTypeNode("str")))
+    assert canonical == ListType(
+        UnionType((NamedType("bool"), NamedType("int"), NamedType("str")))
     )
 
 
 def test_canonicalize_type_node_folds_single_union_member_inside_container() -> None:
     """容器槽位在规范化后可直接持有非 union 节点。"""
-    canonical = DictTypeNode(
-        UnionTypeNode((NamedTypeNode("str"),)),
-        UnionTypeNode((NamedTypeNode("int"),)),
+    canonical = DictType(
+        UnionType((NamedType("str"),)),
+        UnionType((NamedType("int"),)),
     ).canonicalize()
 
-    assert canonical == DictTypeNode(NamedTypeNode("str"), NamedTypeNode("int"))
+    assert canonical == DictType(NamedType("str"), NamedType("int"))
 
 
 def test_canonicalize_type_node_deduplicates_structurally_equal_container_members() -> None:
     """结构相同的容器成员在 union 里应按节点相等性去重。"""
-    canonical = UnionTypeNode(
+    canonical = UnionType(
         (
-            ListTypeNode(NamedTypeNode("int")),
-            ListTypeNode(NamedTypeNode("int")),
+            ListType(NamedType("int")),
+            ListType(NamedType("int")),
         )
     ).canonicalize()
 
-    assert canonical == ListTypeNode(NamedTypeNode("int"))
+    assert canonical == ListType(NamedType("int"))
 
 
 def test_canonicalize_type_node_keeps_empty_union_when_all_members_are_never() -> None:
     """嵌套 union 仅包含 `Never` 时应回到空 union。"""
-    canonical = UnionTypeNode(
+    canonical = UnionType(
         (
-            UnionTypeNode(()),
-            UnionTypeNode((UnionTypeNode(()),)),
+            UnionType(()),
+            UnionType((UnionType(()),)),
         )
     ).canonicalize()
 
-    assert canonical == UnionTypeNode(())
+    assert canonical == UnionType(())
 
 
 @pytest.mark.parametrize(
     ("format_string", "arg_count", "expected"),
     [
-        ("", 0, NamedTypeNode("None")),
-        (" \t , : ", 0, NamedTypeNode("None")),
-        ("()", 0, TupleTypeNode(())),
-        ("[]", 0, ListTypeNode(UnionTypeNode(()))),
+        ("", 0, NamedType("None")),
+        (" \t , : ", 0, NamedType("None")),
+        ("()", 0, TupleType(())),
+        ("[]", 0, ListType(UnionType(()))),
         (
             "{}",
             0,
-            DictTypeNode(
-                UnionTypeNode(()),
-                UnionTypeNode(()),
+            DictType(
+                UnionType(()),
+                UnionType(()),
             ),
         ),
-        ("(i)", 1, TupleTypeNode((NamedTypeNode("int"),))),
+        ("(i)", 1, TupleType((NamedType("int"),))),
         (
             "[szuU]",
             4,
-            ListTypeNode(
-                UnionTypeNode(
+            ListType(
+                UnionType(
                     (
-                        UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None"))),
-                        UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None"))),
-                        UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None"))),
-                        UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None"))),
+                        UnionType((NamedType("str"), NamedType("None"))),
+                        UnionType((NamedType("str"), NamedType("None"))),
+                        UnionType((NamedType("str"), NamedType("None"))),
+                        UnionType((NamedType("str"), NamedType("None"))),
                     )
                 )
             ),
@@ -216,20 +216,20 @@ def test_canonicalize_type_node_keeps_empty_union_when_all_members_are_never() -
         (
             "{Oi}",
             2,
-            DictTypeNode(
-                UnionTypeNode((AnyTypeNode(),)),
-                UnionTypeNode((NamedTypeNode("int"),)),
+            DictType(
+                UnionType((AnyType(),)),
+                UnionType((NamedType("int"),)),
             ),
         ),
         (
             "{Oiis}",
             4,
-            DictTypeNode(
-                UnionTypeNode((AnyTypeNode(), NamedTypeNode("int"))),
-                UnionTypeNode(
+            DictType(
+                UnionType((AnyType(), NamedType("int"))),
+                UnionType(
                     (
-                        NamedTypeNode("int"),
-                        UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None"))),
+                        NamedType("int"),
+                        UnionType((NamedType("str"), NamedType("None"))),
                     )
                 ),
             ),
@@ -239,7 +239,7 @@ def test_canonicalize_type_node_keeps_empty_union_when_all_members_are_never() -
 def test_parse_returns_expected_raw_type_tree(
     format_string: str,
     arg_count: int,
-    expected: TypeNode,
+    expected: Type,
 ) -> None:
     """解析阶段应返回未经规范化的原始类型树。"""
     assert _parse(format_string, arg_count) == expected
@@ -260,10 +260,20 @@ def test_parse_returns_expected_raw_type_tree(
         ("{iO}", 2, "dict[int, Any]"),
         ("{Oiis}", 4, "dict[Any, None | int | str]"),
         ("{syUy}", 4, "dict[None | str, None | bytes]"),
+        ("i", 1, "int"),
         ("b", 1, "int"),
+        ("h", 1, "int"),
+        ("l", 1, "int"),
+        ("B", 1, "int"),
+        ("H", 1, "int"),
+        ("I", 1, "int"),
+        ("k", 1, "int"),
+        ("L", 1, "int"),
+        ("K", 1, "int"),
+        ("n", 1, "int"),
+        ("d", 1, "float"),
         ("f", 1, "float"),
         ("D", 1, "complex"),
-        ("p", 1, "bool"),
         ("C", 1, "str"),
         ("s", 1, "None | str"),
         ("s#", 2, "None | str"),
@@ -340,9 +350,9 @@ def test_parse_value_returns_list_node_for_empty_list_format() -> None:
 
     list_node = parser._parse_value()
 
-    assert isinstance(list_node, ListTypeNode)
-    assert isinstance(list_node.element, UnionTypeNode)
-    assert list_node.element == UnionTypeNode(())
+    assert isinstance(list_node, ListType)
+    assert isinstance(list_node.element, UnionType)
+    assert list_node.element == UnionType(())
 
 
 def test_parse_value_returns_dict_node_for_empty_dict_format() -> None:
@@ -351,11 +361,31 @@ def test_parse_value_returns_dict_node_for_empty_dict_format() -> None:
 
     dict_node = parser._parse_value()
 
-    assert isinstance(dict_node, DictTypeNode)
-    assert isinstance(dict_node.key, UnionTypeNode)
-    assert isinstance(dict_node.value, UnionTypeNode)
-    assert dict_node.key == UnionTypeNode(())
-    assert dict_node.value == UnionTypeNode(())
+    assert isinstance(dict_node, DictType)
+    assert isinstance(dict_node.key, UnionType)
+    assert isinstance(dict_node.value, UnionType)
+    assert dict_node.key == UnionType(())
+    assert dict_node.value == UnionType(())
+
+
+@pytest.mark.parametrize(
+    ("format_string", "arg_count", "expected"),
+    [
+        ("s#", 2, "None | str"),
+        ("y#", 2, "None | bytes"),
+        ("z#", 2, "None | str"),
+        ("u#", 2, "None | str"),
+        ("U#", 2, "None | str"),
+        ("O&", 2, "Any"),
+    ],
+)
+def test_parse_matches_longest_format_unit_first(
+    format_string: str,
+    arg_count: int,
+    expected: str,
+) -> None:
+    """多字符格式单元应按最长匹配整体消费。"""
+    assert _canonical_render(format_string, arg_count) == expected
 
 
 def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> None:
@@ -366,16 +396,37 @@ def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> N
         _parse("{sis}", 3)
 
 
+@pytest.mark.parametrize(("format_string",), [("O",), ("S",), ("N",)])
+def test_parse_uses_object_slot_cursor_for_object_like_units(format_string: str) -> None:
+    """`O`、`S`、`N` 应将自己的对象槽位交给类型解析函数。"""
+    object_cursor = cast(Cursor, object())
+    seen: list[Cursor] = []
+
+    def resolve_object_type(cursor: Cursor) -> Type:
+        """记录解析器看到的游标并返回固定类型。"""
+        seen.append(cursor)
+        return NamedType("Resolved")
+
+    parser = PyBuildValueTypeParser(
+        format_string,
+        [object_cursor],
+        resolve_object_type_func=resolve_object_type,
+    )
+
+    assert parser.parse() == NamedType("Resolved")
+    assert seen == [object_cursor]
+
+
 def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
     """`O&` 应将 converter 游标交给对象类型解析函数。"""
     converter_cursor = cast(Cursor, object())
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> TypeNode:
+    def resolve_object_type(cursor: Cursor) -> Type:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
-        return NamedTypeNode("Converted")
+        return NamedType("Converted")
 
     parser = PyBuildValueTypeParser(
         "O&",
@@ -383,7 +434,7 @@ def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
         resolve_object_type_func=resolve_object_type,
     )
 
-    assert parser.parse() == NamedTypeNode("Converted")
+    assert parser.parse() == NamedType("Converted")
     assert seen == [converter_cursor]
 
 
@@ -393,10 +444,10 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> TypeNode:
+    def resolve_object_type(cursor: Cursor) -> Type:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
-        return NamedTypeNode("Converted")
+        return NamedType("Converted")
 
     parser = PyBuildValueTypeParser(
         "([O&])",
@@ -404,8 +455,8 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
         resolve_object_type_func=resolve_object_type,
     )
 
-    assert parser.parse() == TupleTypeNode(
-        (ListTypeNode(UnionTypeNode((NamedTypeNode("Converted"),))),)
+    assert parser.parse() == TupleType(
+        (ListType(UnionType((NamedType("Converted"),))),)
     )
     assert seen == [converter_cursor]
 
@@ -416,6 +467,7 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
         ("q", 0),
         ("(i", 1),
         ("{sis}", 3),
+        ("p", 1),
         ("s#", 1),
         ("i", 2),
         ("i#", 2),

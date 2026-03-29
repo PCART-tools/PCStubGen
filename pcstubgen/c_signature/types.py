@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-"""Py_BuildValue 类型树节点及其规范化、渲染逻辑。"""
+"""`Py_BuildValue` 类型树及其规范化、渲染逻辑。"""
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
-class TypeNode(ABC):
+class Type(ABC):
     @abstractmethod
-    def canonicalize(self) -> TypeNode:
+    def canonicalize(self) -> Type:
         raise NotImplementedError
 
     @abstractmethod
@@ -17,10 +17,10 @@ class TypeNode(ABC):
 
 
 @dataclass(frozen=True)
-class NamedTypeNode(TypeNode):
+class NamedType(Type):
     name: str
 
-    def canonicalize(self) -> TypeNode:
+    def canonicalize(self) -> Type:
         return self
 
     def render(self) -> str:
@@ -28,42 +28,42 @@ class NamedTypeNode(TypeNode):
 
 
 @dataclass(frozen=True)
-class AnyTypeNode(TypeNode):
-    def canonicalize(self) -> TypeNode:
+class AnyType(Type):
+    def canonicalize(self) -> Type:
         return self
 
     def render(self) -> str:
         return "Any"
 
 
-def _union_sort_key(member: TypeNode) -> str:
+def _union_sort_key(member: Type) -> str:
     """返回 union 成员的稳定排序键。"""
     return member.render()
 
 
 @dataclass(frozen=True)
-class UnionTypeNode(TypeNode):
+class UnionType(Type):
     """表示联合类型；空成员列表表示 `Never`。"""
 
-    members: tuple[TypeNode, ...]
+    members: tuple[Type, ...]
 
     def is_empty(self) -> bool:
         """返回当前 union 是否不含任何成员。"""
         return len(self.members) == 0
 
-    def canonicalize(self) -> TypeNode:
+    def canonicalize(self) -> Type:
         """规范化联合类型并折叠 `Any` / `Never` 语义。"""
         if self.is_empty():
             return self
 
-        member_set: set[TypeNode] = set()
+        member_set: set[Type] = set()
         for member in self.members:
             canonical_member = member.canonicalize()
-            if isinstance(canonical_member, AnyTypeNode):
+            if isinstance(canonical_member, AnyType):
                 # Any | int = Any
                 return canonical_member
 
-            if isinstance(canonical_member, UnionTypeNode):
+            if isinstance(canonical_member, UnionType):
                 # 这里不需要递归flatten，canonicalize已保证flat
                 for m in canonical_member.members:
                     member_set.add(m)
@@ -76,7 +76,7 @@ class UnionTypeNode(TypeNode):
             return unique_members[0]
 
         unique_members.sort(key=_union_sort_key)
-        return UnionTypeNode(tuple(unique_members))
+        return UnionType(tuple(unique_members))
 
     def render(self) -> str:
         """按当前成员顺序渲染联合类型。"""
@@ -88,11 +88,11 @@ class UnionTypeNode(TypeNode):
 
 
 @dataclass(frozen=True)
-class TupleTypeNode(TypeNode):
-    items: tuple[TypeNode, ...]
+class TupleType(Type):
+    items: tuple[Type, ...]
 
-    def canonicalize(self) -> TypeNode:
-        return TupleTypeNode(tuple(item.canonicalize() for item in self.items))
+    def canonicalize(self) -> Type:
+        return TupleType(tuple(item.canonicalize() for item in self.items))
 
     def render(self) -> str:
         if not self.items:
@@ -103,31 +103,31 @@ class TupleTypeNode(TypeNode):
 
 
 @dataclass(frozen=True)
-class ListTypeNode(TypeNode):
-    element: TypeNode
+class ListType(Type):
+    element: Type
 
-    def canonicalize(self) -> TypeNode:
-        return ListTypeNode(self.element.canonicalize())
+    def canonicalize(self) -> Type:
+        return ListType(self.element.canonicalize())
 
     def render(self) -> str:
-        if isinstance(self.element, UnionTypeNode) and self.element.is_empty():
+        if isinstance(self.element, UnionType) and self.element.is_empty():
             return "list[Any]"
         return f"list[{self.element.render()}]"
 
 
 @dataclass(frozen=True)
-class DictTypeNode(TypeNode):
-    key: TypeNode
-    value: TypeNode
+class DictType(Type):
+    key: Type
+    value: Type
 
-    def canonicalize(self) -> TypeNode:
-        return DictTypeNode(self.key.canonicalize(), self.value.canonicalize())
+    def canonicalize(self) -> Type:
+        return DictType(self.key.canonicalize(), self.value.canonicalize())
 
     def render(self) -> str:
-        key_rendered = "Any" if isinstance(self.key, UnionTypeNode) and self.key.is_empty() else self.key.render()
+        key_rendered = "Any" if isinstance(self.key, UnionType) and self.key.is_empty() else self.key.render()
         value_rendered = (
             "Any"
-            if isinstance(self.value, UnionTypeNode) and self.value.is_empty()
+            if isinstance(self.value, UnionType) and self.value.is_empty()
             else self.value.render()
         )
         return f"dict[{key_rendered}, {value_rendered}]"

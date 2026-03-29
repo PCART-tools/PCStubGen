@@ -6,14 +6,15 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from .py_build_value_type_nodes import (
-    AnyTypeNode,
-    DictTypeNode,
-    ListTypeNode,
-    NamedTypeNode,
-    TupleTypeNode,
-    TypeNode,
-    UnionTypeNode,
+from .py_build_value_format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
+from .types import (
+    AnyType,
+    DictType,
+    ListType,
+    NamedType,
+    TupleType,
+    Type,
+    UnionType,
 )
 
 
@@ -28,7 +29,7 @@ class PyBuildValueTypeParser:
         self,
         fmt: str,
         args: list[Cursor],
-        resolve_object_type_func: Callable[[Cursor], TypeNode | None] | None = None,
+        resolve_object_type_func: Callable[[Cursor], Type | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
@@ -37,7 +38,7 @@ class PyBuildValueTypeParser:
         self._char_index = 0
         self._arg_index = 0
 
-    def parse(self) -> TypeNode:
+    def parse(self) -> Type:
         """解析格式串并返回未经规范化的类型树。"""
         self._char_index = 0
         self._arg_index = 0
@@ -50,14 +51,14 @@ class PyBuildValueTypeParser:
             )
 
         if not top_level_types:
-            return NamedTypeNode("None")
+            return NamedType("None")
         if len(top_level_types) == 1:
             return top_level_types[0]
-        return TupleTypeNode(tuple(top_level_types))
+        return TupleType(tuple(top_level_types))
 
-    def _parse_items(self, stop_char: str | None) -> list[TypeNode]:
+    def _parse_items(self, stop_char: str | None) -> list[Type]:
         """解析直到终止字符为止的一组类型项。"""
-        items: list[TypeNode] = []
+        items: list[Type] = []
 
         while True:
             self._skip_ignored_chars()
@@ -75,7 +76,7 @@ class PyBuildValueTypeParser:
 
             items.append(self._parse_value())
 
-    def _parse_value(self) -> TypeNode:
+    def _parse_value(self) -> Type:
         """解析单个类型值。"""
         current = self._peek_char_required()
 
@@ -87,21 +88,21 @@ class PyBuildValueTypeParser:
             return self._parse_dict()
         return self._parse_scalar()
 
-    def _parse_tuple(self) -> TypeNode:
+    def _parse_tuple(self) -> Type:
         """解析 tuple 结构。"""
         self._consume_char("(")
         items = self._parse_items(stop_char=")")
         self._consume_char(")")
-        return TupleTypeNode(tuple(items))
+        return TupleType(tuple(items))
 
-    def _parse_list(self) -> TypeNode:
+    def _parse_list(self) -> Type:
         """解析 list 结构。"""
         self._consume_char("[")
         items = self._parse_items(stop_char="]")
         self._consume_char("]")
-        return ListTypeNode(UnionTypeNode(tuple(items)))
+        return ListType(UnionType(tuple(items)))
 
-    def _parse_dict(self) -> TypeNode:
+    def _parse_dict(self) -> Type:
         """解析 dict 结构。"""
         self._consume_char("{")
         items = self._parse_items(stop_char="}")
@@ -112,64 +113,29 @@ class PyBuildValueTypeParser:
 
         key_types = items[0::2]
         value_types = items[1::2]
-        return DictTypeNode(
-            UnionTypeNode(tuple(key_types)),
-            UnionTypeNode(tuple(value_types)),
+        return DictType(
+            UnionType(tuple(key_types)),
+            UnionType(tuple(value_types)),
         )
 
-    def _parse_scalar(self) -> TypeNode:
+    def _parse_scalar(self) -> Type:
         """解析标量格式单元。"""
-        unit = self._peek_char_required()
+        spec = self._advance_format_unit_required()
+        c_args = self._advance_args_required(spec.c_arg_count)
+        if spec.object_type_arg_offset is not None:
+            return self._resolve_object_type(c_args[spec.object_type_arg_offset])
+        return spec.value_type
 
-        if unit in "bBhHiIlkLKn":
-            self._advance_char_arg_required()
-            return NamedTypeNode("int")
-
-        if unit in "fd":
-            self._advance_char_arg_required()
-            return NamedTypeNode("float")
-
-        if unit == "D":
-            self._advance_char_arg_required()
-            return NamedTypeNode("complex")
-
-        if unit == "p":
-            self._advance_char_arg_required()
-            return NamedTypeNode("bool")
-
-        if unit == "C":
-            self._advance_char_arg_required()
-            return NamedTypeNode("str")
-
-        if unit in "szuU":
-            self._advance_char_arg_required()
-            if self._peek_char() == "#":
-                self._advance_char_arg_required()
-            return UnionTypeNode((NamedTypeNode("str"), NamedTypeNode("None")))
-
-        if unit == "c":
-            self._advance_char_arg_required()
-            return NamedTypeNode("bytes")
-
-        if unit == "y":
-            self._advance_char_arg_required()
-            if self._peek_char() == "#":
-                self._advance_char_arg_required()
-            return UnionTypeNode((NamedTypeNode("bytes"), NamedTypeNode("None")))
-
-        if unit == "O":
-            _, arg = self._advance_char_arg_required()
-            if self._peek_char() == "&":
-                self._advance_char_arg_required()
-                return self._resolve_object_type(arg)
-            return self._resolve_object_type(arg)
-
-        if unit in "SN":
-            _, arg = self._advance_char_arg_required()
-            return self._resolve_object_type(arg)
+    def _advance_format_unit_required(self) -> _FormatUnitSpec:
+        """按最长匹配规则消费一个标量格式单元。"""
+        current = self._peek_char_required()
+        for spec in _FORMAT_UNIT_SPECS:
+            if self._format.startswith(spec.unit, self._char_index):
+                self._char_index += len(spec.unit)
+                return spec
 
         raise PyBuildValueTypeParserError(
-            f"索引 {self._char_index} 处的 format unit '{unit}' 不受支持。"
+            f"索引 {self._char_index} 处的 format unit '{current}' 不受支持。"
         )
 
     def _peek_char(self) -> str | None:
@@ -228,16 +194,14 @@ class PyBuildValueTypeParser:
         self._arg_index += 1
         return value
 
-    def _advance_char_arg_required(self) -> tuple[str, Cursor]:
-        """同时消费一个格式字符和对应的一个实参。"""
-        s = self._advance_char_required()
-        cursor = self._advance_arg_required()
-        return s, cursor
+    def _advance_args_required(self, count: int) -> list[Cursor]:
+        """连续消费指定数量的实参游标。"""
+        return [self._advance_arg_required() for _ in range(count)]
 
-    def _resolve_object_type(self, cursor: Cursor) -> TypeNode:
+    def _resolve_object_type(self, cursor: Cursor) -> Type:
         """解析对象槽位的类型，未知时保留为显式 `Any` 节点。"""
         if self._resolve_object_type_func is not None:
             resolved_type = self._resolve_object_type_func(cursor)
             if resolved_type is not None:
                 return resolved_type
-        return AnyTypeNode()
+        return AnyType()

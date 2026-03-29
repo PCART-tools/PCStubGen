@@ -21,12 +21,12 @@ from pcstubgen.c_signature import cursor_utils as cursor_utils_module
 from pcstubgen.c_signature import signature_inference as signature_rules_module
 from pcstubgen.c_signature import module_table as module_table_module
 from pcstubgen.c_signature import translation_unit as translation_unit_module
-from pcstubgen.c_signature.py_build_value_type_nodes import (
-    AnyTypeNode,
-    ListTypeNode,
-    NamedTypeNode,
-    TupleTypeNode,
-    UnionTypeNode,
+from pcstubgen.c_signature.types import (
+    AnyType,
+    ListType,
+    NamedType,
+    TupleType,
+    UnionType,
 )
 from pcstubgen.c_signature.module_table import (
     extract_method_table as _extract_method_table,
@@ -3095,12 +3095,12 @@ def _type_object_decl(name: str, tp_name: str) -> _FakeNode:
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
-        ("Py_None", NamedTypeNode("None")),
-        ("Py_True", NamedTypeNode("bool")),
-        ("Py_False", NamedTypeNode("bool")),
+        ("Py_None", NamedType("None")),
+        ("Py_True", NamedType("bool")),
+        ("Py_False", NamedType("bool")),
     ],
 )
-def test_infer_expr_type_detects_direct_object_returns(token_name: str, expected: NamedTypeNode) -> None:
+def test_infer_expr_type_detects_direct_object_returns(token_name: str, expected: NamedType) -> None:
     inferred = signature_rules_module.infer_expr_type(_identifier_node(token_name))
 
     assert inferred == expected
@@ -3109,14 +3109,14 @@ def test_infer_expr_type_detects_direct_object_returns(token_name: str, expected
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
-        ("Py_RETURN_NONE", NamedTypeNode("None")),
-        ("Py_RETURN_TRUE", NamedTypeNode("bool")),
-        ("Py_RETURN_FALSE", NamedTypeNode("bool")),
-        ("Py_RETURN_NAN", NamedTypeNode("float")),
-        ("Py_RETURN_INF", NamedTypeNode("float")),
+        ("Py_RETURN_NONE", NamedType("None")),
+        ("Py_RETURN_TRUE", NamedType("bool")),
+        ("Py_RETURN_FALSE", NamedType("bool")),
+        ("Py_RETURN_NAN", NamedType("float")),
+        ("Py_RETURN_INF", NamedType("float")),
     ],
 )
-def test_infer_expr_type_detects_preserved_macro_tokens(token_name: str, expected: NamedTypeNode) -> None:
+def test_infer_expr_type_detects_preserved_macro_tokens(token_name: str, expected: NamedType) -> None:
     macro_expr = _macro_expr(token_name)
 
     inferred = signature_rules_module.infer_expr_type(macro_expr)
@@ -3138,25 +3138,25 @@ def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() ->
 @pytest.mark.parametrize(
     ("call_name", "expected"),
     [
-        ("PyBool_FromLong", NamedTypeNode("bool")),
-        ("PyLong_FromLong", NamedTypeNode("int")),
-        ("PyFloat_FromDouble", NamedTypeNode("float")),
-        ("PyComplex_FromDoubles", NamedTypeNode("complex")),
-        ("PyUnicode_FromString", NamedTypeNode("str")),
-        ("PyUnicode_AsUTF8String", NamedTypeNode("bytes")),
-        ("PyByteArray_FromObject", NamedTypeNode("bytearray")),
-        ("PySlice_New", NamedTypeNode("slice")),
-        ("PyMemoryView_FromObject", NamedTypeNode("memoryview")),
-        ("PyTuple_New", NamedTypeNode("tuple")),
-        ("PyList_New", NamedTypeNode("list")),
-        ("PyDict_New", NamedTypeNode("dict")),
-        ("PySet_New", NamedTypeNode("set")),
-        ("PyFrozenSet_New", NamedTypeNode("frozenset")),
-        ("PyList_AsTuple", NamedTypeNode("tuple")),
-        ("PyDict_Items", NamedTypeNode("list")),
+        ("PyBool_FromLong", NamedType("bool")),
+        ("PyLong_FromLong", NamedType("int")),
+        ("PyFloat_FromDouble", NamedType("float")),
+        ("PyComplex_FromDoubles", NamedType("complex")),
+        ("PyUnicode_FromString", NamedType("str")),
+        ("PyUnicode_AsUTF8String", NamedType("bytes")),
+        ("PyByteArray_FromObject", NamedType("bytearray")),
+        ("PySlice_New", NamedType("slice")),
+        ("PyMemoryView_FromObject", NamedType("memoryview")),
+        ("PyTuple_New", NamedType("tuple")),
+        ("PyList_New", NamedType("list")),
+        ("PyDict_New", NamedType("dict")),
+        ("PySet_New", NamedType("set")),
+        ("PyFrozenSet_New", NamedType("frozenset")),
+        ("PyList_AsTuple", NamedType("tuple")),
+        ("PyDict_Items", NamedType("list")),
     ],
 )
-def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: NamedTypeNode) -> None:
+def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: NamedType) -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(call_name, _identifier_node("arg"))
     )
@@ -3174,10 +3174,10 @@ def test_infer_expr_type_parses_py_buildvalue() -> None:
         )
     )
 
-    assert inferred == TupleTypeNode(
+    assert inferred == TupleType(
         (
-            NamedTypeNode("int"),
-            UnionTypeNode((NamedTypeNode("None"), NamedTypeNode("str"))),
+            NamedType("int"),
+            UnionType((NamedType("None"), NamedType("str"))),
         )
     )
 
@@ -3193,12 +3193,12 @@ def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
         )
     )
 
-    assert inferred == ListTypeNode(
-        UnionTypeNode(
+    assert inferred == ListType(
+        UnionType(
             (
-                NamedTypeNode("None"),
-                NamedTypeNode("int"),
-                NamedTypeNode("str"),
+                NamedType("None"),
+                NamedType("int"),
+                NamedType("str"),
             )
         )
     )
@@ -3213,7 +3213,7 @@ def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
         )
     )
 
-    assert inferred == TupleTypeNode((NamedTypeNode("int"),))
+    assert inferred == TupleType((NamedType("int"),))
 
 
 def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() -> None:
@@ -3225,7 +3225,20 @@ def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() 
         )
     )
 
-    assert inferred == TupleTypeNode((AnyTypeNode(),))
+    assert inferred == TupleType((AnyType(),))
+
+
+def test_infer_expr_type_keeps_py_buildvalue_o_ampersand_as_any_when_converter_unknown() -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "Py_BuildValue",
+            _string_literal("(O&)"),
+            _identifier_node("converter"),
+            _identifier_node("value"),
+        )
+    )
+
+    assert inferred == TupleType((AnyType(),))
 
 
 def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
@@ -3245,7 +3258,7 @@ def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
 
     inferred = signature_rules_module.infer_expr_type(wrapped_expr)
 
-    assert inferred == NamedTypeNode("bytes")
+    assert inferred == NamedType("bytes")
 
 
 def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
