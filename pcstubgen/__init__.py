@@ -10,8 +10,9 @@ from .pipeline import Pipeline
 from .visitors.node_visitor import NodeVisitor
 from .visitors.docstring_signature_visitor import DocstringSignatureVisitor
 from .visitors.c_signature_visitor import CSignatureVisitor
-from .stub_printer import StubPrinter
-from .writer import Writer
+from .stub_renderer import StubRenderer
+from .stub_writer import StubWriter
+from .checks import check
 
 __all__ = ["write_stubs"]
 
@@ -20,7 +21,7 @@ def write_stubs(
     module_name: str,
     output_dir: Path,
     options: StubGenerationOptions | None = None,
-    _writer: Writer | None = None,
+    _writer: StubWriter | None = None,
 ) -> None:
     """
     生成存根并写入文件。
@@ -67,10 +68,10 @@ def write_stubs(
         c_signature_visitor.log_summary()
 
     if _writer is None:
-        _writer = Writer()
-    printer = StubPrinter(
+        _writer = StubWriter()
+    renderer = StubRenderer(
         include_docstrings=options.include_docstrings,
         include_module_type_comment=options.include_module_type_comment,
         include_c_inferred_source_comment=options.include_c_inferred_source_comment,
     )
-    _writer.write(ir_module, printer, to=output_dir)
+    _writer.write(ir_module, renderer, to=output_dir)

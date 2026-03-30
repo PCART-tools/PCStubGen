@@ -3,7 +3,7 @@ from __future__ import annotations
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
-from .._checks import check
+from ..checks import check
 from .clang_eval import eval_int
 from .cursor_utils import (
     unwrap_transparent,

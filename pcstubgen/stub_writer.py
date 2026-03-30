@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .stub_printer import StubPrinter
+from .stub_renderer import StubRenderer
 from .ir import IRModule
 from .ir.ir_module import IRModuleType
 
 
-class Writer:
+class StubWriter:
     def write(
         self,
         module: IRModule,
-        printer: StubPrinter,
+        renderer: StubRenderer,
         to: Path,
     ) -> None:
         assert to.exists()
@@ -27,8 +27,8 @@ class Writer:
 
         if module.module_type == IRModuleType.EXTENSION:
             with open(module_file, "w", encoding="utf-8") as f:
-                for line in printer.print_module(module):
+                for line in renderer.print_module(module):
                     f.write(line + "\n")
 
         for sub_module in module.sub_modules:
-            self.write(sub_module, printer, module_dir)
+            self.write(sub_module, renderer, module_dir)

@@ -5,7 +5,7 @@ from pathlib import Path
 from clang.cindex import Index
 from loguru import logger
 
-from .._checks import check
+from ..checks import check
 from .models import ExtractedModule
 from . import signature_inference
 from . import module_table
