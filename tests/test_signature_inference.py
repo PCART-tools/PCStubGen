@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from pcstubgen.c_signature.name_to_type import FUNCTION_NAME_TO_TYPE
 from tests._c_signature_test_support import *
+
+
+def test_function_name_to_type_uses_type_instances() -> None:
+    assert FUNCTION_NAME_TO_TYPE["PyLong_FromLong"] == NamedType("int")
 
 
 @pytest.mark.parametrize(

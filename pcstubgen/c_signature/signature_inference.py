@@ -79,8 +79,6 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
             continue
 
         return_children = list(cursor.get_children())
-        if not return_children:
-            continue
         return_expr = return_children[0]
 
         inferred_type = infer_expr_type(return_expr)
@@ -160,8 +158,8 @@ def infer_expr_type(expr: Cursor) -> Type | None:
 
 def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
     """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
+    assert expr_cursor.kind == CursorKind.CONDITIONAL_OPERATOR
     children = list(expr_cursor.get_children())
-    check(len(children) == 3, "CONDITIONAL_OPERATOR 必须包含 3 个子节点。")
 
     branch_types: list[Type] = []
     for branch in children[1:]:
@@ -176,6 +174,8 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
 
 def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
+    assert expr_cursor.kind == CursorKind.DECL_REF_EXPR
+
     identifier_name = _get_cursor_name(expr_cursor)
     mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
@@ -183,20 +183,25 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     return None
 
 
-def _infer_call_expr_type(call_expr_cursor: Cursor) -> Type | None:
-    """从调用表达式推断返回类型。"""
-    check(
-        call_expr_cursor.kind == CursorKind.CALL_EXPR,
-        "_infer_call_expr_type 只接受 CALL_EXPR。",
-    )
-    call_name = call_expr_cursor.spelling
+def _infer_call_expr_type(cursor: Cursor) -> Type | None:
+    """
+    从调用表达式推断返回类型。
+    不一定能从spelling获取，可能是宏 #define PyArray_Return (*(PyObject *(*)(PyArrayObject *)) PyArray_API[76])
+    选择从源代码获取
+    """
+    assert cursor.kind == CursorKind.CALL_EXPR
+    children = list(cursor.get_children())
+    func_cursor = children[0]
+    call_name = source_range_get_text(func_cursor.extent)
+    if call_name is None:
+        return None
 
     if call_name == "Py_BuildValue":
-        return _infer_py_buildvalue_type(call_expr_cursor)
+        return _infer_py_buildvalue_type(cursor)
     mapped = FUNCTION_NAME_TO_TYPE.get(call_name)
     if mapped is None:
         return None
-    return NamedType(mapped)
+    return mapped
 
 
 def _get_cursor_name(cursor: Cursor) -> str | None:
@@ -243,7 +248,10 @@ def _resolve_argument_name(c_args: list[Cursor]) -> str:
 
 
 def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
-    """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
+    """
+    解析 `PyArg_*` 中对象槽位对应的 Python 类型名。
+    可能名字是宏
+    """
     source_text = source_range_get_text(cursor.extent)
     if source_text is None:
         return None
