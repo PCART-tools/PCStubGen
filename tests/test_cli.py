@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from typer.testing import CliRunner
 
 from pcstubgen import cli
@@ -12,7 +11,7 @@ RUNNER = CliRunner()
 
 
 def test_cli_passes_stub_generation_options(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch,
     tmp_path: Path,
 ) -> None:
     captured_module_name: str | None = None
@@ -35,7 +34,11 @@ def test_cli_passes_stub_generation_options(
             str(tmp_path),
             "--include",
             "Python.h",
+            "--include",
+            "  spaced/header.h  ",
             "--include=numpy/arrayobject.h",
+            "--include",
+            "Python.h",
             "--include-directory",
             "C:/IncludeA",
             "--include-directory=C:/IncludeB",
@@ -54,7 +57,12 @@ def test_cli_passes_stub_generation_options(
     assert captured_module_name == "math"
     assert captured_output_dir == tmp_path
     assert captured_options is not None
-    assert captured_options.include == ["Python.h", "numpy/arrayobject.h"]
+    assert captured_options.include == [
+        "Python.h",
+        "  spaced/header.h  ",
+        "numpy/arrayobject.h",
+        "Python.h",
+    ]
     assert captured_options.include_directory == [
         Path("C:/IncludeA"),
         Path("C:/IncludeB"),
@@ -65,22 +73,59 @@ def test_cli_passes_stub_generation_options(
     assert captured_options.include_c_inferred_source_comment is True
 
 
-def test_invalid_include_reports_chinese_validation_error() -> None:
+def test_cli_preserves_include_without_validation(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_options
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
     result = RUNNER.invoke(
         cli.app,
-        ["math", "--include=-bad"],
+        [
+            "math",
+            "--output-dir",
+            str(tmp_path),
+            "--include=-bad",
+            "--include",
+            "   ",
+        ],
         prog_name="pcstubgen",
     )
 
-    assert result.exit_code == 2
-    assert "Invalid value for '--include'" in result.stderr
-    assert "'-bad'" in result.stderr
+    assert result.exit_code == 0
+    assert captured_options is not None
+    assert captured_options.include == ["-bad", "   "]
 
 
-def test_validate_include_preserves_chinese_error_message() -> None:
-    with pytest.raises(cli.typer.BadParameter) as ex:
-        cli._validate_include(["-bad"])
+def test_cli_defaults_include_and_include_directory_to_empty_lists(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: StubGenerationOptions | None = None
 
-    message = str(ex.value)
-    assert "include" in message
-    assert "-bad" in message
+    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_options
+        captured_options = options
+
+    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        cli.app,
+        [
+            "math",
+            "--output-dir",
+            str(tmp_path),
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert captured_options is not None
+    assert captured_options.include == []
+    assert captured_options.include_directory == []

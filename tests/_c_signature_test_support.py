@@ -56,7 +56,7 @@ from pcstubgen.visitors.c_signature_visitor import (
 from pcstubgen.visitors.docstring_signature_visitor import (
     DocstringSignatureVisitor,
 )
-from pcstubgen.pipeline import Pipeline
+from pcstubgen.visitor_runner import run_visitors
 from pcstubgen.stub_generation_options import StubGenerationOptions
 
 

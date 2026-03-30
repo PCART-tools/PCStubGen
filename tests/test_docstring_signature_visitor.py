@@ -7,7 +7,7 @@ import pytest
 from pcstubgen.ir import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
 from pcstubgen.visitors import docstring_signature_visitor as docstring_signature_visitor_module
 from pcstubgen.visitors.docstring_signature_visitor import DocstringSignatureVisitor
-from pcstubgen.pipeline import Pipeline
+from pcstubgen.visitor_runner import run_visitors
 
 
 def _signature(
@@ -123,7 +123,7 @@ def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
     assert signature.return_type_name == "typing.Union[int, str]"
 
 
-def test_docstring_parser_pipeline_still_parses_method_docstrings() -> None:
+def test_docstring_parser_visitor_runner_still_parses_method_docstrings() -> None:
     method = IRMethod(
         function=_unknown_function(
             "build",
@@ -136,7 +136,7 @@ def test_docstring_parser_pipeline_still_parses_method_docstrings() -> None:
         classes=[IRClass(name="Builder", methods=[method])],
     )
 
-    Pipeline([DocstringSignatureVisitor()]).run(ir_module)
+    run_visitors(ir_module, [DocstringSignatureVisitor()])
 
     assert len(method.function.signatures) == 1
     signature = method.function.signatures[0]
@@ -203,6 +203,74 @@ def test_docstring_parser_visit_function_warns_and_skips_invalid_docstring(
     assert "pkg.mod" in warnings[0]
     assert "foo" in warnings[0]
     assert "ValueError" in warnings[0]
+
+
+def test_docstring_parser_log_summary_reports_unknown_and_known_overlap_stats(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    visitor = DocstringSignatureVisitor()
+    ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
+    messages: list[str] = []
+
+    def _info(message: str, *args: object) -> None:
+        messages.append(message.format(*args))
+
+    monkeypatch.setattr(docstring_signature_visitor_module.logger, "info", _info)
+
+    visitor.visit_function(
+        _unknown_function(
+            "parsed",
+            doc="parsed(value: int) -> str",
+        ),
+        ir_module,
+    )
+    visitor.visit_function(
+        _unknown_function("missing_doc"),
+        ir_module,
+    )
+    visitor.visit_function(
+        _unknown_function(
+            "no_match",
+            doc="This is not a signature.",
+        ),
+        ir_module,
+    )
+    visitor.visit_function(
+        _unknown_function(
+            "broken",
+            doc='broken(value: str = "unterminated) -> str',
+        ),
+        ir_module,
+    )
+    visitor.visit_function(
+        IRFunction(
+            name="known_overlap",
+            doc="known_overlap(value: int) -> str",
+            signatures=[_signature(args=[IRArgument(name="value")])],
+        ),
+        ir_module,
+    )
+    visitor.visit_function(
+        IRFunction(
+            name="known_broken",
+            doc='known_broken(value: str = "unterminated) -> str',
+            signatures=[_signature(args=[IRArgument(name="value")])],
+        ),
+        ir_module,
+    )
+
+    visitor.log_summary()
+
+    assert len(messages) == 1
+    summary = messages[0]
+    assert "total_unknown_signatures=4" in summary
+    assert "success=1" in summary
+    assert "missing_doc=1" in summary
+    assert "no_signature_match=1" in summary
+    assert "parse_error=1" in summary
+    assert "skipped_known_signatures=2" in summary
+    assert "skipped_known_with_parsable_docstring=1" in summary
+    assert "skipped_known_with_parse_error=1" in summary
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:

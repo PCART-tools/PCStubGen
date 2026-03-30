@@ -6,7 +6,7 @@ from pathlib import Path
 from .module_builder import build_module
 from .stub_generation_options import StubGenerationOptions
 from .ir import QualifiedName
-from .pipeline import Pipeline
+from .visitor_runner import run_visitors
 from .visitors.node_visitor import NodeVisitor
 from .visitors.docstring_signature_visitor import DocstringSignatureVisitor
 from .visitors.c_signature_visitor import CSignatureVisitor
@@ -21,13 +21,15 @@ def write_stubs(
     module_name: str,
     output_dir: Path,
     options: StubGenerationOptions | None = None,
-    _writer: StubWriter | None = None,
+    writer: StubWriter | None = None,
 ) -> None:
     """
     生成存根并写入文件。
     """
     if options is None:
         options = StubGenerationOptions()
+    if writer is None:
+        writer = StubWriter()
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,13 +42,8 @@ def write_stubs(
         module,
     )
 
-    # 3. 设置管道
+    # 3. 设置 visitor runner
     visitors: list[NodeVisitor] = []
-
-    # 核心签名解析与类型修复 visitor（仅覆盖模块树 / 函数 / 类方法主链路）
-    if options.enable_docstring_signature_parser:
-        visitors.append(DocstringSignatureVisitor())
-
     c_signature_visitor: CSignatureVisitor | None = None
 
     if options.source_root is not None:
@@ -60,18 +57,18 @@ def write_stubs(
         )
         visitors.append(c_signature_visitor)
 
-    _pipeline = Pipeline(visitors)
+    docstring_signature_visitor = DocstringSignatureVisitor()
+    visitors.append(docstring_signature_visitor)
 
-    # 4. 运行管道
-    _pipeline.run(ir_module)
+    # 4. 运行 visitor runner
+    run_visitors(ir_module, visitors)
     if c_signature_visitor is not None:
         c_signature_visitor.log_summary()
+    docstring_signature_visitor.log_summary()
 
-    if _writer is None:
-        _writer = StubWriter()
     renderer = StubRenderer(
         include_docstrings=options.include_docstrings,
         include_module_type_comment=options.include_module_type_comment,
         include_c_inferred_source_comment=options.include_c_inferred_source_comment,
     )
-    _writer.write(ir_module, renderer, to=output_dir)
+    writer.write(ir_module, renderer, to=output_dir)

@@ -33,11 +33,6 @@ class _InferenceStats:
 class CSignatureVisitor(NodeVisitor):
     """
     使用 C AST 提取结果补全未知函数签名。
-
-    执行顺序设计为：
-    1) DocstringSignatureVisitor
-    2) CAstSignatureInferenceVisitor（本 visitor）
-    3) InferMethodModifierVisitor
     """
 
     def __init__(

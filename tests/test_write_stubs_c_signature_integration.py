@@ -32,7 +32,6 @@ def test_write_stubs_propagates_extract_errors(
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     options = StubGenerationOptions(
-        enable_docstring_signature_parser=False,
         source_root=tmp_path,
     )
     with pytest.raises(RuntimeError, match="boom"):
@@ -111,11 +110,32 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
             captured["written_renderer"] = renderer
             captured["written_to"] = to
 
+    class FakeDocstringSignatureVisitor:
+        def visit_module(self, node: IRModule) -> None:
+            _ = node
+
+        def visit_class(self, node: IRClass, module: IRModule) -> None:
+            _ = (node, module)
+
+        def visit_function(self, node: IRFunction, module: IRModule) -> None:
+            _ = (node, module)
+
+        def visit_method(self, node: IRMethod, module: IRModule) -> None:
+            _ = (node, module)
+
+        def log_summary(self) -> None:
+            captured["docstring_visitor_log_summary_called"] = True
+
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     monkeypatch.setattr(
         stubgen_module,
         "CSignatureVisitor",
         FakeCSignatureVisitor,
+    )
+    monkeypatch.setattr(
+        stubgen_module,
+        "DocstringSignatureVisitor",
+        FakeDocstringSignatureVisitor,
     )
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
 
@@ -134,7 +154,7 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
         "math",
         tmp_path,
         options=options,
-        _writer=FakeWriter(),
+        writer=FakeWriter(),
     )
 
     assert captured["visitor_source_root"] == tmp_path
@@ -144,6 +164,7 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
     assert captured["visitor_cpp_std"] == "c++20"
     assert captured["visitor_include_c_inferred_source_comment"] is True
     assert captured["visitor_log_summary_called"] is True
+    assert captured["docstring_visitor_log_summary_called"] is True
     assert captured["printer_include_docstrings"] is False
     assert captured["printer_include_module_type_comment"] is True
     assert captured["printer_include_c_inferred_source_comment"] is True
@@ -151,7 +172,58 @@ def test_write_stubs_passes_c_inferred_source_comment_option(
     assert captured["written_to"] == tmp_path
 
 
-def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
+def test_c_signature_takes_precedence_over_docstring_signature(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[
+            _unknown_function(
+                "foo",
+                doc="foo(x: str) -> str\n\nparsed from docstring",
+            )
+        ],
+    )
+    extractor = _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[ExtractedArgument(name="value", type_name="int")],
+                            return_type_name="bool",
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+
+    run_visitors(
+        module,
+        [
+            CSignatureVisitor(
+                source_root=tmp_path,
+            ),
+            DocstringSignatureVisitor(),
+        ],
+    )
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
+    assert [arg.type_name for arg in parsed.signatures[0].args] == ["int"]
+    assert parsed.signatures[0].return_type_name == "bool"
+    assert parsed.signatures[0].doc == "foo(x: str) -> str\n\nparsed from docstring"
+    assert extractor.called == 1
+
+
+def test_docstring_signature_fills_gap_when_c_ast_has_no_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -170,14 +242,15 @@ def test_doc_parser_preserves_rewritten_signature_without_c_ast_candidates(
     )
     extractor = _patch_c_signature_extractor(monkeypatch, modules={})
 
-    Pipeline(
+    run_visitors(
+        module,
         [
-            DocstringSignatureVisitor(),
             CSignatureVisitor(
                 source_root=tmp_path,
             ),
-        ]
-    ).run(module)
+            DocstringSignatureVisitor(),
+        ],
+    )
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]

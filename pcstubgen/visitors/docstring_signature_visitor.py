@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import re
 from enum import Enum, auto
 
@@ -24,17 +25,37 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
+@dataclasses.dataclass
+class _InferenceStats:
+    total_unknown_signatures: int = 0
+    success: int = 0
+    missing_doc: int = 0
+    no_signature_match: int = 0
+    parse_error: int = 0
+    skipped_known_signatures: int = 0
+    skipped_known_with_parsable_docstring: int = 0
+    skipped_known_with_parse_error: int = 0
+
+
 class DocstringSignatureVisitor(NodeVisitor):
     """
     解析文档字符串中的函数和方法签名。
     """
 
+    def __init__(self) -> None:
+        self._stats = _InferenceStats()
+
     def visit_function(self, node: IRFunction, module: IRModule) -> None:
         """在函数层原地补全文档字符串签名。"""
         if node.signatures:
+            self._stats.skipped_known_signatures += 1
+            self._record_known_signature_docstring_overlap(node)
             return
 
+        self._stats.total_unknown_signatures += 1
+
         if not node.doc:
+            self._stats.missing_doc += 1
             return
 
         try:
@@ -43,6 +64,7 @@ class DocstringSignatureVisitor(NodeVisitor):
                 doc_lines=node.doc.splitlines(),
             )
         except ValueError as ex:
+            self._stats.parse_error += 1
             logger.warning(
                 "解析 docstring 签名失败, module_name: {}, func_name: {}, error_type: {}, error: {}",
                 str(module.full_name),
@@ -53,7 +75,37 @@ class DocstringSignatureVisitor(NodeVisitor):
             return
 
         if parsed_signatures:
+            self._stats.success += 1
             node.signatures = parsed_signatures
+            return
+
+        self._stats.no_signature_match += 1
+
+    def log_summary(self) -> None:
+        """输出一次项目级 docstring 签名补全统计。"""
+        total_visited = (
+            self._stats.total_unknown_signatures
+            + self._stats.skipped_known_signatures
+        )
+        if total_visited <= 0:
+            self._reset_stats()
+            return
+
+        logger.info(
+            "Docstring 签名推断汇总: "
+            "total_unknown_signatures={}, success={}, missing_doc={}, no_signature_match={}, "
+            "parse_error={}, skipped_known_signatures={}, skipped_known_with_parsable_docstring={}, "
+            "skipped_known_with_parse_error={}",
+            self._stats.total_unknown_signatures,
+            self._stats.success,
+            self._stats.missing_doc,
+            self._stats.no_signature_match,
+            self._stats.parse_error,
+            self._stats.skipped_known_signatures,
+            self._stats.skipped_known_with_parsable_docstring,
+            self._stats.skipped_known_with_parse_error,
+        )
+        self._reset_stats()
 
     def parse_function_docstring(
         self, func_name: str, doc_lines: list[str]
@@ -325,3 +377,23 @@ class DocstringSignatureVisitor(NodeVisitor):
         if len(result) == 0:
             return None
         return result
+
+    def _record_known_signature_docstring_overlap(self, node: IRFunction) -> None:
+        """统计已有签名节点中，docstring 是否仍可被当前解析器识别。"""
+        if not node.doc:
+            return
+
+        try:
+            parsed_signatures = self.parse_function_docstring(
+                func_name=node.name,
+                doc_lines=node.doc.splitlines(),
+            )
+        except ValueError:
+            self._stats.skipped_known_with_parse_error += 1
+            return
+
+        if parsed_signatures:
+            self._stats.skipped_known_with_parsable_docstring += 1
+
+    def _reset_stats(self) -> None:
+        self._stats = _InferenceStats()

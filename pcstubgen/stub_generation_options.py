@@ -6,9 +6,6 @@ from pathlib import Path
 
 @dataclasses.dataclass
 class StubGenerationOptions:
-    # 签名补全管道控制
-    enable_docstring_signature_parser: bool = True
-
     source_root: Path | None = None
     c_std: str = "c11"
     cpp_std: str = "c++17"

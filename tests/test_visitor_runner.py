@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pcstubgen.ir import IRClass, IRFunction, IRMethod, IRModule, QualifiedName
 from pcstubgen.visitors.node_visitor import NodeVisitor
-from pcstubgen.pipeline import Pipeline
+from pcstubgen.visitor_runner import run_visitors
 
 
-def test_pipeline_inplace_mutation_removes_classes_functions_and_methods() -> None:
+def test_visitor_runner_inplace_mutation_removes_classes_functions_and_methods() -> None:
     class DropByNameVisitor(NodeVisitor):
         def visit_module(self, node: IRModule) -> None:
             node.classes = [cls for cls in node.classes if not cls.name.startswith("Drop")]
@@ -35,7 +35,7 @@ def test_pipeline_inplace_mutation_removes_classes_functions_and_methods() -> No
         functions=[IRFunction(name="drop_func"), IRFunction(name="keep_func")],
     )
 
-    Pipeline([DropByNameVisitor()]).run(ir_module)
+    run_visitors(ir_module, [DropByNameVisitor()])
 
     assert [cls.name for cls in ir_module.classes] == ["KeepClass"]
     assert [func.name for func in ir_module.functions] == ["keep_func"]
@@ -43,7 +43,7 @@ def test_pipeline_inplace_mutation_removes_classes_functions_and_methods() -> No
     assert [method.function.name for method in keep_class.methods] == ["keep_method"]
 
 
-def test_pipeline_visits_functions_in_module_and_methods() -> None:
+def test_visitor_runner_visits_functions_in_module_and_methods() -> None:
     class RenameVisitedFunctionsVisitor(NodeVisitor):
         def visit_function(self, node: IRFunction, module: IRModule) -> None:
             assert module.full_name == QualifiedName.from_str("pkg.mod")
@@ -57,7 +57,7 @@ def test_pipeline_visits_functions_in_module_and_methods() -> None:
         functions=[IRFunction(name="f")],
     )
 
-    Pipeline([RenameVisitedFunctionsVisitor()]).run(ir_module)
+    run_visitors(ir_module, [RenameVisitedFunctionsVisitor()])
 
     assert [func.name for func in ir_module.functions] == ["visited_f"]
     assert [m.function.name for m in ir_class.methods] == ["visited_m"]
