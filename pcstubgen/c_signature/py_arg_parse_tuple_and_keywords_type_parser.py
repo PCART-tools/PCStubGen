@@ -10,6 +10,7 @@ from clang.cindex import Cursor
 from ..ir import IRArgumentKind
 from .models import ExtractedArgument
 from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
+from .types import RawType, Type
 
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):
@@ -30,7 +31,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         fmt: str,
         kwlist: list[str],
         args: list[Cursor],
-        resolve_object_type_func: Callable[[Cursor], str | None] | None = None,
+        resolve_object_type_func: Callable[[Cursor], Type | str | None] | None = None,
         resolve_default_value_func: Callable[[Cursor], str | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
@@ -96,9 +97,9 @@ class PyArgParseTupleAndKeywordsTypeParser:
         spec = self._advance_format_unit_required()
         c_args = self._advance_c_args_required(spec.c_arg_count)
 
-        type_name = spec.type_name
+        arg_type = spec.type
         if spec.object_type_arg_offset is not None:
-            type_name = self._resolve_object_type(c_args[spec.object_type_arg_offset])
+            arg_type = self._resolve_object_type(c_args[spec.object_type_arg_offset])
 
         has_default = section is not _ArgumentSection.REQUIRED
 
@@ -112,7 +113,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
 
         return ExtractedArgument(
             name=name,
-            type_name=type_name,
+            type=arg_type,
             default_value=default_value,
             has_default=has_default,
             kind=kind,
@@ -198,13 +199,15 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._arg_index = end_index
         return values
 
-    def _resolve_object_type(self, cursor: Cursor) -> str:
+    def _resolve_object_type(self, cursor: Cursor) -> Type:
         """解析对象单元的 Python 类型，未知时回退为 `object`。"""
         if self._resolve_object_type_func is not None:
             resolved_type = self._resolve_object_type_func(cursor)
             if resolved_type is not None:
+                if isinstance(resolved_type, str):
+                    return RawType(resolved_type)
                 return resolved_type
-        return "object"
+        return RawType("object")
 
     def _resolve_default_value(self, cursor: Cursor) -> str | None:
         """解析可选参数的默认值文本，无法解析时保留为未知。"""

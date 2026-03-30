@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
+from pcstubgen.c_signature.types import RawType
 from pcstubgen.c_signature.models import ExtractedArgument
 from pcstubgen.c_signature.py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
@@ -46,6 +47,26 @@ def _parse(
     ).parse()
 
 
+def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+    return RawType(text, imports=imports)
+
+
+def _arg(
+    name: str,
+    type_text: str,
+    *,
+    imports: list[str] | None = None,
+    default_value: str | None = None,
+    has_default: bool = False,
+) -> ExtractedArgument:
+    return ExtractedArgument(
+        name=name,
+        type=_raw(type_text, imports=imports),
+        default_value=default_value,
+        has_default=has_default,
+    )
+
+
 def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators() -> None:
     count_cursor = _cursor("count")
     payload_cursor = _cursor("payload")
@@ -58,13 +79,9 @@ def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators
     )
 
     assert parsed == [
-        ExtractedArgument(name="count", type_name="int"),
-        ExtractedArgument(name="payload", type_name="str | collections.abc.Buffer"),
-        ExtractedArgument(
-            name="maybe",
-            type_name="str | collections.abc.Buffer | None",
-            has_default=True,
-        ),
+        _arg("count", "int"),
+        _arg("payload", "str | collections.abc.Buffer", imports=["collections.abc"]),
+        _arg("maybe", "str | collections.abc.Buffer | None", imports=["collections.abc"], has_default=True),
     ]
 
 
@@ -151,37 +168,12 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
         maybe_buffer_cursor,
     ]
     assert parsed == [
-        ExtractedArgument(name="count", type_name="int"),
-        ExtractedArgument(
-            name="text",
-            type_name="str | bytes | bytearray",
-            default_value='"utf8"',
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="typed",
-            type_name="Point",
-            default_value="None",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="converted",
-            type_name="ConvertedValue",
-            default_value="factory_default()",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="raw",
-            type_name="str | collections.abc.Buffer",
-            default_value="b''",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="maybe",
-            type_name="str | collections.abc.Buffer | None",
-            default_value="None",
-            has_default=True,
-        ),
+        _arg("count", "int"),
+        _arg("text", "str | bytes | bytearray", default_value='"utf8"', has_default=True),
+        _arg("typed", "Point", default_value="None", has_default=True),
+        _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
+        _arg("raw", "str | collections.abc.Buffer", imports=["collections.abc"], default_value="b''", has_default=True),
+        _arg("maybe", "str | collections.abc.Buffer | None", imports=["collections.abc"], default_value="None", has_default=True),
     ]
 
 
@@ -206,8 +198,8 @@ def test_parse_falls_back_to_object_for_unresolved_object_units() -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(name="typed", type_name="object"),
-        ExtractedArgument(name="converted", type_name="object"),
+        _arg("typed", "object"),
+        _arg("converted", "object"),
     ]
 
 
@@ -241,10 +233,11 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
         ["text", "value", "buffer"],
     ]
     assert parsed == [
-        ExtractedArgument(name="single", type_name="tuple[int,]"),
-        ExtractedArgument(
-            name="nested",
-            type_name="tuple[str | collections.abc.Buffer, tuple[Point, collections.abc.Buffer]]",
+        _arg("single", "tuple[int,]"),
+        _arg(
+            "nested",
+            "tuple[str | collections.abc.Buffer, tuple[Point, collections.abc.Buffer]]",
+            imports=["collections.abc"],
         ),
     ]
 
@@ -268,9 +261,10 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(
-            name="payload",
-            type_name="tuple[int, tuple[str | collections.abc.Buffer,]]",
+        _arg(
+            "payload",
+            "tuple[int, tuple[str | collections.abc.Buffer,]]",
+            imports=["collections.abc"],
             default_value="(1, ('abc',))",
             has_default=True,
         )
@@ -295,11 +289,7 @@ def test_parse_keeps_optional_tuple_argument_when_any_leaf_default_is_unknown() 
     )
 
     assert parsed == [
-        ExtractedArgument(
-            name="pair",
-            type_name="tuple[int, str]",
-            has_default=True,
-        )
+        _arg("pair", "tuple[int, str]", has_default=True)
     ]
 
 
@@ -320,8 +310,8 @@ def test_parse_marks_optional_scalar_without_default_text_when_resolution_fails(
 
     assert seen_default_cursors == [second_cursor]
     assert parsed == [
-        ExtractedArgument(name="first", type_name="int"),
-        ExtractedArgument(name="second", type_name="int", has_default=True),
+        _arg("first", "int"),
+        _arg("second", "int", has_default=True),
     ]
 
 
@@ -387,8 +377,8 @@ def test_parse_accepts_empty_invalid_and_duplicate_resolved_names() -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(name="", type_name="int"),
-        ExtractedArgument(name="123bad", type_name="int"),
-        ExtractedArgument(name="same", type_name="int"),
-        ExtractedArgument(name="same", type_name="int"),
+        _arg("", "int"),
+        _arg("123bad", "int"),
+        _arg("same", "int"),
+        _arg("same", "int"),
     ]

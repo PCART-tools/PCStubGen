@@ -11,7 +11,7 @@ from pcstubgen.c_signature.types import (
     AnyType,
     DictType,
     ListType,
-    NamedType,
+    RawType as NamedType,
     TupleType,
     Type,
     UnionType,
@@ -40,7 +40,7 @@ def _canonical_render(format_string: str, arg_count: int) -> str:
 @pytest.mark.parametrize(
     ("node", "expected"),
     [
-        (AnyType(), "Any"),
+        (AnyType(), "typing.Any"),
         (NamedType("int"), "int"),
         (UnionType(()), "Never"),
         (UnionType((NamedType("int"),)), "int"),
@@ -251,14 +251,14 @@ def test_parse_returns_expected_raw_type_tree(
         ("", 0, "None"),
         (" \t , : ", 0, "None"),
         ("()", 0, "tuple[()]"),
-        ("[]", 0, "list[Any]"),
-        ("{}", 0, "dict[Any, Any]"),
+        ("[]", 0, "list[typing.Any]"),
+        ("{}", 0, "dict[typing.Any, typing.Any]"),
         ("(i)", 1, "tuple[int,]"),
         ("[szuU]", 4, "list[None | str]"),
-        ("[Oi]", 2, "list[Any]"),
-        ("{Oi}", 2, "dict[Any, int]"),
-        ("{iO}", 2, "dict[int, Any]"),
-        ("{Oiis}", 4, "dict[Any, None | int | str]"),
+        ("[Oi]", 2, "list[typing.Any]"),
+        ("{Oi}", 2, "dict[typing.Any, int]"),
+        ("{iO}", 2, "dict[int, typing.Any]"),
+        ("{Oiis}", 4, "dict[typing.Any, None | int | str]"),
         ("{syUy}", 4, "dict[None | str, None | bytes]"),
         ("i", 1, "int"),
         ("b", 1, "int"),
@@ -286,14 +286,14 @@ def test_parse_returns_expected_raw_type_tree(
         ("y", 1, "None | bytes"),
         ("y#", 2, "None | bytes"),
         ("c", 1, "bytes"),
-        ("O", 1, "Any"),
-        ("O&", 2, "Any"),
-        ("S", 1, "Any"),
-        ("N", 1, "Any"),
+        ("O", 1, "typing.Any"),
+        ("O&", 2, "typing.Any"),
+        ("S", 1, "typing.Any"),
+        ("N", 1, "typing.Any"),
         (
             "(i, [sz], {s:i, s:[f]}, y#, O&)",
             11,
-            "tuple[int, list[None | str], dict[None | str, int | list[float]], None | bytes, Any]",
+            "tuple[int, list[None | str], dict[None | str, int | list[float]], None | bytes, typing.Any]",
         ),
         (
             "([i{sz}](s#y#){isfs})",
@@ -376,7 +376,7 @@ def test_parse_value_returns_dict_node_for_empty_dict_format() -> None:
         ("z#", 2, "None | str"),
         ("u#", 2, "None | str"),
         ("U#", 2, "None | str"),
-        ("O&", 2, "Any"),
+        ("O&", 2, "typing.Any"),
     ],
 )
 def test_parse_matches_longest_format_unit_first(
@@ -459,6 +459,15 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
         (ListType(UnionType((NamedType("Converted"),))),)
     )
     assert seen == [converter_cursor]
+
+
+def test_collect_imports_returns_recursive_dependency_set() -> None:
+    node = DictType(
+        NamedType("numpy.ndarray", imports=["numpy"]),
+        UnionType((AnyType(), NamedType("collections.abc.Buffer", imports=["collections.abc"]))),
+    )
+
+    assert node.collect_imports() == {"numpy", "collections.abc", "typing"}
 
 
 @pytest.mark.parametrize(

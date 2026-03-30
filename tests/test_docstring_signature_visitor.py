@@ -4,6 +4,7 @@ import typing
 
 import pytest
 
+from pcstubgen.c_signature.types import RawType, Type
 from pcstubgen.ir import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
 from pcstubgen.visitors import docstring_signature_visitor as docstring_signature_visitor_module
 from pcstubgen.visitors.docstring_signature_visitor import DocstringSignatureVisitor
@@ -13,15 +14,23 @@ from pcstubgen.visitor_runner import run_visitors
 def _signature(
     *,
     args: list[IRArgument] | None = None,
-    return_type_name: str | None = None,
+    return_type: Type | None = None,
     doc: str | None = None,
 ) -> IRSignature:
     """构造测试用签名。"""
     return IRSignature(
         args=list(args or ()),
-        return_type_name=return_type_name,
+        return_type=return_type,
         doc=doc,
     )
+
+
+def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+    return RawType(text, imports=imports)
+
+
+def _render_type(type_: Type | None) -> str | None:
+    return None if type_ is None else type_.render()
 
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
     """构造签名未知的测试函数。"""
@@ -41,7 +50,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
     assert len(func.signatures) == 1
     signature = func.signatures[0]
     assert [arg.name for arg in signature.args] == ["x", "y"]
-    assert signature.return_type_name == "str"
+    assert _render_type(signature.return_type) == "str"
     assert signature.doc == "parsed from docstring"
 
 
@@ -61,7 +70,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
     assert len(func.signatures) == 1
     signature = func.signatures[0]
     assert [arg.name for arg in signature.args] == ["x", "y", "w", "out", "p"]
-    assert [arg.type_name for arg in signature.args] == [
+    assert [_render_type(arg.type) for arg in signature.args] == [
         "object",
         "object",
         "object",
@@ -82,7 +91,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         True,
         True,
     ]
-    assert signature.return_type_name == "numpy.ndarray"
+    assert _render_type(signature.return_type) == "numpy.ndarray"
 
 
 def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
@@ -98,7 +107,7 @@ def test_docstring_parser_preserves_pybind11_enum_default_value_text() -> None:
     assert len(func.signatures) == 1
     signature = func.signatures[0]
     assert [arg.default_value for arg in signature.args] == ["<demo.Color.RED: 1>"]
-    assert signature.return_type_name == "None"
+    assert _render_type(signature.return_type) == "None"
 
 
 def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
@@ -116,11 +125,11 @@ def test_docstring_parser_preserves_complex_generic_annotation_text() -> None:
 
     assert len(func.signatures) == 1
     signature = func.signatures[0]
-    assert [arg.type_name for arg in signature.args] == [
+    assert [_render_type(arg.type) for arg in signature.args] == [
         "typing.Optional[list[int]]",
         "dict[str, tuple[int, str]]",
     ]
-    assert signature.return_type_name == "typing.Union[int, str]"
+    assert _render_type(signature.return_type) == "typing.Union[int, str]"
 
 
 def test_docstring_parser_visitor_runner_still_parses_method_docstrings() -> None:
@@ -141,7 +150,7 @@ def test_docstring_parser_visitor_runner_still_parses_method_docstrings() -> Non
     assert len(method.function.signatures) == 1
     signature = method.function.signatures[0]
     assert [arg.name for arg in signature.args] == ["value"]
-    assert signature.return_type_name == "str"
+    assert _render_type(signature.return_type) == "str"
     assert signature.doc == "parsed from method docstring"
 
 
@@ -282,7 +291,7 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
     )
 
     assert [arg.name for arg in parsed] == ["a", "x", "mapping", "flag"]
-    assert [arg.type_name for arg in parsed] == [
+    assert [_render_type(arg.type) for arg in parsed] == [
         "int",
         "tuple[int, int]",
         "dict[str, int]",
@@ -311,7 +320,7 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
     )
 
     assert [arg.name for arg in parsed] == ["value", "args", "kwargs"]
-    assert [arg.type_name for arg in parsed] == [
+    assert [_render_type(arg.type) for arg in parsed] == [
         "typing.Optional[list[int]]",
         "tuple[str, ...]",
         "object",
@@ -332,7 +341,7 @@ def test_docstring_parser_parse_args_str_supports_full_marker_ordering() -> None
     )
 
     assert [arg.name for arg in parsed] == ["a", "b", "args", "c", "kwargs"]
-    assert [arg.type_name for arg in parsed] == [
+    assert [_render_type(arg.type) for arg in parsed] == [
         None,
         None,
         "tuple[str, ...]",
@@ -357,7 +366,7 @@ def test_docstring_parser_parse_args_str_supports_slash_then_bare_star() -> None
     )
 
     assert [arg.name for arg in parsed] == ["a", "b", "c", "d"]
-    assert [arg.type_name for arg in parsed] == ["int", "int", "str", "str"]
+    assert [_render_type(arg.type) for arg in parsed] == ["int", "int", "str", "str"]
     assert [arg.default_value for arg in parsed] == [None, "1", None, '"x"']
     assert [arg.has_default for arg in parsed] == [False, True, False, True]
     assert [arg.kind for arg in parsed] == [
@@ -380,7 +389,7 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
     )
 
     assert [arg.name for arg in parsed_with_markers] == ["value", "named", "kw"]
-    assert [arg.type_name for arg in parsed_with_markers] == [
+    assert [_render_type(arg.type) for arg in parsed_with_markers] == [
         "int",
         "str",
         "bool",
@@ -394,7 +403,7 @@ def test_docstring_parser_parse_args_str_supports_whitespace_around_arg_heads() 
     ]
 
     assert [arg.name for arg in parsed_with_var_args] == ["value", "args", "kw", "kwargs"]
-    assert [arg.type_name for arg in parsed_with_var_args] == [
+    assert [_render_type(arg.type) for arg in parsed_with_var_args] == [
         "int",
         "tuple[str, ...]",
         "bool",

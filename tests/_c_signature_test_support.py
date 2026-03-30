@@ -24,7 +24,8 @@ from pcstubgen.c_signature import clang_parser as translation_unit_module
 from pcstubgen.c_signature.types import (
     AnyType,
     ListType,
-    NamedType,
+    RawType,
+    Type,
     TupleType,
     UnionType,
 )
@@ -63,14 +64,36 @@ from pcstubgen.stub_generation_options import StubGenerationOptions
 def _signature(
     *,
     args: list[IRArgument] | None = None,
-    return_type_name: str | None = None,
+    return_type: Type | None = None,
     doc: str | None = None,
 ) -> IRSignature:
     """构造测试用 IR 签名。"""
     return IRSignature(
         args=list(args or ()),
-        return_type_name=return_type_name,
+        return_type=return_type,
         doc=doc,
+    )
+
+
+def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+    return RawType(text, imports=imports)
+
+
+def _arg(
+    name: str,
+    type_text: str | None = None,
+    *,
+    imports: list[str] | None = None,
+    default_value: str | None = None,
+    has_default: bool = False,
+    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
+) -> ExtractedArgument:
+    return ExtractedArgument(
+        name=name,
+        type=None if type_text is None else _raw(type_text, imports=imports),
+        default_value=default_value,
+        has_default=has_default,
+        kind=kind,
     )
 
 

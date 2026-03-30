@@ -15,16 +15,30 @@ class Type(ABC):
     def render(self) -> str:
         raise NotImplementedError
 
+    @abstractmethod
+    def collect_imports(self) -> set[str]:
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
-class NamedType(Type):
-    name: str
+class RawType(Type):
+    text: str
+    imports: list[str] | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "imports", list(self.imports or ()))
+
+    def __hash__(self) -> int:
+        return hash((self.text, tuple(self.imports or ())))
 
     def canonicalize(self) -> Type:
         return self
 
     def render(self) -> str:
-        return self.name
+        return self.text
+
+    def collect_imports(self) -> set[str]:
+        return set(self.imports or ())
 
 
 @dataclass(frozen=True)
@@ -33,7 +47,10 @@ class AnyType(Type):
         return self
 
     def render(self) -> str:
-        return "Any"
+        return "typing.Any"
+
+    def collect_imports(self) -> set[str]:
+        return {"typing"}
 
 
 def _union_sort_key(member: Type) -> str:
@@ -86,6 +103,12 @@ class UnionType(Type):
             return self.members[0].render()
         return " | ".join(member.render() for member in self.members)
 
+    def collect_imports(self) -> set[str]:
+        imports: set[str] = set()
+        for member in self.members:
+            imports.update(member.collect_imports())
+        return imports
+
 
 @dataclass(frozen=True)
 class TupleType(Type):
@@ -101,6 +124,12 @@ class TupleType(Type):
             return f"tuple[{self.items[0].render()},]"
         return f"tuple[{', '.join(item.render() for item in self.items)}]"
 
+    def collect_imports(self) -> set[str]:
+        imports: set[str] = set()
+        for item in self.items:
+            imports.update(item.collect_imports())
+        return imports
+
 
 @dataclass(frozen=True)
 class ListType(Type):
@@ -111,8 +140,14 @@ class ListType(Type):
 
     def render(self) -> str:
         if isinstance(self.element, UnionType) and self.element.is_empty():
-            return "list[Any]"
+            return "list[typing.Any]"
         return f"list[{self.element.render()}]"
+
+    def collect_imports(self) -> set[str]:
+        imports = set(self.element.collect_imports())
+        if isinstance(self.element, UnionType) and self.element.is_empty():
+            imports.add("typing")
+        return imports
 
 
 @dataclass(frozen=True)
@@ -124,10 +159,22 @@ class DictType(Type):
         return DictType(self.key.canonicalize(), self.value.canonicalize())
 
     def render(self) -> str:
-        key_rendered = "Any" if isinstance(self.key, UnionType) and self.key.is_empty() else self.key.render()
+        key_rendered = (
+            "typing.Any"
+            if isinstance(self.key, UnionType) and self.key.is_empty()
+            else self.key.render()
+        )
         value_rendered = (
-            "Any"
+            "typing.Any"
             if isinstance(self.value, UnionType) and self.value.is_empty()
             else self.value.render()
         )
         return f"dict[{key_rendered}, {value_rendered}]"
+
+    def collect_imports(self) -> set[str]:
+        imports = set(self.key.collect_imports()) | set(self.value.collect_imports())
+        if isinstance(self.key, UnionType) and self.key.is_empty():
+            imports.add("typing")
+        if isinstance(self.value, UnionType) and self.value.is_empty():
+            imports.add("typing")
+        return imports

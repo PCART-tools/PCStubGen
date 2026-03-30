@@ -196,8 +196,8 @@ def test_c_signature_takes_precedence_over_docstring_signature(
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
-                            arguments=[ExtractedArgument(name="value", type_name="int")],
-                            return_type_name="bool",
+                            arguments=[_arg("value", "int")],
+                            return_type=_raw("bool"),
                         )
                     ],
                 )
@@ -217,8 +217,11 @@ def test_c_signature_takes_precedence_over_docstring_signature(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
-    assert [arg.type_name for arg in parsed.signatures[0].args] == ["int"]
-    assert parsed.signatures[0].return_type_name == "bool"
+    assert [arg.type.render() if arg.type is not None else None for arg in parsed.signatures[0].args] == [
+        "int"
+    ]
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
     assert parsed.signatures[0].doc == "foo(x: str) -> str\n\nparsed from docstring"
     assert extractor.called == 1
 
@@ -254,5 +257,6 @@ def test_docstring_signature_fills_gap_when_c_ast_has_no_candidates(
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
-    assert parsed.signatures[0].return_type_name == "numpy.ndarray"
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "numpy.ndarray"
     assert extractor.called == 1

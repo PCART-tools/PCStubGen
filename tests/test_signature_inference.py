@@ -1,22 +1,23 @@
 from __future__ import annotations
 
 from pcstubgen.c_signature.name_to_type import FUNCTION_NAME_TO_TYPE
+from pcstubgen.c_signature.types import RawType
 from tests._c_signature_test_support import *
 
 
 def test_function_name_to_type_uses_type_instances() -> None:
-    assert FUNCTION_NAME_TO_TYPE["PyLong_FromLong"] == NamedType("int")
+    assert FUNCTION_NAME_TO_TYPE["PyLong_FromLong"] == RawType("int")
 
 
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
-        ("_Py_NoneStruct", NamedType("None")),
-        ("_Py_TrueStruct", NamedType("bool")),
-        ("_Py_FalseStruct", NamedType("bool")),
+        ("_Py_NoneStruct", RawType("None")),
+        ("_Py_TrueStruct", RawType("bool")),
+        ("_Py_FalseStruct", RawType("bool")),
     ],
 )
-def test_infer_expr_type_detects_addressed_object_returns(token_name: str, expected: NamedType) -> None:
+def test_infer_expr_type_detects_addressed_object_returns(token_name: str, expected: RawType) -> None:
     inferred = signature_rules_module.infer_expr_type(_address_of(token_name))
 
     assert inferred == expected
@@ -54,25 +55,25 @@ def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() ->
 @pytest.mark.parametrize(
     ("call_name", "expected"),
     [
-        ("PyBool_FromLong", NamedType("bool")),
-        ("PyLong_FromLong", NamedType("int")),
-        ("PyFloat_FromDouble", NamedType("float")),
-        ("PyComplex_FromDoubles", NamedType("complex")),
-        ("PyUnicode_FromString", NamedType("str")),
-        ("PyUnicode_AsUTF8String", NamedType("bytes")),
-        ("PyByteArray_FromObject", NamedType("bytearray")),
-        ("PySlice_New", NamedType("slice")),
-        ("PyMemoryView_FromObject", NamedType("memoryview")),
-        ("PyTuple_New", NamedType("tuple")),
-        ("PyList_New", NamedType("list")),
-        ("PyDict_New", NamedType("dict")),
-        ("PySet_New", NamedType("set")),
-        ("PyFrozenSet_New", NamedType("frozenset")),
-        ("PyList_AsTuple", NamedType("tuple")),
-        ("PyDict_Items", NamedType("list")),
+        ("PyBool_FromLong", RawType("bool")),
+        ("PyLong_FromLong", RawType("int")),
+        ("PyFloat_FromDouble", RawType("float")),
+        ("PyComplex_FromDoubles", RawType("complex")),
+        ("PyUnicode_FromString", RawType("str")),
+        ("PyUnicode_AsUTF8String", RawType("bytes")),
+        ("PyByteArray_FromObject", RawType("bytearray")),
+        ("PySlice_New", RawType("slice")),
+        ("PyMemoryView_FromObject", RawType("memoryview")),
+        ("PyTuple_New", RawType("tuple")),
+        ("PyList_New", RawType("list")),
+        ("PyDict_New", RawType("dict")),
+        ("PySet_New", RawType("set")),
+        ("PyFrozenSet_New", RawType("frozenset")),
+        ("PyList_AsTuple", RawType("tuple")),
+        ("PyDict_Items", RawType("list")),
     ],
 )
-def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: NamedType) -> None:
+def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: RawType) -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(call_name, _identifier_node("arg"))
     )
@@ -92,8 +93,8 @@ def test_infer_expr_type_parses_py_buildvalue() -> None:
 
     assert inferred == TupleType(
         (
-            NamedType("int"),
-            UnionType((NamedType("None"), NamedType("str"))),
+            RawType("int"),
+            UnionType((RawType("None"), RawType("str"))),
         )
     )
 
@@ -112,9 +113,9 @@ def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
     assert inferred == ListType(
         UnionType(
             (
-                NamedType("None"),
-                NamedType("int"),
-                NamedType("str"),
+                RawType("None"),
+                RawType("int"),
+                RawType("str"),
             )
         )
     )
@@ -129,7 +130,7 @@ def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
         )
     )
 
-    assert inferred == TupleType((NamedType("int"),))
+    assert inferred == TupleType((RawType("int"),))
 
 
 def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() -> None:
@@ -174,7 +175,7 @@ def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
 
     inferred = signature_rules_module.infer_expr_type(wrapped_expr)
 
-    assert inferred == NamedType("bytes")
+    assert inferred == RawType("bytes")
 
 
 def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
@@ -210,7 +211,8 @@ def test_return_type_detects_addressed_object_returns(token_name: str, expected:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == expected
+    assert inferred is not None
+    assert inferred.render() == expected
 
 
 @pytest.mark.parametrize(
@@ -260,7 +262,8 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == expected
+    assert inferred is not None
+    assert inferred.render() == expected
 
 
 def test_return_type_parses_py_buildvalue() -> None:
@@ -277,7 +280,8 @@ def test_return_type_parses_py_buildvalue() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "tuple[int, None | str]"
+    assert inferred is not None
+    assert inferred.render() == "tuple[int, None | str]"
 
 
 def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
@@ -298,7 +302,8 @@ def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "bytes"
+    assert inferred is not None
+    assert inferred.render() == "bytes"
 
 
 def test_return_type_deduplicates_and_canonicalizes_order() -> None:
@@ -317,7 +322,8 @@ def test_return_type_deduplicates_and_canonicalizes_order() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "None | bool | int"
+    assert inferred is not None
+    assert inferred.render() == "None | bool | int"
 
 
 def test_return_type_detects_conditional_expr() -> None:
@@ -333,7 +339,8 @@ def test_return_type_detects_conditional_expr() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "float | int"
+    assert inferred is not None
+    assert inferred.render() == "float | int"
 
 
 def test_return_type_deduplicates_members_already_present_in_union_return() -> None:
@@ -350,7 +357,8 @@ def test_return_type_deduplicates_members_already_present_in_union_return() -> N
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == "float | int"
+    assert inferred is not None
+    assert inferred.render() == "float | int"
 
 
 def test_return_type_returns_none_for_unsupported_returns() -> None:
@@ -389,13 +397,8 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
 
     assert inferred == [
         [
-            ExtractedArgument(name="count", type_name="int"),
-            ExtractedArgument(
-                name="label",
-                type_name="str | None",
-                default_value="None",
-                has_default=True,
-            ),
+            _arg("count", "int"),
+            _arg("label", "str | None", default_value="None", has_default=True),
         ]
     ]
 
@@ -418,7 +421,8 @@ def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_pa
 
     inferred = signature_rules_module._resolve_object_type_for_pyarg(cursor)
 
-    assert inferred == "str"
+    assert inferred is not None
+    assert inferred.render() == "str"
 
 
 def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(
@@ -450,9 +454,7 @@ def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(
 
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
-    assert inferred == [
-        [ExtractedArgument(name="value", type_name="object")]
-    ]
+    assert inferred == [[_arg("value", "object")]]
 
 
 def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None:
@@ -470,9 +472,7 @@ def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None
 
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
-    assert inferred == [
-        [ExtractedArgument(name="left_right", type_name="tuple[int, int]")]
-    ]
+    assert inferred == [[_arg("left_right", "tuple[int, int]")]]
 
 
 def test_infer_argument_lists_returns_empty_when_no_supported_pyarg_calls_exist() -> None:
@@ -553,8 +553,8 @@ def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [
-        [ExtractedArgument(name="value", type_name="int")],
-        [ExtractedArgument(name="value", type_name="int")],
+        [_arg("value", "int")],
+        [_arg("value", "int")],
     ]
 
 
@@ -568,7 +568,7 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
     assert inferred == [
         ExtractedSignature(
             arguments=[],
-            return_type_name="int",
+            return_type=_raw("int"),
         )
     ]
 
@@ -587,9 +587,7 @@ def test_infer_signature_returns_signature_with_inferred_arguments_when_return_i
 
     inferred = signature_rules_module.infer_signature(cursor)
 
-    assert inferred == [
-        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
-    ]
+    assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
 
 
 def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
@@ -626,8 +624,8 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
 
     assert inferred == [
         ExtractedSignature(
-            arguments=[ExtractedArgument(name="value", type_name="int")],
-            return_type_name="int",
+            arguments=[_arg("value", "int")],
+            return_type=_raw("int"),
         )
     ]
 
@@ -646,9 +644,7 @@ def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() ->
 
     inferred = signature_rules_module.infer_signature(cursor)
 
-    assert inferred == [
-        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
-    ]
+    assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
 
 
 def test_infer_expr_type_raises_when_conditional_operator_children_count_is_invalid() -> None:

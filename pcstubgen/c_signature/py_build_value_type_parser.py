@@ -11,7 +11,7 @@ from .types import (
     AnyType,
     DictType,
     ListType,
-    NamedType,
+    RawType,
     TupleType,
     Type,
     UnionType,
@@ -51,7 +51,7 @@ class PyBuildValueTypeParser:
             )
 
         if not top_level_types:
-            return NamedType("None")
+            return RawType("None")
         if len(top_level_types) == 1:
             return top_level_types[0]
         return TupleType(tuple(top_level_types))

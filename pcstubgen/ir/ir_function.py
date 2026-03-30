@@ -22,5 +22,6 @@ class IRFunction:
         rendered = []
         for signature in self.signatures:
             args = ", ".join(str(arg) for arg in signature.args)
-            rendered.append(f"({args}) -> {signature.return_type_name}")
+            return_type = signature.return_type.render() if signature.return_type is not None else None
+            rendered.append(f"({args}) -> {return_type}")
         return f"{self.name}{' | '.join(rendered)}"

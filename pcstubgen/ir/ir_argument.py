@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
+from ..c_signature.types import Type
+
 
 class IRArgumentKind(Enum):
     POSITIONAL_ONLY = auto()  # 仅限位置参数
@@ -15,7 +17,7 @@ class IRArgumentKind(Enum):
 @dataclass
 class IRArgument:
     name: str | None
-    type_name: str | None = field(default=None)
+    type: Type | None = field(default=None)
     default_value: str | None = field(default=None)
     has_default: bool = field(default=False)
     kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
@@ -28,8 +30,8 @@ class IRArgument:
             result.append("**")
 
         result.append(f"{self.name}")
-        if self.type_name:
-            result.append(f": {self.type_name}")
+        if self.type is not None:
+            result.append(f": {self.type.render()}")
         if self.default_value is not None:
             result.append(f" = {self.default_value}")
         elif self.has_default:

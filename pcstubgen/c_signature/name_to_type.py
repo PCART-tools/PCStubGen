@@ -1,24 +1,28 @@
-from .types import NamedType, Type, UnionType
+from .types import RawType, Type, UnionType
+
+
+def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+    return RawType(text, imports=imports)
 
 
 # 参数类型推导
-PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, str] = {
-    "PyList_Type": "list",
-    "PyTuple_Type": "tuple",
-    "PyDict_Type": "dict",
-    "PyUnicode_Type": "str",
-    "PyLong_Type": "int",
-    "PyFloat_Type": "float",
-    "PyBool_Type": "bool",
-    "PyBytes_Type": "bytes",
-    "PyByteArray_Type": "bytearray",
-    "PySet_Type": "set",
-    "PyFrozenSet_Type": "frozenset",
-    "PyType_Type": "type",
-    "PyBaseObject_Type": "object",
+PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
+    "PyList_Type": _raw("list"),
+    "PyTuple_Type": _raw("tuple"),
+    "PyDict_Type": _raw("dict"),
+    "PyUnicode_Type": _raw("str"),
+    "PyLong_Type": _raw("int"),
+    "PyFloat_Type": _raw("float"),
+    "PyBool_Type": _raw("bool"),
+    "PyBytes_Type": _raw("bytes"),
+    "PyByteArray_Type": _raw("bytearray"),
+    "PySet_Type": _raw("set"),
+    "PyFrozenSet_Type": _raw("frozenset"),
+    "PyType_Type": _raw("type"),
+    "PyBaseObject_Type": _raw("object"),
 
     # numpy
-    "PyArray_Type": "numpy.ndarray"
+    "PyArray_Type": _raw("numpy.ndarray", imports=["numpy"]),
 }
 
 # 参数类型推导，O& converter
@@ -41,139 +45,144 @@ DEFAULT_IDENTIFIER_TO_VALUE: dict[str, str] = {
 # 返回值类型推导
 FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     # bool
-    "PyBool_FromLong": NamedType("bool"),
+    "PyBool_FromLong": _raw("bool"),
 
     # int
-    "PyLong_FromLong": NamedType("int"),
-    "PyLong_FromUnsignedLong": NamedType("int"),
-    "PyLong_FromSsize_t": NamedType("int"),
-    "PyLong_FromSize_t": NamedType("int"),
-    "PyLong_FromLongLong": NamedType("int"),
-    "PyLong_FromUnsignedLongLong": NamedType("int"),
-    "PyLong_FromDouble": NamedType("int"),
-    "PyLong_FromString": NamedType("int"),
-    "PyLong_FromUnicodeObject": NamedType("int"),
-    "PyLong_FromVoidPtr": NamedType("int"),
+    "PyLong_FromLong": _raw("int"),
+    "PyLong_FromUnsignedLong": _raw("int"),
+    "PyLong_FromSsize_t": _raw("int"),
+    "PyLong_FromSize_t": _raw("int"),
+    "PyLong_FromLongLong": _raw("int"),
+    "PyLong_FromUnsignedLongLong": _raw("int"),
+    "PyLong_FromDouble": _raw("int"),
+    "PyLong_FromString": _raw("int"),
+    "PyLong_FromUnicodeObject": _raw("int"),
+    "PyLong_FromVoidPtr": _raw("int"),
 
     # float
-    "PyFloat_FromString": NamedType("float"),
-    "PyFloat_FromDouble": NamedType("float"),
+    "PyFloat_FromString": _raw("float"),
+    "PyFloat_FromDouble": _raw("float"),
 
     # complex
-    "PyComplex_FromCComplex": NamedType("complex"),
-    "PyComplex_FromDoubles": NamedType("complex"),
+    "PyComplex_FromCComplex": _raw("complex"),
+    "PyComplex_FromDoubles": _raw("complex"),
 
     # str
-    "PyUnicode_New": NamedType("str"),
-    "PyUnicode_FromKindAndData": NamedType("str"),
-    "PyUnicode_FromString": NamedType("str"),
-    "PyUnicode_FromStringAndSize": NamedType("str"),
-    "PyUnicode_FromFormat": NamedType("str"),
-    "PyUnicode_FromFormatV": NamedType("str"),
-    "PyUnicode_FromObject": NamedType("str"),
-    "PyUnicode_FromEncodedObject": NamedType("str"),
-    "PyUnicode_FromWideChar": NamedType("str"),
-    "PyUnicode_Decode": NamedType("str"),
-    "PyUnicode_DecodeUTF8": NamedType("str"),
-    "PyUnicode_DecodeUTF8Stateful": NamedType("str"),
-    "PyUnicode_DecodeUTF32": NamedType("str"),
-    "PyUnicode_DecodeUTF32Stateful": NamedType("str"),
-    "PyUnicode_DecodeUTF16": NamedType("str"),
-    "PyUnicode_DecodeUTF16Stateful": NamedType("str"),
-    "PyUnicode_DecodeUTF7": NamedType("str"),
-    "PyUnicode_DecodeUTF7Stateful": NamedType("str"),
-    "PyUnicode_DecodeUnicodeEscape": NamedType("str"),
-    "PyUnicode_DecodeRawUnicodeEscape": NamedType("str"),
-    "PyUnicode_DecodeLatin1": NamedType("str"),
-    "PyUnicode_DecodeASCII": NamedType("str"),
-    "PyUnicode_DecodeCharmap": NamedType("str"),
-    "PyUnicode_DecodeLocaleAndSize": NamedType("str"),
-    "PyUnicode_DecodeLocale": NamedType("str"),
-    "PyUnicode_DecodeFSDefaultAndSize": NamedType("str"),
-    "PyUnicode_DecodeFSDefault": NamedType("str"),
-    "PyUnicode_Translate": NamedType("str"),
-    "PyUnicode_DecodeMBCS": NamedType("str"),
-    "PyUnicode_DecodeMBCSStateful": NamedType("str"),
-    "PyUnicode_DecodeCodePageStateful": NamedType("str"),
-    "PyUnicode_Substring": NamedType("str"),
-    "PyUnicode_Concat": NamedType("str"),
-    "PyUnicode_Join": NamedType("str"),
-    "PyUnicode_Replace": NamedType("str"),
-    "PyUnicode_Format": NamedType("str"),
-    "PyUnicode_InternFromString": NamedType("str"),
+    "PyUnicode_New": _raw("str"),
+    "PyUnicode_FromKindAndData": _raw("str"),
+    "PyUnicode_FromString": _raw("str"),
+    "PyUnicode_FromStringAndSize": _raw("str"),
+    "PyUnicode_FromFormat": _raw("str"),
+    "PyUnicode_FromFormatV": _raw("str"),
+    "PyUnicode_FromObject": _raw("str"),
+    "PyUnicode_FromEncodedObject": _raw("str"),
+    "PyUnicode_FromWideChar": _raw("str"),
+    "PyUnicode_Decode": _raw("str"),
+    "PyUnicode_DecodeUTF8": _raw("str"),
+    "PyUnicode_DecodeUTF8Stateful": _raw("str"),
+    "PyUnicode_DecodeUTF32": _raw("str"),
+    "PyUnicode_DecodeUTF32Stateful": _raw("str"),
+    "PyUnicode_DecodeUTF16": _raw("str"),
+    "PyUnicode_DecodeUTF16Stateful": _raw("str"),
+    "PyUnicode_DecodeUTF7": _raw("str"),
+    "PyUnicode_DecodeUTF7Stateful": _raw("str"),
+    "PyUnicode_DecodeUnicodeEscape": _raw("str"),
+    "PyUnicode_DecodeRawUnicodeEscape": _raw("str"),
+    "PyUnicode_DecodeLatin1": _raw("str"),
+    "PyUnicode_DecodeASCII": _raw("str"),
+    "PyUnicode_DecodeCharmap": _raw("str"),
+    "PyUnicode_DecodeLocaleAndSize": _raw("str"),
+    "PyUnicode_DecodeLocale": _raw("str"),
+    "PyUnicode_DecodeFSDefaultAndSize": _raw("str"),
+    "PyUnicode_DecodeFSDefault": _raw("str"),
+    "PyUnicode_Translate": _raw("str"),
+    "PyUnicode_DecodeMBCS": _raw("str"),
+    "PyUnicode_DecodeMBCSStateful": _raw("str"),
+    "PyUnicode_DecodeCodePageStateful": _raw("str"),
+    "PyUnicode_Substring": _raw("str"),
+    "PyUnicode_Concat": _raw("str"),
+    "PyUnicode_Join": _raw("str"),
+    "PyUnicode_Replace": _raw("str"),
+    "PyUnicode_Format": _raw("str"),
+    "PyUnicode_InternFromString": _raw("str"),
 
     # bytes
-    "PyBytes_FromString": NamedType("bytes"),
-    "PyBytes_FromStringAndSize": NamedType("bytes"),
-    "PyBytes_FromFormat": NamedType("bytes"),
-    "PyBytes_FromFormatV": NamedType("bytes"),
-    "PyBytes_FromObject": NamedType("bytes"),
-    "PyUnicode_AsEncodedString": NamedType("bytes"),
-    "PyUnicode_AsUTF8String": NamedType("bytes"),
-    "PyUnicode_AsUTF32String": NamedType("bytes"),
-    "PyUnicode_AsUTF16String": NamedType("bytes"),
-    "PyUnicode_AsUnicodeEscapeString": NamedType("bytes"),
-    "PyUnicode_AsRawUnicodeEscapeString": NamedType("bytes"),
-    "PyUnicode_AsLatin1String": NamedType("bytes"),
-    "PyUnicode_AsASCIIString": NamedType("bytes"),
-    "PyUnicode_AsCharmapString": NamedType("bytes"),
-    "PyUnicode_EncodeLocale": NamedType("bytes"),
-    "PyUnicode_EncodeFSDefault": NamedType("bytes"),
-    "PyUnicode_AsMBCSString": NamedType("bytes"),
-    "PyUnicode_EncodeCodePage": NamedType("bytes"),
+    "PyBytes_FromString": _raw("bytes"),
+    "PyBytes_FromStringAndSize": _raw("bytes"),
+    "PyBytes_FromFormat": _raw("bytes"),
+    "PyBytes_FromFormatV": _raw("bytes"),
+    "PyBytes_FromObject": _raw("bytes"),
+    "PyUnicode_AsEncodedString": _raw("bytes"),
+    "PyUnicode_AsUTF8String": _raw("bytes"),
+    "PyUnicode_AsUTF32String": _raw("bytes"),
+    "PyUnicode_AsUTF16String": _raw("bytes"),
+    "PyUnicode_AsUnicodeEscapeString": _raw("bytes"),
+    "PyUnicode_AsRawUnicodeEscapeString": _raw("bytes"),
+    "PyUnicode_AsLatin1String": _raw("bytes"),
+    "PyUnicode_AsASCIIString": _raw("bytes"),
+    "PyUnicode_AsCharmapString": _raw("bytes"),
+    "PyUnicode_EncodeLocale": _raw("bytes"),
+    "PyUnicode_EncodeFSDefault": _raw("bytes"),
+    "PyUnicode_AsMBCSString": _raw("bytes"),
+    "PyUnicode_EncodeCodePage": _raw("bytes"),
 
     # bytearray
-    "PyByteArray_FromObject": NamedType("bytearray"),
-    "PyByteArray_FromStringAndSize": NamedType("bytearray"),
-    "PyByteArray_Concat": NamedType("bytearray"),
+    "PyByteArray_FromObject": _raw("bytearray"),
+    "PyByteArray_FromStringAndSize": _raw("bytearray"),
+    "PyByteArray_Concat": _raw("bytearray"),
 
     # slice
-    "PySlice_New": NamedType("slice"),
+    "PySlice_New": _raw("slice"),
 
     # memoryview
-    "PyMemoryView_FromObject": NamedType("memoryview"),
-    "PyMemoryView_FromMemory": NamedType("memoryview"),
-    "PyMemoryView_FromBuffer": NamedType("memoryview"),
-    "PyMemoryView_GetContiguous": NamedType("memoryview"),
+    "PyMemoryView_FromObject": _raw("memoryview"),
+    "PyMemoryView_FromMemory": _raw("memoryview"),
+    "PyMemoryView_FromBuffer": _raw("memoryview"),
+    "PyMemoryView_GetContiguous": _raw("memoryview"),
 
     # tuple
-    "PyTuple_New": NamedType("tuple"),
-    "PyTuple_Pack": NamedType("tuple"),
-    "PyTuple_GetSlice": NamedType("tuple"),
-    "PyList_AsTuple": NamedType("tuple"),
-    "PyUnicode_Partition": NamedType("tuple"),
-    "PyUnicode_RPartition": NamedType("tuple"),
+    "PyTuple_New": _raw("tuple"),
+    "PyTuple_Pack": _raw("tuple"),
+    "PyTuple_GetSlice": _raw("tuple"),
+    "PyList_AsTuple": _raw("tuple"),
+    "PyUnicode_Partition": _raw("tuple"),
+    "PyUnicode_RPartition": _raw("tuple"),
 
     # list
-    "PyList_New": NamedType("list"),
-    "PyList_GetSlice": NamedType("list"),
-    "PyUnicode_Split": NamedType("list"),
-    "PyUnicode_RSplit": NamedType("list"),
-    "PyUnicode_Splitlines": NamedType("list"),
-    "PyDict_Items": NamedType("list"),
-    "PyDict_Keys": NamedType("list"),
-    "PyDict_Values": NamedType("list"),
+    "PyList_New": _raw("list"),
+    "PyList_GetSlice": _raw("list"),
+    "PyUnicode_Split": _raw("list"),
+    "PyUnicode_RSplit": _raw("list"),
+    "PyUnicode_Splitlines": _raw("list"),
+    "PyDict_Items": _raw("list"),
+    "PyDict_Keys": _raw("list"),
+    "PyDict_Values": _raw("list"),
 
     # dict
-    "PyDict_New": NamedType("dict"),
-    "PyDict_Copy": NamedType("dict"),
+    "PyDict_New": _raw("dict"),
+    "PyDict_Copy": _raw("dict"),
 
     # set
-    "PySet_New": NamedType("set"),
+    "PySet_New": _raw("set"),
 
     # frozenset
-    "PyFrozenSet_New": NamedType("frozenset"),
+    "PyFrozenSet_New": _raw("frozenset"),
 
     # numpy
-    "PyArray_Return": UnionType((NamedType("numpy.ndarray"), NamedType("numpy.generic")))
+    "PyArray_Return": UnionType(
+        (
+            _raw("numpy.ndarray", imports=["numpy"]),
+            _raw("numpy.generic", imports=["numpy"]),
+        )
+    ),
 }
 
 BUILD_CONVERTER_NAME_TO_TYPE: dict[str, str] = {
 
 }
 
-OBJECT_NAME_TO_TYPE: dict[str, str] = {
-    "_Py_NoneStruct": "None",
-    "_Py_TrueStruct": "bool",
-    "_Py_FalseStruct": "bool",
+OBJECT_NAME_TO_TYPE: dict[str, Type] = {
+    "_Py_NoneStruct": _raw("None"),
+    "_Py_TrueStruct": _raw("bool"),
+    "_Py_FalseStruct": _raw("bool"),
 }

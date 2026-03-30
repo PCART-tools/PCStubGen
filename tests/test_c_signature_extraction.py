@@ -138,7 +138,8 @@ def test_c_signature_extraction_engine_extract_modules_populates_inferred_return
     signatures = extracted["return_only"].functions["foo"].signatures
     assert len(signatures) == 1
     assert signatures[0].arguments == []
-    assert signatures[0].return_type_name == "int"
+    assert signatures[0].return_type is not None
+    assert signatures[0].return_type.render() == "int"
 
 
 def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_arguments(
@@ -210,8 +211,8 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
     assert signatures == [
         ExtractedSignature(
             arguments=[
-                ExtractedArgument(name="count", type_name="int"),
-                ExtractedArgument(name="items", type_name="list"),
+                _arg("count", "int"),
+                _arg("items", "list"),
             ]
         )
     ]
@@ -286,7 +287,7 @@ def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_ex
     assert signatures == [
         ExtractedSignature(
             arguments=[
-                ExtractedArgument(name="array", type_name="numpy.ndarray"),
+                _arg("array", "numpy.ndarray", imports=["numpy"]),
             ]
         )
     ]
@@ -362,8 +363,8 @@ def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures
 
     signatures = extracted["multiple_pyarg_signatures"].functions["foo"].signatures
     assert signatures == [
-        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")]),
-        ExtractedSignature(arguments=[ExtractedArgument(name="label", type_name="str")]),
+        ExtractedSignature(arguments=[_arg("value", "int")]),
+        ExtractedSignature(arguments=[_arg("label", "str")]),
     ]
 
 
@@ -1399,7 +1400,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
         if function_cursor is bad_cursor:
             raise RuntimeError("broken inference")
-        return [ExtractedSignature(return_type_name="int")]
+        return [ExtractedSignature(return_type=_raw("int"))]
 
     def _exception(message: str, *args: object) -> None:
         logged_messages.append(message.format(*args))
@@ -1415,7 +1416,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
-        ExtractedSignature(return_type_name="int")
+        ExtractedSignature(return_type=_raw("int"))
     ]
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]
@@ -1469,7 +1470,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
         if function_cursor is bad_cursor:
             raise RuntimeError("broken inference")
-        return [ExtractedSignature(return_type_name="int")]
+        return [ExtractedSignature(return_type=_raw("int"))]
 
     def _exception(message: str, *args: object) -> None:
         logged_messages.append(message.format(*args))
@@ -1485,7 +1486,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
-        ExtractedSignature(return_type_name="int")
+        ExtractedSignature(return_type=_raw("int"))
     ]
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]

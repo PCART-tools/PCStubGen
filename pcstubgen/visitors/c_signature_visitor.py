@@ -138,7 +138,7 @@ class CSignatureVisitor(NodeVisitor):
             rewritten_signatures.append(
                 IRSignature(
                     args=args,
-                    return_type_name=sig.return_type_name,
+                    return_type=sig.return_type,
                     doc=func.doc,
                 )
             )
@@ -159,7 +159,7 @@ class CSignatureVisitor(NodeVisitor):
         """将单个提取参数转换为 IR 参数。"""
         return IRArgument(
             name=argument.name,
-            type_name=argument.type_name,
+            type=argument.type,
             default_value=argument.default_value,
             has_default=argument.has_default,
             kind=argument.kind,

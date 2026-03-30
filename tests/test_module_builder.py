@@ -8,9 +8,14 @@ import types
 
 import pytest
 
+from pcstubgen.c_signature.types import RawType
 from pcstubgen.ir import QualifiedName
 import pcstubgen.module_builder as module_builder_module
 from pcstubgen.module_builder import build_function, build_module
+
+
+def _render_type(type_: RawType | None) -> str | None:
+    return None if type_ is None else type_.render()
 
 
 def test_module_builder_keeps_raw_annotation_strings() -> None:
@@ -21,8 +26,8 @@ def test_module_builder_keeps_raw_annotation_strings() -> None:
 
     assert len(parsed.signatures) == 1
     signature = parsed.signatures[0]
-    assert [arg.type_name for arg in signature.args] == ["int", "list[int]"]
-    assert signature.return_type_name == "typing.Optional[int]"
+    assert [_render_type(arg.type) for arg in signature.args] == ["int", "list[int]"]
+    assert _render_type(signature.return_type) == "typing.Optional[int]"
 
 
 def test_module_builder_keeps_default_values_as_strings() -> None:

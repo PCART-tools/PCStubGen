@@ -23,16 +23,11 @@ def test_c_ast_visitor_rewrites_module_function_without_normalizing_arguments(
                     signatures=[
                         ExtractedSignature(
                             arguments=[
-                                ExtractedArgument(name="self", type_name="object"),
-                                ExtractedArgument(name="x", type_name="int"),
-                                ExtractedArgument(
-                                    name="flag",
-                                    type_name="bool",
-                                    default_value="False",
-                                    has_default=True,
-                                ),
+                                _arg("self", "object"),
+                                _arg("x", "int"),
+                                _arg("flag", "bool", default_value="False", has_default=True),
                             ],
-                            return_type_name="int",
+                            return_type=_raw("int"),
                         )
                     ],
                 )
@@ -49,14 +44,14 @@ def test_c_ast_visitor_rewrites_module_function_without_normalizing_arguments(
     assert len(rewritten.signatures) == 1
     signature = rewritten.signatures[0]
     assert [arg.name for arg in signature.args] == ["self", "x", "flag"]
-    assert signature.args[0].type_name == "object"
-    assert signature.args[1].type_name == "int"
-    assert signature.args[2].type_name == "bool"
+    assert signature.args[0].type is not None and signature.args[0].type.render() == "object"
+    assert signature.args[1].type is not None and signature.args[1].type.render() == "int"
+    assert signature.args[2].type is not None and signature.args[2].type.render() == "bool"
     assert signature.args[2].default_value is not None
     assert signature.args[2].default_value == "False"
     assert signature.args[2].has_default is True
-    assert signature.return_type_name is not None
-    assert signature.return_type_name == "int"
+    assert signature.return_type is not None
+    assert signature.return_type.render() == "int"
     assert rewritten.c_inferred_source_comment is None
     assert visitor._stats.total_unknown_signatures == 1
     assert visitor._stats.success == 1
@@ -100,7 +95,7 @@ def test_c_ast_visitor_records_c_inferred_source_comment_when_enabled(
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
-                            arguments=[ExtractedArgument(name="value", type_name="int")]
+                            arguments=[_arg("value", "int")]
                         )
                     ],
                 )
@@ -137,7 +132,7 @@ def test_c_ast_visitor_skips_c_inferred_source_comment_when_extent_text_is_unava
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
-                            arguments=[ExtractedArgument(name="value", type_name="int")]
+                            arguments=[_arg("value", "int")]
                         )
                     ],
                 )
@@ -175,11 +170,7 @@ def test_c_ast_visitor_preserves_has_default_without_default_text(
                     signatures=[
                         ExtractedSignature(
                             arguments=[
-                                ExtractedArgument(
-                                    name="flag",
-                                    type_name="bool",
-                                    has_default=True,
-                                )
+                                _arg("flag", "bool", has_default=True)
                             ]
                         )
                     ],
@@ -217,14 +208,9 @@ def test_c_ast_visitor_preserves_raw_argument_and_return_text(
                     signatures=[
                         ExtractedSignature(
                             arguments=[
-                                ExtractedArgument(
-                                    name="value",
-                                    type_name="  int  ",
-                                    default_value="  keep_raw()  ",
-                                    has_default=True,
-                                )
+                                _arg("value", "  int  ", default_value="  keep_raw()  ", has_default=True)
                             ],
-                            return_type_name="  bool  ",
+                            return_type=_raw("  bool  "),
                         )
                     ],
                 )
@@ -236,9 +222,9 @@ def test_c_ast_visitor_preserves_raw_argument_and_return_text(
     visitor.visit_module(module)
 
     signature = module.functions[0].signatures[0]
-    assert signature.args[0].type_name == "  int  "
+    assert signature.args[0].type is not None and signature.args[0].type.render() == "  int  "
     assert signature.args[0].default_value == "  keep_raw()  "
-    assert signature.return_type_name == "  bool  "
+    assert signature.return_type is not None and signature.return_type.render() == "  bool  "
 
 
 def test_c_ast_visitor_preserves_extracted_argument_kinds(
@@ -317,7 +303,7 @@ def test_c_ast_visitor_keeps_known_function_unchanged(
                     ml_name="foo",
                     function_cursor=_fake_function_cursor("foo"),
                     ml_flags=METH_VARARGS,
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    signatures=[ExtractedSignature(arguments=[_arg("x", "int")])],
                 )
             }
         ),
@@ -327,7 +313,7 @@ def test_c_ast_visitor_keeps_known_function_unchanged(
 
     assert module.functions[0] is func
     assert func.signatures[0].args[0].name == "x"
-    assert func.signatures[0].args[0].type_name is None
+    assert func.signatures[0].args[0].type is None
     assert func.c_inferred_source_comment is None
     assert visitor._stats.total_unknown_signatures == 0
     assert visitor._stats.success == 0
@@ -350,7 +336,7 @@ def test_c_ast_visitor_records_missing_function_match_stats(
                     ml_name="bar",
                     function_cursor=_fake_function_cursor("bar"),
                     ml_flags=METH_VARARGS,
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    signatures=[ExtractedSignature(arguments=[_arg("x", "int")])],
                 )
             }
         ),
@@ -437,7 +423,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                         ml_name="foo",
                         function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                        signatures=[ExtractedSignature(arguments=[_arg("x", "int")])],
                     )
                 },
             ),
@@ -448,7 +434,7 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
                         ml_name="foo",
                         function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="float")])],
+                        signatures=[ExtractedSignature(arguments=[_arg("value", "float")])],
                     )
                 },
             ),
@@ -472,9 +458,9 @@ def test_c_ast_visitor_matches_candidates_by_module_before_function_name(
     visitor.visit_module(second_module)
 
     assert [arg.name for arg in first_module.functions[0].signatures[0].args] == ["x"]
-    assert first_module.functions[0].signatures[0].args[0].type_name == "int"
+    assert first_module.functions[0].signatures[0].args[0].type is not None and first_module.functions[0].signatures[0].args[0].type.render() == "int"
     assert [arg.name for arg in second_module.functions[0].signatures[0].args] == ["value"]
-    assert second_module.functions[0].signatures[0].args[0].type_name == "float"
+    assert second_module.functions[0].signatures[0].args[0].type is not None and second_module.functions[0].signatures[0].args[0].type.render() == "float"
 
 
 def test_c_ast_visitor_falls_back_to_unique_leaf_module_match(
@@ -493,7 +479,7 @@ def test_c_ast_visitor_falls_back_to_unique_leaf_module_match(
                         ml_flags=METH_VARARGS,
                         signatures=[
                             ExtractedSignature(
-                                arguments=[ExtractedArgument(name="value", type_name="float")]
+                                arguments=[_arg("value", "float")]
                             )
                         ],
                     )
@@ -511,7 +497,7 @@ def test_c_ast_visitor_falls_back_to_unique_leaf_module_match(
     visitor.visit_module(module)
 
     assert [arg.name for arg in module.functions[0].signatures[0].args] == ["value"]
-    assert module.functions[0].signatures[0].args[0].type_name == "float"
+    assert module.functions[0].signatures[0].args[0].type is not None and module.functions[0].signatures[0].args[0].type.render() == "float"
     assert visitor._stats.success == 1
 
 
@@ -529,7 +515,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                         ml_name="foo",
                         function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                        signatures=[ExtractedSignature(arguments=[_arg("x", "int")])],
                     )
                 },
             ),
@@ -540,7 +526,7 @@ def test_c_ast_visitor_rejects_ambiguous_leaf_module_match_without_global_fallba
                         ml_name="foo",
                         function_cursor=_fake_function_cursor("foo"),
                         ml_flags=METH_VARARGS,
-                        signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="y", type_name="float")])],
+                        signatures=[ExtractedSignature(arguments=[_arg("y", "float")])],
                     )
                 },
             ),
@@ -586,8 +572,8 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
                     ml_flags=METH_VARARGS,
                     signatures=[
                         ExtractedSignature(
-                            arguments=[ExtractedArgument(name="x", type_name="int")],
-                            return_type_name="typing.Optional[int]",
+                            arguments=[_arg("x", "int")],
+                            return_type=_raw("typing.Optional[int]", imports=["typing"]),
                         )
                     ],
                 )
@@ -601,8 +587,8 @@ def test_c_ast_visitor_overwrites_existing_return_with_raw_inferred_return(
     visitor.visit_module(module)
 
     rewritten = module.functions[0]
-    assert rewritten.signatures[0].return_type_name is not None
-    assert rewritten.signatures[0].return_type_name == "typing.Optional[int]"
+    assert rewritten.signatures[0].return_type is not None
+    assert rewritten.signatures[0].return_type.render() == "typing.Optional[int]"
 
 
 def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -618,7 +604,7 @@ def test_c_ast_visitor_skips_python_modules(monkeypatch: pytest.MonkeyPatch, tmp
                 "foo": ExtractedFunction(
                     ml_name="foo",
                     function_cursor=_fake_function_cursor("foo"),
-                    signatures=[ExtractedSignature(arguments=[ExtractedArgument(name="x", type_name="int")])],
+                    signatures=[ExtractedSignature(arguments=[_arg("x", "int")])],
                 )
             }
         ),

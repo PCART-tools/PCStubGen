@@ -6,6 +6,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
+from pcstubgen.c_signature.types import RawType
 from pcstubgen.ir import IRArgumentKind
 from pcstubgen.c_signature.models import ExtractedArgument
 from pcstubgen.c_signature.py_arg_parse_tuple_and_keywords_type_parser import (
@@ -40,6 +41,28 @@ def _parse(
     ).parse()
 
 
+def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+    return RawType(text, imports=imports)
+
+
+def _arg(
+    name: str,
+    type_text: str,
+    *,
+    imports: list[str] | None = None,
+    default_value: str | None = None,
+    has_default: bool = False,
+    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
+) -> ExtractedArgument:
+    return ExtractedArgument(
+        name=name,
+        type=_raw(type_text, imports=imports),
+        default_value=default_value,
+        has_default=has_default,
+        kind=kind,
+    )
+
+
 def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
     count_cursor = _cursor("count")
     label_cursor = _cursor("label")
@@ -52,14 +75,9 @@ def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(name="count", type_name="int"),
-        ExtractedArgument(name="label", type_name="str | None", has_default=True),
-        ExtractedArgument(
-            name="target",
-            type_name="object",
-            has_default=True,
-            kind=IRArgumentKind.KEYWORD_ONLY,
-        ),
+        _arg("count", "int"),
+        _arg("label", "str | None", has_default=True),
+        _arg("target", "object", has_default=True, kind=IRArgumentKind.KEYWORD_ONLY),
     ]
 
 
@@ -76,8 +94,8 @@ def test_parse_ignores_trailer_and_separators(trailer: str) -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(name="count", type_name="int"),
-        ExtractedArgument(name="payload", type_name="str | collections.abc.Buffer"),
+        _arg("count", "int"),
+        _arg("payload", "str | collections.abc.Buffer", imports=["collections.abc"]),
     ]
 
 
@@ -146,34 +164,15 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
         maybe_buffer_cursor,
     ]
     assert parsed == [
-        ExtractedArgument(name="count", type_name="int"),
-        ExtractedArgument(
-            name="text",
-            type_name="str | bytes | bytearray",
-            default_value='"utf8"',
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="typed",
-            type_name="Point",
-            default_value="None",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="converted",
-            type_name="ConvertedValue",
-            default_value="factory_default()",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="raw",
-            type_name="str | collections.abc.Buffer",
-            default_value="b''",
-            has_default=True,
-        ),
-        ExtractedArgument(
-            name="maybe",
-            type_name="str | collections.abc.Buffer | None",
+        _arg("count", "int"),
+        _arg("text", "str | bytes | bytearray", default_value='"utf8"', has_default=True),
+        _arg("typed", "Point", default_value="None", has_default=True),
+        _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
+        _arg("raw", "str | collections.abc.Buffer", imports=["collections.abc"], default_value="b''", has_default=True),
+        _arg(
+            "maybe",
+            "str | collections.abc.Buffer | None",
+            imports=["collections.abc"],
             default_value="None",
             has_default=True,
             kind=IRArgumentKind.KEYWORD_ONLY,
@@ -211,9 +210,9 @@ def test_parse_accepts_empty_invalid_and_duplicate_keyword_names() -> None:
     )
 
     assert parsed == [
-        ExtractedArgument(name="", type_name="int"),
-        ExtractedArgument(name="same", type_name="int"),
-        ExtractedArgument(name="same", type_name="int"),
+        _arg("", "int"),
+        _arg("same", "int"),
+        _arg("same", "int"),
     ]
 
 
@@ -253,8 +252,8 @@ def test_parse_marks_optional_arguments_when_default_text_resolution_fails() -> 
 
     assert seen_default_cursors == [second_cursor]
     assert parsed == [
-        ExtractedArgument(name="first", type_name="int"),
-        ExtractedArgument(name="second", type_name="int", has_default=True),
+        _arg("first", "int"),
+        _arg("second", "int", has_default=True),
     ]
 
 
@@ -264,12 +263,7 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
     parsed = _parse("|$i", ["value"], [value_cursor])
 
     assert parsed == [
-        ExtractedArgument(
-            name="value",
-            type_name="int",
-            has_default=True,
-            kind=IRArgumentKind.KEYWORD_ONLY,
-        )
+        _arg("value", "int", has_default=True, kind=IRArgumentKind.KEYWORD_ONLY)
     ]
 
 
@@ -296,8 +290,8 @@ def test_parse_falls_back_to_object_for_unresolved_object_units(
     )
 
     assert parsed == [
-        ExtractedArgument(name="typed", type_name="object"),
-        ExtractedArgument(name="converted", type_name="object"),
+        _arg("typed", "object"),
+        _arg("converted", "object"),
     ]
 
 
@@ -306,7 +300,7 @@ def test_parse_maps_p_unit_to_object() -> None:
 
     parsed = _parse("p", ["predicate"], [predicate_cursor])
 
-    assert parsed == [ExtractedArgument(name="predicate", type_name="object")]
+    assert parsed == [_arg("predicate", "object")]
 
 
 @pytest.mark.parametrize(

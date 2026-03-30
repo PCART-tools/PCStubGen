@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ..ir import IRArgumentKind
+from .types import Type
 
 if TYPE_CHECKING:
     from clang.cindex import Cursor
@@ -21,7 +22,7 @@ class ExtractedArgument:
     """
 
     name: str
-    type_name: str | None = None
+    type: Type | None = None
     default_value: str | None = None
     has_default: bool = False
     kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD
@@ -32,7 +33,7 @@ class ExtractedSignature:
     """单条函数签名（参数列表 + 返回值类型）。"""
 
     arguments: list[ExtractedArgument] = field(default_factory=list)
-    return_type_name: str | None = None
+    return_type: Type | None = None
 
 
 @dataclass

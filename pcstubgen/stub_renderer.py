@@ -42,8 +42,8 @@ class StubRenderer:
         if self.include_docstrings and node.doc is not None:
             result.extend(self.print_docstring(node.doc))
 
-        if self._module_needs_typing_import(node):
-            result.append("import typing")
+        for import_name in self._collect_module_imports(node):
+            result.append(f"import {import_name}")
 
         for sub_module in node.sub_modules:
             result.extend(self.print_submodule_import(sub_module.full_name.name))
@@ -113,8 +113,8 @@ class StubRenderer:
         if arg.kind is IRArgumentKind.VAR_KEYWORD:
             parts.append("**")
         parts.append(f"{arg.name}")
-        if arg.type_name is not None:
-            parts.append(f": {arg.type_name}")
+        if arg.type is not None:
+            parts.append(f": {arg.type.render()}")
         if arg.default_value is not None:
             parts.append(f" = {arg.default_value}")
         elif arg.has_default:
@@ -204,8 +204,8 @@ class StubRenderer:
     ) -> str:
         """构建单行 def 头。"""
         rendered = [f"def {func_name}(", ", ".join(args), ")"]
-        if signature.return_type_name is not None:
-            rendered.append(f" -> {signature.return_type_name}")
+        if signature.return_type is not None:
+            rendered.append(f" -> {signature.return_type.render()}")
         rendered.append(":")
         return "".join(rendered)
 
@@ -221,8 +221,8 @@ class StubRenderer:
         rendered.extend(self.indent_lines([f"{arg}," for arg in args]))
 
         closing_line = ")"
-        if signature.return_type_name is not None:
-            closing_line += f" -> {signature.return_type_name}"
+        if signature.return_type is not None:
+            closing_line += f" -> {signature.return_type.render()}"
         closing_line += ":"
         rendered.append(closing_line)
         return rendered
@@ -293,39 +293,43 @@ class StubRenderer:
             doc=func.doc,
         )
 
-    def _module_needs_typing_import(self, node: IRModule) -> bool:
-        """判断模块输出是否需要 `import typing`。"""
-        return any(self._class_needs_typing_import(class_) for class_ in node.classes) or any(
-            self._function_needs_typing_import(func) for func in node.functions
-        )
+    def _collect_module_imports(self, node: IRModule) -> list[str]:
+        """收集模块内函数/方法签名依赖的 import。"""
+        imports: set[str] = set()
+        for class_ in node.classes:
+            imports.update(self._collect_class_imports(class_))
+        for func in node.functions:
+            imports.update(self._collect_function_imports(func))
+        return sorted(imports)
 
-    def _class_needs_typing_import(self, irclass: IRClass) -> bool:
-        """判断类输出是否需要 `import typing`。"""
-        if any(self._text_uses_typing(str(base)) for base in irclass.bases):
-            return True
-        return any(self._class_needs_typing_import(sub_class) for sub_class in irclass.classes) or any(
-            self._function_needs_typing_import(method.function) for method in irclass.methods
-        )
+    def _collect_class_imports(self, irclass: IRClass) -> set[str]:
+        """递归收集类内函数/方法签名依赖的 import。"""
+        imports: set[str] = set()
+        for sub_class in irclass.classes:
+            imports.update(self._collect_class_imports(sub_class))
+        for method in irclass.methods:
+            imports.update(self._collect_function_imports(method.function))
+        return imports
 
-    def _function_needs_typing_import(self, func: IRFunction) -> bool:
-        """判断函数输出是否需要 `import typing`。"""
+    def _collect_function_imports(self, func: IRFunction) -> set[str]:
+        """收集函数签名依赖的 import。"""
+        imports: set[str] = set()
         if len(func.signatures) > 1:
-            return True
-        return any(self._signature_needs_typing_import(signature) for signature in func.signatures)
-
-    def _signature_needs_typing_import(self, signature: IRSignature) -> bool:
-        """判断单条签名是否引用了 `typing.` 前缀。"""
-        if self._text_uses_typing(signature.return_type_name):
-            return True
-        return any(
-            self._text_uses_typing(arg.type_name) or self._text_uses_typing(arg.default_value)
-            for arg in signature.args
-        )
+            imports.add("typing")
+        for signature in func.signatures:
+            imports.update(self._collect_signature_imports(signature))
+        return imports
 
     @staticmethod
-    def _text_uses_typing(value: str | None) -> bool:
-        """判断给定文本是否包含 `typing.` 前缀引用。"""
-        return value is not None and "typing." in value
+    def _collect_signature_imports(signature: IRSignature) -> set[str]:
+        """收集单条签名依赖的 import。"""
+        imports: set[str] = set()
+        if signature.return_type is not None:
+            imports.update(signature.return_type.collect_imports())
+        for arg in signature.args:
+            if arg.type is not None:
+                imports.update(arg.type.collect_imports())
+        return imports
 
     def print_submodule_import(self, name: str) -> list[str]:
         """渲染子模块导入。"""

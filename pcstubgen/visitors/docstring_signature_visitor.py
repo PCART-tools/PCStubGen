@@ -6,6 +6,7 @@ from enum import Enum, auto
 
 from loguru import logger
 
+from ..c_signature.types import RawType, Type
 from ..ir import (
     IRArgument,
     IRArgumentKind,
@@ -137,12 +138,12 @@ class DocstringSignatureVisitor(NodeVisitor):
         # 单条
         if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
             args = self.parse_args_str(match.group("args"))
-            returns = (match.group("returns") or "").strip('"')
+            returns = self.parse_annotation_str((match.group("returns") or "").strip('"'))
             return [
                 IRSignature(
                     args=args,
                     doc=self._strip_empty_lines(doc_lines[1:]),
-                    return_type_name=returns,
+                    return_type=returns,
                 )
             ]
 
@@ -170,7 +171,7 @@ class DocstringSignatureVisitor(NodeVisitor):
             overloads.append(
                 IRSignature(
                     args=args,
-                    return_type_name=self.parse_annotation_str(match.group("returns")),
+                    return_type=self.parse_annotation_str(match.group("returns")),
                 )
             )
             doc_start = i + 1
@@ -188,14 +189,14 @@ class DocstringSignatureVisitor(NodeVisitor):
         result: list[IRArgument] = []
         state = _ArgsParseState.POSITIONAL
 
-        for arg_decl, type_name, default_str in split_args:
+        for arg_decl, annotation, default_str in split_args:
             if state is _ArgsParseState.FINISHED:
                 raise ValueError("可变关键字参数之后不允许再出现其他参数。")
 
             if arg_decl == "/":
                 if (
                     state is not _ArgsParseState.POSITIONAL
-                    or type_name is not None
+                    or annotation is not None
                     or default_str is not None
                 ):
                     raise ValueError("位置参数分隔符 '/' 位置非法。")
@@ -215,7 +216,7 @@ class DocstringSignatureVisitor(NodeVisitor):
             if arg_decl == "*":
                 if (
                     state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD)
-                    or type_name is not None
+                    or annotation is not None
                     or default_str is not None
                 ):
                     raise ValueError("关键字专用分隔符 '*' 位置非法。")
@@ -260,17 +261,19 @@ class DocstringSignatureVisitor(NodeVisitor):
                     name=name,
                     default_value=default_str,
                     has_default=default_str is not None,
-                    type_name=type_name,
+                    type=annotation,
                     kind=kind,
                 )
             )
         return result
 
     @staticmethod
-    def parse_annotation_str(annotation_str: str) -> str | None:
+    def parse_annotation_str(annotation_str: str) -> Type | None:
         """清理注解文本中的空白。"""
         text = annotation_str.strip()
-        return text or None
+        if not text:
+            return None
+        return RawType(text)
 
     def _split_args_str(
         self, args_str: str
@@ -281,7 +284,7 @@ class DocstringSignatureVisitor(NodeVisitor):
 
         arg_blocks = self._split_top_level(args_str, ",")
 
-        result: list[tuple[str, str | None, str | None]] = []
+        result: list[tuple[str, Type | None, str | None]] = []
         for arg_block in arg_blocks:
             if not arg_block.strip():
                 raise ValueError("参数列表中存在空参数块。")
@@ -303,7 +306,7 @@ class DocstringSignatureVisitor(NodeVisitor):
                 raise ValueError("参数注解声明中包含多个 ':'。")
 
             name = name_type_parts[0].strip()
-            type_ = name_type_parts[1].strip() if len(name_type_parts) == 2 else None
+            type_ = self.parse_annotation_str(name_type_parts[1]) if len(name_type_parts) == 2 else None
             result.append((name, type_, default))
 
         return result

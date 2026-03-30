@@ -9,6 +9,7 @@ from clang.cindex import Cursor
 
 from .models import ExtractedArgument
 from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS
+from .types import RawType, Type
 
 
 class PyArgParseTupleTypeParserError(ValueError):
@@ -21,7 +22,7 @@ class _ParsedValue:
     # 仅保留真正接收 ParseTuple 输出值的 decl-ref 槽位。
     c_args: tuple[Cursor, ...]
 
-    def render_type_name(self) -> str:
+    def build_type(self) -> Type:
         raise NotImplementedError
 
     def render_default_value(
@@ -35,12 +36,12 @@ class _ParsedValue:
 class _ScalarParsedValue(_ParsedValue):
     """标量格式单元的解析结果。"""
 
-    type_name: str
+    type: Type
     c_args: tuple[Cursor, ...]
     default_value_cursor: Cursor
 
-    def render_type_name(self) -> str:
-        return self.type_name
+    def build_type(self) -> Type:
+        return self.type
 
     def render_default_value(
         self,
@@ -58,13 +59,17 @@ class _TupleParsedValue(_ParsedValue):
     items: tuple[_ParsedValue, ...]
     c_args: tuple[Cursor, ...]
 
-    def render_type_name(self) -> str:
-        item_type_names = tuple(item.render_type_name() for item in self.items)
-        if not item_type_names:
+    def build_type(self) -> Type:
+        item_types = tuple(item.build_type() for item in self.items)
+        if not item_types:
             raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
-        if len(item_type_names) == 1:
-            return f"tuple[{item_type_names[0]},]"
-        return f"tuple[{', '.join(item_type_names)}]"
+        item_rendered = [item_type.render() for item_type in item_types]
+        imports: set[str] = set()
+        for item_type in item_types:
+            imports.update(item_type.collect_imports())
+        if len(item_rendered) == 1:
+            return RawType(f"tuple[{item_rendered[0]},]", imports=sorted(imports))
+        return RawType(f"tuple[{', '.join(item_rendered)}]", imports=sorted(imports))
 
     def render_default_value(
         self,
@@ -93,7 +98,7 @@ class PyArgParseTupleTypeParser:
         fmt: str,
         args: list[Cursor],
         resolve_name_func: Callable[[list[Cursor]], str | None],
-        resolve_object_type_func: Callable[[Cursor], str | None] | None = None,
+        resolve_object_type_func: Callable[[Cursor], Type | str | None] | None = None,
         resolve_default_value_func: Callable[[Cursor], str | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
@@ -142,7 +147,7 @@ class PyArgParseTupleTypeParser:
 
         return ExtractedArgument(
             name=name,
-            type_name=value.render_type_name(),
+            type=value.build_type(),
             default_value=default_value,
             has_default=has_default,
         )
@@ -199,14 +204,14 @@ class PyArgParseTupleTypeParser:
             if self._format.startswith(spec.unit, self._char_index):
                 self._char_index += len(spec.unit)
                 raw_c_args = self._advance_c_args_required(spec.c_arg_count)
-                type_name = spec.type_name
+                value_type = spec.type
                 if spec.object_type_arg_offset is not None:
-                    type_name = self._resolve_object_type(
+                    value_type = self._resolve_object_type(
                         raw_c_args[spec.object_type_arg_offset]
                     )
                 decl_ref_cursor = raw_c_args[spec.decl_ref_offset]
                 return _ScalarParsedValue(
-                    type_name=type_name,
+                    type=value_type,
                     c_args=(decl_ref_cursor,),
                     default_value_cursor=decl_ref_cursor,
                 )
@@ -229,13 +234,15 @@ class PyArgParseTupleTypeParser:
             raise PyArgParseTupleTypeParserError("无法解析 argument name。")
         return name
 
-    def _resolve_object_type(self, cursor: Cursor) -> str:
+    def _resolve_object_type(self, cursor: Cursor) -> Type:
         """解析对象单元的 Python 类型，未知时回退为 `object`。"""
         if self._resolve_object_type_func is not None:
             resolved_type = self._resolve_object_type_func(cursor)
             if resolved_type is not None:
+                if isinstance(resolved_type, str):
+                    return RawType(resolved_type)
                 return resolved_type
-        return "object"
+        return RawType("object")
 
     def _peek_char(self) -> str | None:
         """查看当前位置字符而不推进游标。"""

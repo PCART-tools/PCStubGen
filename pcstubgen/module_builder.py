@@ -9,6 +9,7 @@ from typing import Any
 
 from loguru import logger
 
+from .c_signature.types import RawType, Type
 from .reflection_helpers import (
     get_doc,
     get_module_name,
@@ -57,10 +58,14 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             try:
                 sub_module = importlib.import_module(submodule_name)
             except (ImportError, OSError) as ex:
+                missing_dependency = None
+                if isinstance(ex, ModuleNotFoundError):
+                    missing_dependency = ex.name
                 logger.warning(
-                    "跳过子模块, module: {}, error_type: {}, error: {}",
+                    "跳过子模块, module: {}, error_type: {}, missing_dependency: {}, error: {}",
                     submodule_name,
                     type(ex).__name__,
+                    missing_dependency,
                     ex,
                 )
                 continue
@@ -167,16 +172,16 @@ def build_function(
                 arg.default_value = _build_value(param.default)
                 arg.has_default = True
             if param.annotation is not inspect.Signature.empty:
-                arg.type_name = _build_annotation(param.annotation)
+                arg.type = _build_annotation(param.annotation)
             args.append(arg)
 
-        return_type_name: str | None = None
+        return_type: Type | None = None
         if sig.return_annotation is not inspect.Signature.empty:
-            return_type_name = _build_annotation(sig.return_annotation)
+            return_type = _build_annotation(sig.return_annotation)
         irfunc.signatures.append(
             IRSignature(
                 args=args,
-                return_type_name=return_type_name,
+                return_type=return_type,
                 doc=irfunc.doc,
             )
         )
@@ -227,19 +232,25 @@ def build_bases(class_: type) -> list[QualifiedName]:
     return result
 
 
-def _build_annotation(annotation: Any) -> str | None:
+def _build_annotation(annotation: Any) -> Type | None:
     if isinstance(annotation, str):
-        return _normalize_annotation_text(annotation)
+        return _build_raw_annotation(annotation)
     if isinstance(annotation, type):
-        return str(_get_type_fullname(annotation))
-    return _normalize_annotation_text(_build_value(annotation))
+        qualified_name = _get_type_fullname(annotation)
+        imports: list[str] = []
+        if annotation.__module__ != "builtins":
+            imports.append(annotation.__module__)
+        return RawType(str(qualified_name), imports=imports)
+    return _build_raw_annotation(_build_value(annotation))
 
 
-def _normalize_annotation_text(annotation_text: str | None) -> str | None:
+def _build_raw_annotation(annotation_text: str | None) -> RawType | None:
     if annotation_text is None:
         return None
     text = annotation_text.strip()
-    return text or None
+    if not text:
+        return None
+    return RawType(text)
 
 
 def _build_value(value: Any) -> str:

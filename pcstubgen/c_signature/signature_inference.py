@@ -25,7 +25,7 @@ from .py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from .types import NamedType, Type, UnionType
+from .types import Type, UnionType
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 
@@ -38,14 +38,14 @@ def infer_signature(func_cursor: Cursor) -> list[ExtractedSignature]:
         return [
             ExtractedSignature(
                 arguments=arguments,
-                return_type_name=inferred_return_type,
+                return_type=inferred_return_type,
             )
             for arguments in inferred_argument_lists
         ]
 
     if inferred_return_type is None:
         return []
-    return [ExtractedSignature(return_type_name=inferred_return_type)]
+    return [ExtractedSignature(return_type=inferred_return_type)]
 
 
 def infer_argument_lists(func_cursor: Cursor) -> list[list[ExtractedArgument]]:
@@ -70,7 +70,7 @@ def infer_argument_lists(func_cursor: Cursor) -> list[list[ExtractedArgument]]:
     return inferred_argument_lists
 
 
-def infer_return_type(func_cursor: Cursor) -> str | None:
+def infer_return_type(func_cursor: Cursor) -> Type | None:
     """遍历函数子树中的 return 语句并汇总可识别的返回类型。"""
     inferred_types: list[Type] = []
 
@@ -79,6 +79,8 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
             continue
 
         return_children = list(cursor.get_children())
+        if not return_children:
+            continue
         return_expr = return_children[0]
 
         inferred_type = infer_expr_type(return_expr)
@@ -93,7 +95,7 @@ def infer_return_type(func_cursor: Cursor) -> str | None:
     if isinstance(merged_type, UnionType):
         if len(merged_type.members) > 1:
             logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
-    return merged_type.render()
+    return merged_type
 
 
 def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[ExtractedArgument]:
@@ -160,6 +162,10 @@ def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
     """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
     assert expr_cursor.kind == CursorKind.CONDITIONAL_OPERATOR
     children = list(expr_cursor.get_children())
+    if len(children) != 3:
+        raise RuntimeError(
+            f"CONDITIONAL_OPERATOR 子节点数量非法: expected 3, got {len(children)}"
+        )
 
     branch_types: list[Type] = []
     for branch in children[1:]:
@@ -179,7 +185,7 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     identifier_name = _get_cursor_name(expr_cursor)
     mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
-        return NamedType(mapped)
+        return mapped
     return None
 
 
@@ -192,7 +198,11 @@ def _infer_call_expr_type(cursor: Cursor) -> Type | None:
     assert cursor.kind == CursorKind.CALL_EXPR
     children = list(cursor.get_children())
     func_cursor = children[0]
-    call_name = source_range_get_text(func_cursor.extent)
+    call_name = None
+    if getattr(func_cursor, "extent", None) is not None:
+        call_name = source_range_get_text(func_cursor.extent)
+    if call_name is None:
+        call_name = _get_cursor_name(func_cursor)
     if call_name is None:
         return None
 
@@ -247,7 +257,7 @@ def _resolve_argument_name(c_args: list[Cursor]) -> str:
     return "_".join(names)
 
 
-def _resolve_object_type_for_pyarg(cursor: Cursor) -> str | None:
+def _resolve_object_type_for_pyarg(cursor: Cursor) -> Type | None:
     """
     解析 `PyArg_*` 中对象槽位对应的 Python 类型名。
     可能名字是宏
