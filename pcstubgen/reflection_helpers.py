@@ -19,4 +19,7 @@ def get_module_name(obj: Any) -> str | None:
 
 
 def is_package(module: types.ModuleType) -> bool:
-    return hasattr(module, "__path__")
+    spec = module.__spec__
+    if spec is None:
+        return False
+    return spec.submodule_search_locations is not None

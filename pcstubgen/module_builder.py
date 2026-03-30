@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib
 import importlib.machinery
 import inspect
+import pkgutil
 import types
 from typing import Any
 
@@ -49,8 +51,22 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             irmodule.classes.append(
                 build_class(member_path, member, module_type=module_type)
             )
-        elif inspect.ismodule(member):
-            irmodule.sub_modules.append(build_module(member_path, member))
+
+    if irmodule.is_package:
+        for submodule_name in _iter_submodule_names(module):
+            try:
+                sub_module = importlib.import_module(submodule_name)
+            except (ImportError, OSError) as ex:
+                logger.warning(
+                    "跳过子模块, module: {}, error_type: {}, error: {}",
+                    submodule_name,
+                    type(ex).__name__,
+                    ex,
+                )
+                continue
+            irmodule.sub_modules.append(
+                build_module(QualifiedName.from_str(submodule_name), sub_module)
+            )
 
     return irmodule
 
@@ -75,6 +91,21 @@ def _detect_module_type(module: types.ModuleType) -> IRModuleType:
         return IRModuleType.PYTHON
 
     return IRModuleType.UNKNOWN
+
+
+def _iter_submodule_names(module: types.ModuleType) -> list[str]:
+    """按 import 拓扑枚举包的直接子模块全名。"""
+    spec = module.__spec__
+    assert spec is not None
+    assert spec.submodule_search_locations is not None
+
+    return sorted(
+        module_info.name
+        for module_info in pkgutil.iter_modules(
+            spec.submodule_search_locations,
+            prefix=f"{module.__name__}.",
+        )
+    )
 
 
 def build_class(
