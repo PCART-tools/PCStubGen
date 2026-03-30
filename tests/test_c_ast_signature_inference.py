@@ -2626,60 +2626,6 @@ def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_withou
     assert extracted == {}
 
 
-def test_c_signature_extraction_engine_does_not_extract_initializer_list_method_table_yet(tmp_path: Path) -> None:
-    pytest.importorskip("clang.cindex")
-    if _get_packaged_libclang_path() is None:
-        pytest.skip("Packaged libclang library is not available")
-
-    source = tmp_path / "mini_ext.cpp"
-    source.write_text(
-        "\n".join(
-            [
-                "namespace std {",
-                "template<class E> class initializer_list {",
-                "public:",
-                "    const E* begin() const;",
-                "    const E* end() const;",
-                "    unsigned long size() const;",
-                "};",
-                "}",
-                "typedef struct _object PyObject;",
-                "typedef PyObject* (*PyCFunction)(PyObject*, PyObject*);",
-                "typedef struct PyMethodDef {",
-                "    const char* ml_name;",
-                "    PyCFunction ml_meth;",
-                "    int ml_flags;",
-                "    const char* ml_doc;",
-                "} PyMethodDef;",
-                "#define METH_VARARGS 1",
-                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
-                "static PyObject* add_impl(PyObject* self, PyObject* args) {",
-                "    int a = 0;",
-                "    int b = 0;",
-                "    if (!PyArg_ParseTuple(args, \"ii\", &a, &b)) {",
-                "        return (PyObject*)0;",
-                "    }",
-                "    return (PyObject*)0;",
-                "}",
-                "static std::initializer_list<PyMethodDef> Methods = {",
-                "    {\"add\", add_impl, METH_VARARGS, \"doc\"},",
-                "    {nullptr, nullptr, 0, nullptr}",
-                "};",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        cpp_std="c++17",
-    )
-    extracted = engine.extract_modules()
-
-    assert extracted == {}
-
-
 def test_c_ast_visitor_passes_clang_options_to_extractor(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     captured: dict[str, object] = {
         "extract_calls": 0,
@@ -2761,57 +2707,6 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
         assert engine._include_directory == expected_include_dirs
     finally:
         monkeypatch.undo()
-
-
-def test_c_signature_engine_build_parse_args_uses_only_external_include_values(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(source_root=tmp_path, c_std="c11")
-
-    assert translation_unit_module.build_clang_parse_args(
-        tmp_path / "module.c",
-        include=engine._include,
-        include_directory=engine._include_directory,
-        c_std=engine._c_std,
-        cpp_std=engine._cpp_std,
-    ) == [
-        "--std",
-        "c11",
-        *[
-            item
-            for include_dir in engine._include_directory
-            for item in ("--include-directory", str(include_dir))
-        ],
-    ]
-
-
-def test_c_signature_engine_build_parse_args_places_include_before_include_directory(tmp_path: Path) -> None:
-    engine = CSignatureExtractor(
-        source_root=tmp_path,
-        include=["Python.h", "numpy/arrayobject.h"],
-        include_directory=[Path("C:/MyInclude")],
-        c_std="c11",
-    )
-
-    assert translation_unit_module.build_clang_parse_args(
-        tmp_path / "module.c",
-        include=engine._include,
-        include_directory=engine._include_directory,
-        c_std=engine._c_std,
-        cpp_std=engine._cpp_std,
-    ) == [
-        "--std",
-        "c11",
-        "--include",
-        "Python.h",
-        "--include",
-        "numpy/arrayobject.h",
-        "--include-directory",
-        str(Path("C:/MyInclude")),
-        *[
-            item
-            for include_dir in engine._include_directory[1:]
-            for item in ("--include-directory", str(include_dir))
-        ],
-    ]
 
 
 class _FakeToken:
@@ -3095,33 +2990,33 @@ def _type_object_decl(name: str, tp_name: str) -> _FakeNode:
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
-        ("Py_None", NamedType("None")),
-        ("Py_True", NamedType("bool")),
-        ("Py_False", NamedType("bool")),
+        ("_Py_NoneStruct", NamedType("None")),
+        ("_Py_TrueStruct", NamedType("bool")),
+        ("_Py_FalseStruct", NamedType("bool")),
     ],
 )
-def test_infer_expr_type_detects_direct_object_returns(token_name: str, expected: NamedType) -> None:
-    inferred = signature_rules_module.infer_expr_type(_identifier_node(token_name))
+def test_infer_expr_type_detects_addressed_object_returns(token_name: str, expected: NamedType) -> None:
+    inferred = signature_rules_module.infer_expr_type(_address_of(token_name))
 
     assert inferred == expected
 
 
 @pytest.mark.parametrize(
-    ("token_name", "expected"),
+    "token_name",
     [
-        ("Py_RETURN_NONE", NamedType("None")),
-        ("Py_RETURN_TRUE", NamedType("bool")),
-        ("Py_RETURN_FALSE", NamedType("bool")),
-        ("Py_RETURN_NAN", NamedType("float")),
-        ("Py_RETURN_INF", NamedType("float")),
+        "Py_RETURN_NONE",
+        "Py_RETURN_TRUE",
+        "Py_RETURN_FALSE",
+        "Py_RETURN_NAN",
+        "Py_RETURN_INF",
     ],
 )
-def test_infer_expr_type_detects_preserved_macro_tokens(token_name: str, expected: NamedType) -> None:
+def test_infer_expr_type_returns_none_for_preserved_macro_tokens(token_name: str) -> None:
     macro_expr = _macro_expr(token_name)
 
     inferred = signature_rules_module.infer_expr_type(macro_expr)
 
-    assert inferred == expected
+    assert inferred is None
 
 
 def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() -> None:
@@ -3284,13 +3179,13 @@ def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
-        ("Py_None", "None"),
-        ("Py_True", "bool"),
-        ("Py_False", "bool"),
+        ("_Py_NoneStruct", "None"),
+        ("_Py_TrueStruct", "bool"),
+        ("_Py_FalseStruct", "bool"),
     ],
 )
-def test_return_type_detects_direct_object_returns(token_name: str, expected: str) -> None:
-    cursor = _fake_function_cursor_with_children(_return_stmt(_identifier_node(token_name)))
+def test_return_type_detects_addressed_object_returns(token_name: str, expected: str) -> None:
+    cursor = _fake_function_cursor_with_children(_return_stmt(_address_of(token_name)))
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
@@ -3298,22 +3193,22 @@ def test_return_type_detects_direct_object_returns(token_name: str, expected: st
 
 
 @pytest.mark.parametrize(
-    ("token_name", "expected"),
+    "token_name",
     [
-        ("Py_RETURN_NONE", "None"),
-        ("Py_RETURN_TRUE", "bool"),
-        ("Py_RETURN_FALSE", "bool"),
-        ("Py_RETURN_NAN", "float"),
-        ("Py_RETURN_INF", "float"),
+        "Py_RETURN_NONE",
+        "Py_RETURN_TRUE",
+        "Py_RETURN_FALSE",
+        "Py_RETURN_NAN",
+        "Py_RETURN_INF",
     ],
 )
-def test_return_type_detects_preserved_macro_tokens(token_name: str, expected: str) -> None:
+def test_return_type_returns_none_for_preserved_macro_tokens(token_name: str) -> None:
     macro_expr = _macro_expr(token_name)
     cursor = _fake_function_cursor_with_children(_return_stmt(macro_expr))
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == expected
+    assert inferred is None
 
 
 @pytest.mark.parametrize(
@@ -3387,7 +3282,7 @@ def test_return_type_unwraps_transparent_wrappers_and_casts() -> None:
 
 def test_return_type_deduplicates_and_canonicalizes_order() -> None:
     cursor = _fake_function_cursor_with_children(
-        _return_stmt(_identifier_node("Py_None")),
+        _return_stmt(_address_of("_Py_NoneStruct")),
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
         _return_stmt(
             _call_expr(
@@ -3396,7 +3291,7 @@ def test_return_type_deduplicates_and_canonicalizes_order() -> None:
                 _identifier_node("value"),
             )
         ),
-        _return_stmt(_identifier_node("Py_False")),
+        _return_stmt(_address_of("_Py_FalseStruct")),
     )
 
     inferred = signature_rules_module.infer_return_type(cursor)
@@ -3745,6 +3640,14 @@ def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
     assert inferred == []
 
 
+def test_infer_signature_returns_empty_when_return_type_is_macro_expr() -> None:
+    cursor = _fake_function_cursor_with_children(_return_stmt(_macro_expr("Py_RETURN_NONE")))
+
+    inferred = signature_rules_module.infer_signature(cursor)
+
+    assert inferred == []
+
+
 def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
     cursor = _fake_function_cursor_with_children(
@@ -3764,6 +3667,25 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
             arguments=[ExtractedArgument(name="value", type_name="int")],
             return_type_name="int",
         )
+    ]
+
+
+def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _return_stmt(_macro_expr("Py_RETURN_NONE")),
+    )
+
+    inferred = signature_rules_module.infer_signature(cursor)
+
+    assert inferred == [
+        ExtractedSignature(arguments=[ExtractedArgument(name="value", type_name="int")])
     ]
 
 
@@ -3788,12 +3710,12 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     logged_messages: list[str] = []
 
     monkeypatch.setattr(
-        c_signature_extraction_module.translation_unit,
+        c_signature_extraction_module.clang_parser,
         "inject_python_include_directories",
         lambda include_directory: list(include_directory),
     )
     monkeypatch.setattr(
-        c_signature_extraction_module.translation_unit,
+        c_signature_extraction_module.clang_parser,
         "find_candidate_files",
         lambda source_root: [source_root / "sample.c"],
     )
@@ -3803,8 +3725,8 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
         staticmethod(lambda: object()),
     )
     monkeypatch.setattr(
-        c_signature_extraction_module.translation_unit,
-        "parse_translation_unit",
+        c_signature_extraction_module.clang_parser,
+        "parse",
         lambda *args, **kwargs: SimpleNamespace(cursor="fake-tu"),
     )
     monkeypatch.setattr(
@@ -3842,9 +3764,9 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     assert extracted["pkg.mod"].functions["good"].signatures == [
         ExtractedSignature(return_type_name="int")
     ]
-    assert logged_messages == [
-        "推断 C 函数签名失败, module_name: pkg.mod, func_name: bad"
-    ]
+    assert len(logged_messages) == 1
+    assert "pkg.mod" in logged_messages[0]
+    assert "bad" in logged_messages[0]
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:

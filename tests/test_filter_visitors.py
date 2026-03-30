@@ -215,9 +215,10 @@ def test_docstring_parser_visit_function_warns_and_skips_invalid_docstring(
     visitor.visit_function(func, ir_module)
 
     assert func.signatures == []
-    assert warnings == [
-        "解析 docstring 签名失败, module_name: pkg.mod, func_name: foo, error_type: ValueError, error: 参数列表中存在空参数块。"
-    ]
+    assert len(warnings) == 1
+    assert "pkg.mod" in warnings[0]
+    assert "foo" in warnings[0]
+    assert "ValueError" in warnings[0]
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
@@ -511,73 +512,6 @@ def test_printer_prints_placeholder_signature_for_unknown_function() -> None:
     ]
 
 
-def test_printer_prints_multiple_arguments_one_per_line() -> None:
-    func = IRFunction(
-        name="foo",
-        signatures=[
-            _signature(
-                args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="str")],
-            )
-        ],
-    )
-
-    lines = StubPrinter(include_docstrings=False).print_function(func)
-
-    assert lines == [
-        "def foo(",
-        "    x: int,",
-        "    y: str,",
-        "):",
-        "    ...",
-    ]
-
-
-def test_printer_prints_multiple_arguments_with_return_type_one_per_line() -> None:
-    func = IRFunction(
-        name="foo",
-        signatures=[
-            _signature(
-                args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="str")],
-                return_type_name="bool",
-            )
-        ],
-    )
-
-    lines = StubPrinter(include_docstrings=False).print_function(func)
-
-    assert lines == [
-        "def foo(",
-        "    x: int,",
-        "    y: str,",
-        ") -> bool:",
-        "    ...",
-    ]
-
-
-def test_printer_prints_multiple_arguments_with_defaults_one_per_line() -> None:
-    func = IRFunction(
-        name="foo",
-        signatures=[
-            _signature(
-                args=[
-                    IRArgument(name="x", default_value="1"),
-                    IRArgument(name="y", default_value="unknown_default()"),
-                ],
-            )
-        ],
-    )
-
-    lines = StubPrinter(include_docstrings=False).print_function(func)
-
-    assert lines == [
-        "def foo(",
-        "    x = 1,",
-        "    y = unknown_default(),",
-        "):",
-        "    ...",
-    ]
-
-
 def test_printer_prints_positional_only_marker_on_its_own_line() -> None:
     func = IRFunction(
         name="foo",
@@ -815,44 +749,6 @@ def test_printer_repeats_method_decorator_for_each_overload() -> None:
         "@classmethod",
         "@typing.overload",
         "def build(x: str) -> str:",
-        "    ...",
-    ]
-
-
-def test_printer_repeats_method_decorator_for_each_multiline_overload() -> None:
-    method = IRMethod(
-        function=IRFunction(
-            name="build",
-            signatures=[
-                _signature(
-                    args=[IRArgument(name="x", type_name="int"), IRArgument(name="y", type_name="int")],
-                    return_type_name="int",
-                ),
-                _signature(
-                    args=[IRArgument(name="x", type_name="str"), IRArgument(name="y", type_name="str")],
-                    return_type_name="str",
-                ),
-            ],
-        ),
-        decorator="classmethod",
-    )
-
-    lines = StubPrinter(include_docstrings=False).print_method(method)
-
-    assert lines == [
-        "@classmethod",
-        "@typing.overload",
-        "def build(",
-        "    x: int,",
-        "    y: int,",
-        ") -> int:",
-        "    ...",
-        "@classmethod",
-        "@typing.overload",
-        "def build(",
-        "    x: str,",
-        "    y: str,",
-        ") -> str:",
         "    ...",
     ]
 

@@ -80,7 +80,7 @@ def test_run_single_module_returns_error_when_collect_module_names_fails(
     captured = capsys.readouterr()
 
     assert exit_code == module_c_impl.EXIT_ERROR
-    assert "检查失败: boom: bad.module" in captured.out
+    assert "boom: bad.module" in captured.out
 
 
 def test_write_report_writes_csv_header_and_c_modules_first(

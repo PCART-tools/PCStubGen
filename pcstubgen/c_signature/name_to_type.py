@@ -167,15 +167,7 @@ BUILD_CONVERTER_NAME_TO_TYPE: dict[str, str] = {
 }
 
 OBJECT_NAME_TO_TYPE: dict[str, str] = {
-    "Py_None": "None",
-    "Py_True": "bool",
-    "Py_False": "bool",
-}
-
-RETURN_MACRO_TO_TYPE: dict[str, str] = {
-    "Py_RETURN_NONE": "None",
-    "Py_RETURN_TRUE": "bool",
-    "Py_RETURN_FALSE": "bool",
-    "Py_RETURN_NAN": "float",
-    "Py_RETURN_INF": "float",
+    "_Py_NoneStruct": "None",
+    "_Py_TrueStruct": "bool",
+    "_Py_FalseStruct": "bool",
 }

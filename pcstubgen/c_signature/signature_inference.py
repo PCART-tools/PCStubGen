@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
@@ -140,22 +138,24 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(
         raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
 
 
-def infer_expr_type(expr_cursor: Cursor) -> Type | None:
+def infer_expr_type(expr: Cursor) -> Type | None:
     """对单个表达式做 Python 类型推断。"""
-    normalized_expr = unwrap_transparent(expr_cursor)
+    expr = unwrap_transparent(expr)
 
-    if normalized_expr.kind == CursorKind.CONDITIONAL_OPERATOR:
-        return _infer_conditional_operator_type(normalized_expr)
+    if expr.kind == CursorKind.CONDITIONAL_OPERATOR:
+        return _infer_conditional_operator_type(expr)
 
-    if normalized_expr.kind == CursorKind.CALL_EXPR:
-        return _infer_call_expr_type(normalized_expr)
+    if expr.kind == CursorKind.CALL_EXPR:
+        return _infer_call_expr_type(expr)
 
-    if normalized_expr.kind == CursorKind.DECL_REF_EXPR:
-        direct_type = _infer_decl_ref_expr_type(normalized_expr)
-        if direct_type is not None:
-            return direct_type
+    if expr.kind == CursorKind.UNARY_OPERATOR:
+        # 可能为&Obj
+        child = next(expr.get_children())
+        child = unwrap_transparent(child)
+        if child.kind == CursorKind.DECL_REF_EXPR:
+            return _infer_decl_ref_expr_type(child)
 
-    return _infer_macro_expr_type(normalized_expr)
+    return None
 
 
 def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
@@ -181,24 +181,6 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     if mapped is not None:
         return NamedType(mapped)
     return None
-
-
-def _infer_macro_expr_type(expr_cursor: Cursor) -> Type | None:
-    """识别 AST 子树中可见名称对应的返回宏类型。"""
-    for name in _iter_subtree_names(expr_cursor):
-        mapped = RETURN_MACRO_TO_TYPE.get(name)
-        if mapped is not None:
-            logger.info("发现宏RETURN {}", mapped)
-            return NamedType(mapped)
-    return None
-
-
-def _iter_subtree_names(node: Cursor) -> Iterable[str]:
-    """遍历子树中可由 AST 直接读取到的名称。"""
-    for cursor in walk_cursor(node):
-        name = _get_cursor_name(cursor)
-        if name is not None:
-            yield name
 
 
 def _infer_call_expr_type(call_expr_cursor: Cursor) -> Type | None:
