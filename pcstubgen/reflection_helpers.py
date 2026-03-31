@@ -22,4 +22,4 @@ def is_package(module: types.ModuleType) -> bool:
     spec = module.__spec__
     if spec is None:
         return False
-    return spec.submodule_search_locations is not None
+    return getattr(spec, "submodule_search_locations", None) is not None

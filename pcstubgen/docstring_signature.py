@@ -1,163 +1,75 @@
 from __future__ import annotations
 
-import dataclasses
 import re
 from enum import Enum, auto
 
-from loguru import logger
-
-from ..c_signature.types import RawType, Type
-from ..ir import (
-    IRArgument,
-    IRArgumentKind,
-    IRFunction,
-    IRModule,
-    IRSignature,
+from .c_signature.types import RawType, Type
+from .ir import IRArgumentKind
+from .signature_models import (
+    ResolvedArgument,
+    ResolvedFunctionSignatures,
+    ResolvedSignature,
 )
-from .node_visitor import NodeVisitor
 
 
 class _ArgsParseState(Enum):
-    """参数头解析阶段。"""
-
     POSITIONAL = auto()
     POSITIONAL_OR_KEYWORD = auto()
     KEYWORD_ONLY = auto()
     FINISHED = auto()
 
 
-@dataclasses.dataclass
-class _InferenceStats:
-    total_unknown_signatures: int = 0
-    success: int = 0
-    missing_doc: int = 0
-    no_signature_match: int = 0
-    parse_error: int = 0
-    skipped_known_signatures: int = 0
-    skipped_known_with_parsable_docstring: int = 0
-    skipped_known_with_parse_error: int = 0
+class DocstringSignatureParser:
+    def resolve(
+        self,
+        *,
+        func_name: str,
+        doc: str | None,
+    ) -> ResolvedFunctionSignatures | None:
+        if not doc:
+            return None
 
-
-class DocstringSignatureVisitor(NodeVisitor):
-    """
-    解析文档字符串中的函数和方法签名。
-    """
-
-    def __init__(self) -> None:
-        self._stats = _InferenceStats()
-
-    def visit_function(self, node: IRFunction, module: IRModule) -> None:
-        """在函数层原地补全文档字符串签名。"""
-        if node.signatures:
-            self._stats.skipped_known_signatures += 1
-            self._record_known_signature_docstring_overlap(node)
-            return
-
-        self._stats.total_unknown_signatures += 1
-
-        if not node.doc:
-            self._stats.missing_doc += 1
-            return
-
-        try:
-            parsed_signatures = self.parse_function_docstring(
-                func_name=node.name,
-                doc_lines=node.doc.splitlines(),
-            )
-        except ValueError as ex:
-            self._stats.parse_error += 1
-            logger.warning(
-                "解析 docstring 签名失败, module_name: {}, func_name: {}, error_type: {}, error: {}",
-                str(module.full_name),
-                node.name,
-                type(ex).__name__,
-                ex,
-            )
-            return
-
-        if parsed_signatures:
-            self._stats.success += 1
-            node.signatures = parsed_signatures
-            return
-
-        self._stats.no_signature_match += 1
-
-    def log_summary(self) -> None:
-        """输出一次项目级 docstring 签名补全统计。"""
-        total_visited = (
-            self._stats.total_unknown_signatures
-            + self._stats.skipped_known_signatures
-        )
-        if total_visited <= 0:
-            self._reset_stats()
-            return
-
-        logger.info(
-            "Docstring 签名推断汇总: "
-            "total_unknown_signatures={}, success={}, missing_doc={}, no_signature_match={}, "
-            "parse_error={}, skipped_known_signatures={}, skipped_known_with_parsable_docstring={}, "
-            "skipped_known_with_parse_error={}",
-            self._stats.total_unknown_signatures,
-            self._stats.success,
-            self._stats.missing_doc,
-            self._stats.no_signature_match,
-            self._stats.parse_error,
-            self._stats.skipped_known_signatures,
-            self._stats.skipped_known_with_parsable_docstring,
-            self._stats.skipped_known_with_parse_error,
-        )
-        self._reset_stats()
+        signatures = self.parse_function_docstring(func_name, doc.splitlines())
+        if not signatures:
+            return None
+        return ResolvedFunctionSignatures(signatures=signatures)
 
     def parse_function_docstring(
-        self, func_name: str, doc_lines: list[str]
-    ) -> list[IRSignature]:
-        """
-        解析函数文档字符串中的签名。
-
-        Example（单签名）:
-            add(a: int, b: int = 0) -> int
-            Return a + b.
-
-        Example（pybind11 重载）:
-            add(*args, **kwargs)
-            Overloaded function.
-            1. add(a: int, b: int) -> int
-            2. add(a: float, b: float) -> float
-        """
+        self,
+        func_name: str,
+        doc_lines: list[str],
+    ) -> list[ResolvedSignature]:
         if len(doc_lines) == 0:
             return []
 
         top_signature_regex = re.compile(
             rf"^{re.escape(func_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
         )
-
         match = top_signature_regex.match(doc_lines[0])
         if match is None:
             return []
 
-        # 单条
         if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
             args = self.parse_args_str(match.group("args"))
             returns = self.parse_annotation_str((match.group("returns") or "").strip('"'))
             return [
-                IRSignature(
-                    args=args,
+                ResolvedSignature(
+                    arguments=args,
                     doc=self._strip_empty_lines(doc_lines[1:]),
                     return_type=returns,
                 )
             ]
 
-        # 多条overload
         overload_signature_regex = re.compile(
             rf"^(\s*(?P<overload_number>\d+).\s*)"
             rf"{re.escape(func_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
         )
 
         doc_start = 0
-        overloads: list[IRSignature] = []
+        overloads: list[ResolvedSignature] = []
 
-        for i in range(2, len(doc_lines)):
-            match = overload_signature_regex.match(doc_lines[i])
+        for index in range(2, len(doc_lines)):
+            match = overload_signature_regex.match(doc_lines[index])
             if match is None:
                 continue
 
@@ -165,16 +77,16 @@ class DocstringSignatureVisitor(NodeVisitor):
                 continue
 
             if overloads:
-                overloads[-1].doc = self._strip_empty_lines(doc_lines[doc_start:i])
+                overloads[-1].doc = self._strip_empty_lines(doc_lines[doc_start:index])
 
             args = self.parse_args_str(match.group("args"))
             overloads.append(
-                IRSignature(
-                    args=args,
+                ResolvedSignature(
+                    arguments=args,
                     return_type=self.parse_annotation_str(match.group("returns")),
                 )
             )
-            doc_start = i + 1
+            doc_start = index + 1
 
         if not overloads:
             raise ValueError("Overloaded function. 之后未找到有效重载签名。")
@@ -182,11 +94,10 @@ class DocstringSignatureVisitor(NodeVisitor):
         overloads[-1].doc = self._strip_empty_lines(doc_lines[doc_start:])
         return overloads
 
-    def parse_args_str(self, args_str: str) -> list[IRArgument]:
-        """解析签名中的参数串。"""
+    def parse_args_str(self, args_str: str) -> list[ResolvedArgument]:
         split_args = self._split_args_str(args_str)
 
-        result: list[IRArgument] = []
+        result: list[ResolvedArgument] = []
         state = _ArgsParseState.POSITIONAL
 
         for arg_decl, annotation, default_str in split_args:
@@ -201,7 +112,6 @@ class DocstringSignatureVisitor(NodeVisitor):
                 ):
                     raise ValueError("位置参数分隔符 '/' 位置非法。")
 
-                # 不允许 f(/, a)
                 if not any(
                     arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
                 ):
@@ -257,7 +167,7 @@ class DocstringSignatureVisitor(NodeVisitor):
                     kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
 
             result.append(
-                IRArgument(
+                ResolvedArgument(
                     name=name,
                     default_value=default_str,
                     has_default=default_str is not None,
@@ -265,20 +175,20 @@ class DocstringSignatureVisitor(NodeVisitor):
                     kind=kind,
                 )
             )
+
         return result
 
     @staticmethod
     def parse_annotation_str(annotation_str: str) -> Type | None:
-        """清理注解文本中的空白。"""
         text = annotation_str.strip()
         if not text:
             return None
         return RawType(text)
 
     def _split_args_str(
-        self, args_str: str
-    ) -> list[tuple[str, str | None, str | None]]:
-        """按顶层逗号拆参数，再分阶段解析注解和默认值。"""
+        self,
+        args_str: str,
+    ) -> list[tuple[str, Type | None, str | None]]:
         if not args_str.strip():
             return []
 
@@ -289,30 +199,28 @@ class DocstringSignatureVisitor(NodeVisitor):
             if not arg_block.strip():
                 raise ValueError("参数列表中存在空参数块。")
 
-            # 先拆=号，再拆:
-            nametype_default_parts = self._split_top_level(arg_block, "=")
-            if len(nametype_default_parts) > 2:
+            name_and_default = self._split_top_level(arg_block, "=")
+            if len(name_and_default) > 2:
                 raise ValueError("参数默认值声明中包含多个 '='。")
 
-            nametype = nametype_default_parts[0]
-            default = (
-                nametype_default_parts[1].strip()
-                if len(nametype_default_parts) == 2
-                else None
-            )
+            name_and_type = name_and_default[0]
+            default = name_and_default[1].strip() if len(name_and_default) == 2 else None
 
-            name_type_parts = self._split_top_level(nametype, ":")
+            name_type_parts = self._split_top_level(name_and_type, ":")
             if len(name_type_parts) > 2:
                 raise ValueError("参数注解声明中包含多个 ':'。")
 
             name = name_type_parts[0].strip()
-            type_ = self.parse_annotation_str(name_type_parts[1]) if len(name_type_parts) == 2 else None
+            type_ = (
+                self.parse_annotation_str(name_type_parts[1])
+                if len(name_type_parts) == 2
+                else None
+            )
             result.append((name, type_, default))
 
         return result
 
     def _split_top_level(self, text: str, delim: str) -> list[str]:
-        """仅在顶层按单字符分隔，忽略括号和字符串内部的分隔符。"""
         if len(delim) != 1:
             raise ValueError("delim must be a single character")
 
@@ -321,26 +229,25 @@ class DocstringSignatureVisitor(NodeVisitor):
         stack: list[str] = []
         parts: list[str] = []
         start = 0
-        idx = 0
+        index = 0
 
-        while idx < len(text):
-            ch = text[idx]
+        while index < len(text):
+            ch = text[index]
             if ch in "\"'":
-                str_end = self._find_str_end(text, idx)
-                idx = str_end + 1
+                str_end = self._find_str_end(text, index)
+                index = str_end + 1
                 continue
 
             if ch in left_to_right:
-                stack.append(left_to_right[ch])  # 进右侧符号
+                stack.append(left_to_right[ch])
             elif ch in rights:
-                # 栈为空或ch不为栈顶
                 if not stack or ch != stack[-1]:
                     raise ValueError("括号不匹配。")
                 stack.pop()
             elif not stack and ch == delim:
-                parts.append(text[start:idx])
-                start = idx + 1
-            idx += 1
+                parts.append(text[start:index])
+                start = index + 1
+            index += 1
 
         if stack:
             raise ValueError("存在未闭合的括号。")
@@ -348,31 +255,32 @@ class DocstringSignatureVisitor(NodeVisitor):
         parts.append(text[start:])
         return parts
 
-    def _find_str_end(self, s: str, start: int) -> int:
-        """查找字符串字面量的结束位置。"""
-        quote = s[start]
-        i = start + 1
-        while i < len(s):
-            if s[i] == "\\":
-                i += 2
+    def _find_str_end(self, text: str, start: int) -> int:
+        quote = text[start]
+        index = start + 1
+        while index < len(text):
+            if text[index] == "\\":
+                index += 2
                 continue
-            if s[i] == quote:
-                return i
-            i += 1
+            if text[index] == quote:
+                return index
+            index += 1
         raise ValueError("字符串字面量未闭合。")
 
     def _strip_empty_lines(self, doc_lines: list[str]) -> str | None:
-        """去掉文档前后的空行。"""
         if not doc_lines:
             return None
+
         start = 0
         for start in range(0, len(doc_lines)):
             if len(doc_lines[start].strip()) > 0:
                 break
+
         end = len(doc_lines) - 1
-        for end in range(len(doc_lines) - 1, 0, -1):
+        for end in range(len(doc_lines) - 1, -1, -1):
             if len(doc_lines[end].strip()) > 0:
                 break
+
         if start > end:
             return None
 
@@ -381,22 +289,11 @@ class DocstringSignatureVisitor(NodeVisitor):
             return None
         return result
 
-    def _record_known_signature_docstring_overlap(self, node: IRFunction) -> None:
-        """统计已有签名节点中，docstring 是否仍可被当前解析器识别。"""
-        if not node.doc:
-            return
 
-        try:
-            parsed_signatures = self.parse_function_docstring(
-                func_name=node.name,
-                doc_lines=node.doc.splitlines(),
-            )
-        except ValueError:
-            self._stats.skipped_known_with_parse_error += 1
-            return
-
-        if parsed_signatures:
-            self._stats.skipped_known_with_parsable_docstring += 1
-
-    def _reset_stats(self) -> None:
-        self._stats = _InferenceStats()
+def resolve_docstring_signatures(
+    *,
+    func_name: str,
+    doc: str | None,
+) -> ResolvedFunctionSignatures | None:
+    parser = DocstringSignatureParser()
+    return parser.resolve(func_name=func_name, doc=doc)

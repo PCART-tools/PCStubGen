@@ -2,63 +2,35 @@ from __future__ import annotations
 
 import importlib
 import sys
-import typing
 from pathlib import Path
 import types
 
 import pytest
 
-from pcstubgen.c_signature.types import RawType
 from pcstubgen.ir import QualifiedName
 import pcstubgen.module_builder as module_builder_module
 from pcstubgen.module_builder import build_function, build_module
 
 
-def _render_type(type_: RawType | None) -> str | None:
-    return None if type_ is None else type_.render()
-
-
-def test_module_builder_keeps_raw_annotation_strings() -> None:
-    def sample(a: int, b: list[int]) -> typing.Optional[int]:
-        raise NotImplementedError
-
-    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
-
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
-    assert [_render_type(arg.type) for arg in signature.args] == ["int", "list[int]"]
-    assert _render_type(signature.return_type) == "typing.Optional[int]"
-
-
-def test_module_builder_keeps_default_values_as_strings() -> None:
-    def sample(
-        flag: bool = False,
-        values: tuple[int, int] = (1, 2),
-    ) -> None:
-        raise NotImplementedError
-
-    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
-
-    assert len(parsed.signatures) == 1
-    signature = parsed.signatures[0]
-    assert [arg.default_value for arg in signature.args] == ["False", "(1, 2)"]
-    assert [arg.has_default for arg in signature.args] == [True, True]
-
-
-def test_module_builder_uses_empty_signatures_when_inspect_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_module_builder_keeps_runtime_function_and_leaves_signatures_empty() -> None:
     def sample() -> None:
         raise NotImplementedError
 
-    def _raise_signature_error(obj: object) -> object:
-        """模拟 inspect.signature 失败。"""
-        raise TypeError(f"cannot inspect {obj!r}")
+    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
-    monkeypatch.setattr(module_builder_module.inspect, "signature", _raise_signature_error)
+    assert parsed.signatures == []
+    assert parsed.runtime_function is sample
+
+
+def test_module_builder_keeps_function_doc_without_supplementing_signatures() -> None:
+    def sample(value: int, flag: bool = False) -> int:
+        """sample doc"""
+        raise NotImplementedError
 
     parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
+    assert parsed.doc == "sample doc"
+    assert parsed.runtime_function is sample
     assert parsed.signatures == []
 
 

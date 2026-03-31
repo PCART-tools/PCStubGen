@@ -40,6 +40,16 @@ from pcstubgen.c_signature.models import (
     ExtractedModule,
     ExtractedSignature,
 )
+from pcstubgen.c_signature.resolver import (
+    CSignatureResolver,
+)
+from pcstubgen.docstring_signature import (
+    DocstringSignatureParser,
+    resolve_docstring_signatures,
+)
+from pcstubgen.inspect_signature import (
+    resolve_inspect_signatures,
+)
 from pcstubgen.ir import (
     IRArgument,
     IRArgumentKind,
@@ -51,14 +61,12 @@ from pcstubgen.ir import (
     IRSignature,
     QualifiedName,
 )
-from pcstubgen.visitors.c_signature_visitor import (
-    CSignatureVisitor,
-)
-from pcstubgen.visitors.docstring_signature_visitor import (
-    DocstringSignatureVisitor,
-)
-from pcstubgen.visitor_runner import run_visitors
 from pcstubgen.stub_generation_options import StubGenerationOptions
+from pcstubgen.supplementer import (
+    SignatureSupplementSummary,
+    SignatureSupplementer,
+    supplement_signatures,
+)
 
 
 def _signature(
@@ -97,9 +105,14 @@ def _arg(
     )
 
 
-def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
+def _unknown_function(
+    name: str,
+    *,
+    doc: str | None = None,
+    runtime_function: object | None = None,
+) -> IRFunction:
     """构造签名未知的测试函数。"""
-    return IRFunction(name=name, doc=doc)
+    return IRFunction(name=name, doc=doc, runtime_function=runtime_function)
 
 
 def _module_fixture(
@@ -192,9 +205,9 @@ def _patch_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         return extractor.extract_modules()
 
-    import pcstubgen.visitors.c_signature_visitor as visitor_module
+    import pcstubgen.c_signature.resolver as resolver_module
 
-    monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
+    monkeypatch.setattr(resolver_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
     return extractor
 
 
@@ -213,9 +226,9 @@ def _patch_raising_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         raise error
 
-    import pcstubgen.visitors.c_signature_visitor as visitor_module
+    import pcstubgen.c_signature.resolver as resolver_module
 
-    monkeypatch.setattr(visitor_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
+    monkeypatch.setattr(resolver_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
 
 
 def _get_packaged_libclang_path() -> str | None:

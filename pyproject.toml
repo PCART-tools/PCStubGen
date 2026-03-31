@@ -18,4 +18,4 @@ dependencies = [
 pcstubgen = "pcstubgen.__main__:main"
 
 [tool.setuptools]
-packages = ["pcstubgen", "pcstubgen.ir", "pcstubgen.visitors", "pcstubgen.c_signature"]
+packages = ["pcstubgen", "pcstubgen.ir", "pcstubgen.c_signature"]
