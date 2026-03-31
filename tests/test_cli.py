@@ -4,7 +4,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from pcstubgen import cli
+import pcstubgen.__main__ as main_module
 from pcstubgen.stub_generation_options import StubGenerationOptions
 
 RUNNER = CliRunner()
@@ -24,10 +24,10 @@ def test_cli_passes_stub_generation_options(
         captured_output_dir = output_dir
         captured_options = options
 
-    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
 
     result = RUNNER.invoke(
-        cli.app,
+        main_module.app,
         [
             "math",
             "--output-dir",
@@ -83,10 +83,10 @@ def test_cli_preserves_include_without_validation(
         nonlocal captured_options
         captured_options = options
 
-    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
 
     result = RUNNER.invoke(
-        cli.app,
+        main_module.app,
         [
             "math",
             "--output-dir",
@@ -113,10 +113,10 @@ def test_cli_defaults_include_and_include_directory_to_empty_lists(
         nonlocal captured_options
         captured_options = options
 
-    monkeypatch.setattr(cli, "write_stubs", fake_write_stubs)
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
 
     result = RUNNER.invoke(
-        cli.app,
+        main_module.app,
         [
             "math",
             "--output-dir",

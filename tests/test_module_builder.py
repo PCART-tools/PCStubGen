@@ -22,7 +22,7 @@ def test_module_builder_keeps_runtime_function_and_leaves_signatures_empty() -> 
     assert parsed.runtime_function is sample
 
 
-def test_module_builder_keeps_function_doc_without_supplementing_signatures() -> None:
+def test_module_builder_keeps_function_doc_without_completing_signatures() -> None:
     def sample(value: int, flag: bool = False) -> int:
         """sample doc"""
         raise NotImplementedError

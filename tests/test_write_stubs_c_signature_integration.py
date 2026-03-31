@@ -35,7 +35,7 @@ def test_write_stubs_propagates_extract_errors(
         stubgen_module.write_stubs("math", tmp_path, options=options)
 
 
-def test_write_stubs_passes_options_to_supplementer_and_logs_summary(
+def test_write_stubs_passes_options_to_completer_and_logs_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -45,8 +45,8 @@ def test_write_stubs_passes_options_to_supplementer_and_logs_summary(
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))
 
     class FakeSummary:
-        def log_summary(self) -> None:
-            captured["summary_logged"] = True
+        def __str__(self) -> str:
+            return "签名补全汇总: total_functions=1, skipped_known_signatures=0, c_resolved=0, docstring_resolved=0, inspect_resolved=1, unresolved=0"
 
     class FakeStubRenderer:
         def __init__(
@@ -76,17 +76,23 @@ def test_write_stubs_passes_options_to_supplementer_and_logs_summary(
             captured["written_renderer"] = renderer
             captured["written_to"] = to
 
-    def fake_supplement_signatures(
-        module: IRModule,
-        options: StubGenerationOptions,
-    ) -> FakeSummary:
-        captured["supplemented_module"] = module
-        captured["supplement_options"] = options
-        return FakeSummary()
+    class FakeSignatureCompleter:
+        def __init__(self, options: StubGenerationOptions) -> None:
+            captured["completion_options"] = options
+
+        def run(self, module: IRModule) -> FakeSummary:
+            captured["completed_module"] = module
+            return FakeSummary()
+
+    def fake_logger_info(message: str, summary: object) -> None:
+        captured["logger_message"] = message
+        captured["logger_summary"] = summary
+        captured["logger_summary_text"] = str(summary)
 
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
-    monkeypatch.setattr(stubgen_module, "supplement_signatures", fake_supplement_signatures)
+    monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
+    monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=fake_logger_info))
 
     options = StubGenerationOptions(
         source_root=tmp_path,
@@ -106,9 +112,11 @@ def test_write_stubs_passes_options_to_supplementer_and_logs_summary(
         writer=FakeWriter(),
     )
 
-    assert captured["supplemented_module"] is ir_module
-    assert captured["supplement_options"] is options
-    assert captured["summary_logged"] is True
+    assert captured["completed_module"] is ir_module
+    assert captured["completion_options"] is options
+    assert captured["logger_message"] == "{}"
+    assert isinstance(captured["logger_summary"], FakeSummary)
+    assert captured["logger_summary_text"] == str(captured["logger_summary"])
     assert captured["renderer_include_docstrings"] is False
     assert captured["renderer_include_module_type_comment"] is True
     assert captured["renderer_include_c_inferred_source_comment"] is True

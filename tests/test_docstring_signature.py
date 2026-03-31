@@ -3,7 +3,8 @@ from __future__ import annotations
 import pytest
 
 from pcstubgen.signature_completion.docstring_source import (
-    DocstringSignatureParser,
+    parse_args_str,
+    parse_function_docstring,
     resolve_docstring_signatures,
 )
 from pcstubgen.ir import IRArgumentKind
@@ -16,9 +17,7 @@ def _render_type(type_: object | None) -> str | None:
 
 
 def test_docstring_parser_parses_generic_function_signature() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.resolve(
+    parsed = resolve_docstring_signatures(
         func_name="foo",
         doc="foo(x: int, y: str) -> str\n\nparsed from docstring",
     )
@@ -31,9 +30,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.resolve(
+    parsed = resolve_docstring_signatures(
         func_name="cdist_minkowski",
         doc=(
             "cdist_minkowski(x: object, y: object, w: object = None, "
@@ -69,9 +66,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
 
 def test_docstring_parser_preserves_overload_docs() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.resolve(
+    parsed = resolve_docstring_signatures(
         func_name="foo",
         doc=(
             "foo(*args, **kwargs)\n"
@@ -96,9 +91,7 @@ def test_docstring_parser_returns_none_without_doc() -> None:
 
 
 def test_docstring_parser_returns_none_for_non_signature_first_line() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.parse_function_docstring(
+    parsed = parse_function_docstring(
         "foo",
         ["This is not a signature.", "still docs"],
     )
@@ -115,9 +108,7 @@ def test_docstring_parser_raises_on_invalid_signature_like_doc() -> None:
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.parse_args_str(
+    parsed = parse_args_str(
         'a: int, /, x: tuple[int, int] = (1, 2), *, '
         'mapping: dict[str, int] = {"a": 1, "b": 2}, flag: str = "x"'
     )
@@ -145,9 +136,7 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
 
 
 def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> None:
-    parser = DocstringSignatureParser()
-
-    parsed = parser.parse_args_str(
+    parsed = parse_args_str(
         "value: typing.Optional[list[int]], *args: tuple[str, ...], **kwargs: object"
     )
 
@@ -185,7 +174,5 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
     ],
 )
 def test_docstring_parser_parse_args_str_rejects_invalid_input(args_str: str) -> None:
-    parser = DocstringSignatureParser()
-
     with pytest.raises(ValueError):
-        parser.parse_args_str(args_str)
+        parse_args_str(args_str)

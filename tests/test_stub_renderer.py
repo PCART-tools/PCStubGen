@@ -21,7 +21,7 @@ def _signature(
     )
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
@@ -34,8 +34,8 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
         name="foo",
         signatures=[
             _signature(
-                args=[IRArgument(name="value", type=_raw("typing.Optional[int]", imports=["typing"]))],
-                return_type=_raw("typing.Optional[int]", imports=["typing"]),
+                args=[IRArgument(name="value", type=_raw("typing.Optional[int]", imports=("typing",)))],
+                return_type=_raw("typing.Optional[int]", imports=("typing",)),
             )
         ],
     )
@@ -306,8 +306,8 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
                 signatures=[
                     _signature(args=[IRArgument(name="x", type=_raw("int"))], return_type=_raw("int")),
                     _signature(
-                        args=[IRArgument(name="x", type=_raw("typing.Optional[int]", imports=["typing"]))],
-                        return_type=_raw("typing.Optional[int]", imports=["typing"]),
+                        args=[IRArgument(name="x", type=_raw("typing.Optional[int]", imports=("typing",)))],
+                        return_type=_raw("typing.Optional[int]", imports=("typing",)),
                     ),
                 ],
             )

@@ -47,7 +47,7 @@ def _parse(
     ).parse()
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 
@@ -55,7 +55,7 @@ def _arg(
     name: str,
     type_text: str,
     *,
-    imports: list[str] | None = None,
+    imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
 ) -> ExtractedArgument:
@@ -80,8 +80,8 @@ def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators
 
     assert parsed == [
         _arg("count", "int"),
-        _arg("payload", "str | collections.abc.Buffer", imports=["collections.abc"]),
-        _arg("maybe", "str | collections.abc.Buffer | None", imports=["collections.abc"], has_default=True),
+        _arg("payload", "str | collections.abc.Buffer", imports=("collections.abc",)),
+        _arg("maybe", "str | collections.abc.Buffer | None", imports=("collections.abc",), has_default=True),
     ]
 
 
@@ -172,8 +172,8 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
         _arg("text", "str | bytes | bytearray", default_value='"utf8"', has_default=True),
         _arg("typed", "Point", default_value="None", has_default=True),
         _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
-        _arg("raw", "str | collections.abc.Buffer", imports=["collections.abc"], default_value="b''", has_default=True),
-        _arg("maybe", "str | collections.abc.Buffer | None", imports=["collections.abc"], default_value="None", has_default=True),
+        _arg("raw", "str | collections.abc.Buffer", imports=("collections.abc",), default_value="b''", has_default=True),
+        _arg("maybe", "str | collections.abc.Buffer | None", imports=("collections.abc",), default_value="None", has_default=True),
     ]
 
 
@@ -237,7 +237,7 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
         _arg(
             "nested",
             "tuple[str | collections.abc.Buffer, tuple[Point, collections.abc.Buffer]]",
-            imports=["collections.abc"],
+            imports=("collections.abc",),
         ),
     ]
 
@@ -264,7 +264,7 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
         _arg(
             "payload",
             "tuple[int, tuple[str | collections.abc.Buffer,]]",
-            imports=["collections.abc"],
+            imports=("collections.abc",),
             default_value="(1, ('abc',))",
             has_default=True,
         )

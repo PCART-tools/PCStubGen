@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from ...type_system.types import RawType, Type
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 
@@ -25,30 +25,30 @@ class _FormatUnitSpec:
 _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
     _FormatUnitSpec("es#", _raw("str"), 3, 1),
     _FormatUnitSpec("et#", _raw("str | bytes | bytearray"), 3, 1),
-    _FormatUnitSpec("s*", _raw("str | collections.abc.Buffer", imports=["collections.abc"]), 1, 0),
-    _FormatUnitSpec("s#", _raw("str | collections.abc.Buffer", imports=["collections.abc"]), 2, 0),
+    _FormatUnitSpec("s*", _raw("str | collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
+    _FormatUnitSpec("s#", _raw("str | collections.abc.Buffer", imports=("collections.abc",)), 2, 0),
     _FormatUnitSpec(
         "z*",
-        _raw("str | collections.abc.Buffer | None", imports=["collections.abc"]),
+        _raw("str | collections.abc.Buffer | None", imports=("collections.abc",)),
         1,
         0,
     ),
     _FormatUnitSpec(
         "z#",
-        _raw("str | collections.abc.Buffer | None", imports=["collections.abc"]),
+        _raw("str | collections.abc.Buffer | None", imports=("collections.abc",)),
         2,
         0,
     ),
-    _FormatUnitSpec("y*", _raw("collections.abc.Buffer", imports=["collections.abc"]), 1, 0),
-    _FormatUnitSpec("y#", _raw("collections.abc.Buffer", imports=["collections.abc"]), 2, 0),
+    _FormatUnitSpec("y*", _raw("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
+    _FormatUnitSpec("y#", _raw("collections.abc.Buffer", imports=("collections.abc",)), 2, 0),
     _FormatUnitSpec("es", _raw("str"), 2, 1),
     _FormatUnitSpec("et", _raw("str | bytes | bytearray"), 2, 1),
-    _FormatUnitSpec("w*", _raw("collections.abc.Buffer", imports=["collections.abc"]), 1, 0),
+    _FormatUnitSpec("w*", _raw("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
     _FormatUnitSpec("O!", _raw("object"), 2, 1, object_type_arg_offset=0),
     _FormatUnitSpec("O&", _raw("object"), 2, 1, object_type_arg_offset=0),
     _FormatUnitSpec("s", _raw("str"), 1, 0),
     _FormatUnitSpec("z", _raw("str | None"), 1, 0),
-    _FormatUnitSpec("y", _raw("collections.abc.Buffer", imports=["collections.abc"]), 1, 0),
+    _FormatUnitSpec("y", _raw("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
     _FormatUnitSpec("S", _raw("bytes"), 1, 0),
     _FormatUnitSpec("Y", _raw("bytearray"), 1, 0),
     _FormatUnitSpec("U", _raw("str"), 1, 0),

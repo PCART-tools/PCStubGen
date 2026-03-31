@@ -23,13 +23,7 @@ class Type(ABC):
 @dataclass(frozen=True)
 class RawType(Type):
     text: str
-    imports: list[str] | None = None
-
-    def __post_init__(self) -> None:
-        object.__setattr__(self, "imports", list(self.imports or ()))
-
-    def __hash__(self) -> int:
-        return hash((self.text, tuple(self.imports or ())))
+    imports: tuple[str, ...] = ()
 
     def canonicalize(self) -> Type:
         return self
@@ -38,7 +32,7 @@ class RawType(Type):
         return self.text
 
     def collect_imports(self) -> set[str]:
-        return set(self.imports or ())
+        return set(self.imports)
 
 
 @dataclass(frozen=True)

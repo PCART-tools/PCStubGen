@@ -41,7 +41,7 @@ def _parse(
     ).parse()
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 
@@ -49,7 +49,7 @@ def _arg(
     name: str,
     type_text: str,
     *,
-    imports: list[str] | None = None,
+    imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
     kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
@@ -95,7 +95,7 @@ def test_parse_ignores_trailer_and_separators(trailer: str) -> None:
 
     assert parsed == [
         _arg("count", "int"),
-        _arg("payload", "str | collections.abc.Buffer", imports=["collections.abc"]),
+        _arg("payload", "str | collections.abc.Buffer", imports=("collections.abc",)),
     ]
 
 
@@ -168,11 +168,11 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
         _arg("text", "str | bytes | bytearray", default_value='"utf8"', has_default=True),
         _arg("typed", "Point", default_value="None", has_default=True),
         _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
-        _arg("raw", "str | collections.abc.Buffer", imports=["collections.abc"], default_value="b''", has_default=True),
+        _arg("raw", "str | collections.abc.Buffer", imports=("collections.abc",), default_value="b''", has_default=True),
         _arg(
             "maybe",
             "str | collections.abc.Buffer | None",
-            imports=["collections.abc"],
+            imports=("collections.abc",),
             default_value="None",
             has_default=True,
             kind=IRArgumentKind.KEYWORD_ONLY,

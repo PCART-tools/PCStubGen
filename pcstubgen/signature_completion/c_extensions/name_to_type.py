@@ -1,7 +1,7 @@
 from ...type_system.types import RawType, Type, UnionType
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 
@@ -22,7 +22,7 @@ PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyBaseObject_Type": _raw("object"),
 
     # numpy
-    "PyArray_Type": _raw("numpy.ndarray", imports=["numpy"]),
+    "PyArray_Type": _raw("numpy.ndarray", imports=("numpy",)),
 }
 
 # 参数类型推导，O& converter
@@ -171,8 +171,8 @@ FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     # numpy
     "PyArray_Return": UnionType(
         (
-            _raw("numpy.ndarray", imports=["numpy"]),
-            _raw("numpy.generic", imports=["numpy"]),
+            _raw("numpy.ndarray", imports=("numpy",)),
+            _raw("numpy.generic", imports=("numpy",)),
         )
     ),
 }

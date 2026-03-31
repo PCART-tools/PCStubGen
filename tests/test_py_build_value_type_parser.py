@@ -463,11 +463,26 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
 
 def test_collect_imports_returns_recursive_dependency_set() -> None:
     node = DictType(
-        NamedType("numpy.ndarray", imports=["numpy"]),
-        UnionType((AnyType(), NamedType("collections.abc.Buffer", imports=["collections.abc"]))),
+        NamedType("numpy.ndarray", imports=("numpy",)),
+        UnionType((AnyType(), NamedType("collections.abc.Buffer", imports=("collections.abc",)))),
     )
 
     assert node.collect_imports() == {"numpy", "collections.abc", "typing"}
+
+
+def test_raw_type_defaults_imports_to_empty_tuple() -> None:
+    assert NamedType("int").imports == ()
+
+
+def test_raw_type_is_hashable_with_tuple_imports() -> None:
+    assert hash(NamedType("x", imports=("typing",))) == hash(NamedType("x", imports=("typing",)))
+
+
+def test_raw_type_collect_imports_returns_set_from_tuple() -> None:
+    assert NamedType("x", imports=("typing", "typing", "collections.abc")).collect_imports() == {
+        "typing",
+        "collections.abc",
+    }
 
 
 @pytest.mark.parametrize(

@@ -25,7 +25,7 @@ def resolve_inspect_signatures(
 
     try:
         sig = inspect.signature(_get_signature_target(func))
-    except (TypeError, ValueError) as ex:
+    except Exception as ex:
         if module_type is IRModuleType.EXTENSION:
             logger.warning(
                 "EXTENSION 模块 inspect 签名获取失败, function: {}, error_type: {}, error: {}",
@@ -33,16 +33,6 @@ def resolve_inspect_signatures(
                 type(ex).__name__,
                 ex,
             )
-        return None
-    except Exception as ex:
-        if module_type is not IRModuleType.EXTENSION:
-            raise
-        logger.warning(
-            "EXTENSION 模块 inspect 签名获取失败, function: {}, error_type: {}, error: {}",
-            _describe_function(func),
-            type(ex).__name__,
-            ex,
-        )
         return None
 
     kind_map = {
@@ -96,9 +86,9 @@ def _build_annotation(annotation: Any) -> Type | None:
         return _build_raw_annotation(annotation)
     if isinstance(annotation, type):
         qualified_name = _get_type_fullname(annotation)
-        imports: list[str] = []
+        imports: tuple[str, ...] = ()
         if annotation.__module__ != "builtins":
-            imports.append(annotation.__module__)
+            imports = (annotation.__module__,)
         return RawType(str(qualified_name), imports=imports)
     return _build_raw_annotation(_build_value(annotation))
 

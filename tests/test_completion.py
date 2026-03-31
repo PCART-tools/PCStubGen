@@ -3,7 +3,7 @@ from __future__ import annotations
 from tests._c_signature_test_support import *
 
 
-def test_supplementer_prefers_c_over_docstring_and_writes_source_comment(
+def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -58,13 +58,12 @@ def test_supplementer_prefers_c_over_docstring_and_writes_source_comment(
         ),
     )
 
-    summary = supplement_signatures(
-        module,
+    summary = SignatureCompleter(
         StubGenerationOptions(
             source_root=tmp_path,
             include_c_inferred_source_comment=True,
-        ),
-    )
+        )
+    ).run(module)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
@@ -83,7 +82,7 @@ def test_supplementer_prefers_c_over_docstring_and_writes_source_comment(
     assert extractor.called == 1
 
 
-def test_supplementer_falls_back_to_docstring_when_c_has_no_candidates(
+def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -102,10 +101,7 @@ def test_supplementer_falls_back_to_docstring_when_c_has_no_candidates(
     )
     extractor = _patch_c_signature_extractor(monkeypatch, modules={})
 
-    summary = supplement_signatures(
-        module,
-        StubGenerationOptions(source_root=tmp_path),
-    )
+    summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
@@ -119,7 +115,7 @@ def test_supplementer_falls_back_to_docstring_when_c_has_no_candidates(
     assert extractor.called == 1
 
 
-def test_supplementer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
+def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -165,10 +161,7 @@ def test_supplementer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
         ],
     )
 
-    summary = supplement_signatures(
-        module,
-        StubGenerationOptions(source_root=tmp_path),
-    )
+    summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
 
     parsed = module.classes[0].methods[0].function
     assert [arg.name for arg in parsed.signatures[0].args] == ["cls", "value"]
@@ -185,7 +178,7 @@ def test_supplementer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
     assert summary.unresolved == 0
 
 
-def test_supplementer_skips_known_signatures_and_counts_unresolved() -> None:
+def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
     def fallback(value: int) -> int:
         raise NotImplementedError
 
@@ -202,7 +195,7 @@ def test_supplementer_skips_known_signatures_and_counts_unresolved() -> None:
         ],
     )
 
-    summary = supplement_signatures(module, StubGenerationOptions())
+    summary = SignatureCompleter(StubGenerationOptions()).run(module)
 
     assert summary.total_functions == 3
     assert summary.skipped_known_signatures == 1
@@ -210,6 +203,43 @@ def test_supplementer_skips_known_signatures_and_counts_unresolved() -> None:
     assert summary.docstring_resolved == 0
     assert summary.inspect_resolved == 1
     assert summary.unresolved == 1
+    assert str(summary) == (
+        "签名补全汇总: total_functions=3, skipped_known_signatures=1, "
+        "c_resolved=0, docstring_resolved=0, inspect_resolved=1, unresolved=1"
+    )
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
     assert [arg.name for arg in module.functions[2].signatures[0].args] == ["value"]
+
+
+def test_signature_completion_summary_str_includes_zero_counts() -> None:
+    summary = SignatureCompletionSummary()
+
+    assert str(summary) == (
+        "签名补全汇总: total_functions=0, skipped_known_signatures=0, "
+        "c_resolved=0, docstring_resolved=0, inspect_resolved=0, unresolved=0"
+    )
+
+
+def test_completer_run_recreates_summary_for_each_invocation() -> None:
+    completer = SignatureCompleter(StubGenerationOptions())
+
+    first_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.first"),
+        module_type=IRModuleType.PYTHON,
+        functions=[_unknown_function("missing")],
+    )
+    second_module = IRModule(
+        full_name=QualifiedName.from_str("pkg.second"),
+        module_type=IRModuleType.PYTHON,
+        functions=[],
+    )
+
+    first_summary = completer.run(first_module)
+    second_summary = completer.run(second_module)
+
+    assert first_summary.total_functions == 1
+    assert first_summary.unresolved == 1
+    assert second_summary.total_functions == 0
+    assert second_summary.unresolved == 0
+    assert second_summary is not first_summary

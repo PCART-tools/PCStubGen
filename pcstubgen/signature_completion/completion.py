@@ -13,7 +13,7 @@ from ..stub_generation_options import StubGenerationOptions
 
 
 @dataclasses.dataclass
-class SignatureSupplementSummary:
+class SignatureCompletionSummary:
     total_functions: int = 0
     skipped_known_signatures: int = 0
     c_resolved: int = 0
@@ -21,81 +21,75 @@ class SignatureSupplementSummary:
     inspect_resolved: int = 0
     unresolved: int = 0
 
-    def log_summary(self) -> None:
-        if self.total_functions <= 0:
-            return
-        logger.info(
-            "签名补全汇总: total_functions={}, skipped_known_signatures={}, c_resolved={}, "
-            "docstring_resolved={}, inspect_resolved={}, unresolved={}",
-            self.total_functions,
-            self.skipped_known_signatures,
-            self.c_resolved,
-            self.docstring_resolved,
-            self.inspect_resolved,
-            self.unresolved,
+    def __str__(self) -> str:
+        return (
+            "签名补全汇总: "
+            f"total_functions={self.total_functions}, "
+            f"skipped_known_signatures={self.skipped_known_signatures}, "
+            f"c_resolved={self.c_resolved}, "
+            f"docstring_resolved={self.docstring_resolved}, "
+            f"inspect_resolved={self.inspect_resolved}, "
+            f"unresolved={self.unresolved}"
         )
 
 
-class SignatureSupplementer:
+class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
         self._c_resolver = self._build_c_resolver(options)
+        self._summary = SignatureCompletionSummary()
 
-    def supplement(self, module: IRModule) -> SignatureSupplementSummary:
-        summary = SignatureSupplementSummary()
-        self._supplement_module(module, summary)
-        return summary
+    def run(self, module: IRModule) -> SignatureCompletionSummary:
+        self._summary = SignatureCompletionSummary()
+        self._complete_module(module)
+        return self._summary
 
-    def _supplement_module(
+    def _complete_module(
         self,
         module: IRModule,
-        summary: SignatureSupplementSummary,
     ) -> None:
         for sub_module in module.sub_modules:
-            self._supplement_module(sub_module, summary)
+            self._complete_module(sub_module)
 
         for cls in module.classes:
-            self._supplement_class(cls, module, summary)
+            self._complete_class(cls, module)
 
         for func in module.functions:
-            self._supplement_function(func, module, summary, is_method=False)
+            self._complete_function(func, module, is_method=False)
 
-    def _supplement_class(
+    def _complete_class(
         self,
         node: IRClass,
         module: IRModule,
-        summary: SignatureSupplementSummary,
     ) -> None:
         for nested_cls in node.classes:
-            self._supplement_class(nested_cls, module, summary)
+            self._complete_class(nested_cls, module)
 
         for method in node.methods:
-            self._supplement_method(method, module, summary)
+            self._complete_method(method, module)
 
-    def _supplement_method(
+    def _complete_method(
         self,
         method: IRMethod,
         module: IRModule,
-        summary: SignatureSupplementSummary,
     ) -> None:
-        self._supplement_function(method.function, module, summary, is_method=True)
+        self._complete_function(method.function, module, is_method=True)
 
-    def _supplement_function(
+    def _complete_function(
         self,
         func: IRFunction,
         module: IRModule,
-        summary: SignatureSupplementSummary,
         *,
         is_method: bool,
     ) -> None:
-        summary.total_functions += 1
+        self._summary.total_functions += 1
         if func.signatures:
-            summary.skipped_known_signatures += 1
+            self._summary.skipped_known_signatures += 1
             return
 
         resolved = self._resolve_function(func=func, module=module, is_method=is_method)
         if resolved is None:
-            summary.unresolved += 1
+            self._summary.unresolved += 1
             return
 
         source, result = resolved
@@ -105,11 +99,11 @@ class SignatureSupplementer:
 
         match source:
             case "c":
-                summary.c_resolved += 1
+                self._summary.c_resolved += 1
             case "docstring":
-                summary.docstring_resolved += 1
+                self._summary.docstring_resolved += 1
             case "inspect":
-                summary.inspect_resolved += 1
+                self._summary.inspect_resolved += 1
 
     def _resolve_function(
         self,
@@ -168,7 +162,7 @@ class SignatureSupplementer:
         fallback_doc: str | None,
     ) -> IRSignature:
         return IRSignature(
-            args=[SignatureSupplementer._build_ir_argument(arg) for arg in signature.arguments],
+            args=[SignatureCompleter._build_ir_argument(arg) for arg in signature.arguments],
             return_type=signature.return_type,
             doc=signature.doc if signature.doc is not None else fallback_doc,
         )
@@ -182,10 +176,3 @@ class SignatureSupplementer:
             has_default=argument.has_default,
             kind=argument.kind,
         )
-
-
-def supplement_signatures(
-    module: IRModule,
-    options: StubGenerationOptions,
-) -> SignatureSupplementSummary:
-    return SignatureSupplementer(options).supplement(module)

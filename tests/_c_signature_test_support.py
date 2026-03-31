@@ -44,7 +44,6 @@ from pcstubgen.signature_completion.c_extensions.resolver import (
     CSignatureResolver,
 )
 from pcstubgen.signature_completion.docstring_source import (
-    DocstringSignatureParser,
     resolve_docstring_signatures,
 )
 from pcstubgen.signature_completion.inspect_source import (
@@ -63,9 +62,8 @@ from pcstubgen.ir import (
 )
 from pcstubgen.stub_generation_options import StubGenerationOptions
 from pcstubgen.signature_completion import (
-    SignatureSupplementSummary,
-    SignatureSupplementer,
-    supplement_signatures,
+    SignatureCompletionSummary,
+    SignatureCompleter,
 )
 
 
@@ -83,7 +81,7 @@ def _signature(
     )
 
 
-def _raw(text: str, *, imports: list[str] | None = None) -> RawType:
+def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
 
@@ -91,7 +89,7 @@ def _arg(
     name: str,
     type_text: str | None = None,
     *,
-    imports: list[str] | None = None,
+    imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
     kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,

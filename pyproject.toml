@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pcstubgen = "pcstubgen.__main__:main"
+pcstubgen = "pcstubgen.__main__:app"
 
 [tool.setuptools]
 packages = ["pcstubgen", "pcstubgen.ir", "pcstubgen.c_signature"]

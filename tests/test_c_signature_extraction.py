@@ -287,7 +287,7 @@ def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_ex
     assert signatures == [
         ExtractedSignature(
             arguments=[
-                _arg("array", "numpy.ndarray", imports=["numpy"]),
+                _arg("array", "numpy.ndarray", imports=("numpy",)),
             ]
         )
     ]

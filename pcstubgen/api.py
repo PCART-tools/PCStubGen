@@ -3,10 +3,12 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+from loguru import logger
+
 from .module_build import build_module
 from .stub_generation_options import StubGenerationOptions
 from .ir import QualifiedName
-from .signature_completion import supplement_signatures
+from .signature_completion import SignatureCompleter
 from .stub_output import StubRenderer, StubWriter
 
 __all__ = ["write_stubs"]
@@ -34,8 +36,8 @@ def write_stubs(
         module,
     )
 
-    summary = supplement_signatures(ir_module, options)
-    summary.log_summary()
+    completion_summary = SignatureCompleter(options).run(ir_module)
+    logger.info("{}", completion_summary)
 
     renderer = StubRenderer(
         include_docstrings=options.include_docstrings,

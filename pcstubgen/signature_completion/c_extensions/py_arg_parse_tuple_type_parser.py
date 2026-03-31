@@ -68,8 +68,8 @@ class _TupleParsedValue(_ParsedValue):
         for item_type in item_types:
             imports.update(item_type.collect_imports())
         if len(item_rendered) == 1:
-            return RawType(f"tuple[{item_rendered[0]},]", imports=sorted(imports))
-        return RawType(f"tuple[{', '.join(item_rendered)}]", imports=sorted(imports))
+            return RawType(f"tuple[{item_rendered[0]},]", imports=tuple(sorted(imports)))
+        return RawType(f"tuple[{', '.join(item_rendered)}]", imports=tuple(sorted(imports)))
 
     def render_default_value(
         self,

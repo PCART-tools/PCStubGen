@@ -76,7 +76,7 @@ def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
     assert _render_type(signature.return_type) == "str"
 
 
-def test_resolve_inspect_signatures_swallows_extension_only_runtime_errors(
+def test_resolve_inspect_signatures_swallows_runtime_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def sample() -> None:
@@ -87,9 +87,5 @@ def test_resolve_inspect_signatures_swallows_extension_only_runtime_errors(
 
     monkeypatch.setattr(inspect_signature_module.inspect, "signature", _raise_runtime_error)
 
-    assert (
-        resolve_inspect_signatures(sample, module_type=IRModuleType.EXTENSION) is None
-    )
-
-    with pytest.raises(RuntimeError, match="boom"):
-        resolve_inspect_signatures(sample, module_type=IRModuleType.PYTHON)
+    assert resolve_inspect_signatures(sample, module_type=IRModuleType.EXTENSION) is None
+    assert resolve_inspect_signatures(sample, module_type=IRModuleType.PYTHON) is None
