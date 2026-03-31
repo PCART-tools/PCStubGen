@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pcstubgen.signature_completion.c_extensions.name_to_type import FUNCTION_NAME_TO_TYPE
-from pcstubgen.type_system import RawType
+from pcstubgen.type_system import RawType, UnionType
 from tests._c_signature_test_support import *
 
 
@@ -398,7 +398,12 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     assert inferred == [
         [
             _arg("count", "int"),
-            _arg("label", "str | None", default_value="None", has_default=True),
+            _arg(
+                "label",
+                UnionType((RawType("str"), RawType("None"))),
+                default_value="None",
+                has_default=True,
+            ),
         ]
     ]
 

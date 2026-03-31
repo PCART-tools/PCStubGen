@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ...type_system.types import RawType, Type
+from ...type_system.types import RawType, Type, UnionType
 
 
 @dataclass(frozen=True)
@@ -12,58 +12,58 @@ class _FormatUnitSpec:
     """描述单个格式单元如何映射到 Python 参数。"""
 
     unit: str
-    type: Type
     c_arg_count: int
     decl_ref_offset: int
+    type: Type
     object_type_arg_offset: int | None = None
 
 
+_BUFFER_TYPE = RawType("collections.abc.Buffer", imports=("collections.abc",))
+_STR_OR_BYTES_OR_BYTEARRAY_TYPE = UnionType(
+    (RawType("str"), RawType("bytes"), RawType("bytearray"))
+)
+_STR_OR_BUFFER_TYPE = UnionType((RawType("str"), _BUFFER_TYPE))
+_STR_OR_BUFFER_OR_NONE_TYPE = UnionType((RawType("str"), _BUFFER_TYPE, RawType("None")))
+_STR_OR_NONE_TYPE = UnionType((RawType("str"), RawType("None")))
+_BYTES_OR_BYTEARRAY_TYPE = UnionType((RawType("bytes"), RawType("bytearray")))
+
+
 _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
-    _FormatUnitSpec("es#", RawType("str"), 3, 1),
-    _FormatUnitSpec("et#", RawType("str | bytes | bytearray"), 3, 1),
-    _FormatUnitSpec("s*", RawType("str | collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
-    _FormatUnitSpec("s#", RawType("str | collections.abc.Buffer", imports=("collections.abc",)), 2, 0),
-    _FormatUnitSpec(
-        "z*",
-        RawType("str | collections.abc.Buffer | None", imports=("collections.abc",)),
-        1,
-        0,
-    ),
-    _FormatUnitSpec(
-        "z#",
-        RawType("str | collections.abc.Buffer | None", imports=("collections.abc",)),
-        2,
-        0,
-    ),
-    _FormatUnitSpec("y*", RawType("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
-    _FormatUnitSpec("y#", RawType("collections.abc.Buffer", imports=("collections.abc",)), 2, 0),
-    _FormatUnitSpec("es", RawType("str"), 2, 1),
-    _FormatUnitSpec("et", RawType("str | bytes | bytearray"), 2, 1),
-    _FormatUnitSpec("w*", RawType("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
-    _FormatUnitSpec("O!", RawType("object"), 2, 1, object_type_arg_offset=0),
-    _FormatUnitSpec("O&", RawType("object"), 2, 1, object_type_arg_offset=0),
-    _FormatUnitSpec("s", RawType("str"), 1, 0),
-    _FormatUnitSpec("z", RawType("str | None"), 1, 0),
-    _FormatUnitSpec("y", RawType("collections.abc.Buffer", imports=("collections.abc",)), 1, 0),
-    _FormatUnitSpec("S", RawType("bytes"), 1, 0),
-    _FormatUnitSpec("Y", RawType("bytearray"), 1, 0),
-    _FormatUnitSpec("U", RawType("str"), 1, 0),
-    _FormatUnitSpec("b", RawType("int"), 1, 0),
-    _FormatUnitSpec("B", RawType("int"), 1, 0),
-    _FormatUnitSpec("h", RawType("int"), 1, 0),
-    _FormatUnitSpec("H", RawType("int"), 1, 0),
-    _FormatUnitSpec("i", RawType("int"), 1, 0),
-    _FormatUnitSpec("I", RawType("int"), 1, 0),
-    _FormatUnitSpec("l", RawType("int"), 1, 0),
-    _FormatUnitSpec("k", RawType("int"), 1, 0),
-    _FormatUnitSpec("L", RawType("int"), 1, 0),
-    _FormatUnitSpec("K", RawType("int"), 1, 0),
-    _FormatUnitSpec("n", RawType("int"), 1, 0),
-    _FormatUnitSpec("c", RawType("bytes | bytearray"), 1, 0),
-    _FormatUnitSpec("C", RawType("str"), 1, 0),
-    _FormatUnitSpec("f", RawType("float"), 1, 0),
-    _FormatUnitSpec("d", RawType("float"), 1, 0),
-    _FormatUnitSpec("D", RawType("complex"), 1, 0),
-    _FormatUnitSpec("O", RawType("object"), 1, 0),
-    _FormatUnitSpec("p", RawType("object"), 1, 0),
+    _FormatUnitSpec("es#", 3, 1, RawType("str")),
+    _FormatUnitSpec("et#", 3, 1, _STR_OR_BYTES_OR_BYTEARRAY_TYPE),
+    _FormatUnitSpec("s*", 1, 0, _STR_OR_BUFFER_TYPE),
+    _FormatUnitSpec("s#", 2, 0, _STR_OR_BUFFER_TYPE),
+    _FormatUnitSpec("z*", 1, 0, _STR_OR_BUFFER_OR_NONE_TYPE),
+    _FormatUnitSpec("z#", 2, 0, _STR_OR_BUFFER_OR_NONE_TYPE),
+    _FormatUnitSpec("y*", 1, 0, _BUFFER_TYPE),
+    _FormatUnitSpec("y#", 2, 0, _BUFFER_TYPE),
+    _FormatUnitSpec("es", 2, 1, RawType("str")),
+    _FormatUnitSpec("et", 2, 1, _STR_OR_BYTES_OR_BYTEARRAY_TYPE),
+    _FormatUnitSpec("w*", 1, 0, _BUFFER_TYPE),
+    _FormatUnitSpec("O!", 2, 1, RawType("object"), object_type_arg_offset=0),
+    _FormatUnitSpec("O&", 2, 1, RawType("object"), object_type_arg_offset=0),
+    _FormatUnitSpec("s", 1, 0, RawType("str")),
+    _FormatUnitSpec("z", 1, 0, _STR_OR_NONE_TYPE),
+    _FormatUnitSpec("y", 1, 0, _BUFFER_TYPE),
+    _FormatUnitSpec("S", 1, 0, RawType("bytes")),
+    _FormatUnitSpec("Y", 1, 0, RawType("bytearray")),
+    _FormatUnitSpec("U", 1, 0, RawType("str")),
+    _FormatUnitSpec("b", 1, 0, RawType("int")),
+    _FormatUnitSpec("B", 1, 0, RawType("int")),
+    _FormatUnitSpec("h", 1, 0, RawType("int")),
+    _FormatUnitSpec("H", 1, 0, RawType("int")),
+    _FormatUnitSpec("i", 1, 0, RawType("int")),
+    _FormatUnitSpec("I", 1, 0, RawType("int")),
+    _FormatUnitSpec("l", 1, 0, RawType("int")),
+    _FormatUnitSpec("k", 1, 0, RawType("int")),
+    _FormatUnitSpec("L", 1, 0, RawType("int")),
+    _FormatUnitSpec("K", 1, 0, RawType("int")),
+    _FormatUnitSpec("n", 1, 0, RawType("int")),
+    _FormatUnitSpec("c", 1, 0, _BYTES_OR_BYTEARRAY_TYPE),
+    _FormatUnitSpec("C", 1, 0, RawType("str")),
+    _FormatUnitSpec("f", 1, 0, RawType("float")),
+    _FormatUnitSpec("d", 1, 0, RawType("float")),
+    _FormatUnitSpec("D", 1, 0, RawType("complex")),
+    _FormatUnitSpec("O", 1, 0, RawType("object")),
+    _FormatUnitSpec("p", 1, 0, RawType("object")),
 )

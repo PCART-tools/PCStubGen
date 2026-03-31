@@ -81,7 +81,7 @@ def _signature(
     )
 def _arg(
     name: str,
-    type_text: str | None = None,
+    type_text: str | Type | None = None,
     *,
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
@@ -90,7 +90,13 @@ def _arg(
 ) -> ExtractedArgument:
     return ExtractedArgument(
         name=name,
-        type=None if type_text is None else RawType(type_text, imports=imports),
+        type=(
+            None
+            if type_text is None
+            else type_text
+            if isinstance(type_text, Type)
+            else RawType(type_text, imports=imports)
+        ),
         default_value=default_value,
         has_default=has_default,
         kind=kind,

@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.type_system import RawType
+from pcstubgen.type_system import RawType, Type, UnionType
 from pcstubgen.signature_completion.c_extensions.models import ExtractedArgument
 from pcstubgen.signature_completion.c_extensions.py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
@@ -45,9 +45,19 @@ def _parse(
         resolve_object_type_func=resolve_object_type_func,
         resolve_default_value_func=resolve_default_value_func,
     ).parse()
+
+
+_BUFFER_TYPE = RawType("collections.abc.Buffer", imports=("collections.abc",))
+_STR_OR_BUFFER_TYPE = UnionType((RawType("str"), _BUFFER_TYPE))
+_STR_OR_BUFFER_OR_NONE_TYPE = UnionType((RawType("str"), _BUFFER_TYPE, RawType("None")))
+_STR_OR_BYTES_OR_BYTEARRAY_TYPE = UnionType(
+    (RawType("str"), RawType("bytes"), RawType("bytearray"))
+)
+
+
 def _arg(
     name: str,
-    type_text: str,
+    type_text: str | Type,
     *,
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
@@ -55,7 +65,7 @@ def _arg(
 ) -> ExtractedArgument:
     return ExtractedArgument(
         name=name,
-        type=RawType(type_text, imports=imports),
+        type=type_text if isinstance(type_text, Type) else RawType(type_text, imports=imports),
         default_value=default_value,
         has_default=has_default,
     )
@@ -74,8 +84,8 @@ def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators
 
     assert parsed == [
         _arg("count", "int"),
-        _arg("payload", "str | collections.abc.Buffer", imports=("collections.abc",)),
-        _arg("maybe", "str | collections.abc.Buffer | None", imports=("collections.abc",), has_default=True),
+        _arg("payload", _STR_OR_BUFFER_TYPE),
+        _arg("maybe", _STR_OR_BUFFER_OR_NONE_TYPE, has_default=True),
     ]
 
 
@@ -163,11 +173,11 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
     ]
     assert parsed == [
         _arg("count", "int"),
-        _arg("text", "str | bytes | bytearray", default_value='"utf8"', has_default=True),
+        _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"', has_default=True),
         _arg("typed", "Point", default_value="None", has_default=True),
         _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
-        _arg("raw", "str | collections.abc.Buffer", imports=("collections.abc",), default_value="b''", has_default=True),
-        _arg("maybe", "str | collections.abc.Buffer | None", imports=("collections.abc",), default_value="None", has_default=True),
+        _arg("raw", _STR_OR_BUFFER_TYPE, default_value="b''", has_default=True),
+        _arg("maybe", _STR_OR_BUFFER_OR_NONE_TYPE, default_value="None", has_default=True),
     ]
 
 
