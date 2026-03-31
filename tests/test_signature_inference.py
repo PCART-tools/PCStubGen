@@ -568,7 +568,7 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
     assert inferred == [
         ExtractedSignature(
             arguments=[],
-            return_type=_raw("int"),
+            return_type=RawType("int"),
         )
     ]
 
@@ -625,7 +625,7 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
     assert inferred == [
         ExtractedSignature(
             arguments=[_arg("value", "int")],
-            return_type=_raw("int"),
+            return_type=RawType("int"),
         )
     ]
 

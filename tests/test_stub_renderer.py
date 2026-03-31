@@ -19,12 +19,6 @@ def _signature(
         return_type=return_type,
         doc=doc,
     )
-
-
-def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
-    return RawType(text, imports=imports)
-
-
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
     """构造签名未知的测试函数。"""
     return IRFunction(name=name, doc=doc)
@@ -35,8 +29,8 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
         name="foo",
         signatures=[
             _signature(
-                args=[IRArgument(name="value", type=_raw("typing.Optional[int]", imports=("typing",)))],
-                return_type=_raw("typing.Optional[int]", imports=("typing",)),
+                args=[IRArgument(name="value", type=RawType("typing.Optional[int]", imports=("typing",)))],
+                return_type=RawType("typing.Optional[int]", imports=("typing",)),
             )
         ],
     )
@@ -194,7 +188,7 @@ def test_renderer_prints_var_args_and_var_kwargs_on_their_own_lines() -> None:
 def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
     func = IRFunction(
         name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=_raw("int"))])],
+        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
     )
 
@@ -218,12 +212,12 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
         name="foo",
         signatures=[
             _signature(
-                args=[IRArgument(name="value", type=_raw("int")), IRArgument(name="flag", type=_raw("bool"))],
-                return_type=_raw("int"),
+                args=[IRArgument(name="value", type=RawType("int")), IRArgument(name="flag", type=RawType("bool"))],
+                return_type=RawType("int"),
             ),
             _signature(
-                args=[IRArgument(name="value", type=_raw("str")), IRArgument(name="flag", type=_raw("bool"))],
-                return_type=_raw("str"),
+                args=[IRArgument(name="value", type=RawType("str")), IRArgument(name="flag", type=RawType("bool"))],
+                return_type=RawType("str"),
             ),
         ],
         c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
@@ -247,7 +241,7 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
 def test_renderer_skips_c_inferred_source_comment_when_disabled() -> None:
     func = IRFunction(
         name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=_raw("int"))])],
+        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         c_inferred_source_comment="static int foo_impl(int value) { return value; }",
     )
 
@@ -266,10 +260,10 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
             IRFunction(
                 name="foo",
                 signatures=[
-                    _signature(args=[IRArgument(name="x", type=_raw("int"))], return_type=_raw("int")),
+                    _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
                     _signature(
-                        args=[IRArgument(name="x", type=_raw("typing.Optional[int]", imports=("typing",)))],
-                        return_type=_raw("typing.Optional[int]", imports=("typing",)),
+                        args=[IRArgument(name="x", type=RawType("typing.Optional[int]", imports=("typing",)))],
+                        return_type=RawType("typing.Optional[int]", imports=("typing",)),
                     ),
                 ],
             )
@@ -294,8 +288,8 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
         function=IRFunction(
             name="build",
             signatures=[
-                _signature(args=[IRArgument(name="x", type=_raw("int"))], return_type=_raw("int")),
-                _signature(args=[IRArgument(name="x", type=_raw("str"))], return_type=_raw("str")),
+                _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
+                _signature(args=[IRArgument(name="x", type=RawType("str"))], return_type=RawType("str")),
             ],
         ),
         decorator="classmethod",

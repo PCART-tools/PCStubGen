@@ -39,7 +39,7 @@ def test_c_signature_resolver_preserves_extracted_fields_and_source_comment(
                                 _arg("x", "int"),
                                 _arg("flag", "bool", default_value="False", has_default=True),
                             ],
-                            return_type=_raw("int"),
+                            return_type=RawType("int"),
                         )
                     ],
                 )

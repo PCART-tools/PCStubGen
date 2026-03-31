@@ -79,12 +79,6 @@ def _signature(
         return_type=return_type,
         doc=doc,
     )
-
-
-def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
-    return RawType(text, imports=imports)
-
-
 def _arg(
     name: str,
     type_text: str | None = None,
@@ -96,7 +90,7 @@ def _arg(
 ) -> ExtractedArgument:
     return ExtractedArgument(
         name=name,
-        type=None if type_text is None else _raw(type_text, imports=imports),
+        type=None if type_text is None else RawType(type_text, imports=imports),
         default_value=default_value,
         has_default=has_default,
         kind=kind,

@@ -45,12 +45,6 @@ def _parse(
         resolve_object_type_func=resolve_object_type_func,
         resolve_default_value_func=resolve_default_value_func,
     ).parse()
-
-
-def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
-    return RawType(text, imports=imports)
-
-
 def _arg(
     name: str,
     type_text: str,
@@ -61,7 +55,7 @@ def _arg(
 ) -> ExtractedArgument:
     return ExtractedArgument(
         name=name,
-        type=_raw(type_text, imports=imports),
+        type=RawType(type_text, imports=imports),
         default_value=default_value,
         has_default=has_default,
     )

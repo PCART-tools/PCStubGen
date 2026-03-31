@@ -1400,7 +1400,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
         if function_cursor is bad_cursor:
             raise RuntimeError("broken inference")
-        return [ExtractedSignature(return_type=_raw("int"))]
+        return [ExtractedSignature(return_type=RawType("int"))]
 
     def _exception(message: str, *args: object) -> None:
         logged_messages.append(message.format(*args))
@@ -1416,7 +1416,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
-        ExtractedSignature(return_type=_raw("int"))
+        ExtractedSignature(return_type=RawType("int"))
     ]
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]
@@ -1470,7 +1470,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
         if function_cursor is bad_cursor:
             raise RuntimeError("broken inference")
-        return [ExtractedSignature(return_type=_raw("int"))]
+        return [ExtractedSignature(return_type=RawType("int"))]
 
     def _exception(message: str, *args: object) -> None:
         logged_messages.append(message.format(*args))
@@ -1486,7 +1486,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
-        ExtractedSignature(return_type=_raw("int"))
+        ExtractedSignature(return_type=RawType("int"))
     ]
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]

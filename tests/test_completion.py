@@ -50,7 +50,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
                     signatures=[
                         ExtractedSignature(
                             arguments=[_arg("value", "int")],
-                            return_type=_raw("bool"),
+                            return_type=RawType("bool"),
                         )
                     ],
                 )
@@ -133,7 +133,7 @@ def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
                     signatures=[
                         ExtractedSignature(
                             arguments=[_arg("from_c", "bool")],
-                            return_type=_raw("bool"),
+                            return_type=RawType("bool"),
                         )
                     ],
                 )
