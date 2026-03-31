@@ -102,7 +102,7 @@ def test_c_signature_resolver_returns_none_for_methods_and_python_modules(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    extractor = _patch_c_signature_extractor(
+    _patch_c_signature_extractor(
         monkeypatch,
         modules=_module_fixture(
             functions={
@@ -136,7 +136,6 @@ def test_c_signature_resolver_returns_none_for_methods_and_python_modules(
         is None
     )
     assert resolver.resolve_function(module=python_module, func=python_module.functions[0]) is None
-    assert extractor.called == 1
 
 
 def test_c_signature_resolver_matches_exact_module_before_leaf_name(

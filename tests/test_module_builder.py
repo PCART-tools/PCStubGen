@@ -12,17 +12,7 @@ import pcstubgen.module_build.builder as module_builder_module
 from pcstubgen.module_build import build_function, build_module
 
 
-def test_module_builder_keeps_runtime_function_and_leaves_signatures_empty() -> None:
-    def sample() -> None:
-        raise NotImplementedError
-
-    parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
-
-    assert parsed.signatures == []
-    assert parsed.runtime_function is sample
-
-
-def test_module_builder_keeps_function_doc_without_completing_signatures() -> None:
+def test_module_builder_build_function_keeps_runtime_function_and_doc_without_completing_signatures() -> None:
     def sample(value: int, flag: bool = False) -> int:
         """sample doc"""
         raise NotImplementedError
@@ -32,6 +22,58 @@ def test_module_builder_keeps_function_doc_without_completing_signatures() -> No
     assert parsed.doc == "sample doc"
     assert parsed.runtime_function is sample
     assert parsed.signatures == []
+
+
+def test_module_builder_keeps_only_tree_functions_and_methods() -> None:
+    module = types.ModuleType("pkg")
+
+    def root_function(*args, **kwargs):
+        return args, kwargs
+
+    root_function.__module__ = "pkg"
+    root_function.__doc__ = "root_function(x: int) -> int"
+
+    class RootClass:
+        class_attr = 123
+
+        def method(*args, **kwargs):
+            return args, kwargs
+
+        @property
+        def prop(self):
+            return 1
+
+    RootClass.__module__ = "pkg"
+    RootClass.method.__doc__ = "method(self, y: int) -> int"
+
+    sub = types.ModuleType("pkg.sub")
+
+    def sub_function(*args, **kwargs):
+        return args, kwargs
+
+    sub_function.__module__ = "pkg.sub"
+    sub.sub_function = sub_function
+
+    module.root_function = root_function
+    module.alias_function = root_function
+    module.RootClass = RootClass
+    module.sub = sub
+    module.VALUE = 10
+
+    ir_module = build_module(QualifiedName.from_str("pkg"), module)
+
+    assert [func.name for func in ir_module.functions] == ["root_function"]
+    assert [cls.name for cls in ir_module.classes] == ["RootClass"]
+    assert ir_module.sub_modules == []
+
+    root_cls = ir_module.classes[0]
+    assert [method.function.name for method in root_cls.methods] == ["method"]
+    assert root_cls.classes == []
+
+    # 精简后的 IR 不再携带变量/属性/字段等节点
+    assert not hasattr(ir_module, "variables")
+    assert not hasattr(root_cls, "properties")
+    assert not hasattr(root_cls, "fields")
 
 
 def test_module_builder_discovers_direct_submodules_from_package_path(
@@ -167,7 +209,7 @@ def test_module_builder_skips_submodule_when_dependency_is_missing(
     )
 
     module = _import_module_from_tmp("optionalpkg", tmp_path, monkeypatch)
-    warning_messages: list[tuple[str, str, str | None]] = []
+    warning_records: list[tuple[str, str, str | None]] = []
 
     def fake_warning(
         message: str,
@@ -176,19 +218,16 @@ def test_module_builder_skips_submodule_when_dependency_is_missing(
         missing_dependency: str | None,
         error: str,
     ) -> None:
-        warning_messages.append((message, error_type, missing_dependency))
+        _ = message, error
+        warning_records.append((module_name, error_type, missing_dependency))
 
     monkeypatch.setattr(module_builder_module.logger, "warning", fake_warning)
 
     ir_module = build_module(QualifiedName.from_str("optionalpkg"), module)
 
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
-    assert warning_messages == [
-        (
-            "跳过子模块, module: {}, error_type: {}, missing_dependency: {}, error: {}",
-            "ModuleNotFoundError",
-            "definitely_missing_dependency",
-        )
+    assert warning_records == [
+        ("optionalpkg.needs_missing_dep", "ModuleNotFoundError", "definitely_missing_dependency")
     ]
 
 
@@ -210,7 +249,7 @@ def test_module_builder_skips_submodule_when_import_raises_os_error(
     )
 
     module = _import_module_from_tmp("oserrorpkg", tmp_path, monkeypatch)
-    warning_messages: list[tuple[str, str, str | None]] = []
+    warning_records: list[tuple[str, str, str | None]] = []
 
     def fake_warning(
         message: str,
@@ -219,19 +258,16 @@ def test_module_builder_skips_submodule_when_import_raises_os_error(
         missing_dependency: str | None,
         error: str,
     ) -> None:
-        warning_messages.append((message, error_type, missing_dependency))
+        _ = message, error
+        warning_records.append((module_name, error_type, missing_dependency))
 
     monkeypatch.setattr(module_builder_module.logger, "warning", fake_warning)
 
     ir_module = build_module(QualifiedName.from_str("oserrorpkg"), module)
 
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
-    assert warning_messages == [
-        (
-            "跳过子模块, module: {}, error_type: {}, missing_dependency: {}, error: {}",
-            "OSError",
-            None,
-        )
+    assert warning_records == [
+        ("oserrorpkg.broken", "OSError", None)
     ]
 
 

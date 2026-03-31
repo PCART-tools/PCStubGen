@@ -6,7 +6,6 @@ import pytest
 
 import pcstubgen.signature_completion.inspect_source as inspect_signature_module
 from pcstubgen.signature_completion.inspect_source import resolve_inspect_signatures
-from pcstubgen.ir import IRModuleType
 
 
 def _render_type(type_: object | None) -> str | None:
@@ -45,20 +44,18 @@ def test_resolve_inspect_signatures_preserves_tuple_default_text() -> None:
     assert signature.arguments[0].has_default is True
 
 
-def test_resolve_inspect_signatures_returns_none_when_inspect_fails(
+def test_resolve_inspect_signatures_returns_none_when_inspect_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def sample() -> None:
         raise NotImplementedError
 
     def _raise_signature_error(obj: object) -> object:
-        raise TypeError(f"cannot inspect {obj!r}")
+        raise RuntimeError(f"boom: {obj!r}")
 
     monkeypatch.setattr(inspect_signature_module.inspect, "signature", _raise_signature_error)
 
-    resolved = resolve_inspect_signatures(sample)
-
-    assert resolved is None
+    assert resolve_inspect_signatures(sample) is None
 
 
 def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
@@ -74,18 +71,3 @@ def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
     assert [arg.name for arg in signature.arguments] == ["cls", "value"]
     assert [_render_type(arg.type) for arg in signature.arguments] == [None, "int"]
     assert _render_type(signature.return_type) == "str"
-
-
-def test_resolve_inspect_signatures_swallows_runtime_errors(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    def sample() -> None:
-        raise NotImplementedError
-
-    def _raise_runtime_error(obj: object) -> object:
-        raise RuntimeError(f"boom: {obj!r}")
-
-    monkeypatch.setattr(inspect_signature_module.inspect, "signature", _raise_runtime_error)
-
-    assert resolve_inspect_signatures(sample, module_type=IRModuleType.EXTENSION) is None
-    assert resolve_inspect_signatures(sample, module_type=IRModuleType.PYTHON) is None

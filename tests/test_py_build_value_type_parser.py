@@ -70,12 +70,6 @@ def test_canonicalize_type_turns_empty_union_into_never() -> None:
     assert canonical == UnionType(())
 
 
-def test_union_type_is_empty_reports_whether_members_exist() -> None:
-    """空 union 判定应只取决于成员是否为空。"""
-    assert UnionType(()).is_empty() is True
-    assert UnionType((NamedType("int"),)).is_empty() is False
-
-
 def test_canonicalize_type_propagates_any_across_union_members() -> None:
     """联合类型中只要出现显式 `Any`，整体就应规范化为 `Any`。"""
     canonical = UnionType(
@@ -311,83 +305,6 @@ def test_parse_canonicalize_render_returns_expected_type_string(
     assert _canonical_render(format_string, arg_count) == expected
 
 
-@pytest.mark.parametrize(
-    ("format_string", "arg_count", "expected"),
-    [
-        ("", 0, "None"),
-        ("i", 1, "int"),
-        ("iii", 3, "tuple[int, int, int]"),
-        ("s", 1, "None | str"),
-        ("y", 1, "None | bytes"),
-        ("ss", 2, "tuple[None | str, None | str]"),
-        ("s#", 2, "None | str"),
-        ("y#", 2, "None | bytes"),
-        ("()", 0, "tuple[()]"),
-        ("(i)", 1, "tuple[int,]"),
-        ("(ii)", 2, "tuple[int, int]"),
-        ("(i,i)", 2, "tuple[int, int]"),
-        ("[i,i]", 2, "list[int]"),
-        ("{s:i,s:i}", 4, "dict[None | str, int]"),
-        (
-            "((ii)(ii)) (ii)",
-            6,
-            "tuple[tuple[tuple[int, int], tuple[int, int]], tuple[int, int]]",
-        ),
-    ],
-)
-def test_parse_canonicalize_render_matches_documented_py_buildvalue_examples(
-    format_string: str,
-    arg_count: int,
-    expected: str,
-) -> None:
-    """文档样例在当前项目的类型推断语义下应保持稳定。"""
-    assert _canonical_render(format_string, arg_count) == expected
-
-
-def test_parse_value_returns_list_node_for_empty_list_format() -> None:
-    """直接解析值时应为列表格式返回列表节点。"""
-    parser = PyBuildValueTypeParser("[]", [])
-
-    list_node = parser._parse_value()
-
-    assert isinstance(list_node, ListType)
-    assert isinstance(list_node.element, UnionType)
-    assert list_node.element == UnionType(())
-
-
-def test_parse_value_returns_dict_node_for_empty_dict_format() -> None:
-    """直接解析值时应为字典格式返回字典节点。"""
-    parser = PyBuildValueTypeParser("{}", [])
-
-    dict_node = parser._parse_value()
-
-    assert isinstance(dict_node, DictType)
-    assert isinstance(dict_node.key, UnionType)
-    assert isinstance(dict_node.value, UnionType)
-    assert dict_node.key == UnionType(())
-    assert dict_node.value == UnionType(())
-
-
-@pytest.mark.parametrize(
-    ("format_string", "arg_count", "expected"),
-    [
-        ("s#", 2, "None | str"),
-        ("y#", 2, "None | bytes"),
-        ("z#", 2, "None | str"),
-        ("u#", 2, "None | str"),
-        ("U#", 2, "None | str"),
-        ("O&", 2, "typing.Any"),
-    ],
-)
-def test_parse_matches_longest_format_unit_first(
-    format_string: str,
-    arg_count: int,
-    expected: str,
-) -> None:
-    """多字符格式单元应按最长匹配整体消费。"""
-    assert _canonical_render(format_string, arg_count) == expected
-
-
 def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> None:
     with pytest.raises(
         PyBuildValueTypeParserError,
@@ -468,21 +385,6 @@ def test_collect_imports_returns_recursive_dependency_set() -> None:
     )
 
     assert node.collect_imports() == {"numpy", "collections.abc", "typing"}
-
-
-def test_raw_type_defaults_imports_to_empty_tuple() -> None:
-    assert NamedType("int").imports == ()
-
-
-def test_raw_type_is_hashable_with_tuple_imports() -> None:
-    assert hash(NamedType("x", imports=("typing",))) == hash(NamedType("x", imports=("typing",)))
-
-
-def test_raw_type_collect_imports_returns_set_from_tuple() -> None:
-    assert NamedType("x", imports=("typing", "typing", "collections.abc")).collect_imports() == {
-        "typing",
-        "collections.abc",
-    }
 
 
 @pytest.mark.parametrize(

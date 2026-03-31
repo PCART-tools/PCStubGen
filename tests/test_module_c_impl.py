@@ -14,29 +14,7 @@ from tools import module_c_impl
 RUNNER = CliRunner()
 
 
-def test_cli_passes_explicit_module_name(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    captured_module_name: str | None = None
-    captured_output_dir: Path | None = None
-
-    def fake_run_single_module(module_name: str, *, output_dir: Path) -> int:
-        nonlocal captured_module_name, captured_output_dir
-        captured_module_name = module_name
-        captured_output_dir = output_dir
-        return 0
-
-    monkeypatch.setattr(module_c_impl, "run_single_module", fake_run_single_module)
-    monkeypatch.setattr(module_c_impl, "DEFAULT_OUTPUT_DIR", Path("C:/tmp/module_c_impl_output"))
-
-    result = RUNNER.invoke(module_c_impl.app, ["math"], prog_name="module_c_impl")
-
-    assert result.exit_code == 0
-    assert captured_module_name == "math"
-    assert captured_output_dir == Path("C:/tmp/module_c_impl_output")
-
-
-def test_cli_passes_explicit_module_name_and_output_dir(
+def test_cli_passes_module_name_and_output_dir(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:

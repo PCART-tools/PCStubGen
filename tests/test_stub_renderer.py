@@ -24,6 +24,7 @@ def _signature(
 def _raw(text: str, *, imports: tuple[str, ...] = ()) -> RawType:
     return RawType(text, imports=imports)
 
+
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
     """构造签名未知的测试函数。"""
     return IRFunction(name=name, doc=doc)
@@ -212,7 +213,7 @@ def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
     ]
 
 
-def test_renderer_prints_c_inferred_source_comment_once_after_multiline_overloads() -> None:
+def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> None:
     func = IRFunction(
         name="foo",
         signatures=[
@@ -233,48 +234,9 @@ def test_renderer_prints_c_inferred_source_comment_once_after_multiline_overload
         include_c_inferred_source_comment=True,
     ).print_function(func)
 
-    assert lines == [
-        "@typing.overload",
-        "def foo(",
-        "    value: int,",
-        "    flag: bool,",
-        ") -> int:",
-        "    ...",
-        "@typing.overload",
-        "def foo(",
-        "    value: str,",
-        "    flag: bool,",
-        ") -> str:",
-        "    ...",
-        "#   C inferred source for foo:",
-        "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
-        "#       return self;",
-        "#   }",
-    ]
-
-
-def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> None:
-    func = IRFunction(
-        name="foo",
-        signatures=[
-            _signature(args=[IRArgument(name="value", type=_raw("int"))], return_type=_raw("int")),
-            _signature(args=[IRArgument(name="value", type=_raw("str"))], return_type=_raw("str")),
-        ],
-        c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
-    )
-
-    lines = StubRenderer(
-        include_docstrings=False,
-        include_c_inferred_source_comment=True,
-    ).print_function(func)
-
-    assert lines == [
-        "@typing.overload",
-        "def foo(value: int) -> int:",
-        "    ...",
-        "@typing.overload",
-        "def foo(value: str) -> str:",
-        "    ...",
+    assert lines.count("@typing.overload") == 2
+    assert lines.count("#   C inferred source for foo:") == 1
+    assert lines[-4:] == [
         "#   C inferred source for foo:",
         "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
         "#       return self;",

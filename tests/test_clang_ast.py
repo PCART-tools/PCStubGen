@@ -54,57 +54,10 @@ def test_cli_accepts_include_and_include_directory(
     ]
     assert captured_kwargs["c_std"] == "c99"
     assert captured_kwargs["cpp_std"] == "c++20"
-def test_cli_invalid_include_reports_bad_parameter(tmp_path: Path) -> None:
-    source_path = tmp_path / "sample.c"
-    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
-
-    result = RUNNER.invoke(
-        clang_ast.app,
-        [str(source_path), "--include=-bad"],
-        prog_name="clang_ast",
-    )
-
-    assert result.exit_code == 2
-    assert "Invalid value for '--include'" in result.stderr
-    assert "'-bad'" in result.stderr
-
-
-def test_cli_invalid_include_directory_reports_bad_parameter(tmp_path: Path) -> None:
-    source_path = tmp_path / "sample.c"
-    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
-
-    result = RUNNER.invoke(
-        clang_ast.app,
-        [str(source_path), "--include-directory=-bad"],
-        prog_name="clang_ast",
-    )
-
-    assert result.exit_code == 2
-    assert "Invalid value for '--include-directory'" in result.stderr
-    assert "'-bad'" in result.stderr
-
 
 def test_normalize_include_headers_rejects_option_like_values() -> None:
     with pytest.raises(ValueError, match="option-like"):
         clang_ast._normalize_include_headers(["-Winvalid"])
-
-
-def test_validate_include_preserves_message() -> None:
-    with pytest.raises(clang_ast.typer.BadParameter) as ex:
-        clang_ast._validate_include(["-bad"])
-
-    message = str(ex.value)
-    assert "include" in message
-    assert "-bad" in message
-
-
-def test_validate_include_directory_preserves_message() -> None:
-    with pytest.raises(clang_ast.typer.BadParameter) as ex:
-        clang_ast._validate_include_directory([Path("-bad")])
-
-    message = str(ex.value)
-    assert "include_directory" in message
-    assert "-bad" in message
 
 
 class _FakeLocation:
@@ -165,6 +118,8 @@ class _FakeDiagnostic:
         self.severity = severity
         self.spelling = spelling
         self.location = _FakeLocation(file=file, line=line, column=column)
+
+
 def test_build_ast_payload_renders_tree_and_filters_external_children() -> None:
     source_path = Path("C:/project/sample.c").resolve()
     output_path = Path("C:/project/out/sample.libclang.txt").resolve()

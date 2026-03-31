@@ -14,7 +14,11 @@ def _module_with_loader(
     file_path: str | None = None,
 ) -> types.ModuleType:
     module = types.ModuleType(name)
-    module.__spec__ = types.SimpleNamespace(loader=loader)
+    module.__spec__ = types.SimpleNamespace(
+        name=name,
+        loader=loader,
+        submodule_search_locations=None,
+    )
     if file_path is not None:
         module.__file__ = file_path
     return module

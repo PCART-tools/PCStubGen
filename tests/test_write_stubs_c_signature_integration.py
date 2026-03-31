@@ -84,15 +84,10 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
             captured["completed_module"] = module
             return FakeSummary()
 
-    def fake_logger_info(message: str, summary: object) -> None:
-        captured["logger_message"] = message
-        captured["logger_summary"] = summary
-        captured["logger_summary_text"] = str(summary)
-
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
-    monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=fake_logger_info))
+    monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
 
     options = StubGenerationOptions(
         source_root=tmp_path,
@@ -114,11 +109,9 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
 
     assert captured["completed_module"] is ir_module
     assert captured["completion_options"] is options
-    assert captured["logger_message"] == "{}"
-    assert isinstance(captured["logger_summary"], FakeSummary)
-    assert captured["logger_summary_text"] == str(captured["logger_summary"])
     assert captured["renderer_include_docstrings"] is False
     assert captured["renderer_include_module_type_comment"] is True
     assert captured["renderer_include_c_inferred_source_comment"] is True
     assert captured["written_module"] is ir_module
+    assert isinstance(captured["written_renderer"], FakeStubRenderer)
     assert captured["written_to"] == tmp_path

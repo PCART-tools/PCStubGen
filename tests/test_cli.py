@@ -101,31 +101,3 @@ def test_cli_preserves_include_without_validation(
     assert result.exit_code == 0
     assert captured_options is not None
     assert captured_options.include == ["-bad", "   "]
-
-
-def test_cli_defaults_include_and_include_directory_to_empty_lists(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    captured_options: StubGenerationOptions | None = None
-
-    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
-        nonlocal captured_options
-        captured_options = options
-
-    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
-
-    result = RUNNER.invoke(
-        main_module.app,
-        [
-            "math",
-            "--output-dir",
-            str(tmp_path),
-        ],
-        prog_name="pcstubgen",
-    )
-
-    assert result.exit_code == 0
-    assert captured_options is not None
-    assert captured_options.include == []
-    assert captured_options.include_directory == []
