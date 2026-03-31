@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ..ir import IRFunction, IRModule, IRModuleType
-from ..signature_models import (
+from ...ir import IRFunction, IRModule, IRModuleType
+from ..models import (
     ResolvedArgument,
     ResolvedFunctionSignatures,
     ResolvedSignature,

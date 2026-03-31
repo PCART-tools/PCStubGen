@@ -7,7 +7,7 @@ def test_write_stubs_propagates_extract_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen as stubgen_module
+    import pcstubgen.api as stubgen_module
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
@@ -39,7 +39,7 @@ def test_write_stubs_passes_options_to_supplementer_and_logs_summary(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    import pcstubgen as stubgen_module
+    import pcstubgen.api as stubgen_module
 
     captured: dict[str, object] = {}
     ir_module = IRModule(full_name=QualifiedName.from_str("pkg.mod"))

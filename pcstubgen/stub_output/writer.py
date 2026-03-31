@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .stub_renderer import StubRenderer
-from .ir import IRModule
-from .ir.ir_module import IRModuleType
+from .renderer import StubRenderer
+from ..ir import IRModule
+from ..ir.module import IRModuleType
 
 
 class StubWriter:

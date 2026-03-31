@@ -3,9 +3,9 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from .c_signature.types import RawType, Type
-from .ir import IRArgumentKind
-from .signature_models import (
+from ..type_system.types import RawType, Type
+from ..ir import IRArgumentKind
+from .models import (
     ResolvedArgument,
     ResolvedFunctionSignatures,
     ResolvedSignature,

@@ -4,7 +4,7 @@ import importlib.machinery
 import types
 
 from pcstubgen.ir import IRModuleType, QualifiedName
-from pcstubgen.module_builder import build_module
+from pcstubgen.module_build import build_module
 
 
 def _module_with_loader(

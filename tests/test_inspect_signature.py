@@ -4,8 +4,8 @@ import typing
 
 import pytest
 
-import pcstubgen.inspect_signature as inspect_signature_module
-from pcstubgen.inspect_signature import resolve_inspect_signatures
+import pcstubgen.signature_completion.inspect_source as inspect_signature_module
+from pcstubgen.signature_completion.inspect_source import resolve_inspect_signatures
 from pcstubgen.ir import IRModuleType
 
 

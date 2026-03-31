@@ -5,8 +5,8 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .ir_class import IRClass
-    from .ir_function import IRFunction
+    from .class_ import IRClass
+    from .function import IRFunction
     from .qualified_name import QualifiedName
 
 class IRModuleType(Enum):

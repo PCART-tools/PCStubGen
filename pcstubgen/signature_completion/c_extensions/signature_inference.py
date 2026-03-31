@@ -3,7 +3,7 @@ from __future__ import annotations
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
-from ..checks import check
+from ...checks import check
 from .clang_eval import eval_int
 from .cursor_utils import (
     unwrap_transparent,
@@ -25,7 +25,7 @@ from .py_arg_parse_tuple_type_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from .types import Type, UnionType
+from ...type_system.types import Type, UnionType
 from .py_build_value_type_parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 

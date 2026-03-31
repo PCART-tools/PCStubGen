@@ -9,7 +9,7 @@ from clang.cindex import Cursor
 
 from .models import ExtractedArgument
 from .py_arg_parse_format_units import _FORMAT_UNIT_SPECS
-from .types import RawType, Type
+from ...type_system.types import RawType, Type
 
 
 class PyArgParseTupleTypeParserError(ValueError):

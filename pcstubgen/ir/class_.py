@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .ir_method import IRMethod
+    from .method import IRMethod
     from .qualified_name import QualifiedName
 
 

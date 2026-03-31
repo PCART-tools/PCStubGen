@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 
-from .ir import (
+from ..ir import (
     IRArgument,
     IRArgumentKind,
     IRClass,

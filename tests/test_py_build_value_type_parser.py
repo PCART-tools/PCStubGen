@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.c_signature.types import (
+from pcstubgen.type_system import (
     AnyType,
     DictType,
     ListType,
@@ -16,7 +16,7 @@ from pcstubgen.c_signature.types import (
     Type,
     UnionType,
 )
-from pcstubgen.c_signature.py_build_value_type_parser import (
+from pcstubgen.signature_completion.c_extensions.py_build_value_type_parser import (
     PyBuildValueTypeParser,
     PyBuildValueTypeParserError,
 )

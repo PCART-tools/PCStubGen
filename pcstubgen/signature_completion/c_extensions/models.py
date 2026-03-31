@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ..ir import IRArgumentKind
-from .types import Type
+from ...ir import IRArgumentKind
+from ...type_system.types import Type
 
 if TYPE_CHECKING:
     from clang.cindex import Cursor

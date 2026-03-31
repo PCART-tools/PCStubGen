@@ -6,7 +6,7 @@ from pathlib import Path
 import typer
 from loguru import logger
 
-from . import write_stubs
+from .api import write_stubs
 from .stub_generation_options import StubGenerationOptions
 
 MY_LOGURU_FORMAT = (

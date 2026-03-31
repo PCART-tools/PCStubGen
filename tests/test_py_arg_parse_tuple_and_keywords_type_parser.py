@@ -6,10 +6,10 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.c_signature.types import RawType
+from pcstubgen.type_system import RawType
 from pcstubgen.ir import IRArgumentKind
-from pcstubgen.c_signature.models import ExtractedArgument
-from pcstubgen.c_signature.py_arg_parse_tuple_and_keywords_type_parser import (
+from pcstubgen.signature_completion.c_extensions.models import ExtractedArgument
+from pcstubgen.signature_completion.c_extensions.py_arg_parse_tuple_and_keywords_type_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
 )

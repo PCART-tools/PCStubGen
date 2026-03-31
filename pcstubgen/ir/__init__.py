@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from .ir_argument import IRArgument, IRArgumentKind
-from .ir_class import IRClass
-from .ir_function import IRFunction
-from .ir_method import IRMethod
+from .argument import IRArgument, IRArgumentKind
+from .class_ import IRClass
+from .function import IRFunction
+from .method import IRMethod
 from .ir_method_decorator import IRMethodDecorator
-from .ir_module import IRModule, IRModuleType
-from .ir_signature import IRSignature
+from .module import IRModule, IRModuleType
+from .signature import IRSignature
 from .qualified_name import QualifiedName
 
 __all__ = [

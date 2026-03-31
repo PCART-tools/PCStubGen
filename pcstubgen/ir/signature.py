@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..c_signature.types import Type
-from .ir_argument import IRArgument
+from ..type_system.types import Type
+from .argument import IRArgument
 
 
 @dataclass

@@ -1,4 +1,4 @@
-from .types import RawType, Type, UnionType
+from ...type_system.types import RawType, Type, UnionType
 
 
 def _raw(text: str, *, imports: list[str] | None = None) -> RawType:

@@ -8,8 +8,8 @@ import types
 import pytest
 
 from pcstubgen.ir import QualifiedName
-import pcstubgen.module_builder as module_builder_module
-from pcstubgen.module_builder import build_function, build_module
+import pcstubgen.module_build.builder as module_builder_module
+from pcstubgen.module_build import build_function, build_module
 
 
 def test_module_builder_keeps_runtime_function_and_leaves_signatures_empty() -> None:

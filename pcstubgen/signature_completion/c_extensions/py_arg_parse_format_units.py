@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .types import RawType, Type
+from ...type_system.types import RawType, Type
 
 
 def _raw(text: str, *, imports: list[str] | None = None) -> RawType:

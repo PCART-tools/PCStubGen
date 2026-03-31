@@ -4,12 +4,12 @@ import dataclasses
 
 from loguru import logger
 
-from .c_signature import CSignatureResolver
-from .docstring_signature import resolve_docstring_signatures
-from .inspect_signature import resolve_inspect_signatures
-from .ir import IRArgument, IRClass, IRFunction, IRMethod, IRModule, IRSignature
-from .signature_models import ResolvedArgument, ResolvedFunctionSignatures, ResolvedSignature
-from .stub_generation_options import StubGenerationOptions
+from .c_extensions import CSignatureResolver
+from .docstring_source import resolve_docstring_signatures
+from .inspect_source import resolve_inspect_signatures
+from ..ir import IRArgument, IRClass, IRFunction, IRMethod, IRModule, IRSignature
+from .models import ResolvedArgument, ResolvedFunctionSignatures, ResolvedSignature
+from ..stub_generation_options import StubGenerationOptions
 
 
 @dataclasses.dataclass

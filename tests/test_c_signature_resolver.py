@@ -336,7 +336,7 @@ def test_c_signature_resolver_passes_clang_options_to_extractor(
         captured["cpp_std"] = cpp_std
         return {}
 
-    import pcstubgen.c_signature.resolver as resolver_module
+    import pcstubgen.signature_completion.c_extensions.resolver as resolver_module
 
     monkeypatch.setattr(
         resolver_module,

@@ -9,12 +9,12 @@ from typing import Any
 
 from loguru import logger
 
-from .reflection_helpers import (
+from .reflection import (
     get_doc,
     get_module_name,
     is_package,
 )
-from .ir import (
+from ..ir import (
     IRClass,
     IRFunction,
     IRMethod,

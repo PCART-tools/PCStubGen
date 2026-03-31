@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from .ir_signature import IRSignature
+from .signature import IRSignature
 
 
 @dataclass

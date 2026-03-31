@@ -5,10 +5,10 @@ from typing import Any
 
 from loguru import logger
 
-from .c_signature.types import RawType, Type
-from .ir import IRArgumentKind, IRModuleType, QualifiedName
-from .reflection_helpers import get_module_name
-from .signature_models import (
+from ..type_system.types import RawType, Type
+from ..ir import IRArgumentKind, IRModuleType, QualifiedName
+from ..module_build.reflection import get_module_name
+from .models import (
     ResolvedArgument,
     ResolvedFunctionSignatures,
     ResolvedSignature,

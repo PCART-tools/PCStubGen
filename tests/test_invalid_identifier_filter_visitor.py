@@ -3,7 +3,7 @@ from __future__ import annotations
 import types
 
 from pcstubgen.ir import QualifiedName
-from pcstubgen.module_builder import build_module
+from pcstubgen.module_build import build_module
 
 
 def test_module_builder_keeps_only_tree_functions_and_methods() -> None:

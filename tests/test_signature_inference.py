@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pcstubgen.c_signature.name_to_type import FUNCTION_NAME_TO_TYPE
-from pcstubgen.c_signature.types import RawType
+from pcstubgen.signature_completion.c_extensions.name_to_type import FUNCTION_NAME_TO_TYPE
+from pcstubgen.type_system import RawType
 from tests._c_signature_test_support import *
 
 

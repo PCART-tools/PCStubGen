@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import typing
 
-from pcstubgen.c_signature.types import RawType, Type
+from pcstubgen.type_system import RawType, Type
 from pcstubgen.ir import IRArgument, IRArgumentKind, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
-from pcstubgen.stub_renderer import StubRenderer
+from pcstubgen.stub_output import StubRenderer
 
 
 def _signature(

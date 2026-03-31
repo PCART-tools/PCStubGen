@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.docstring_signature import (
+from pcstubgen.signature_completion.docstring_source import (
     DocstringSignatureParser,
     resolve_docstring_signatures,
 )

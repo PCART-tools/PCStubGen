@@ -9,19 +9,19 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.c_signature import extract_c_signature_modules
-from pcstubgen.c_signature.constants import (
+from pcstubgen.signature_completion.c_extensions import extract_c_signature_modules
+from pcstubgen.signature_completion.c_extensions.constants import (
     METH_KEYWORDS,
     METH_VARARGS,
 )
-from pcstubgen.c_signature import (
+from pcstubgen.signature_completion.c_extensions import (
     c_signature_extraction as c_signature_extraction_module,
 )
-from pcstubgen.c_signature import cursor_utils as cursor_utils_module
-from pcstubgen.c_signature import signature_inference as signature_rules_module
-from pcstubgen.c_signature import module_table as module_table_module
-from pcstubgen.c_signature import clang_parser as translation_unit_module
-from pcstubgen.c_signature.types import (
+from pcstubgen.signature_completion.c_extensions import cursor_utils as cursor_utils_module
+from pcstubgen.signature_completion.c_extensions import signature_inference as signature_rules_module
+from pcstubgen.signature_completion.c_extensions import module_table as module_table_module
+from pcstubgen.signature_completion.c_extensions import clang_parser as translation_unit_module
+from pcstubgen.type_system import (
     AnyType,
     ListType,
     RawType,
@@ -29,25 +29,25 @@ from pcstubgen.c_signature.types import (
     TupleType,
     UnionType,
 )
-from pcstubgen.c_signature.module_table import (
+from pcstubgen.signature_completion.c_extensions.module_table import (
     extract_method_table as _extract_method_table,
     extract_pymethoddef_init_list_expr as _extract_PyMethodDef_INIT_LIST_EXPR,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
-from pcstubgen.c_signature.models import (
+from pcstubgen.signature_completion.c_extensions.models import (
     ExtractedArgument,
     ExtractedFunction,
     ExtractedModule,
     ExtractedSignature,
 )
-from pcstubgen.c_signature.resolver import (
+from pcstubgen.signature_completion.c_extensions.resolver import (
     CSignatureResolver,
 )
-from pcstubgen.docstring_signature import (
+from pcstubgen.signature_completion.docstring_source import (
     DocstringSignatureParser,
     resolve_docstring_signatures,
 )
-from pcstubgen.inspect_signature import (
+from pcstubgen.signature_completion.inspect_source import (
     resolve_inspect_signatures,
 )
 from pcstubgen.ir import (
@@ -62,7 +62,7 @@ from pcstubgen.ir import (
     QualifiedName,
 )
 from pcstubgen.stub_generation_options import StubGenerationOptions
-from pcstubgen.supplementer import (
+from pcstubgen.signature_completion import (
     SignatureSupplementSummary,
     SignatureSupplementer,
     supplement_signatures,
@@ -205,7 +205,7 @@ def _patch_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         return extractor.extract_modules()
 
-    import pcstubgen.c_signature.resolver as resolver_module
+    import pcstubgen.signature_completion.c_extensions.resolver as resolver_module
 
     monkeypatch.setattr(resolver_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
     return extractor
@@ -226,7 +226,7 @@ def _patch_raising_c_signature_extractor(
         _ = (source_root, include, include_directory, c_std, cpp_std)
         raise error
 
-    import pcstubgen.c_signature.resolver as resolver_module
+    import pcstubgen.signature_completion.c_extensions.resolver as resolver_module
 
     monkeypatch.setattr(resolver_module, "extract_c_signature_modules", _patched_extract_c_signature_modules)
 
