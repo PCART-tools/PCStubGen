@@ -3,6 +3,22 @@ from __future__ import annotations
 from tests._c_extension_test_support import *
 
 
+def test_summary_str_uses_chinese_labels() -> None:
+    summary = SignatureCompletionSummary(
+        total_functions=6,
+        skipped_known_signatures=1,
+        c_resolved=2,
+        docstring_resolved=1,
+        inspect_resolved=1,
+        unresolved=1,
+    )
+
+    assert str(summary) == (
+        "签名补全汇总: 函数总数=6, 跳过已有签名=1, "
+        "C源码补全=2, 文档字符串补全=1, 运行时反射补全=1, 未补全=1"
+    )
+
+
 def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
