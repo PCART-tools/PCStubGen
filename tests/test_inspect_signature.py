@@ -24,7 +24,7 @@ def test_resolve_inspect_signatures_parses_annotations_and_defaults() -> None:
     resolved = resolve_inspect_signatures(sample)
 
     assert resolved is not None
-    signature = resolved.signatures[0]
+    signature = resolved[0]
     assert [arg.name for arg in signature.args] == ["a", "values"]
     assert [_render_type(arg.type) for arg in signature.args] == ["int", "list[int]"]
     assert [arg.default_value for arg in signature.args] == [None, "[1, 2]"]
@@ -39,7 +39,7 @@ def test_resolve_inspect_signatures_preserves_tuple_default_text() -> None:
     resolved = resolve_inspect_signatures(sample)
 
     assert resolved is not None
-    signature = resolved.signatures[0]
+    signature = resolved[0]
     assert signature.args[0].default_value == "(1, 2)"
     assert signature.args[0].has_default is True
 
@@ -67,7 +67,7 @@ def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
     resolved = resolve_inspect_signatures(Builder.build)
 
     assert resolved is not None
-    signature = resolved.signatures[0]
+    signature = resolved[0]
     assert [arg.name for arg in signature.args] == ["cls", "value"]
     assert [_render_type(arg.type) for arg in signature.args] == [None, "int"]
     assert _render_type(signature.return_type) == "str"

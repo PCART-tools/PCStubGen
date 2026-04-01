@@ -8,14 +8,13 @@ from loguru import logger
 from ..type_system.types import RawType, Type
 from ..ir import IRArgument, IRArgumentKind, IRModuleType, IRSignature, QualifiedName
 from ..module_build.reflection import get_module_name
-from .models import ResolvedFunctionSignatures
 
 
 def resolve_inspect_signatures(
     func: Any,
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
-) -> ResolvedFunctionSignatures | None:
+) -> list[IRSignature] | None:
     if func is None:
         return None
 
@@ -56,9 +55,7 @@ def resolve_inspect_signatures(
     if module_type is IRModuleType.EXTENSION:
         logger.info("EXTENSION 模块 inspect 签名获取成功, function: {}", _describe_function(func))
 
-    return ResolvedFunctionSignatures(
-        signatures=[IRSignature(args=args, return_type=return_type)]
-    )
+    return [IRSignature(args=args, return_type=return_type)]
 
 
 def _get_signature_target(func: Any) -> Any:

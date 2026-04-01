@@ -23,7 +23,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
     )
 
     assert parsed is not None
-    signature = parsed.signatures[0]
+    signature = parsed[0]
     assert [arg.name for arg in signature.args] == ["x", "y"]
     assert _render_type(signature.return_type) == "str"
 
@@ -38,7 +38,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
     )
 
     assert parsed is not None
-    signature = parsed.signatures[0]
+    signature = parsed[0]
     assert [arg.name for arg in signature.args] == ["x", "y", "w", "out", "p"]
     assert [_render_type(arg.type) for arg in signature.args] == [
         "object",
@@ -80,8 +80,8 @@ def test_docstring_parser_preserves_overload_docs() -> None:
     )
 
     assert parsed is not None
-    assert len(parsed.signatures) == 2
-    assert [_render_type(sig.return_type) for sig in parsed.signatures] == ["str", "int"]
+    assert len(parsed) == 2
+    assert [_render_type(sig.return_type) for sig in parsed] == ["str", "int"]
 
 
 def test_docstring_parser_returns_none_without_doc() -> None:

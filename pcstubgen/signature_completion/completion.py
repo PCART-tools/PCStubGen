@@ -102,9 +102,10 @@ class SignatureCompleter:
                 is_method=is_method,
             )
             if c_result is not None:
-                func.signatures = c_result.signatures
+                signatures, c_inferred_source_comment = c_result
+                func.signatures = signatures
                 if self._options.include_c_inferred_source_comment:
-                    func.c_inferred_source_comment = c_result.c_inferred_source_comment
+                    func.c_inferred_source_comment = c_inferred_source_comment
                 self._summary.c_resolved += 1
                 return
 
@@ -120,7 +121,7 @@ class SignatureCompleter:
             )
         else:
             if docstring_result is not None:
-                func.signatures = docstring_result.signatures
+                func.signatures = docstring_result
                 self._summary.docstring_resolved += 1
                 return
 
@@ -129,7 +130,7 @@ class SignatureCompleter:
             module_type=module.module_type,
         )
         if inspect_result is not None:
-            func.signatures = inspect_result.signatures
+            func.signatures = inspect_result
             self._summary.inspect_resolved += 1
             return
 
