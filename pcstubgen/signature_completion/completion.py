@@ -23,12 +23,12 @@ class SignatureCompletionSummary:
     def __str__(self) -> str:
         return (
             "签名补全汇总: "
-            f"total_functions={self.total_functions}, "
-            f"skipped_known_signatures={self.skipped_known_signatures}, "
-            f"c_resolved={self.c_resolved}, "
-            f"docstring_resolved={self.docstring_resolved}, "
-            f"inspect_resolved={self.inspect_resolved}, "
-            f"unresolved={self.unresolved}"
+            f"函数总数={self.total_functions}, "
+            f"跳过已有签名={self.skipped_known_signatures}, "
+            f"C源码补全={self.c_resolved}, "
+            f"文档字符串补全={self.docstring_resolved}, "
+            f"运行时反射补全={self.inspect_resolved}, "
+            f"未补全={self.unresolved}"
         )
 
 
