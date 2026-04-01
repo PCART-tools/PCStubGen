@@ -22,25 +22,16 @@ def resolve_docstring_signatures(
     if not doc:
         return None
 
-    signatures = parse_function_docstring(func_name, doc.splitlines())
-    if not signatures:
-        return None
-    return signatures
-
-
-def parse_function_docstring(
-    func_name: str,
-    doc_lines: list[str],
-) -> list[IRSignature]:
+    doc_lines = doc.splitlines()
     if len(doc_lines) == 0:
-        return []
+        return None
 
     top_signature_regex = re.compile(
         rf"^{re.escape(func_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
     )
     match = top_signature_regex.match(doc_lines[0])
     if match is None:
-        return []
+        return None
 
     if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
         args = parse_args_str(match.group("args"))

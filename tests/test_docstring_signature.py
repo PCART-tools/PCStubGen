@@ -4,7 +4,6 @@ import pytest
 
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
-    parse_function_docstring,
     resolve_docstring_signatures,
 )
 from pcstubgen.ir import IRArgumentKind
@@ -89,12 +88,12 @@ def test_docstring_parser_returns_none_without_doc() -> None:
 
 
 def test_docstring_parser_returns_none_for_non_signature_first_line() -> None:
-    parsed = parse_function_docstring(
-        "foo",
-        ["This is not a signature.", "still docs"],
+    parsed = resolve_docstring_signatures(
+        func_name="foo",
+        doc="This is not a signature.\nstill docs",
     )
 
-    assert parsed == []
+    assert parsed is None
 
 
 def test_docstring_parser_raises_on_invalid_signature_like_doc() -> None:
