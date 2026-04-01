@@ -57,12 +57,12 @@ def test_c_signature_resolver_preserves_extracted_fields_and_source_comment(
 
     assert resolved is not None
     signature = resolved.signatures[0]
-    assert [arg.name for arg in signature.arguments] == ["self", "x", "flag"]
-    assert signature.arguments[0].type is not None and signature.arguments[0].type.render() == "object"
-    assert signature.arguments[1].type is not None and signature.arguments[1].type.render() == "int"
-    assert signature.arguments[2].type is not None and signature.arguments[2].type.render() == "bool"
-    assert signature.arguments[2].default_value == "False"
-    assert signature.arguments[2].has_default is True
+    assert [arg.name for arg in signature.args] == ["self", "x", "flag"]
+    assert signature.args[0].type is not None and signature.args[0].type.render() == "object"
+    assert signature.args[1].type is not None and signature.args[1].type.render() == "int"
+    assert signature.args[2].type is not None and signature.args[2].type.render() == "bool"
+    assert signature.args[2].default_value == "False"
+    assert signature.args[2].has_default is True
     assert signature.return_type is not None
     assert signature.return_type.render() == "int"
     assert resolved.c_inferred_source_comment == snippet
@@ -186,12 +186,12 @@ def test_c_signature_resolver_matches_exact_module_before_leaf_name(
 
     assert first is not None
     assert second is not None
-    assert first.signatures[0].arguments[0].name == "x"
-    assert first.signatures[0].arguments[0].type is not None
-    assert first.signatures[0].arguments[0].type.render() == "int"
-    assert second.signatures[0].arguments[0].name == "value"
-    assert second.signatures[0].arguments[0].type is not None
-    assert second.signatures[0].arguments[0].type.render() == "float"
+    assert first.signatures[0].args[0].name == "x"
+    assert first.signatures[0].args[0].type is not None
+    assert first.signatures[0].args[0].type.render() == "int"
+    assert second.signatures[0].args[0].name == "value"
+    assert second.signatures[0].args[0].type is not None
+    assert second.signatures[0].args[0].type.render() == "float"
 
 
 def test_c_signature_resolver_falls_back_to_unique_leaf_name(
@@ -224,9 +224,9 @@ def test_c_signature_resolver_falls_back_to_unique_leaf_name(
     resolved = resolver.resolve_function(module=module, func=module.functions[0])
 
     assert resolved is not None
-    assert resolved.signatures[0].arguments[0].name == "value"
-    assert resolved.signatures[0].arguments[0].type is not None
-    assert resolved.signatures[0].arguments[0].type.render() == "float"
+    assert resolved.signatures[0].args[0].name == "value"
+    assert resolved.signatures[0].args[0].type is not None
+    assert resolved.signatures[0].args[0].type.render() == "float"
 
 
 def test_c_signature_resolver_returns_none_for_ambiguous_leaf_name(

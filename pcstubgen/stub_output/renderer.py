@@ -99,6 +99,7 @@ class StubRenderer:
                 self._print_function_block(
                     func_name=node.function.name,
                     signature=signature,
+                    func_doc=node.function.doc,
                     overload=overload,
                     method_decorator=node.decorator,
                 )
@@ -139,6 +140,7 @@ class StubRenderer:
                 self._print_function_block(
                     func_name=func.name,
                     signature=signature,
+                    func_doc=func.doc,
                     overload=overload,
                     method_decorator=None,
                 )
@@ -168,6 +170,7 @@ class StubRenderer:
         *,
         func_name: str,
         signature: IRSignature,
+        func_doc: str | None,
         overload: bool,
         method_decorator: IRMethodDecorator,
     ) -> list[str]:
@@ -179,8 +182,8 @@ class StubRenderer:
             result.append("@typing.overload")
         result.extend(self._build_function_signature(func_name=func_name, signature=signature))
 
-        if self.include_docstrings and signature.doc is not None:
-            body = self.print_docstring(signature.doc)
+        if self.include_docstrings and func_doc is not None:
+            body = self.print_docstring(func_doc)
         else:
             body = ["..."]
 
@@ -290,7 +293,6 @@ class StubRenderer:
                 IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
                 IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
             ],
-            doc=func.doc,
         )
 
     def _collect_module_imports(self, node: IRModule) -> list[str]:

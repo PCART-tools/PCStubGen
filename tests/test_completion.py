@@ -72,7 +72,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     ]
     assert parsed.signatures[0].return_type is not None
     assert parsed.signatures[0].return_type.render() == "bool"
-    assert parsed.signatures[0].doc == "foo(value: str) -> str\n\nparsed from docstring"
+    assert parsed.doc == "foo(value: str) -> str\n\nparsed from docstring"
     assert parsed.c_inferred_source_comment == snippet
     assert summary.total_functions == 1
     assert summary.c_resolved == 1
@@ -172,6 +172,31 @@ def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
     assert summary.total_functions == 1
     assert summary.c_resolved == 0
     assert summary.docstring_resolved == 0
+    assert summary.inspect_resolved == 1
+    assert summary.unresolved == 0
+
+
+def test_completer_preserves_function_doc_when_inspect_resolves_signature() -> None:
+    def fallback(value: int) -> int:
+        raise NotImplementedError
+
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.PYTHON,
+        functions=[
+            _unknown_function(
+                "fallback",
+                doc="plain fallback docs",
+                runtime_function=fallback,
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(StubGenerationOptions()).run(module)
+
+    parsed = module.functions[0]
+    assert parsed.doc == "plain fallback docs"
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
     assert summary.inspect_resolved == 1
     assert summary.unresolved == 0
 

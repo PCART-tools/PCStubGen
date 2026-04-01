@@ -6,13 +6,9 @@ from typing import Any
 from loguru import logger
 
 from ..type_system.types import RawType, Type
-from ..ir import IRArgumentKind, IRModuleType, QualifiedName
+from ..ir import IRArgument, IRArgumentKind, IRModuleType, IRSignature, QualifiedName
 from ..module_build.reflection import get_module_name
-from .models import (
-    ResolvedArgument,
-    ResolvedFunctionSignatures,
-    ResolvedSignature,
-)
+from .models import ResolvedFunctionSignatures
 
 
 def resolve_inspect_signatures(
@@ -43,9 +39,9 @@ def resolve_inspect_signatures(
         inspect.Parameter.VAR_KEYWORD: IRArgumentKind.VAR_KEYWORD,
     }
 
-    args: list[ResolvedArgument] = []
+    args: list[IRArgument] = []
     for param in sig.parameters.values():
-        arg = ResolvedArgument(name=param.name, kind=kind_map[param.kind])
+        arg = IRArgument(name=param.name, kind=kind_map[param.kind])
         if param.default is not inspect.Signature.empty:
             arg.default_value = _build_value(param.default)
             arg.has_default = True
@@ -61,7 +57,7 @@ def resolve_inspect_signatures(
         logger.info("EXTENSION 模块 inspect 签名获取成功, function: {}", _describe_function(func))
 
     return ResolvedFunctionSignatures(
-        signatures=[ResolvedSignature(arguments=args, return_type=return_type)]
+        signatures=[IRSignature(args=args, return_type=return_type)]
     )
 
 

@@ -4,12 +4,8 @@ import re
 from enum import Enum, auto
 
 from ..type_system.types import RawType, Type
-from ..ir import IRArgumentKind
-from .models import (
-    ResolvedArgument,
-    ResolvedFunctionSignatures,
-    ResolvedSignature,
-)
+from ..ir import IRArgument, IRArgumentKind, IRSignature
+from .models import ResolvedFunctionSignatures
 
 
 class _ArgsParseState(Enum):
@@ -36,7 +32,7 @@ def resolve_docstring_signatures(
 def parse_function_docstring(
     func_name: str,
     doc_lines: list[str],
-) -> list[ResolvedSignature]:
+) -> list[IRSignature]:
     if len(doc_lines) == 0:
         return []
 
@@ -51,9 +47,8 @@ def parse_function_docstring(
         args = parse_args_str(match.group("args"))
         returns = parse_annotation_str((match.group("returns") or "").strip('"'))
         return [
-            ResolvedSignature(
-                arguments=args,
-                doc=_strip_empty_lines(doc_lines[1:]),
+            IRSignature(
+                args=args,
                 return_type=returns,
             )
         ]
@@ -63,8 +58,7 @@ def parse_function_docstring(
         rf"{re.escape(func_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
     )
 
-    doc_start = 0
-    overloads: list[ResolvedSignature] = []
+    overloads: list[IRSignature] = []
 
     for index in range(2, len(doc_lines)):
         match = overload_signature_regex.match(doc_lines[index])
@@ -74,29 +68,24 @@ def parse_function_docstring(
         if match.group("overload_number") != f"{len(overloads) + 1}":
             continue
 
-        if overloads:
-            overloads[-1].doc = _strip_empty_lines(doc_lines[doc_start:index])
-
         args = parse_args_str(match.group("args"))
         overloads.append(
-            ResolvedSignature(
-                arguments=args,
+            IRSignature(
+                args=args,
                 return_type=parse_annotation_str(match.group("returns")),
             )
         )
-        doc_start = index + 1
 
     if not overloads:
         raise ValueError("Overloaded function. 之后未找到有效重载签名。")
 
-    overloads[-1].doc = _strip_empty_lines(doc_lines[doc_start:])
     return overloads
 
 
-def parse_args_str(args_str: str) -> list[ResolvedArgument]:
+def parse_args_str(args_str: str) -> list[IRArgument]:
     split_args = _split_args_str(args_str)
 
-    result: list[ResolvedArgument] = []
+    result: list[IRArgument] = []
     state = _ArgsParseState.POSITIONAL
 
     for arg_decl, annotation, default_str in split_args:
@@ -166,7 +155,7 @@ def parse_args_str(args_str: str) -> list[ResolvedArgument]:
                 kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
 
         result.append(
-            ResolvedArgument(
+            IRArgument(
                 name=name,
                 default_value=default_str,
                 has_default=default_str is not None,
@@ -267,26 +256,3 @@ def _find_str_end(text: str, start: int) -> int:
             return index
         index += 1
     raise ValueError("字符串字面量未闭合。")
-
-
-def _strip_empty_lines(doc_lines: list[str]) -> str | None:
-    if not doc_lines:
-        return None
-
-    start = 0
-    for start in range(0, len(doc_lines)):
-        if len(doc_lines[start].strip()) > 0:
-            break
-
-    end = len(doc_lines) - 1
-    for end in range(len(doc_lines) - 1, -1, -1):
-        if len(doc_lines[end].strip()) > 0:
-            break
-
-    if start > end:
-        return None
-
-    result = "\n".join(doc_lines[start : end + 1])
-    if len(result) == 0:
-        return None
-    return result

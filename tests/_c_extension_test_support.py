@@ -72,13 +72,11 @@ def _signature(
     *,
     args: list[IRArgument] | None = None,
     return_type: Type | None = None,
-    doc: str | None = None,
 ) -> IRSignature:
     """构造测试用 IR 签名。"""
     return IRSignature(
         args=list(args or ()),
         return_type=return_type,
-        doc=doc,
     )
 def _arg(
     name: str,

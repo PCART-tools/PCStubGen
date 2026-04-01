@@ -2,12 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...ir import IRFunction, IRModule, IRModuleType
-from ..models import (
-    ResolvedArgument,
-    ResolvedFunctionSignatures,
-    ResolvedSignature,
-)
+from ...ir import IRArgument, IRFunction, IRModule, IRModuleType, IRSignature
+from ..models import ResolvedFunctionSignatures
 from .collect import collect_modules
 from .clang.cursor_utils import source_range_get_text
 from .models import CArgument, CFunction, CModule
@@ -52,8 +48,8 @@ class CExtensionSource:
             return None
 
         signatures = [
-            ResolvedSignature(
-                arguments=[self._build_argument(arg) for arg in sig.arguments],
+            IRSignature(
+                args=[self._build_argument(arg) for arg in sig.arguments],
                 return_type=sig.return_type,
             )
             for sig in selected.signatures
@@ -65,8 +61,8 @@ class CExtensionSource:
         )
 
     @staticmethod
-    def _build_argument(argument: CArgument) -> ResolvedArgument:
-        return ResolvedArgument(
+    def _build_argument(argument: CArgument) -> IRArgument:
+        return IRArgument(
             name=argument.name,
             type=argument.type,
             default_value=argument.default_value,

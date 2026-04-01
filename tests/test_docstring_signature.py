@@ -24,9 +24,8 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
     assert parsed is not None
     signature = parsed.signatures[0]
-    assert [arg.name for arg in signature.arguments] == ["x", "y"]
+    assert [arg.name for arg in signature.args] == ["x", "y"]
     assert _render_type(signature.return_type) == "str"
-    assert signature.doc == "parsed from docstring"
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
@@ -40,22 +39,22 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
     assert parsed is not None
     signature = parsed.signatures[0]
-    assert [arg.name for arg in signature.arguments] == ["x", "y", "w", "out", "p"]
-    assert [_render_type(arg.type) for arg in signature.arguments] == [
+    assert [arg.name for arg in signature.args] == ["x", "y", "w", "out", "p"]
+    assert [_render_type(arg.type) for arg in signature.args] == [
         "object",
         "object",
         "object",
         "object",
         "typing.SupportsFloat",
     ]
-    assert [arg.default_value for arg in signature.arguments] == [
+    assert [arg.default_value for arg in signature.args] == [
         None,
         None,
         "None",
         "None",
         "2.0",
     ]
-    assert [arg.has_default for arg in signature.arguments] == [
+    assert [arg.has_default for arg in signature.args] == [
         False,
         False,
         True,
@@ -83,7 +82,6 @@ def test_docstring_parser_preserves_overload_docs() -> None:
     assert parsed is not None
     assert len(parsed.signatures) == 2
     assert [_render_type(sig.return_type) for sig in parsed.signatures] == ["str", "int"]
-    assert [sig.doc for sig in parsed.signatures] == ["first overload", "second overload"]
 
 
 def test_docstring_parser_returns_none_without_doc() -> None:

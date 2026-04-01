@@ -11,13 +11,11 @@ def _signature(
     *,
     args: list[IRArgument] | None = None,
     return_type: Type | None = None,
-    doc: str | None = None,
 ) -> IRSignature:
     """构造测试用签名。"""
     return IRSignature(
         args=list(args or ()),
         return_type=return_type,
-        doc=doc,
     )
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
     """构造签名未知的测试函数。"""
@@ -104,6 +102,108 @@ def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
         "    **kwargs,",
         "):",
         "    ...",
+    ]
+
+
+def test_renderer_prints_function_doc_for_single_signature() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
+        doc="original docs",
+    )
+
+    lines = StubRenderer().print_function(func)
+
+    assert lines == [
+        "def foo(value: int):",
+        '    """',
+        "    original docs",
+        '    """',
+    ]
+
+
+def test_renderer_prints_function_doc_for_placeholder_signature() -> None:
+    func = IRFunction(name="foo", doc="original docs")
+
+    lines = StubRenderer().print_function(func)
+
+    assert lines == [
+        "def foo(",
+        "    *args,",
+        "    **kwargs,",
+        "):",
+        '    """',
+        "    original docs",
+        '    """',
+    ]
+
+
+def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
+    doc = (
+        "foo(*args, **kwargs)\n"
+        "Overloaded function.\n"
+        "1. foo(value: int) -> str\n"
+        "\n"
+        "first overload\n"
+        "2. foo(value: str) -> int\n"
+        "\n"
+        "second overload"
+    )
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("str")),
+            _signature(args=[IRArgument(name="value", type=RawType("str"))], return_type=RawType("int")),
+        ],
+        doc=doc,
+    )
+
+    lines = StubRenderer().print_function(func)
+
+    assert lines == [
+        "@typing.overload",
+        "def foo(value: int) -> str:",
+        '    """',
+        "    foo(*args, **kwargs)",
+        "    Overloaded function.",
+        "    1. foo(value: int) -> str",
+        "    ",
+        "    first overload",
+        "    2. foo(value: str) -> int",
+        "    ",
+        "    second overload",
+        '    """',
+        "@typing.overload",
+        "def foo(value: str) -> int:",
+        '    """',
+        "    foo(*args, **kwargs)",
+        "    Overloaded function.",
+        "    1. foo(value: int) -> str",
+        "    ",
+        "    first overload",
+        "    2. foo(value: str) -> int",
+        "    ",
+        "    second overload",
+        '    """',
+    ]
+
+
+def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("bool"))],
+        doc="foo(value: str) -> str\n\nparsed from docstring",
+    )
+
+    lines = StubRenderer().print_function(func)
+
+    assert lines == [
+        "def foo(value: int) -> bool:",
+        '    """',
+        "    foo(value: str) -> str",
+        "    ",
+        "    parsed from docstring",
+        '    """',
     ]
 
 

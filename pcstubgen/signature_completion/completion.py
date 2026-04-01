@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import dataclasses
+from dataclasses import dataclass
 
 from loguru import logger
 
 from .c_extension import CExtensionSource
 from .docstring_source import resolve_docstring_signatures
 from .inspect_source import resolve_inspect_signatures
-from ..ir import IRArgument, IRClass, IRFunction, IRMethod, IRModule, IRSignature
-from .models import ResolvedArgument, ResolvedFunctionSignatures, ResolvedSignature
+from ..ir import IRClass, IRFunction, IRMethod, IRModule
 from ..stub_generation_options import StubGenerationOptions
 
 
-@dataclasses.dataclass
+@dataclass
 class SignatureCompletionSummary:
     total_functions: int = 0
     skipped_known_signatures: int = 0
@@ -87,31 +86,6 @@ class SignatureCompleter:
             self._summary.skipped_known_signatures += 1
             return
 
-        resolved = self._resolve_function(func=func, module=module, is_method=is_method)
-        if resolved is None:
-            self._summary.unresolved += 1
-            return
-
-        source, result = resolved
-        func.signatures = [self._build_ir_signature(sig, fallback_doc=func.doc) for sig in result.signatures]
-        if source == "c" and self._options.include_c_inferred_source_comment:
-            func.c_inferred_source_comment = result.c_inferred_source_comment
-
-        match source:
-            case "c":
-                self._summary.c_resolved += 1
-            case "docstring":
-                self._summary.docstring_resolved += 1
-            case "inspect":
-                self._summary.inspect_resolved += 1
-
-    def _resolve_function(
-        self,
-        *,
-        func: IRFunction,
-        module: IRModule,
-        is_method: bool,
-    ) -> tuple[str, ResolvedFunctionSignatures] | None:
         if self._c_source is not None:
             c_result = self._c_source.resolve_function(
                 module=module,
@@ -119,7 +93,11 @@ class SignatureCompleter:
                 is_method=is_method,
             )
             if c_result is not None:
-                return ("c", c_result)
+                func.signatures = c_result.signatures
+                if self._options.include_c_inferred_source_comment:
+                    func.c_inferred_source_comment = c_result.c_inferred_source_comment
+                self._summary.c_resolved += 1
+                return
 
         try:
             docstring_result = resolve_docstring_signatures(func_name=func.name, doc=func.doc)
@@ -133,15 +111,20 @@ class SignatureCompleter:
             )
         else:
             if docstring_result is not None:
-                return ("docstring", docstring_result)
+                func.signatures = docstring_result.signatures
+                self._summary.docstring_resolved += 1
+                return
 
         inspect_result = resolve_inspect_signatures(
             func.runtime_function,
             module_type=module.module_type,
         )
         if inspect_result is not None:
-            return ("inspect", inspect_result)
-        return None
+            func.signatures = inspect_result.signatures
+            self._summary.inspect_resolved += 1
+            return
+
+        self._summary.unresolved += 1
 
     @staticmethod
     def _build_c_source(options: StubGenerationOptions) -> CExtensionSource | None:
@@ -153,26 +136,4 @@ class SignatureCompleter:
             include_directory=options.include_directory,
             c_std=options.c_std,
             cpp_std=options.cpp_std,
-        )
-
-    @staticmethod
-    def _build_ir_signature(
-        signature: ResolvedSignature,
-        *,
-        fallback_doc: str | None,
-    ) -> IRSignature:
-        return IRSignature(
-            args=[SignatureCompleter._build_ir_argument(arg) for arg in signature.arguments],
-            return_type=signature.return_type,
-            doc=signature.doc if signature.doc is not None else fallback_doc,
-        )
-
-    @staticmethod
-    def _build_ir_argument(argument: ResolvedArgument) -> IRArgument:
-        return IRArgument(
-            name=argument.name,
-            type=argument.type,
-            default_value=argument.default_value,
-            has_default=argument.has_default,
-            kind=argument.kind,
         )

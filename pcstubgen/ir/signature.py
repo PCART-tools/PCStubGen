@@ -12,4 +12,3 @@ class IRSignature:
 
     args: list[IRArgument] = field(default_factory=list)
     return_type: Type | None = field(default=None)
-    doc: str | None = field(default=None)
