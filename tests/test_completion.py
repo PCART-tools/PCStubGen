@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests._c_signature_test_support import *
+from tests._c_extension_test_support import *
 
 
 def test_completer_prefers_c_over_docstring_and_writes_source_comment(

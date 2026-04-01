@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests._c_signature_test_support import *
+from tests._c_extension_test_support import *
 
 
 def test_write_stubs_propagates_extract_errors(

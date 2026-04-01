@@ -4,7 +4,7 @@ import dataclasses
 
 from loguru import logger
 
-from .c_extensions import CSignatureResolver
+from .c_extension import CExtensionSource
 from .docstring_source import resolve_docstring_signatures
 from .inspect_source import resolve_inspect_signatures
 from ..ir import IRArgument, IRClass, IRFunction, IRMethod, IRModule, IRSignature
@@ -36,7 +36,7 @@ class SignatureCompletionSummary:
 class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
-        self._c_resolver = self._build_c_resolver(options)
+        self._c_source = self._build_c_source(options)
         self._summary = SignatureCompletionSummary()
 
     def run(self, module: IRModule) -> SignatureCompletionSummary:
@@ -112,8 +112,8 @@ class SignatureCompleter:
         module: IRModule,
         is_method: bool,
     ) -> tuple[str, ResolvedFunctionSignatures] | None:
-        if self._c_resolver is not None:
-            c_result = self._c_resolver.resolve_function(
+        if self._c_source is not None:
+            c_result = self._c_source.resolve_function(
                 module=module,
                 func=func,
                 is_method=is_method,
@@ -144,10 +144,10 @@ class SignatureCompleter:
         return None
 
     @staticmethod
-    def _build_c_resolver(options: StubGenerationOptions) -> CSignatureResolver | None:
+    def _build_c_source(options: StubGenerationOptions) -> CExtensionSource | None:
         if options.source_root is None:
             return None
-        return CSignatureResolver(
+        return CExtensionSource(
             source_root=options.source_root,
             include=options.include,
             include_directory=options.include_directory,
