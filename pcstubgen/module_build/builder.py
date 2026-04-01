@@ -53,17 +53,8 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
         for submodule_name in _iter_submodule_names(module):
             try:
                 sub_module = importlib.import_module(submodule_name)
-            except (ImportError, OSError) as ex:
-                missing_dependency = None
-                if isinstance(ex, ModuleNotFoundError):
-                    missing_dependency = ex.name
-                logger.warning(
-                    "跳过子模块, module: {}, error_type: {}, missing_dependency: {}, error: {}",
-                    submodule_name,
-                    type(ex).__name__,
-                    missing_dependency,
-                    ex,
-                )
+            except BaseException as ex:
+                logger.warning("跳过子模块, module: {}, error: {!r}", submodule_name, ex)
                 continue
             irmodule.sub_modules.append(
                 build_module(QualifiedName.from_str(submodule_name), sub_module)
