@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TypeAlias
 
-from ...ir import IRArgument, IRFunction, IRModule, IRModuleType, IRSignature
+from ...ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, IRSignature
 from .collect import collect_modules
 from .clang.cursor_utils import source_range_get_text
 from .models import CArgument, CFunction, CModule
@@ -34,17 +34,22 @@ class CExtensionSource:
         irmodule: IRModule,
         irfunction: IRFunction,
         is_method: bool = False,
-    ) -> ResolvedCExtensionFunction | None:
+    ) -> ResolvedCExtensionFunction:
         if is_method:
-            return None
+            raise RuntimeError("C源码补全暂不支持方法。")
+
+        if irmodule.module_type is not IRModuleType.EXTENSION:
+            raise RuntimeError(f"模块 {irmodule.full_name} 不是扩展模块。")
 
         c_module = self._match_c_module(irmodule, self._modules)
         if c_module is None:
-            return None
+            raise RuntimeError(f"未匹配到C模块: {irmodule.full_name}")
 
         selected = c_module.functions.get(irfunction.name)
-        if selected is None or not selected.signatures:
-            return None
+        if selected is None:
+            raise RuntimeError(f"C模块 {c_module.name} 中未找到函数 {irfunction.name}")
+        if not selected.signatures:
+            raise RuntimeError(f"C函数 {c_module.name}.{irfunction.name} 没有可用签名")
 
         signatures = [
             IRSignature(

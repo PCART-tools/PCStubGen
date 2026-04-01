@@ -7,7 +7,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.types import RawType, Type, UnionType
-from pcstubgen.ir import IRArgumentKind
+from pcstubgen.ir_modules import IRArgumentKind
 from pcstubgen.signature_completion.c_extension.models import CArgument
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,

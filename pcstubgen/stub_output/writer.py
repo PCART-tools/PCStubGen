@@ -3,8 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .renderer import StubRenderer
-from ..ir import IRModule
-from ..ir.module import IRModuleType
+from ..ir_modules import IRModule, IRModuleType
 
 
 class StubWriter:

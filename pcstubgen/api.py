@@ -7,7 +7,7 @@ from loguru import logger
 
 from .module_build import build_module
 from .stub_generation_options import StubGenerationOptions
-from .ir import QualifiedName
+from .ir_modules import QualifiedName
 from .signature_completion import SignatureCompleter
 from .stub_output import StubRenderer, StubWriter
 

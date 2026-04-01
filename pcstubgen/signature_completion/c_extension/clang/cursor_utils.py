@@ -76,7 +76,7 @@ def is_nullptr_or_zero(node: Cursor) -> bool:
 def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor | None:
     """从变量声明直接找出其初始化列表节点。"""
     assert cursor.kind == CursorKind.VAR_DECL
-    for child in cursor.get_children():
+    for child in walk_cursor(cursor):
         if child.kind == CursorKind.INIT_LIST_EXPR:
             return child
     return None

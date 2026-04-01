@@ -4,7 +4,7 @@ import re
 from enum import Enum, auto
 
 from ..types import RawType, Type
-from ..ir import IRArgument, IRArgumentKind, IRFunction, IRModule, IRSignature
+from ..ir_modules import IRArgument, IRArgumentKind, IRFunction, IRModule, IRSignature
 
 
 class _ArgsParseState(Enum):

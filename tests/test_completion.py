@@ -1,20 +1,23 @@
 from __future__ import annotations
 
+from io import StringIO
+
+from loguru import logger
+
 from tests._c_extension_test_support import *
 
 
 def test_summary_str_uses_chinese_labels() -> None:
     summary = SignatureCompletionResult(
         total_functions=6,
-        skipped_known_signatures=1,
         c_completed=2,
         docstring_completed=1,
-        uncompleted=1,
+        uncompleted=3,
     )
 
     assert str(summary) == (
-        "签名补全汇总: 函数总数=6, 跳过已有签名=1, "
-        "C源码补全=2, 文档字符串补全=1, 未补全=1"
+        "签名补全结果: 函数总数=6, "
+        "C源码补全=2, 文档字符串补全=1, 未补全=3"
     )
 
 
@@ -110,7 +113,12 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     )
     _patch_c_signature_extractor(monkeypatch, modules={})
 
-    summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+    finally:
+        logger.remove(sink_id)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
@@ -120,6 +128,8 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     assert summary.c_completed == 0
     assert summary.docstring_completed == 1
     assert summary.uncompleted == 0
+    assert "通过docstring补全成功" in log_output.getvalue()
+    assert "补全失败" not in log_output.getvalue()
 
 
 def test_completer_skips_source_comment_when_option_disabled(
@@ -218,7 +228,12 @@ def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
         ],
     )
 
-    summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+    finally:
+        logger.remove(sink_id)
 
     parsed = module.classes[0].methods[0].function
     assert parsed.signatures == []
@@ -226,6 +241,8 @@ def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
     assert summary.c_completed == 0
     assert summary.docstring_completed == 0
     assert summary.uncompleted == 1
+    assert "c_reason: C源码补全暂不支持方法。" in log_output.getvalue()
+    assert "docstring_reason: docstring为空或缺失，无法解析签名。" in log_output.getvalue()
 
 
 def test_completer_preserves_function_doc_when_signature_stays_unresolved() -> None:
@@ -272,7 +289,59 @@ def test_completer_uses_docstring_when_available_for_python_module() -> None:
     assert summary.uncompleted == 0
 
 
-def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
+def test_completer_logs_explicit_reasons_when_both_paths_return_no_signature() -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.PYTHON,
+        functions=[
+            _unknown_function(
+                "fallback",
+                doc="plain fallback docs",
+            )
+        ],
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        summary = SignatureCompleter(StubGenerationOptions()).run(module)
+    finally:
+        logger.remove(sink_id)
+
+    assert summary.uncompleted == 1
+    assert "c_reason: 未配置 source_root，未启用C源码补全。" in log_output.getvalue()
+    assert "docstring_reason: docstring首行不是可解析的签名声明。" in log_output.getvalue()
+
+
+def test_completer_logs_docstring_parse_error_in_final_warning(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[
+            _unknown_function(
+                "foo",
+                doc="foo(a=1=2) -> int",
+            )
+        ],
+    )
+    _patch_c_signature_extractor(monkeypatch, modules={})
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+    finally:
+        logger.remove(sink_id)
+
+    assert summary.uncompleted == 1
+    assert "c_reason: 未匹配到唯一C模块: pkg.mod" in log_output.getvalue()
+    assert "docstring_reason: ValueError: 参数默认值声明中包含多个 '='。" in log_output.getvalue()
+
+
+def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -289,10 +358,9 @@ def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
     summary = SignatureCompleter(StubGenerationOptions()).run(module)
 
     assert summary.total_functions == 3
-    assert summary.skipped_known_signatures == 1
     assert summary.c_completed == 0
     assert summary.docstring_completed == 0
-    assert summary.uncompleted == 2
+    assert summary.uncompleted == 3
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
     assert module.functions[2].signatures == []

@@ -100,7 +100,7 @@ def test_c_signature_resolver_skips_missing_extent_text(
     assert source_comment is None
 
 
-def test_c_signature_resolver_returns_none_for_methods_and_python_modules(
+def test_c_signature_resolver_raises_for_methods_and_python_modules(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -129,15 +129,15 @@ def test_c_signature_resolver_returns_none_for_methods_and_python_modules(
         functions=[_unknown_function("foo")],
     )
 
-    assert (
+    with pytest.raises(RuntimeError, match="暂不支持方法"):
         resolver.resolve_function(
             extension_module,
             extension_module.functions[0],
             is_method=True,
         )
-        is None
-    )
-    assert resolver.resolve_function(python_module, python_module.functions[0]) is None
+
+    with pytest.raises(RuntimeError, match="不是扩展模块"):
+        resolver.resolve_function(python_module, python_module.functions[0])
 
 
 def test_c_signature_resolver_matches_exact_module_before_leaf_name(
@@ -234,7 +234,7 @@ def test_c_signature_resolver_falls_back_to_unique_leaf_name(
     assert signatures[0].args[0].type.render() == "float"
 
 
-def test_c_signature_resolver_returns_none_for_ambiguous_leaf_name(
+def test_c_signature_resolver_raises_for_ambiguous_leaf_name(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -272,10 +272,11 @@ def test_c_signature_resolver_returns_none_for_ambiguous_leaf_name(
         functions=[_unknown_function("foo")],
     )
 
-    assert resolver.resolve_function(module, module.functions[0]) is None
+    with pytest.raises(RuntimeError, match="未匹配到唯一C模块"):
+        resolver.resolve_function(module, module.functions[0])
 
 
-def test_c_signature_resolver_returns_none_when_function_is_missing_or_empty(
+def test_c_signature_resolver_raises_when_function_is_missing_or_empty(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -305,8 +306,11 @@ def test_c_signature_resolver_returns_none_when_function_is_missing_or_empty(
         functions=[_unknown_function("foo"), _unknown_function("baz")],
     )
 
-    assert resolver.resolve_function(module, module.functions[0]) is None
-    assert resolver.resolve_function(module, module.functions[1]) is None
+    with pytest.raises(RuntimeError, match="未找到函数 foo"):
+        resolver.resolve_function(module, module.functions[0])
+
+    with pytest.raises(RuntimeError, match="没有可用签名"):
+        resolver.resolve_function(module, module.functions[1])
 
 
 def test_c_signature_resolver_propagates_extraction_errors(

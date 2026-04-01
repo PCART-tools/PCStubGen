@@ -9,12 +9,7 @@ from typing import Any
 
 from loguru import logger
 
-from .reflection import (
-    get_doc,
-    get_module_name,
-    is_package,
-)
-from ..ir import (
+from .ir_modules import (
     IRClass,
     IRFunction,
     IRMethod,
@@ -22,6 +17,35 @@ from ..ir import (
     IRModuleType,
     QualifiedName,
 )
+
+__all__ = [
+    "build_bases",
+    "build_class",
+    "build_function",
+    "build_method",
+    "build_module",
+]
+
+
+def get_doc(obj: Any) -> str | None:
+    doc = getattr(obj, "__doc__", None)
+    if isinstance(doc, str) and doc and not doc.isspace():
+        return doc
+    return None
+
+
+def get_module_name(obj: Any) -> str | None:
+    module_name = getattr(obj, "__module__", None)
+    if isinstance(module_name, str):
+        return module_name
+    return None
+
+
+def is_package(module: types.ModuleType) -> bool:
+    spec = module.__spec__
+    if spec is None:
+        return False
+    return spec.submodule_search_locations is not None
 
 
 def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
@@ -54,7 +78,11 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             try:
                 sub_module = importlib.import_module(submodule_name)
             except BaseException as ex:
-                logger.error("模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}", submodule_name, ex)
+                logger.error(
+                    "模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}",
+                    submodule_name,
+                    ex,
+                )
                 continue
             irmodule.sub_modules.append(
                 build_module(QualifiedName.from_str(submodule_name), sub_module)
@@ -67,17 +95,17 @@ def _detect_module_type(module: types.ModuleType) -> IRModuleType:
     spec = module.__spec__
     loader = getattr(spec, "loader", None) if spec is not None else None
 
-    if loader is importlib.machinery.BuiltinImporter: # 编译进Python
+    if loader is importlib.machinery.BuiltinImporter:  # 编译进Python
         return IRModuleType.BUILTIN
 
-    if isinstance(loader, importlib.machinery.ExtensionFileLoader): # .pyd .so
+    if isinstance(loader, importlib.machinery.ExtensionFileLoader):  # .pyd .so
         return IRModuleType.EXTENSION
 
     if isinstance(
         loader,
         (
-            importlib.machinery.SourcelessFileLoader, # .pyc
-            importlib.machinery.SourceFileLoader, # .py
+            importlib.machinery.SourcelessFileLoader,  # .pyc
+            importlib.machinery.SourceFileLoader,  # .py
         ),
     ):
         return IRModuleType.PYTHON

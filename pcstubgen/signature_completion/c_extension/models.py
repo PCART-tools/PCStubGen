@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from ...ir import IRArgumentKind
+from ...ir_modules import IRArgumentKind
 from ...types import Type
 
 if TYPE_CHECKING:

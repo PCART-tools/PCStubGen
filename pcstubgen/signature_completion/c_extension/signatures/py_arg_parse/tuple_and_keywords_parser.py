@@ -7,7 +7,7 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from .....ir import IRArgumentKind
+from .....ir_modules import IRArgumentKind
 from ...models import CArgument
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 from .....types import RawType, Type

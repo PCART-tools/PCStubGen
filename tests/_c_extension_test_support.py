@@ -47,7 +47,7 @@ from pcstubgen.signature_completion.c_extension.source import (
 from pcstubgen.signature_completion.docstring_source import (
     resolve_docstring_signatures,
 )
-from pcstubgen.ir import (
+from pcstubgen.ir_modules import (
     IRArgument,
     IRArgumentKind,
     IRClass,

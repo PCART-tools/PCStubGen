@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 from loguru import logger
 
 from .c_extension import CExtensionSource
 from .docstring_source import resolve_docstring_signatures
-from ..ir import IRClass, IRFunction, IRMethod, IRModule, IRModuleType
+from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule, IRModuleType
 from ..stub_generation_options import StubGenerationOptions
 
 
@@ -86,14 +87,18 @@ class SignatureCompleter:
         is_method: bool,
     ) -> None:
         self._result.total_functions += 1
+        c_reason = "未配置 source_root，未启用C源码补全。"
 
         if self._c_source is not None:
-            c_result = self._c_source.resolve_function(
-                module,
-                func,
-                is_method,
-            )
-            if c_result is not None:
+            try:
+                c_result = self._c_source.resolve_function(
+                    module,
+                    func,
+                    is_method,
+                )
+            except RuntimeError as ex:
+                c_reason = str(ex)
+            else:
                 signatures, c_inferred_source_comment = c_result
                 func.signatures = signatures
                 if self._options.include_c_inferred_source_comment:
@@ -105,19 +110,38 @@ class SignatureCompleter:
         try:
             docstring_result = resolve_docstring_signatures(module, func)
         except ValueError as ex:
-            logger.warning(
-                "解析 docstring 签名失败, module_name: {}, func_name: {}, error_type: {}, error: {}",
-                str(module.full_name),
-                func.name,
-                type(ex).__name__,
-                ex,
-            )
+            docstring_reason = f"{type(ex).__name__}: {ex}"
         else:
             if docstring_result is not None:
                 func.signatures = docstring_result
                 self._result.docstring_completed += 1
                 logger.info("通过docstring补全成功, module: {}, func: {}", module.full_name, func.name)
                 return
+            docstring_reason = self._describe_docstring_failure(func)
 
         self._result.uncompleted += 1
-        logger.warning("补全失败, module: {}, func: {}", module.full_name, func.name)
+        logger.warning(
+            "补全失败, module: {}, func: {}, c_reason: {}, docstring_reason: {}",
+            module.full_name,
+            func.name,
+            c_reason,
+            docstring_reason,
+        )
+
+    @staticmethod
+    def _describe_docstring_failure(func: IRFunction) -> str:
+        doc = func.doc
+        if not doc:
+            return "docstring为空或缺失，无法解析签名。"
+
+        doc_lines = doc.splitlines()
+        if len(doc_lines) == 0:
+            return "docstring为空或缺失，无法解析签名。"
+
+        top_signature_regex = re.compile(
+            rf"^{re.escape(func.name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
+        )
+        if top_signature_regex.match(doc_lines[0]) is None:
+            return "docstring首行不是可解析的签名声明。"
+
+        return "docstring未解析出可用签名。"

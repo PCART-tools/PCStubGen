@@ -3,7 +3,7 @@ from __future__ import annotations
 import importlib.machinery
 import types
 
-from pcstubgen.ir import IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRModuleType, QualifiedName
 from pcstubgen.module_build import build_module
 
 

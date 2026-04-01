@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.ir import IRFunction, IRModule, IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRFunction, IRModule, IRModuleType, QualifiedName
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
     resolve_docstring_signatures,
 )
-from pcstubgen.ir import IRArgumentKind
+from pcstubgen.ir_modules import IRArgumentKind
 
 
 def _render_type(type_: object | None) -> str | None:
