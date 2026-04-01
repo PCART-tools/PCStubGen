@@ -35,11 +35,8 @@ def diagnostic_to_str(diagnostic: Diagnostic) -> str:
     """将单条 clang diagnostic 格式化为稳定的一行文本。"""
     severity = diagnostic_severity_to_str(diagnostic.severity)
     location = diagnostic.location
-    filename = location.file.name
-    line = location.line
-    column = location.column
     message = diagnostic.spelling
-    return f"[{severity}] {filename}:{line}:{column}: {message}"
+    return f"[{severity}] {location}: {message}"
 
 
 def normalize_include_literal(include_literal: str) -> str:
@@ -144,13 +141,11 @@ def discover_missing_include_args(
     return added
 
 
-def find_candidate_files(source_root: Path) -> list[Path]:
-    """查找包含 `PyModuleDef` 定义线索的 C/C++ 源文件。"""
+def list_files(source_root: Path) -> list[Path]:
+    """得到所有 C/C++ 源文件。不能只筛 PyModuleDef，因为有的写在头文件里，c再include进来"""
     result: list[Path] = []
     for path in source_root.rglob("*"):
         if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
-            text = path.read_text(encoding="utf-8", errors="ignore")
-            if "PyModuleDef" in text:
                 result.append(path)
     result.sort()
     return result

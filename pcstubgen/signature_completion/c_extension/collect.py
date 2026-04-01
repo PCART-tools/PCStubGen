@@ -31,7 +31,7 @@ def collect_modules(
 
     normalized_include_dirs = clang_parser.inject_python_include_directories(include_directory)
 
-    source_files = clang_parser.find_candidate_files(source_root)
+    source_files = clang_parser.list_files(source_root)
 
     index = Index.create()
     translation_units = []
