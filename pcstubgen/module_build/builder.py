@@ -40,7 +40,7 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
         if _is_member_alias(member_path, member):
             continue
 
-        if inspect.isroutine(member):
+        if inspect.isbuiltin(member):
             irmodule.functions.append(
                 build_function(member_path, member, module_type=module_type)
             )
@@ -54,7 +54,7 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             try:
                 sub_module = importlib.import_module(submodule_name)
             except BaseException as ex:
-                logger.warning("跳过子模块, module: {}, error: {!r}", submodule_name, ex)
+                logger.error("模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}", submodule_name, ex)
                 continue
             irmodule.sub_modules.append(
                 build_module(QualifiedName.from_str(submodule_name), sub_module)
@@ -118,7 +118,7 @@ def build_class(
         if _is_member_alias(member_path, member):
             continue
 
-        if inspect.isroutine(member):
+        if inspect.isbuiltin(member):
             irclass.methods.append(
                 build_method(member_path, member, module_type=module_type)
             )
@@ -136,6 +136,11 @@ def build_function(
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRFunction:
+    extension = module_type == IRModuleType.EXTENSION
+    # self = getattr(func, "__self__", None)
+    # module = type(self or func).__module__
+    # logger.warning("发现函数, extension: {}, type: {}, self: {}, module: {}, path: {}",
+    #                extension, type(func).__name__, self, module, path)
     _ = module_type
     return IRFunction(name=path.name, doc=get_doc(func))
 

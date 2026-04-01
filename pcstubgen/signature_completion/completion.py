@@ -11,21 +11,19 @@ from ..stub_generation_options import StubGenerationOptions
 
 
 @dataclass
-class SignatureCompletionSummary:
+class SignatureCompletionResult:
     total_functions: int = 0
-    skipped_known_signatures: int = 0
-    c_resolved: int = 0
-    docstring_resolved: int = 0
-    unresolved: int = 0
+    c_completed: int = 0
+    docstring_completed: int = 0
+    uncompleted: int = 0
 
     def __str__(self) -> str:
         return (
-            "签名补全汇总: "
+            "签名补全结果: "
             f"函数总数={self.total_functions}, "
-            f"跳过已有签名={self.skipped_known_signatures}, "
-            f"C源码补全={self.c_resolved}, "
-            f"文档字符串补全={self.docstring_resolved}, "
-            f"未补全={self.unresolved}"
+            f"C源码补全={self.c_completed}, "
+            f"文档字符串补全={self.docstring_completed}, "
+            f"未补全={self.uncompleted}"
         )
 
 
@@ -42,12 +40,12 @@ class SignatureCompleter:
                 c_std=options.c_std,
                 cpp_std=options.cpp_std,
             )
-        self._summary = SignatureCompletionSummary()
+        self._result = SignatureCompletionResult()
 
-    def run(self, module: IRModule) -> SignatureCompletionSummary:
-        self._summary = SignatureCompletionSummary()
+    def run(self, module: IRModule) -> SignatureCompletionResult:
+        self._result = SignatureCompletionResult()
         self._complete_module(module)
-        return self._summary
+        return self._result
 
     def _complete_module(
         self,
@@ -87,12 +85,9 @@ class SignatureCompleter:
         *,
         is_method: bool,
     ) -> None:
-        self._summary.total_functions += 1
-        if func.signatures:
-            self._summary.skipped_known_signatures += 1
-            return
+        self._result.total_functions += 1
 
-        if self._c_source is not None and module.module_type is IRModuleType.EXTENSION:
+        if self._c_source is not None:
             c_result = self._c_source.resolve_function(
                 module,
                 func,
@@ -103,7 +98,8 @@ class SignatureCompleter:
                 func.signatures = signatures
                 if self._options.include_c_inferred_source_comment:
                     func.c_inferred_source_comment = c_inferred_source_comment
-                self._summary.c_resolved += 1
+                self._result.c_completed += 1
+                logger.info("通过C源码补全成功, module: {}, func: {}", module.full_name, func.name)
                 return
 
         try:
@@ -119,7 +115,9 @@ class SignatureCompleter:
         else:
             if docstring_result is not None:
                 func.signatures = docstring_result
-                self._summary.docstring_resolved += 1
+                self._result.docstring_completed += 1
+                logger.info("通过docstring补全成功, module: {}, func: {}", module.full_name, func.name)
                 return
 
-        self._summary.unresolved += 1
+        self._result.uncompleted += 1
+        logger.warning("补全失败, module: {}, func: {}", module.full_name, func.name)

@@ -37,8 +37,6 @@ class CExtensionSource:
     ) -> ResolvedCExtensionFunction | None:
         if is_method:
             return None
-        if irmodule.module_type is not IRModuleType.EXTENSION:
-            return None
 
         c_module = self._match_c_module(irmodule, self._modules)
         if c_module is None:

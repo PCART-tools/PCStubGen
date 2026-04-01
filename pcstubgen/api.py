@@ -36,8 +36,8 @@ def write_stubs(
         module,
     )
 
-    completion_summary = SignatureCompleter(options).run(ir_module)
-    logger.info("{}", completion_summary)
+    result = SignatureCompleter(options).run(ir_module)
+    logger.info("{}", result)
 
     renderer = StubRenderer(
         include_docstrings=options.include_docstrings,

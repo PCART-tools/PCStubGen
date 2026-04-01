@@ -60,7 +60,7 @@ from pcstubgen.ir import (
 )
 from pcstubgen.stub_generation_options import StubGenerationOptions
 from pcstubgen.signature_completion import (
-    SignatureCompletionSummary,
+    SignatureCompletionResult,
     SignatureCompleter,
 )
 

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from .completion import (
-    SignatureCompletionSummary,
+    SignatureCompletionResult,
     SignatureCompleter,
 )
 
 __all__ = [
-    "SignatureCompletionSummary",
+    "SignatureCompletionResult",
     "SignatureCompleter",
 ]

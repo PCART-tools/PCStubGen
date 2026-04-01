@@ -19,11 +19,17 @@ pcstubgen = "pcstubgen.__main__:app"
 
 [dependency-groups]
 dev = [
+    "dask>=2026.3.0",
+    "hypothesis>=6.151.10",
+    "marray>=0.0.12",
     "matplotlib>=3.10.8",
     "mypy>=1.20.0",
     "numpy>=2.4.4",
+    "pooch>=1.9.0",
     "pybind11-stubgen>=2.5.5",
     "pytest>=9.0.2",
     "requests>=2.33.1",
     "scipy>=1.17.1",
+    "torch>=2.11.0",
+    "torchvision>=0.26.0",
 ]

@@ -4,12 +4,12 @@ from tests._c_extension_test_support import *
 
 
 def test_summary_str_uses_chinese_labels() -> None:
-    summary = SignatureCompletionSummary(
+    summary = SignatureCompletionResult(
         total_functions=6,
         skipped_known_signatures=1,
-        c_resolved=2,
-        docstring_resolved=1,
-        unresolved=1,
+        c_completed=2,
+        docstring_completed=1,
+        uncompleted=1,
     )
 
     assert str(summary) == (
@@ -86,9 +86,9 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     assert parsed.doc == "foo(value: str) -> str\n\nparsed from docstring"
     assert parsed.c_inferred_source_comment == snippet
     assert summary.total_functions == 1
-    assert summary.c_resolved == 1
-    assert summary.docstring_resolved == 0
-    assert summary.unresolved == 0
+    assert summary.c_completed == 1
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 0
 
 
 def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
@@ -117,9 +117,9 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     assert parsed.signatures[0].return_type is not None
     assert parsed.signatures[0].return_type.render() == "numpy.ndarray"
     assert summary.total_functions == 1
-    assert summary.c_resolved == 0
-    assert summary.docstring_resolved == 1
-    assert summary.unresolved == 0
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 1
+    assert summary.uncompleted == 0
 
 
 def test_completer_skips_source_comment_when_option_disabled(
@@ -223,9 +223,9 @@ def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
     parsed = module.classes[0].methods[0].function
     assert parsed.signatures == []
     assert summary.total_functions == 1
-    assert summary.c_resolved == 0
-    assert summary.docstring_resolved == 0
-    assert summary.unresolved == 1
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
 
 
 def test_completer_preserves_function_doc_when_signature_stays_unresolved() -> None:
@@ -245,7 +245,7 @@ def test_completer_preserves_function_doc_when_signature_stays_unresolved() -> N
     parsed = module.functions[0]
     assert parsed.doc == "plain fallback docs"
     assert parsed.signatures == []
-    assert summary.unresolved == 1
+    assert summary.uncompleted == 1
 
 
 def test_completer_uses_docstring_when_available_for_python_module() -> None:
@@ -268,8 +268,8 @@ def test_completer_uses_docstring_when_available_for_python_module() -> None:
     assert parsed.signatures[0].args[0].type.render() == "str"
     assert parsed.signatures[0].return_type is not None
     assert parsed.signatures[0].return_type.render() == "bool"
-    assert summary.docstring_resolved == 1
-    assert summary.unresolved == 0
+    assert summary.docstring_completed == 1
+    assert summary.uncompleted == 0
 
 
 def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
@@ -290,9 +290,9 @@ def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
 
     assert summary.total_functions == 3
     assert summary.skipped_known_signatures == 1
-    assert summary.c_resolved == 0
-    assert summary.docstring_resolved == 0
-    assert summary.unresolved == 2
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 2
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
     assert module.functions[2].signatures == []
@@ -316,7 +316,7 @@ def test_completer_run_recreates_summary_for_each_invocation() -> None:
     second_summary = completer.run(second_module)
 
     assert first_summary.total_functions == 1
-    assert first_summary.unresolved == 1
+    assert first_summary.uncompleted == 1
     assert second_summary.total_functions == 0
-    assert second_summary.unresolved == 0
+    assert second_summary.uncompleted == 0
     assert second_summary is not first_summary
