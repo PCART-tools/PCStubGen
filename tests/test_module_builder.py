@@ -12,7 +12,7 @@ import pcstubgen.module_build.builder as module_builder_module
 from pcstubgen.module_build import build_function, build_module
 
 
-def test_module_builder_build_function_keeps_runtime_function_and_doc_without_completing_signatures() -> None:
+def test_module_builder_build_function_keeps_doc_without_completing_signatures() -> None:
     def sample(value: int, flag: bool = False) -> int:
         """sample doc"""
         raise NotImplementedError
@@ -20,7 +20,6 @@ def test_module_builder_build_function_keeps_runtime_function_and_doc_without_co
     parsed = build_function(QualifiedName.from_str("pkg.mod.sample"), sample)
 
     assert parsed.doc == "sample doc"
-    assert parsed.runtime_function is sample
     assert parsed.signatures == []
 
 

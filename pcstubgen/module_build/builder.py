@@ -146,7 +146,7 @@ def build_function(
     module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRFunction:
     _ = module_type
-    return IRFunction(name=path.name, doc=get_doc(func), runtime_function=func)
+    return IRFunction(name=path.name, doc=get_doc(func))
 
 
 def build_method(

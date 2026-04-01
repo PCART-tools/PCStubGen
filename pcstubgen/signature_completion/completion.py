@@ -6,8 +6,7 @@ from loguru import logger
 
 from .c_extension import CExtensionSource
 from .docstring_source import resolve_docstring_signatures
-from .inspect_source import resolve_inspect_signatures
-from ..ir import IRClass, IRFunction, IRMethod, IRModule
+from ..ir import IRClass, IRFunction, IRMethod, IRModule, IRModuleType
 from ..stub_generation_options import StubGenerationOptions
 
 
@@ -17,7 +16,6 @@ class SignatureCompletionSummary:
     skipped_known_signatures: int = 0
     c_resolved: int = 0
     docstring_resolved: int = 0
-    inspect_resolved: int = 0
     unresolved: int = 0
 
     def __str__(self) -> str:
@@ -27,7 +25,6 @@ class SignatureCompletionSummary:
             f"跳过已有签名={self.skipped_known_signatures}, "
             f"C源码补全={self.c_resolved}, "
             f"文档字符串补全={self.docstring_resolved}, "
-            f"运行时反射补全={self.inspect_resolved}, "
             f"未补全={self.unresolved}"
         )
 
@@ -95,7 +92,7 @@ class SignatureCompleter:
             self._summary.skipped_known_signatures += 1
             return
 
-        if self._c_source is not None:
+        if self._c_source is not None and module.module_type is IRModuleType.EXTENSION:
             c_result = self._c_source.resolve_function(
                 module,
                 func,
@@ -124,11 +121,5 @@ class SignatureCompleter:
                 func.signatures = docstring_result
                 self._summary.docstring_resolved += 1
                 return
-
-        inspect_result = resolve_inspect_signatures(module, func)
-        if inspect_result is not None:
-            func.signatures = inspect_result
-            self._summary.inspect_resolved += 1
-            return
 
         self._summary.unresolved += 1

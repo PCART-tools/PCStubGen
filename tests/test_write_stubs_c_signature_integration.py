@@ -48,7 +48,7 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
         def __str__(self) -> str:
             return (
                 "签名补全汇总: 函数总数=1, 跳过已有签名=0, C源码补全=0, "
-                "文档字符串补全=0, 运行时反射补全=1, 未补全=0"
+                "文档字符串补全=0, 未补全=1"
             )
 
     class FakeStubRenderer:

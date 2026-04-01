@@ -9,13 +9,12 @@ def test_summary_str_uses_chinese_labels() -> None:
         skipped_known_signatures=1,
         c_resolved=2,
         docstring_resolved=1,
-        inspect_resolved=1,
         unresolved=1,
     )
 
     assert str(summary) == (
         "签名补全汇总: 函数总数=6, 跳过已有签名=1, "
-        "C源码补全=2, 文档字符串补全=1, 运行时反射补全=1, 未补全=1"
+        "C源码补全=2, 文档字符串补全=1, 未补全=1"
     )
 
 
@@ -41,9 +40,6 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
         ),
     )
 
-    def foo(value: int) -> int:
-        raise NotImplementedError
-
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -51,7 +47,6 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
             _unknown_function(
                 "foo",
                 doc="foo(value: str) -> str\n\nparsed from docstring",
-                runtime_function=foo,
             )
         ],
     )
@@ -93,7 +88,6 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     assert summary.total_functions == 1
     assert summary.c_resolved == 1
     assert summary.docstring_resolved == 0
-    assert summary.inspect_resolved == 0
     assert summary.unresolved == 0
 
 
@@ -125,7 +119,6 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     assert summary.total_functions == 1
     assert summary.c_resolved == 0
     assert summary.docstring_resolved == 1
-    assert summary.inspect_resolved == 0
     assert summary.unresolved == 0
 
 
@@ -187,15 +180,10 @@ def test_completer_skips_source_comment_when_option_disabled(
     assert parsed.c_inferred_source_comment is None
 
 
-def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
+def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    class Builder:
-        @classmethod
-        def build(cls, value: int) -> str:
-            raise NotImplementedError
-
     _patch_c_signature_extractor(
         monkeypatch,
         modules=_module_fixture(
@@ -222,10 +210,7 @@ def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
                 name="Builder",
                 methods=[
                     IRMethod(
-                        function=_unknown_function(
-                            "build",
-                            runtime_function=Builder.build,
-                        ),
+                        function=_unknown_function("build"),
                         decorator=None,
                     )
                 ],
@@ -236,24 +221,14 @@ def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
     summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
 
     parsed = module.classes[0].methods[0].function
-    assert [arg.name for arg in parsed.signatures[0].args] == ["cls", "value"]
-    assert [arg.type.render() if arg.type is not None else None for arg in parsed.signatures[0].args] == [
-        None,
-        "int",
-    ]
-    assert parsed.signatures[0].return_type is not None
-    assert parsed.signatures[0].return_type.render() == "str"
+    assert parsed.signatures == []
     assert summary.total_functions == 1
     assert summary.c_resolved == 0
     assert summary.docstring_resolved == 0
-    assert summary.inspect_resolved == 1
-    assert summary.unresolved == 0
+    assert summary.unresolved == 1
 
 
-def test_completer_preserves_function_doc_when_inspect_resolves_signature() -> None:
-    def fallback(value: int) -> int:
-        raise NotImplementedError
-
+def test_completer_preserves_function_doc_when_signature_stays_unresolved() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -261,7 +236,6 @@ def test_completer_preserves_function_doc_when_inspect_resolves_signature() -> N
             _unknown_function(
                 "fallback",
                 doc="plain fallback docs",
-                runtime_function=fallback,
             )
         ],
     )
@@ -270,15 +244,11 @@ def test_completer_preserves_function_doc_when_inspect_resolves_signature() -> N
 
     parsed = module.functions[0]
     assert parsed.doc == "plain fallback docs"
-    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
-    assert summary.inspect_resolved == 1
-    assert summary.unresolved == 0
+    assert parsed.signatures == []
+    assert summary.unresolved == 1
 
 
-def test_completer_prefers_docstring_over_inspect_when_both_available() -> None:
-    def fallback(value: int) -> int:
-        raise NotImplementedError
-
+def test_completer_uses_docstring_when_available_for_python_module() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -286,7 +256,6 @@ def test_completer_prefers_docstring_over_inspect_when_both_available() -> None:
             _unknown_function(
                 "fallback",
                 doc="fallback(value: str) -> bool\n\nparsed from docstring",
-                runtime_function=fallback,
             )
         ],
     )
@@ -300,14 +269,10 @@ def test_completer_prefers_docstring_over_inspect_when_both_available() -> None:
     assert parsed.signatures[0].return_type is not None
     assert parsed.signatures[0].return_type.render() == "bool"
     assert summary.docstring_resolved == 1
-    assert summary.inspect_resolved == 0
     assert summary.unresolved == 0
 
 
 def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
-    def fallback(value: int) -> int:
-        raise NotImplementedError
-
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -317,7 +282,7 @@ def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
                 signatures=[_signature(args=[IRArgument(name="value")])],
             ),
             _unknown_function("missing"),
-            _unknown_function("fallback", runtime_function=fallback),
+            _unknown_function("fallback"),
         ],
     )
 
@@ -327,11 +292,10 @@ def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
     assert summary.skipped_known_signatures == 1
     assert summary.c_resolved == 0
     assert summary.docstring_resolved == 0
-    assert summary.inspect_resolved == 1
-    assert summary.unresolved == 1
+    assert summary.unresolved == 2
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
-    assert [arg.name for arg in module.functions[2].signatures[0].args] == ["value"]
+    assert module.functions[2].signatures == []
 
 
 def test_completer_run_recreates_summary_for_each_invocation() -> None:

@@ -47,9 +47,6 @@ from pcstubgen.signature_completion.c_extension.source import (
 from pcstubgen.signature_completion.docstring_source import (
     resolve_docstring_signatures,
 )
-from pcstubgen.signature_completion.inspect_source import (
-    resolve_inspect_signatures,
-)
 from pcstubgen.ir import (
     IRArgument,
     IRArgumentKind,
@@ -106,10 +103,9 @@ def _unknown_function(
     name: str,
     *,
     doc: str | None = None,
-    runtime_function: object | None = None,
 ) -> IRFunction:
     """构造签名未知的测试函数。"""
-    return IRFunction(name=name, doc=doc, runtime_function=runtime_function)
+    return IRFunction(name=name, doc=doc)
 
 
 def _module_fixture(
