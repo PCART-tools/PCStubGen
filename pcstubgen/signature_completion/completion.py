@@ -35,7 +35,16 @@ class SignatureCompletionSummary:
 class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
-        self._c_source = self._build_c_source(options)
+        if options.source_root is None:
+            self._c_source = None
+        else:
+            self._c_source = CExtensionSource(
+                source_root=options.source_root,
+                include=options.include,
+                include_directory=options.include_directory,
+                c_std=options.c_std,
+                cpp_std=options.cpp_std,
+            )
         self._summary = SignatureCompletionSummary()
 
     def run(self, module: IRModule) -> SignatureCompletionSummary:
@@ -125,15 +134,3 @@ class SignatureCompleter:
             return
 
         self._summary.unresolved += 1
-
-    @staticmethod
-    def _build_c_source(options: StubGenerationOptions) -> CExtensionSource | None:
-        if options.source_root is None:
-            return None
-        return CExtensionSource(
-            source_root=options.source_root,
-            include=options.include,
-            include_directory=options.include_directory,
-            c_std=options.c_std,
-            cpp_std=options.cpp_std,
-        )
