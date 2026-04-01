@@ -97,9 +97,9 @@ class SignatureCompleter:
 
         if self._c_source is not None:
             c_result = self._c_source.resolve_function(
-                module=module,
-                func=func,
-                is_method=is_method,
+                module,
+                func,
+                is_method,
             )
             if c_result is not None:
                 signatures, c_inferred_source_comment = c_result
@@ -110,7 +110,7 @@ class SignatureCompleter:
                 return
 
         try:
-            docstring_result = resolve_docstring_signatures(func_name=func.name, doc=func.doc)
+            docstring_result = resolve_docstring_signatures(module, func)
         except ValueError as ex:
             logger.warning(
                 "解析 docstring 签名失败, module_name: {}, func_name: {}, error_type: {}, error: {}",
@@ -125,10 +125,7 @@ class SignatureCompleter:
                 self._summary.docstring_resolved += 1
                 return
 
-        inspect_result = resolve_inspect_signatures(
-            func.runtime_function,
-            module_type=module.module_type,
-        )
+        inspect_result = resolve_inspect_signatures(module, func)
         if inspect_result is not None:
             func.signatures = inspect_result
             self._summary.inspect_resolved += 1

@@ -4,7 +4,7 @@ import re
 from enum import Enum, auto
 
 from ..type_system.types import RawType, Type
-from ..ir import IRArgument, IRArgumentKind, IRSignature
+from ..ir import IRArgument, IRArgumentKind, IRFunction, IRModule, IRSignature
 
 
 class _ArgsParseState(Enum):
@@ -15,10 +15,12 @@ class _ArgsParseState(Enum):
 
 
 def resolve_docstring_signatures(
-    *,
-    func_name: str,
-    doc: str | None,
+    irmodule: IRModule,
+    irfunction: IRFunction,
 ) -> list[IRSignature] | None:
+    _ = irmodule
+    func_name = irfunction.name
+    doc = irfunction.doc
     if not doc:
         return None
 

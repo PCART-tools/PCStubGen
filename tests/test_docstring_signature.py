@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from pcstubgen.ir import IRFunction, IRModule, IRModuleType, QualifiedName
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
     resolve_docstring_signatures,
@@ -15,11 +16,20 @@ def _render_type(type_: object | None) -> str | None:
     return type_.render()
 
 
-def test_docstring_parser_parses_generic_function_signature() -> None:
-    parsed = resolve_docstring_signatures(
-        func_name="foo",
-        doc="foo(x: int, y: str) -> str\n\nparsed from docstring",
+def _resolve(
+    function_name: str,
+    doc: str | None,
+):
+    irmodule = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.PYTHON,
     )
+    irfunction = IRFunction(name=function_name, doc=doc)
+    return resolve_docstring_signatures(irmodule, irfunction)
+
+
+def test_docstring_parser_parses_generic_function_signature() -> None:
+    parsed = _resolve("foo", "foo(x: int, y: str) -> str\n\nparsed from docstring")
 
     assert parsed is not None
     signature = parsed[0]
@@ -28,9 +38,9 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
-    parsed = resolve_docstring_signatures(
-        func_name="cdist_minkowski",
-        doc=(
+    parsed = _resolve(
+        "cdist_minkowski",
+        (
             "cdist_minkowski(x: object, y: object, w: object = None, "
             "out: object = None, p: typing.SupportsFloat = 2.0) -> numpy.ndarray"
         ),
@@ -64,9 +74,9 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
 
 def test_docstring_parser_preserves_overload_docs() -> None:
-    parsed = resolve_docstring_signatures(
-        func_name="foo",
-        doc=(
+    parsed = _resolve(
+        "foo",
+        (
             "foo(*args, **kwargs)\n"
             "Overloaded function.\n"
             "1. foo(value: int) -> str\n"
@@ -84,24 +94,18 @@ def test_docstring_parser_preserves_overload_docs() -> None:
 
 
 def test_docstring_parser_returns_none_without_doc() -> None:
-    assert resolve_docstring_signatures(func_name="foo", doc=None) is None
+    assert _resolve("foo", None) is None
 
 
 def test_docstring_parser_returns_none_for_non_signature_first_line() -> None:
-    parsed = resolve_docstring_signatures(
-        func_name="foo",
-        doc="This is not a signature.\nstill docs",
-    )
+    parsed = _resolve("foo", "This is not a signature.\nstill docs")
 
     assert parsed is None
 
 
 def test_docstring_parser_raises_on_invalid_signature_like_doc() -> None:
     with pytest.raises(ValueError):
-        resolve_docstring_signatures(
-            func_name="foo",
-            doc="foo(a: int,, b: int) -> int\n\nbroken",
-        )
+        _resolve("foo", "foo(a: int,, b: int) -> int\n\nbroken")
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:

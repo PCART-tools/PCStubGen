@@ -275,6 +275,35 @@ def test_completer_preserves_function_doc_when_inspect_resolves_signature() -> N
     assert summary.unresolved == 0
 
 
+def test_completer_prefers_docstring_over_inspect_when_both_available() -> None:
+    def fallback(value: int) -> int:
+        raise NotImplementedError
+
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.PYTHON,
+        functions=[
+            _unknown_function(
+                "fallback",
+                doc="fallback(value: str) -> bool\n\nparsed from docstring",
+                runtime_function=fallback,
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(StubGenerationOptions()).run(module)
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
+    assert parsed.signatures[0].args[0].type is not None
+    assert parsed.signatures[0].args[0].type.render() == "str"
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
+    assert summary.docstring_resolved == 1
+    assert summary.inspect_resolved == 0
+    assert summary.unresolved == 0
+
+
 def test_completer_skips_known_signatures_and_counts_unresolved() -> None:
     def fallback(value: int) -> int:
         raise NotImplementedError

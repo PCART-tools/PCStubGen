@@ -31,21 +31,20 @@ class CExtensionSource:
 
     def resolve_function(
         self,
-        *,
-        module: IRModule,
-        func: IRFunction,
+        irmodule: IRModule,
+        irfunction: IRFunction,
         is_method: bool = False,
     ) -> ResolvedCExtensionFunction | None:
         if is_method:
             return None
-        if module.module_type is not IRModuleType.EXTENSION:
+        if irmodule.module_type is not IRModuleType.EXTENSION:
             return None
 
-        c_module = self._match_c_module(module, self._modules)
+        c_module = self._match_c_module(irmodule, self._modules)
         if c_module is None:
             return None
 
-        selected = c_module.functions.get(func.name)
+        selected = c_module.functions.get(irfunction.name)
         if selected is None or not selected.signatures:
             return None
 

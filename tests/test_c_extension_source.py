@@ -53,7 +53,7 @@ def test_c_signature_resolver_preserves_extracted_fields_and_source_comment(
         functions=[_unknown_function("foo")],
     )
 
-    resolved = resolver.resolve_function(module=module, func=module.functions[0])
+    resolved = resolver.resolve_function(module, module.functions[0])
 
     assert resolved is not None
     signatures, source_comment = resolved
@@ -93,7 +93,7 @@ def test_c_signature_resolver_skips_missing_extent_text(
         functions=[_unknown_function("foo")],
     )
 
-    resolved = resolver.resolve_function(module=module, func=module.functions[0])
+    resolved = resolver.resolve_function(module, module.functions[0])
 
     assert resolved is not None
     _, source_comment = resolved
@@ -131,13 +131,13 @@ def test_c_signature_resolver_returns_none_for_methods_and_python_modules(
 
     assert (
         resolver.resolve_function(
-            module=extension_module,
-            func=extension_module.functions[0],
+            extension_module,
+            extension_module.functions[0],
             is_method=True,
         )
         is None
     )
-    assert resolver.resolve_function(module=python_module, func=python_module.functions[0]) is None
+    assert resolver.resolve_function(python_module, python_module.functions[0]) is None
 
 
 def test_c_signature_resolver_matches_exact_module_before_leaf_name(
@@ -183,8 +183,8 @@ def test_c_signature_resolver_matches_exact_module_before_leaf_name(
         functions=[_unknown_function("foo")],
     )
 
-    first = resolver.resolve_function(module=first_module, func=first_module.functions[0])
-    second = resolver.resolve_function(module=second_module, func=second_module.functions[0])
+    first = resolver.resolve_function(first_module, first_module.functions[0])
+    second = resolver.resolve_function(second_module, second_module.functions[0])
 
     assert first is not None
     assert second is not None
@@ -225,7 +225,7 @@ def test_c_signature_resolver_falls_back_to_unique_leaf_name(
         functions=[_unknown_function("foo")],
     )
 
-    resolved = resolver.resolve_function(module=module, func=module.functions[0])
+    resolved = resolver.resolve_function(module, module.functions[0])
 
     assert resolved is not None
     signatures, _ = resolved
@@ -272,7 +272,7 @@ def test_c_signature_resolver_returns_none_for_ambiguous_leaf_name(
         functions=[_unknown_function("foo")],
     )
 
-    assert resolver.resolve_function(module=module, func=module.functions[0]) is None
+    assert resolver.resolve_function(module, module.functions[0]) is None
 
 
 def test_c_signature_resolver_returns_none_when_function_is_missing_or_empty(
@@ -305,8 +305,8 @@ def test_c_signature_resolver_returns_none_when_function_is_missing_or_empty(
         functions=[_unknown_function("foo"), _unknown_function("baz")],
     )
 
-    assert resolver.resolve_function(module=module, func=module.functions[0]) is None
-    assert resolver.resolve_function(module=module, func=module.functions[1]) is None
+    assert resolver.resolve_function(module, module.functions[0]) is None
+    assert resolver.resolve_function(module, module.functions[1]) is None
 
 
 def test_c_signature_resolver_propagates_extraction_errors(

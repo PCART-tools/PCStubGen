@@ -5,6 +5,7 @@ import typing
 import pytest
 
 import pcstubgen.signature_completion.inspect_source as inspect_signature_module
+from pcstubgen.ir import IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
 from pcstubgen.signature_completion.inspect_source import resolve_inspect_signatures
 
 
@@ -14,6 +15,24 @@ def _render_type(type_: object | None) -> str | None:
     return type_.render()
 
 
+def _resolve(
+    runtime_function: object | None,
+    *,
+    function_name: str = "sample",
+    module_name: str = "pkg.mod",
+    module_type: IRModuleType = IRModuleType.PYTHON,
+) -> list[IRSignature] | None:
+    irmodule = IRModule(
+        full_name=QualifiedName.from_str(module_name),
+        module_type=module_type,
+    )
+    irfunction = IRFunction(
+        name=function_name,
+        runtime_function=runtime_function,
+    )
+    return resolve_inspect_signatures(irmodule, irfunction)
+
+
 def test_resolve_inspect_signatures_parses_annotations_and_defaults() -> None:
     def sample(
         a: int,
@@ -21,7 +40,7 @@ def test_resolve_inspect_signatures_parses_annotations_and_defaults() -> None:
     ) -> typing.Optional[int]:
         raise NotImplementedError
 
-    resolved = resolve_inspect_signatures(sample)
+    resolved = _resolve(sample)
 
     assert resolved is not None
     signature = resolved[0]
@@ -36,7 +55,7 @@ def test_resolve_inspect_signatures_preserves_tuple_default_text() -> None:
     def sample(values: tuple[int, int] = (1, 2)) -> None:
         raise NotImplementedError
 
-    resolved = resolve_inspect_signatures(sample)
+    resolved = _resolve(sample)
 
     assert resolved is not None
     signature = resolved[0]
@@ -55,7 +74,7 @@ def test_resolve_inspect_signatures_returns_none_when_inspect_raises(
 
     monkeypatch.setattr(inspect_signature_module.inspect, "signature", _raise_signature_error)
 
-    assert resolve_inspect_signatures(sample) is None
+    assert _resolve(sample) is None
 
 
 def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
@@ -64,7 +83,7 @@ def test_resolve_inspect_signatures_normalizes_class_bound_method() -> None:
         def build(cls, value: int) -> str:
             raise NotImplementedError
 
-    resolved = resolve_inspect_signatures(Builder.build)
+    resolved = _resolve(Builder.build, function_name="build")
 
     assert resolved is not None
     signature = resolved[0]

@@ -6,25 +6,25 @@ from typing import Any
 from loguru import logger
 
 from ..type_system.types import RawType, Type
-from ..ir import IRArgument, IRArgumentKind, IRModuleType, IRSignature, QualifiedName
+from ..ir import IRArgument, IRArgumentKind, IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
 from ..module_build.reflection import get_module_name
 
 
 def resolve_inspect_signatures(
-    func: Any,
-    *,
-    module_type: IRModuleType = IRModuleType.UNKNOWN,
+    irmodule: IRModule,
+    irfunction: IRFunction,
 ) -> list[IRSignature] | None:
+    func = irfunction.runtime_function
     if func is None:
         return None
 
     try:
         sig = inspect.signature(_get_signature_target(func))
     except Exception as ex:
-        if module_type is IRModuleType.EXTENSION:
+        if irmodule.module_type is IRModuleType.EXTENSION:
             logger.warning(
                 "EXTENSION 模块 inspect 签名获取失败, function: {}, error_type: {}, error: {}",
-                _describe_function(func),
+                _describe_function(irmodule, irfunction),
                 type(ex).__name__,
                 ex,
             )
@@ -52,8 +52,11 @@ def resolve_inspect_signatures(
     if sig.return_annotation is not inspect.Signature.empty:
         return_type = _build_annotation(sig.return_annotation)
 
-    if module_type is IRModuleType.EXTENSION:
-        logger.info("EXTENSION 模块 inspect 签名获取成功, function: {}", _describe_function(func))
+    if irmodule.module_type is IRModuleType.EXTENSION:
+        logger.info(
+            "EXTENSION 模块 inspect 签名获取成功, function: {}",
+            _describe_function(irmodule, irfunction),
+        )
 
     return [IRSignature(args=args, return_type=return_type)]
 
@@ -64,14 +67,8 @@ def _get_signature_target(func: Any) -> Any:
     return func
 
 
-def _describe_function(func: Any) -> str:
-    module_name = get_module_name(func)
-    qual_name = getattr(func, "__qualname__", None)
-    if isinstance(module_name, str) and isinstance(qual_name, str):
-        return f"{module_name}.{qual_name}"
-    if hasattr(func, "__name__"):
-        return str(func.__name__)
-    return repr(func)
+def _describe_function(irmodule: IRModule, irfunction: IRFunction) -> str:
+    return f"{irmodule.full_name}.{irfunction.name}"
 
 
 def _build_annotation(annotation: Any) -> Type | None:
