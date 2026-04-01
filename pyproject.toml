@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pcstubgen"
@@ -9,13 +9,21 @@ description = "Generate Python stubs for modules."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "libclang",
-    "loguru",
-    "typer",
+    "libclang>=18.1.1",
+    "loguru>=0.7.3",
+    "typer>=0.24.1",
 ]
 
 [project.scripts]
 pcstubgen = "pcstubgen.__main__:app"
 
-[tool.setuptools]
-packages = ["pcstubgen", "pcstubgen.ir", "pcstubgen.c_signature"]
+[dependency-groups]
+dev = [
+    "matplotlib>=3.10.8",
+    "mypy>=1.20.0",
+    "numpy>=2.4.4",
+    "pybind11-stubgen>=2.5.5",
+    "pytest>=9.0.2",
+    "requests>=2.33.1",
+    "scipy>=1.17.1",
+]
