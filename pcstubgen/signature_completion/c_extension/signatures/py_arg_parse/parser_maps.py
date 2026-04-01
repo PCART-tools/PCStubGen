@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .....type_system.types import RawType, Type
+from .....types import RawType, Type
 
 
 PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {

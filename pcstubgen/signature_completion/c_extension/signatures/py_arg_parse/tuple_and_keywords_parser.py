@@ -10,7 +10,7 @@ from clang.cindex import Cursor
 from .....ir import IRArgumentKind
 from ...models import CArgument
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
-from .....type_system.types import RawType, Type
+from .....types import RawType, Type
 
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):

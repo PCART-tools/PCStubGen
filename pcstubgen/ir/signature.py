@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..type_system.types import Type
+from ..types import Type
 from .argument import IRArgument
 
 

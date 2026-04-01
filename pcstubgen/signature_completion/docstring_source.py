@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from ..type_system.types import RawType, Type
+from ..types import RawType, Type
 from ..ir import IRArgument, IRArgumentKind, IRFunction, IRModule, IRSignature
 
 

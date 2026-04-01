@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum, auto
 
-from ..type_system.types import Type
+from ..types import Type
 
 
 class IRArgumentKind(Enum):

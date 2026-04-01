@@ -7,7 +7,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.type_system import (
+from pcstubgen.types import (
     AnyType,
     DictType,
     ListType,

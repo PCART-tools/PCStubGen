@@ -22,7 +22,7 @@ from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cur
 from pcstubgen.signature_completion.c_extension.clang import parser as translation_unit_module
 from pcstubgen.signature_completion.c_extension.modules import collect_modules as module_collection_module
 from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
-from pcstubgen.type_system import (
+from pcstubgen.types import (
     AnyType,
     ListType,
     RawType,

@@ -30,7 +30,7 @@ from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from ....type_system.types import Type, UnionType
+from ....types import Type, UnionType
 from .py_build_value.parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 

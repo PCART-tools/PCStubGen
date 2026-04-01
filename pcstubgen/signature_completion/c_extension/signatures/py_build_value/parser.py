@@ -7,7 +7,7 @@ from typing import Callable
 from clang.cindex import Cursor
 
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
-from .....type_system.types import (
+from .....types import (
     AnyType,
     DictType,
     ListType,
