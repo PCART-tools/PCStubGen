@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TypeAlias
 
 from ...ir import IRArgument, IRFunction, IRModule, IRModuleType, IRSignature
-from ..models import ResolvedFunctionSignatures
 from .collect import collect_modules
 from .clang.cursor_utils import source_range_get_text
 from .models import CArgument, CFunction, CModule
+
+ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
 
 
 class CExtensionSource:
@@ -33,7 +35,7 @@ class CExtensionSource:
         module: IRModule,
         func: IRFunction,
         is_method: bool = False,
-    ) -> ResolvedFunctionSignatures | None:
+    ) -> ResolvedCExtensionFunction | None:
         if is_method:
             return None
         if module.module_type is not IRModuleType.EXTENSION:
@@ -55,10 +57,7 @@ class CExtensionSource:
             for sig in selected.signatures
         ]
 
-        return ResolvedFunctionSignatures(
-            signatures=signatures,
-            c_inferred_source_comment=self._get_source_comment(selected),
-        )
+        return signatures, self._get_source_comment(selected)
 
     @staticmethod
     def _build_argument(argument: CArgument) -> IRArgument:

@@ -113,6 +113,64 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     assert summary.unresolved == 0
 
 
+def test_completer_skips_source_comment_when_option_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "foo_impl.c"
+    snippet = "\n".join(
+        [
+            "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+            "    return (PyObject*)0;",
+            "}",
+        ]
+    )
+    source.write_text(snippet, encoding="utf-8", newline="\n")
+    func_cursor = cast(
+        clang.cindex.Cursor,
+        _FakeNode(
+            kind=clang.cindex.CursorKind.FUNCTION_DECL,
+            spelling="foo_impl",
+            extent=_extent_for_source_snippet(source, snippet),
+        ),
+    )
+
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=func_cursor,
+                    ml_flags=METH_VARARGS,
+                    signatures=[
+                        ExtractedSignature(
+                            arguments=[_arg("value", "int")],
+                            return_type=RawType("bool"),
+                        )
+                    ],
+                )
+            }
+        ),
+    )
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+
+    SignatureCompleter(
+        StubGenerationOptions(
+            source_root=tmp_path,
+            include_c_inferred_source_comment=False,
+        )
+    ).run(module)
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
+    assert parsed.c_inferred_source_comment is None
+
+
 def test_completer_uses_inspect_as_last_fallback_and_skips_c_for_methods(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

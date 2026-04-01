@@ -5,7 +5,6 @@ from enum import Enum, auto
 
 from ..type_system.types import RawType, Type
 from ..ir import IRArgument, IRArgumentKind, IRSignature
-from .models import ResolvedFunctionSignatures
 
 
 class _ArgsParseState(Enum):
@@ -19,14 +18,14 @@ def resolve_docstring_signatures(
     *,
     func_name: str,
     doc: str | None,
-) -> ResolvedFunctionSignatures | None:
+) -> list[IRSignature] | None:
     if not doc:
         return None
 
     signatures = parse_function_docstring(func_name, doc.splitlines())
     if not signatures:
         return None
-    return ResolvedFunctionSignatures(signatures=signatures)
+    return signatures
 
 
 def parse_function_docstring(
