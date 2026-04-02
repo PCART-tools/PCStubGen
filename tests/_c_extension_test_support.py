@@ -20,6 +20,7 @@ from pcstubgen.signature_completion.c_extension import (
 from pcstubgen.signature_completion.c_extension import collect as c_extension_collect_module
 from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
 from pcstubgen.signature_completion.c_extension.clang import parser as translation_unit_module
+from pcstubgen.signature_completion.c_extension.definition_index import DefinitionIndex
 from pcstubgen.signature_completion.c_extension.modules import collect_modules as module_collection_module
 from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
 from pcstubgen.types import (
@@ -31,7 +32,6 @@ from pcstubgen.types import (
     UnionType,
 )
 from pcstubgen.signature_completion.c_extension.modules.collect_modules import (
-    DefinitionResolver,
     collect_method_table as _collect_method_table_impl,
     collect_pymethoddef_init_list_expr as _collect_PyMethodDef_INIT_LIST_EXPR_impl,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
@@ -271,8 +271,16 @@ class _FakeDiagnostic:
 
 
 class _FakeTranslationUnit:
-    def __init__(self, diagnostics: list[_FakeDiagnostic]) -> None:
+    def __init__(
+        self,
+        diagnostics: list[_FakeDiagnostic],
+        *,
+        cursor: object | None = None,
+    ) -> None:
         self.diagnostics = diagnostics
+        self.cursor = cursor if cursor is not None else _FakeNode(
+            kind=clang.cindex.CursorKind.TRANSLATION_UNIT
+        )
 
 
 class _FakeIndex:
@@ -402,17 +410,50 @@ class _FakeNode:
         return None
 
 
-def _definition_resolver(
+def _build_definition_translation_unit(
+    definitions_by_usr: dict[str, object],
+) -> _FakeTranslationUnit:
+    definition_nodes = []
+    for stable_usr, definition in definitions_by_usr.items():
+        if isinstance(definition, _FakeNode):
+            definition._usr = stable_usr
+            definition._is_definition = True
+            if getattr(definition, "canonical", None) is None or definition.canonical is definition:
+                definition.canonical = definition
+            definition_nodes.append(definition)
+            continue
+
+        definition_nodes.append(
+            _FakeNode(
+                kind=clang.cindex.CursorKind.FUNCTION_DECL,
+                usr=stable_usr,
+                definition=definition,
+                is_definition=True,
+            )
+        )
+
+    return _FakeTranslationUnit(
+        diagnostics=[],
+        cursor=_FakeNode(
+            kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+            children=definition_nodes,
+        ),
+    )
+
+
+def _definition_index(
     definitions_by_usr: dict[str, object] | None = None,
-) -> DefinitionResolver:
-    return DefinitionResolver(definitions_by_usr or {})
+) -> DefinitionIndex:
+    return DefinitionIndex([
+        _build_definition_translation_unit(definitions_by_usr or {})
+    ])
 
 
 def _collect_method_table(cursor: object, *, module_name: str) -> dict[str, CFunction]:
     return _collect_method_table_impl(
         cursor,
         module_name=module_name,
-        definition_resolver=_definition_resolver(),
+        definition_index=_definition_index(),
     )
 
 
@@ -422,7 +463,7 @@ def _collect_PyMethodDef_INIT_LIST_EXPR(
 ) -> tuple[bool, CFunction | None]:
     return _collect_PyMethodDef_INIT_LIST_EXPR_impl(
         init_list_expr=init_list_expr,
-        definition_resolver=_definition_resolver(),
+        definition_index=_definition_index(),
     )
 
 

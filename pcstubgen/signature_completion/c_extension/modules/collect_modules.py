@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
 from clang.cindex import Cursor, CursorKind, TokenKind, TypeKind
 from loguru import logger
 
@@ -13,10 +10,8 @@ from ..clang.cursor_utils import (
     var_decl_to_init_list_expr,
     walk_cursor,
 )
+from ..definition_index import DefinitionIndex
 from ..models import CFunction, CModule
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 _ARRAY_TYPE_KINDS = {
     TypeKind.CONSTANTARRAY,
@@ -45,61 +40,6 @@ _PY_METHOD_DEF_FIELD_NAMES = (
     "ml_flags",
     "ml_doc",
 )
-
-
-@dataclass(frozen=True)
-class DefinitionResolver:
-    """基于预建 USR 索引解析跨 translation unit 的定义节点。"""
-
-    definitions_by_usr: Mapping[str, Cursor]
-
-    def resolve_definition(self, cursor: Cursor) -> Cursor | None:
-        local_definition = _get_cursor_definition(cursor)
-        if local_definition is not None and local_definition.is_definition():
-            return local_definition
-
-        stable_usr = _get_stable_usr(cursor)
-        if stable_usr is None:
-            return None
-        return self.definitions_by_usr.get(stable_usr)
-
-
-def _get_cursor_definition(cursor: Cursor) -> Cursor | None:
-    getter = getattr(cursor, "get_definition", None)
-    if not callable(getter):
-        return None
-    return getter()
-
-
-def _get_stable_usr(cursor: Cursor) -> str | None:
-    seen: set[int] = set()
-    candidates = []
-
-    referenced = getattr(cursor, "referenced", None)
-    if referenced is not None:
-        candidates.append(referenced)
-        referenced_canonical = getattr(referenced, "canonical", None)
-        if referenced_canonical is not None:
-            candidates.append(referenced_canonical)
-
-    canonical = getattr(cursor, "canonical", None)
-    if canonical is not None:
-        candidates.append(canonical)
-    candidates.append(cursor)
-
-    for candidate in candidates:
-        candidate_id = id(candidate)
-        if candidate_id in seen:
-            continue
-        seen.add(candidate_id)
-
-        getter = getattr(candidate, "get_usr", None)
-        if not callable(getter):
-            continue
-        stable_usr = getter()
-        if stable_usr:
-            return stable_usr
-    return None
 
 
 def is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
@@ -173,7 +113,7 @@ def _is_null_like_cursor(cursor: Cursor) -> bool:
 def collect_pymethoddef_init_list_expr(
     init_list_expr: Cursor,
     *,
-    definition_resolver: DefinitionResolver,
+    definition_index: DefinitionIndex,
 ) -> tuple[bool, CFunction | None]:
     """
     从 `PyMethodDef` 的单个初始化项提取函数骨架数据。
@@ -203,7 +143,7 @@ def collect_pymethoddef_init_list_expr(
     if ml_flags is None:
         ml_flags = 0
 
-    func_def_cursor = definition_resolver.resolve_definition(ml_meth_cursor)
+    func_def_cursor = definition_index.get_definition(ml_meth_cursor)
     if (
         func_def_cursor is None
         or func_def_cursor.kind != CursorKind.FUNCTION_DECL
@@ -227,7 +167,7 @@ def collect_method_table(
     cursor: Cursor,
     *,
     module_name: str,
-    definition_resolver: DefinitionResolver,
+    definition_index: DefinitionIndex,
 ) -> dict[str, CFunction]:
     """解析 `PyMethodDef[]` 变量。"""
 
@@ -239,7 +179,7 @@ def collect_method_table(
     for element in init_expr_node.get_children():
         is_sentinel, extracted = collect_pymethoddef_init_list_expr(
             init_list_expr=element,
-            definition_resolver=definition_resolver,
+            definition_index=definition_index,
         )
         if is_sentinel:
             break
@@ -259,7 +199,7 @@ def collect_method_table(
 def collect_module_from_pymoduledef(
     module_def_cursor: Cursor,
     *,
-    definition_resolver: DefinitionResolver,
+    definition_index: DefinitionIndex,
 ) -> CModule | None:
     """
     从单个 `PyModuleDef` 变量中提取模块定义与模块方法。
@@ -287,7 +227,7 @@ def collect_module_from_pymoduledef(
         return module
 
     assert m_methods_cursor.kind == CursorKind.DECL_REF_EXPR
-    method_list_cursor = definition_resolver.resolve_definition(m_methods_cursor)
+    method_list_cursor = definition_index.get_definition(m_methods_cursor)
     if method_list_cursor is None or not is_PyMethodDef_array_definition(method_list_cursor):
         logger.warning(
             "找不到 method table definition, module_name: {}, 位置: {}",
@@ -299,7 +239,7 @@ def collect_module_from_pymoduledef(
     module.functions = collect_method_table(
         method_list_cursor,
         module_name=m_name,
-        definition_resolver=definition_resolver,
+        definition_index=definition_index,
     )
     return module
 
@@ -307,7 +247,7 @@ def collect_module_from_pymoduledef(
 def collect_modules_from_translation_unit(
     cursor: Cursor,
     *,
-    definition_resolver: DefinitionResolver,
+    definition_index: DefinitionIndex,
 ) -> list[CModule]:
     """从单个 translation unit 的 `PyModuleDef` 变量定义提取模块。"""
     modules: list[CModule] = []
@@ -320,7 +260,7 @@ def collect_modules_from_translation_unit(
         ):
             extracted = collect_module_from_pymoduledef(
                 node,
-                definition_resolver=definition_resolver,
+                definition_index=definition_index,
             )
             if extracted is not None:
                 modules.append(extracted)

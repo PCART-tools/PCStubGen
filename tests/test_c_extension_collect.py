@@ -1738,7 +1738,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.module_table,
         "collect_modules_from_translation_unit",
-        lambda cursor, definition_resolver: [
+        lambda cursor, definition_index: [
             ExtractedModule(
                 name="pkg.mod",
                 functions={
@@ -1810,7 +1810,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.module_table,
         "collect_modules_from_translation_unit",
-        lambda cursor, definition_resolver: [
+        lambda cursor, definition_index: [
             ExtractedModule(
                 name="pkg.mod",
                 functions={

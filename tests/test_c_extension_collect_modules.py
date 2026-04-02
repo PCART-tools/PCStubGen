@@ -241,9 +241,9 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     def fake_extract(
         *,
         init_list_expr: _FakeNode,
-        definition_resolver: DefinitionResolver,
+        definition_index: DefinitionIndex,
     ) -> tuple[bool, SimpleNamespace | None]:
-        _ = definition_resolver
+        _ = definition_index
         calls.append(init_list_expr)
         if init_list_expr is supported_sentinel:
             return True, None
