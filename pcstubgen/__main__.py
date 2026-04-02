@@ -53,9 +53,9 @@ def main(
         help="传给 clang 的 C++ standard，例如 c++17",
     ),
     include_docstrings: bool = typer.Option(
-        True,
-        "--no-docstrings",
-        help="生成 stub 时不包含 docstring",
+        False,
+        "--include-docstrings",
+        help="生成 stub 时包含 docstring",
     ),
     include_module_type_comment: bool = typer.Option(
         False,

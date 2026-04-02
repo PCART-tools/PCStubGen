@@ -10,6 +10,10 @@ from pcstubgen.stub_generation_options import StubGenerationOptions
 RUNNER = CliRunner()
 
 
+def test_stub_generation_options_excludes_docstrings_by_default() -> None:
+    assert StubGenerationOptions().include_docstrings is False
+
+
 def test_cli_passes_stub_generation_options(
     monkeypatch,
     tmp_path: Path,
@@ -70,7 +74,38 @@ def test_cli_passes_stub_generation_options(
     assert captured_options.source == tmp_path / "src"
     assert captured_options.c_std == "c99"
     assert captured_options.cpp_std == "c++20"
+    assert captured_options.include_docstrings is False
     assert captured_options.include_c_inferred_source_comment is True
+
+
+def test_cli_enables_docstrings_with_explicit_flag(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured_options: StubGenerationOptions | None = None
+
+    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_options
+        _ = module_name
+        _ = output
+        captured_options = options
+
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "math",
+            "--output",
+            str(tmp_path),
+            "--include-docstrings",
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert captured_options is not None
+    assert captured_options.include_docstrings is True
 
 
 def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:
@@ -88,6 +123,22 @@ def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:
 
     assert result.exit_code != 0
     assert "No such option: --source-root" in result.output
+
+
+def test_cli_rejects_removed_no_docstrings_option(tmp_path: Path) -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "math",
+            "--output",
+            str(tmp_path),
+            "--no-docstrings",
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code != 0
+    assert "No such option: --no-docstrings" in result.output
 
 
 def test_cli_preserves_include_without_validation(

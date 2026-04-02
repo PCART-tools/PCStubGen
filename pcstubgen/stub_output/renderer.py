@@ -19,7 +19,7 @@ class StubRenderer:
 
     def __init__(
         self,
-        include_docstrings: bool = True,
+        include_docstrings: bool = False,
         include_module_type_comment: bool = False,
         include_c_inferred_source_comment: bool = False,
     ):

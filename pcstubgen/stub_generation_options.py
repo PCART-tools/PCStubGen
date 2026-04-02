@@ -13,6 +13,6 @@ class StubGenerationOptions:
     include_directory: list[Path] = dataclasses.field(default_factory=list)
 
     # 输出选项
-    include_docstrings: bool = True
+    include_docstrings: bool = False
     include_module_type_comment: bool = False
     include_c_inferred_source_comment: bool = False

@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from pcstubgen.types import RawType, Type
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
+from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 
 
@@ -112,7 +112,7 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
         doc="original docs",
     )
 
-    lines = StubRenderer().print_function(func)
+    lines = StubRenderer(include_docstrings=True).print_function(func)
 
     assert lines == [
         "def foo(value: int):",
@@ -125,7 +125,7 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
 def test_renderer_prints_function_doc_for_placeholder_signature() -> None:
     func = IRFunction(name="foo", doc="original docs")
 
-    lines = StubRenderer().print_function(func)
+    lines = StubRenderer(include_docstrings=True).print_function(func)
 
     assert lines == [
         "def foo(",
@@ -158,7 +158,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
         doc=doc,
     )
 
-    lines = StubRenderer().print_function(func)
+    lines = StubRenderer(include_docstrings=True).print_function(func)
 
     assert lines == [
         "@typing.overload",
@@ -195,7 +195,7 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
         doc="foo(value: str) -> str\n\nparsed from docstring",
     )
 
-    lines = StubRenderer().print_function(func)
+    lines = StubRenderer(include_docstrings=True).print_function(func)
 
     assert lines == [
         "def foo(value: int) -> bool:",
@@ -205,6 +205,46 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
         "    parsed from docstring",
         '    """',
     ]
+
+
+def test_renderer_does_not_render_function_docstring_by_default() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
+        doc="original docs",
+    )
+
+    lines = StubRenderer().print_function(func)
+
+    assert lines == [
+        "def foo(value: int):",
+        "    ...",
+    ]
+
+
+def test_renderer_does_not_render_class_docstring_by_default() -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[IRClass(name="Builder", doc="builder docs")],
+    )
+
+    lines = StubRenderer().print_module(module)
+
+    assert lines == [
+        "class Builder:",
+        "    pass",
+    ]
+
+
+def test_renderer_does_not_render_module_docstring_by_default() -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        doc="module docs",
+    )
+
+    lines = StubRenderer().print_module(module)
+
+    assert lines == []
 
 
 def test_renderer_prints_positional_only_marker_on_its_own_line() -> None:
