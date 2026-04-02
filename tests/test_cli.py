@@ -15,13 +15,13 @@ def test_cli_passes_stub_generation_options(
     tmp_path: Path,
 ) -> None:
     captured_module_name: str | None = None
-    captured_output_dir: Path | None = None
+    captured_output: Path | None = None
     captured_options: StubGenerationOptions | None = None
 
-    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
-        nonlocal captured_module_name, captured_output_dir, captured_options
+    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
+        nonlocal captured_module_name, captured_output, captured_options
         captured_module_name = module_name
-        captured_output_dir = output_dir
+        captured_output = output
         captured_options = options
 
     monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
@@ -30,7 +30,7 @@ def test_cli_passes_stub_generation_options(
         main_module.app,
         [
             "math",
-            "--output-dir",
+            "--output",
             str(tmp_path),
             "--include",
             "Python.h",
@@ -55,7 +55,7 @@ def test_cli_passes_stub_generation_options(
 
     assert result.exit_code == 0
     assert captured_module_name == "math"
-    assert captured_output_dir == tmp_path
+    assert captured_output == tmp_path
     assert captured_options is not None
     assert captured_options.include == [
         "Python.h",
@@ -79,8 +79,9 @@ def test_cli_preserves_include_without_validation(
 ) -> None:
     captured_options: StubGenerationOptions | None = None
 
-    def fake_write_stubs(*, module_name: str, output_dir: Path, options: StubGenerationOptions) -> None:
+    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
         nonlocal captured_options
+        _ = output
         captured_options = options
 
     monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
@@ -89,7 +90,7 @@ def test_cli_preserves_include_without_validation(
         main_module.app,
         [
             "math",
-            "--output-dir",
+            "--output",
             str(tmp_path),
             "--include=-bad",
             "--include",

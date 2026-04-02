@@ -14,17 +14,17 @@ from tools import module_c_impl
 RUNNER = CliRunner()
 
 
-def test_cli_passes_module_name_and_output_dir(
+def test_cli_passes_module_name_and_output(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     captured_module_name: str | None = None
-    captured_output_dir: Path | None = None
+    captured_output: Path | None = None
 
-    def fake_run_single_module(module_name: str, *, output_dir: Path) -> int:
-        nonlocal captured_module_name, captured_output_dir
+    def fake_run_single_module(module_name: str, *, output: Path) -> int:
+        nonlocal captured_module_name, captured_output
         captured_module_name = module_name
-        captured_output_dir = output_dir
+        captured_output = output
         return 0
 
     monkeypatch.setattr(module_c_impl, "run_single_module", fake_run_single_module)
@@ -33,7 +33,7 @@ def test_cli_passes_module_name_and_output_dir(
         module_c_impl.app,
         [
             "math",
-            "--output-dir",
+            "--output",
             str(tmp_path),
         ],
         prog_name="module_c_impl",
@@ -41,7 +41,7 @@ def test_cli_passes_module_name_and_output_dir(
 
     assert result.exit_code == 0
     assert captured_module_name == "math"
-    assert captured_output_dir == tmp_path
+    assert captured_output == tmp_path
 
 
 def test_run_single_module_returns_error_when_collect_module_names_fails(
@@ -54,7 +54,7 @@ def test_run_single_module_returns_error_when_collect_module_names_fails(
 
     monkeypatch.setattr(module_c_impl, "collect_module_names", raise_collect_error)
 
-    exit_code = module_c_impl.run_single_module("bad.module", output_dir=tmp_path)
+    exit_code = module_c_impl.run_single_module("bad.module", output=tmp_path)
     captured = capsys.readouterr()
 
     assert exit_code == module_c_impl.EXIT_ERROR

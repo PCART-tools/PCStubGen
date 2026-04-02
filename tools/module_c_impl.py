@@ -98,8 +98,8 @@ def collect_module_names(module_name: str) -> list[str]:
     return sorted(all_names)
 
 
-def output_file_for(module_name: str, *, output_dir: Path) -> Path:
-    return output_dir / f"{module_name}.csv"
+def output_file_for(module_name: str, *, output: Path) -> Path:
+    return output / f"{module_name}.csv"
 
 
 def write_report(module_names: list[str], report_path: Path) -> int:
@@ -129,7 +129,7 @@ def write_report(module_names: list[str], report_path: Path) -> int:
     return c_module_count
 
 
-def run_single_module(module_name: str, *, output_dir: Path) -> int:
+def run_single_module(module_name: str, *, output: Path) -> int:
     """
     运行单个模块检查流程，并将结果写入指定输出目录。
     """
@@ -141,7 +141,7 @@ def run_single_module(module_name: str, *, output_dir: Path) -> int:
         print(f"检查失败: {exc}")
         return EXIT_ERROR
 
-    report_path = output_file_for(module_name, output_dir=output_dir)
+    report_path = output_file_for(module_name, output=output)
     c_count = write_report(module_names, report_path)
 
     try:
@@ -163,15 +163,15 @@ def command(
         metavar="MODULE_NAME",
         help="待检查的模块名。",
     ),
-    output_dir: Path | None = typer.Option(
+    output: Path | None = typer.Option(
         None,
-        "--output-dir",
+        "--output",
         help="CSV 输出目录，默认写入 tool/module_c_impl_output。",
     ),
 ) -> None:
     configure_output_encoding()
-    effective_output_dir = DEFAULT_OUTPUT_DIR if output_dir is None else output_dir
-    exit_code = run_single_module(module_name, output_dir=effective_output_dir)
+    effective_output = DEFAULT_OUTPUT_DIR if output is None else output
+    exit_code = run_single_module(module_name, output=effective_output)
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
 

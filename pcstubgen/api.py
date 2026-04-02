@@ -16,7 +16,7 @@ __all__ = ["write_stubs"]
 
 def write_stubs(
     module_name: str,
-    output_dir: Path,
+    output: Path,
     options: StubGenerationOptions | None = None,
     writer: StubWriter | None = None,
 ) -> None:
@@ -28,7 +28,7 @@ def write_stubs(
     if writer is None:
         writer = StubWriter()
 
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
 
     module = importlib.import_module(module_name)
     ir_module = build_module(
@@ -44,4 +44,4 @@ def write_stubs(
         include_module_type_comment=options.include_module_type_comment,
         include_c_inferred_source_comment=options.include_c_inferred_source_comment,
     )
-    writer.write(ir_module, renderer, to=output_dir)
+    writer.write(ir_module, renderer, to=output)

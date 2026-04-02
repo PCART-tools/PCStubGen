@@ -22,10 +22,9 @@ app = typer.Typer(add_completion=False)
 @app.command(help="使用 pcstubgen 为模块生成 Python stub。")
 def main(
     module_name: str = typer.Argument(..., metavar="MODULE_NAME", help="模块名"),
-    output_dir: Path = typer.Option(
+    output: Path = typer.Option(
         Path("./stubs"),
-        "--output-dir",
-        "-o",
+        "--output",
         help="输出 stub 的根目录",
     ),
     source_root: Path | None = typer.Option(
@@ -73,12 +72,12 @@ def main(
     使用 pcstubgen 为模块生成 Python stub。
     """
     default_options = StubGenerationOptions()
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output.mkdir(parents=True, exist_ok=True)
 
     logger.remove()
     console_sink_id = logger.add(sys.stderr, format=MY_LOGURU_FORMAT)
     file_sink_id = logger.add(
-        output_dir / "pcstubgen.log",
+        output / "pcstubgen.log",
         mode="w",
         encoding="utf-8",
         catch=False,
@@ -89,7 +88,7 @@ def main(
     try:
         write_stubs(
             module_name=module_name,
-            output_dir=output_dir,
+            output=output,
             options=StubGenerationOptions(
                 source_root=source_root,
                 c_std=c_std or default_options.c_std,
