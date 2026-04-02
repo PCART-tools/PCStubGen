@@ -43,7 +43,7 @@ class CExtensionSource:
 
         c_module = self._match_c_module(irmodule, self._modules)
         if c_module is None:
-            raise RuntimeError(f"未匹配到C模块: {irmodule.full_name}")
+            raise RuntimeError(f"未匹配到唯一C模块: {irmodule.full_name}")
 
         selected = c_module.functions.get(irfunction.name)
         if selected is None:

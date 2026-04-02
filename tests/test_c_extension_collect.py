@@ -1,6 +1,40 @@
 from __future__ import annotations
 
+from io import StringIO
+
+from loguru import logger
+
 from tests._c_extension_test_support import *
+
+
+def _basic_c_extension_definitions(*extra_lines: str) -> str:
+    return "\n".join(
+        [
+            "typedef struct _object PyObject;",
+            "typedef struct PyMethodDef {",
+            "    const char* ml_name;",
+            "    void* ml_meth;",
+            "    int ml_flags;",
+            "    const char* ml_doc;",
+            "} PyMethodDef;",
+            "typedef struct PyModuleDef {",
+            "    int m_base;",
+            "    const char* m_name;",
+            "    const char* m_doc;",
+            "    int m_size;",
+            "    PyMethodDef* m_methods;",
+            "    void* m_slots;",
+            "    void* m_traverse;",
+            "    void* m_clear;",
+            "    void* m_free;",
+            "} PyModuleDef;",
+            "#define PyModuleDef_HEAD_INIT 0",
+            "#define METH_VARARGS 1",
+            "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+            *extra_lines,
+            "",
+        ]
+    )
 
 
 def test_c_signature_extraction_engine_extract_modules_isolates_same_named_functions_per_module(
@@ -1325,6 +1359,322 @@ def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_withou
     assert extracted == {}
 
 
+def test_c_signature_extraction_engine_extract_modules_resolves_ml_meth_definition_across_translation_units(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    shared_header = tmp_path / "shared.h"
+    module_source = tmp_path / "module.c"
+    impl_source = tmp_path / "impl.c"
+
+    shared_header.write_text(
+        _basic_c_extension_definitions(
+            "PyObject* foo_impl(PyObject* self, PyObject* args);",
+        ),
+        encoding="utf-8",
+    )
+    module_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "static PyMethodDef Methods[] = {",
+                '    {"foo", foo_impl, METH_VARARGS, "doc"},',
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                '    "cross.func",',
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    impl_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                '    if (!PyArg_ParseTuple(args, "i", &value)) {',
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+
+    signatures = extracted["cross.func"].functions["foo"].signatures
+    assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
+
+
+def test_c_signature_extraction_engine_extract_modules_resolves_method_table_definition_across_translation_units(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    shared_header = tmp_path / "shared.h"
+    module_source = tmp_path / "module.c"
+    impl_source = tmp_path / "impl.c"
+
+    shared_header.write_text(
+        _basic_c_extension_definitions(
+            "PyObject* foo_impl(PyObject* self, PyObject* args);",
+            "extern PyMethodDef Methods[];",
+        ),
+        encoding="utf-8",
+    )
+    module_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                '    "cross.methods",',
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    impl_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                '    if (!PyArg_ParseTuple(args, "i", &value)) {',
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "PyMethodDef Methods[] = {",
+                '    {"foo", foo_impl, METH_VARARGS, "doc"},',
+                "    {0, 0, 0, 0}",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+
+    signatures = extracted["cross.methods"].functions["foo"].signatures
+    assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
+
+
+def test_c_signature_extraction_engine_usr_index_deduplicates_same_location_header_definitions_without_warning(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    shared_header = tmp_path / "shared.h"
+    module_source = tmp_path / "module.c"
+    helper_source = tmp_path / "helper.c"
+
+    shared_header.write_text(
+        _basic_c_extension_definitions(
+            "static inline PyObject* inline_impl(PyObject* self, PyObject* args) {",
+            "    int value = 0;",
+            '    if (!PyArg_ParseTuple(args, "i", &value)) {',
+            "        return (PyObject*)0;",
+            "    }",
+            "    return (PyObject*)0;",
+            "}",
+        ),
+        encoding="utf-8",
+    )
+    module_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "static PyMethodDef Methods[] = {",
+                '    {"foo", inline_impl, METH_VARARGS, "doc"},',
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                '    "inline.mod",',
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    helper_source.write_text('#include "shared.h"\n', encoding="utf-8")
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+    finally:
+        logger.remove(sink_id)
+
+    assert "USR 定义冲突" not in log_output.getvalue()
+    assert extracted["inline.mod"].functions["foo"].signatures == [
+        ExtractedSignature(arguments=[_arg("value", "int")])
+    ]
+
+
+def test_c_signature_extraction_engine_usr_index_warns_for_conflicting_definitions_and_keeps_first(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    shared_header = tmp_path / "shared.h"
+    module_source = tmp_path / "module.c"
+    first_impl_source = tmp_path / "a_first_impl.c"
+    second_impl_source = tmp_path / "b_second_impl.c"
+
+    shared_header.write_text(
+        _basic_c_extension_definitions(
+            "PyObject* foo_impl(PyObject* self, PyObject* args);",
+        ),
+        encoding="utf-8",
+    )
+    module_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "static PyMethodDef Methods[] = {",
+                '    {"foo", foo_impl, METH_VARARGS, "doc"},',
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                '    "conflict.mod",',
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    first_impl_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                '    if (!PyArg_ParseTuple(args, "i", &value)) {',
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    second_impl_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    const char* label = 0;",
+                '    if (!PyArg_ParseTuple(args, "s", &label)) {',
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+    finally:
+        logger.remove(sink_id)
+
+    assert "USR 定义冲突, 保留首个定义" in log_output.getvalue()
+    assert extracted["conflict.mod"].functions["foo"].signatures == [
+        ExtractedSignature(arguments=[_arg("value", "int")])
+    ]
+
+
+def test_c_signature_extraction_engine_warns_and_skips_when_cross_tu_definition_is_missing(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    shared_header = tmp_path / "shared.h"
+    module_source = tmp_path / "module.c"
+
+    shared_header.write_text(
+        _basic_c_extension_definitions(
+            "PyObject* foo_impl(PyObject* self, PyObject* args);",
+        ),
+        encoding="utf-8",
+    )
+    module_source.write_text(
+        "\n".join(
+            [
+                '#include "shared.h"',
+                "static PyMethodDef Methods[] = {",
+                '    {"foo", foo_impl, METH_VARARGS, "doc"},',
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                '    "missing.mod",',
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+    finally:
+        logger.remove(sink_id)
+
+    assert "找不到 function definition, ml_name: foo" in log_output.getvalue()
+    assert extracted["missing.mod"].functions == {}
+
+
 def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(
     tmp_path: Path,
 ) -> None:
@@ -1334,7 +1684,7 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
         include_directory=[Path("C:/MyInclude")],
     )
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(translation_unit_module, "find_candidate_files", lambda source_root: [])
+    monkeypatch.setattr(translation_unit_module, "list_files", lambda source_root: [])
 
     try:
         assert engine.extract_modules() == {}
@@ -1370,7 +1720,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     )
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
-        "find_candidate_files",
+        "list_files",
         lambda source_root: [source_root / "sample.c"],
     )
     monkeypatch.setattr(
@@ -1381,12 +1731,14 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
         "parse",
-        lambda *args, **kwargs: SimpleNamespace(cursor="fake-tu"),
+        lambda *args, **kwargs: SimpleNamespace(
+            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT)
+        ),
     )
     monkeypatch.setattr(
         c_signature_extraction_module.module_table,
         "collect_modules_from_translation_unit",
-        lambda cursor: [
+        lambda cursor, definition_resolver: [
             ExtractedModule(
                 name="pkg.mod",
                 functions={
@@ -1440,7 +1792,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     )
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
-        "find_candidate_files",
+        "list_files",
         lambda source_root: [source_root / "sample.c"],
     )
     monkeypatch.setattr(
@@ -1451,12 +1803,14 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
         "parse",
-        lambda *args, **kwargs: SimpleNamespace(cursor="fake-tu"),
+        lambda *args, **kwargs: SimpleNamespace(
+            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT)
+        ),
     )
     monkeypatch.setattr(
         c_signature_extraction_module.module_table,
         "collect_modules_from_translation_unit",
-        lambda cursor: [
+        lambda cursor, definition_resolver: [
             ExtractedModule(
                 name="pkg.mod",
                 functions={

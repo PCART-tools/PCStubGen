@@ -31,8 +31,9 @@ from pcstubgen.types import (
     UnionType,
 )
 from pcstubgen.signature_completion.c_extension.modules.collect_modules import (
-    collect_method_table as _collect_method_table,
-    collect_pymethoddef_init_list_expr as _collect_PyMethodDef_INIT_LIST_EXPR,
+    DefinitionResolver,
+    collect_method_table as _collect_method_table_impl,
+    collect_pymethoddef_init_list_expr as _collect_PyMethodDef_INIT_LIST_EXPR_impl,
     resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
 )
 from pcstubgen.signature_completion.c_extension.models import (
@@ -327,9 +328,17 @@ class _FakeToken:
 
 
 class _FakeCursorLocation:
-    def __init__(self, file: str | None = None, offset: int = 0) -> None:
+    def __init__(
+        self,
+        file: str | None = None,
+        offset: int = 0,
+        line: int = 0,
+        column: int = 0,
+    ) -> None:
         self.file = _FakeCursorFile(file) if file is not None else None
         self.offset = offset
+        self.line = line
+        self.column = column
 
 
 class _FakeCursorFile:
@@ -354,6 +363,10 @@ class _FakeNode:
         location: object | None = None,
         extent: object | None = None,
         referenced: object | None = None,
+        canonical: object | None = None,
+        usr: str = "",
+        definition: object | None = None,
+        is_definition: bool = False,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
@@ -362,6 +375,10 @@ class _FakeNode:
         self.location = location if location is not None else _FakeCursorLocation()
         self.extent = extent
         self.referenced = referenced
+        self.canonical = self if canonical is None else canonical
+        self._usr = usr
+        self._definition = definition
+        self._is_definition = is_definition
         self.type = None
 
     def get_tokens(self) -> list[_FakeToken]:
@@ -371,14 +388,53 @@ class _FakeNode:
         return iter(self._children)
 
     def is_definition(self) -> bool:
-        return False
+        return self._is_definition
+
+    def get_usr(self) -> str:
+        return self._usr
+
+    def get_definition(self) -> object | None:
+        if self._definition is not None:
+            return self._definition
+        if self.referenced is not None and getattr(self.referenced, "is_definition", None):
+            if self.referenced.is_definition():
+                return self.referenced
+        return None
+
+
+def _definition_resolver(
+    definitions_by_usr: dict[str, object] | None = None,
+) -> DefinitionResolver:
+    return DefinitionResolver(definitions_by_usr or {})
+
+
+def _collect_method_table(cursor: object, *, module_name: str) -> dict[str, CFunction]:
+    return _collect_method_table_impl(
+        cursor,
+        module_name=module_name,
+        definition_resolver=_definition_resolver(),
+    )
+
+
+def _collect_PyMethodDef_INIT_LIST_EXPR(
+    *,
+    init_list_expr: object,
+) -> tuple[bool, CFunction | None]:
+    return _collect_PyMethodDef_INIT_LIST_EXPR_impl(
+        init_list_expr=init_list_expr,
+        definition_resolver=_definition_resolver(),
+    )
 
 
 def _fake_function_cursor(name: str = "fake_function") -> clang.cindex.Cursor:
     """构造可复用的假函数游标。"""
     return cast(
         clang.cindex.Cursor,
-        _FakeNode(kind=clang.cindex.CursorKind.FUNCTION_DECL, spelling=name),
+        _FakeNode(
+            kind=clang.cindex.CursorKind.FUNCTION_DECL,
+            spelling=name,
+            is_definition=True,
+        ),
     )
 
 
@@ -448,12 +504,16 @@ def _token_identifier_node(
     *,
     kind: object = clang.cindex.CursorKind.DECL_REF_EXPR,
     referenced: object | None = None,
+    canonical: object | None = None,
+    usr: str = "",
 ) -> _FakeNode:
     return _FakeNode(
         kind=kind,
         spelling=name,
         tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
         referenced=referenced,
+        canonical=canonical,
+        usr=usr,
     )
 
 
@@ -552,23 +612,47 @@ def _ml_meth_field(
     *,
     referenced_kind: object = clang.cindex.CursorKind.FUNCTION_DECL,
 ) -> _FakeNode:
-    referenced = _FakeNode(kind=referenced_kind, spelling=name)
+    referenced = _FakeNode(
+        kind=referenced_kind,
+        spelling=name,
+        is_definition=(referenced_kind == clang.cindex.CursorKind.FUNCTION_DECL),
+        usr=f"usr::{name}",
+    )
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
         spelling=name,
-        children=[_token_identifier_node(name, referenced=referenced)],
+        children=[
+            _token_identifier_node(
+                name,
+                referenced=referenced,
+                usr=f"usr::{name}",
+                canonical=referenced,
+            )
+        ],
     )
 
 
 def _ml_meth_cast_field(name: str) -> _FakeNode:
-    referenced = _FakeNode(kind=clang.cindex.CursorKind.FUNCTION_DECL, spelling=name)
+    referenced = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling=name,
+        is_definition=True,
+        usr=f"usr::{name}",
+    )
     return _wrap(
         clang.cindex.CursorKind.UNEXPOSED_EXPR,
         _wrap(
             clang.cindex.CursorKind.PAREN_EXPR,
             _FakeNode(
                 kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
-                children=[_token_identifier_node(name, referenced=referenced)],
+                children=[
+                    _token_identifier_node(
+                        name,
+                        referenced=referenced,
+                        usr=f"usr::{name}",
+                        canonical=referenced,
+                    )
+                ],
             ),
         ),
     )
@@ -643,8 +727,15 @@ CSignatureResolver = CExtensionSource
 extract_c_signature_modules = collect_modules
 c_signature_extraction_module = c_extension_collect_module
 module_table_module = module_collection_module
-_extract_method_table = _collect_method_table
-_extract_PyMethodDef_INIT_LIST_EXPR = _collect_PyMethodDef_INIT_LIST_EXPR
+def _extract_method_table(cursor: object, *, module_name: str) -> dict[str, CFunction]:
+    return _collect_method_table(cursor, module_name=module_name)
+
+
+def _extract_PyMethodDef_INIT_LIST_EXPR(
+    *,
+    init_list_expr: object,
+) -> tuple[bool, CFunction | None]:
+    return _collect_PyMethodDef_INIT_LIST_EXPR(init_list_expr=init_list_expr)
 
 c_signature_extraction_module.clang_parser = translation_unit_module
 c_signature_extraction_module.module_table = module_collection_module

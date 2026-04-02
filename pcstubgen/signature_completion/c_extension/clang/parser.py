@@ -142,7 +142,9 @@ def discover_missing_include_args(
 
 
 def list_files(source_root: Path) -> list[Path]:
-    """得到所有 C/C++ 源文件。不能只筛 PyModuleDef，因为有的写在头文件里，c再include进来"""
+    """得到所有 C/C++ 源文件，不能只筛 PyModuleDef。
+    因为有的写在头文件里，c再include进来。
+    还有函数定义写在别的文件的问题"""
     result: list[Path] = []
     for path in source_root.rglob("*"):
         if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
