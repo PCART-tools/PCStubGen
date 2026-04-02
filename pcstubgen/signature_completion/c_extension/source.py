@@ -87,21 +87,4 @@ class CExtensionSource:
         node: IRModule,
         modules: dict[str, CModule],
     ) -> CModule | None:
-        full_name = str(node.full_name)
-        exact_matches = [
-            module
-            for module in modules.values()
-            if module.name == full_name
-        ]
-        if len(exact_matches) == 1:
-            return exact_matches[0]
-
-        leaf_name = node.full_name.name
-        leaf_matches = [
-            module
-            for module in modules.values()
-            if module.name == leaf_name
-        ]
-        if len(leaf_matches) == 1:
-            return leaf_matches[0]
-        return None
+        return modules.get(node.full_name.name)

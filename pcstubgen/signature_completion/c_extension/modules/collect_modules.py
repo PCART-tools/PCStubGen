@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clang.cindex import Cursor, CursorKind, TokenKind, TypeKind
+from clang.cindex import Cursor, CursorKind, TokenKind, TranslationUnit, TypeKind
 from loguru import logger
 
 from ..clang import constant_eval
@@ -41,6 +41,16 @@ _PY_METHOD_DEF_FIELD_NAMES = (
     "ml_doc",
 )
 
+_PY_MODULE_DEF_TYPE_NAMES = {"PyModuleDef", "struct PyModuleDef"}
+
+_MODULE_CREATE_CALL_NAMES = {
+    "PyModule_Create",
+    "PyModule_Create2",
+    "PyModuleDef_Init",
+}
+
+_PY_INIT_PREFIX = "PyInit_"
+
 
 def is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
     """判断节点是否为 `PyMethodDef[]`。"""
@@ -56,6 +66,14 @@ def is_PyMethodDef_array_definition(cursor: Cursor) -> bool:
         ):
             return True
     return False
+
+
+def _is_pymoduledef_definition(cursor: Cursor) -> bool:
+    return (
+        cursor.kind == CursorKind.VAR_DECL
+        and cursor.is_definition()
+        and cursor.type.spelling in _PY_MODULE_DEF_TYPE_NAMES
+    )
 
 
 def resolve_init_list_expr(
@@ -198,25 +216,19 @@ def collect_method_table(
 def collect_module_from_pymoduledef(
     module_def_cursor: Cursor,
     *,
+    module_name: str,
     definition_index: DefinitionIndex,
 ) -> CModule | None:
     """
     从单个 `PyModuleDef` 变量中提取模块定义与模块方法。
 
-    模块名认 `m_name`，方法认 `m_methods`。
+    模块名认 `PyInit_*` 叶子名，方法认 `m_methods`。
     """
     init_list_expr = var_decl_to_init_list_expr(module_def_cursor)
     assert init_list_expr is not None
 
     values = resolve_init_list_expr(init_list_expr, _PY_MODULE_DEF_FIELD_NAMES)
-
-    # 名字
-    m_name_cursor = values.get("m_name")
-    assert m_name_cursor is not None
-    assert m_name_cursor.kind == CursorKind.STRING_LITERAL
-    m_name = str(m_name_cursor.spelling).strip('"')
-
-    module = CModule(name=m_name)
+    module = CModule(name=module_name)
 
     # 方法表
     m_methods_cursor = values.get("m_methods")
@@ -230,34 +242,117 @@ def collect_module_from_pymoduledef(
     if method_list_cursor is None or not is_PyMethodDef_array_definition(method_list_cursor):
         logger.warning(
             "找不到 method table definition, module_name: {}, 位置: {}",
-            m_name,
+            module_name,
             m_methods_cursor.location,
         )
         return module
 
     module.functions = collect_method_table(
         method_list_cursor,
-        module_name=m_name,
+        module_name=module_name,
         definition_index=definition_index,
     )
     return module
 
 
+def _extract_call_name(call_expr: Cursor) -> str | None:
+    if call_expr.spelling:
+        return str(call_expr.spelling)
+
+    call_children = list(call_expr.get_children())
+    if not call_children:
+        return None
+
+    callee_cursor = unwrap_transparent(call_children[0])
+    if callee_cursor.kind == CursorKind.DECL_REF_EXPR and callee_cursor.spelling:
+        return str(callee_cursor.spelling)
+    return None
+
+
+def _resolve_pymoduledef_cursor_from_argument(
+    argument_cursor: Cursor,
+    *,
+    definition_index: DefinitionIndex,
+) -> Cursor | None:
+    current = unwrap_transparent(argument_cursor)
+    if current.kind == CursorKind.UNARY_OPERATOR:
+        children = list(current.get_children())
+        if not children:
+            return None
+        current = unwrap_transparent(children[-1])
+
+    if current.kind == CursorKind.DECL_REF_EXPR:
+        current = definition_index.get_definition(current)
+
+    if current is None or not _is_pymoduledef_definition(current):
+        return None
+    return current
+
+
+def _collect_module_from_pyinit_function(
+    init_function_cursor: Cursor,
+    *,
+    definition_index: DefinitionIndex,
+) -> CModule | None:
+    init_name = str(init_function_cursor.spelling)
+    if not init_name.startswith(_PY_INIT_PREFIX):
+        return None
+    module_name = init_name[len(_PY_INIT_PREFIX):]
+    if not module_name:
+        return None
+
+    extracted_module: CModule | None = None
+
+    for node in walk_cursor(init_function_cursor):
+        if node.kind != CursorKind.CALL_EXPR:
+            continue
+
+        call_name = _extract_call_name(node)
+        if call_name not in _MODULE_CREATE_CALL_NAMES:
+            continue
+
+        call_children = list(node.get_children())
+        if len(call_children) < 2:
+            continue
+
+        module_def_cursor = _resolve_pymoduledef_cursor_from_argument(
+            call_children[1],
+            definition_index=definition_index,
+        )
+        if module_def_cursor is None:
+            continue
+
+        if extracted_module is not None:
+            logger.warning(
+                "PyInit 中存在多个模块创建候选, 保留首个, init_name: {}, module_name: {}",
+                init_name,
+                module_name,
+            )
+            continue
+
+        extracted_module = collect_module_from_pymoduledef(
+            module_def_cursor,
+            module_name=module_name,
+            definition_index=definition_index,
+        )
+
+    return extracted_module
+
+
 def collect_modules_from_translation_unit(
-    cursor: Cursor,
+    translation_unit: TranslationUnit,
     *,
     definition_index: DefinitionIndex,
 ) -> list[CModule]:
-    """从单个 translation unit 的 `PyModuleDef` 变量定义提取模块。"""
+    """从单个 translation unit 的 `PyInit_*` 定义提取模块。"""
     modules: list[CModule] = []
-    # PyModuleDef可能定义为局部变量
-    for node in walk_cursor(cursor):
+    for node in translation_unit.cursor.get_children():
         if (
-            node.kind == CursorKind.VAR_DECL
+            node.kind == CursorKind.FUNCTION_DECL
             and node.is_definition()
-            and node.type.spelling in {"PyModuleDef", "struct PyModuleDef"}
+            and str(node.spelling).startswith(_PY_INIT_PREFIX)
         ):
-            extracted = collect_module_from_pymoduledef(
+            extracted = _collect_module_from_pyinit_function(
                 node,
                 definition_index=definition_index,
             )

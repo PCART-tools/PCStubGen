@@ -7,6 +7,20 @@ from loguru import logger
 from tests._c_extension_test_support import *
 
 
+def _pyinit_lines(
+    init_name: str,
+    *,
+    moduledef_name: str = "moduledef",
+    create_func_name: str = "PyModule_Create",
+) -> list[str]:
+    return [
+        f"PyObject* {create_func_name}(PyModuleDef* def);",
+        f"PyObject* PyInit_{init_name}(void) {{",
+        f"    return {create_func_name}(&{moduledef_name});",
+        "}",
+    ]
+
+
 def _basic_c_extension_definitions(*extra_lines: str) -> str:
     return "\n".join(
         [
@@ -93,6 +107,7 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
                     "    Methods,",
                     "    0, 0, 0, 0",
                     "};",
+                    *_pyinit_lines(module_name),
                 ]
             ),
             encoding="utf-8",
@@ -158,6 +173,7 @@ def test_c_signature_extraction_engine_extract_modules_populates_inferred_return
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("return_only"),
             ]
         ),
         encoding="utf-8",
@@ -230,6 +246,7 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("parse_tuple_args"),
             ]
         ),
         encoding="utf-8",
@@ -306,6 +323,7 @@ def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_ex
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("parse_tuple_extent_text"),
             ]
         ),
         encoding="utf-8",
@@ -384,6 +402,7 @@ def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("multiple_pyarg_signatures"),
             ]
         ),
         encoding="utf-8",
@@ -472,6 +491,8 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_modulede
                 "    SecondMethods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("first", moduledef_name="first_moduledef"),
+                *_pyinit_lines("second", moduledef_name="second_moduledef"),
             ]
         ),
         encoding="utf-8",
@@ -546,6 +567,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
                     "    Methods,",
                     "    0, 0, 0, 0",
                     "};",
+                    *_pyinit_lines("shared"),
                 ]
             ),
             encoding="utf-8",
@@ -557,12 +579,12 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
     )
     extracted = engine.extract_modules()
 
-    module = extracted["dup.shared"]
+    module = extracted["shared"]
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
 
 
-def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
+def test_c_signature_extraction_engine_extract_modules_ignores_unreachable_moduledefs_in_one_file(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -632,6 +654,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
                 "    SecondMethods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("mod", moduledef_name="first_moduledef"),
             ]
         ),
         encoding="utf-8",
@@ -643,7 +666,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
     )
     extracted = engine.extract_modules()
 
-    module = extracted["dup.same_file"]
+    module = extracted["mod"]
     assert set(module.functions) == {"foo"}
     assert module.functions["foo"].ml_flags == METH_VARARGS
 
@@ -707,6 +730,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("dup"),
             ]
         ),
         encoding="utf-8",
@@ -718,7 +742,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
     )
     extracted = engine.extract_modules()
 
-    module = extracted["dup.mod"]
+    module = extracted["dup"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
 
 
@@ -778,6 +802,7 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
                     "    Methods,",
                     "    0, 0, 0, 0",
                     "};",
+                    *_pyinit_lines("shared"),
                 ]
             ),
             encoding="utf-8",
@@ -789,8 +814,99 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
     )
     extracted = engine.extract_modules()
 
-    module = extracted["dup.shared"]
+    module = extracted["shared"]
     assert module.functions["foo"].ml_flags == METH_VARARGS
+
+
+def test_c_signature_extraction_engine_warns_and_keeps_first_module_create_candidate_in_pyinit(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "multiple_candidates.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyObject* PyModule_Create(PyModuleDef* def);",
+                "static PyObject* first_foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyObject* second_bar_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef FirstMethods[] = {",
+                "    {\"foo\", first_foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyMethodDef SecondMethods[] = {",
+                "    {\"bar\", second_bar_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef first_moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"dup.same_file.first\",",
+                "    0,",
+                "    -1,",
+                "    FirstMethods,",
+                "    0, 0, 0, 0",
+                "};",
+                "static PyModuleDef second_moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"dup.same_file.second\",",
+                "    0,",
+                "    -1,",
+                "    SecondMethods,",
+                "    0, 0, 0, 0",
+                "};",
+                "PyObject* PyInit_mod(void) {",
+                "    PyModule_Create(&first_moduledef);",
+                "    return PyModule_Create(&second_moduledef);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
+    finally:
+        logger.remove(sink_id)
+
+    assert "PyInit 中存在多个模块创建候选, 保留首个" in log_output.getvalue()
+    assert set(extracted["mod"].functions) == {"foo"}
 
 
 def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_from_pymodule_addobject(
@@ -881,7 +997,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_
     )
     extracted = engine.extract_modules()
 
-    module = extracted["pkg.mod"]
+    module = extracted["mod"]
     assert module.functions["foo"].ml_name == "foo"
     assert module.functions["foo"].ml_flags == METH_VARARGS
 
@@ -1048,6 +1164,72 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addtype
     extracted = engine.extract_modules()
 
 
+def test_c_signature_extraction_engine_extract_modules_supports_pymoduledef_init(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "module_def_init.c"
+    source.write_text(
+        "\n".join(
+            [
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "int PyArg_ParseTuple(PyObject* args, const char* fmt, ...);",
+                "PyObject* PyModuleDef_Init(PyModuleDef* def);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
+                "    int value = 0;",
+                "    if (!PyArg_ParseTuple(args, \"i\", &value)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"pkg.mod\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                "PyObject* PyInit_mod(void) {",
+                "    return PyModuleDef_Init(&moduledef);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
+
+    assert "mod" in extracted
+    assert extracted["mod"].functions["foo"].ml_flags == METH_VARARGS
+
+
 def test_c_signature_extraction_engine_extract_modules_supports_designated_moduledef_initializer(
     tmp_path: Path,
 ) -> None:
@@ -1096,6 +1278,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
                 "    .m_size = -1,",
                 "    .m_methods = Methods,",
                 "};",
+                *_pyinit_lines("mod"),
             ]
         ),
         encoding="utf-8",
@@ -1107,9 +1290,9 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
     )
     extracted = engine.extract_modules()
 
-    assert "designated.mod" in extracted
-    assert extracted["designated.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["designated.mod"].functions["foo"].ml_flags == METH_VARARGS
+    assert "mod" in extracted
+    assert extracted["mod"].functions["foo"].ml_name == "foo"
+    assert extracted["mod"].functions["foo"].ml_flags == METH_VARARGS
 
 
 def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_initializer_styles(
@@ -1163,6 +1346,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("mod"),
             ]
         ),
         encoding="utf-8",
@@ -1174,12 +1358,12 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
     )
     extracted = engine.extract_modules()
 
-    assert "mixed.mod" in extracted
-    assert extracted["mixed.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["mixed.mod"].functions["foo"].ml_flags == METH_VARARGS
+    assert "mod" in extracted
+    assert extracted["mod"].functions["foo"].ml_name == "foo"
+    assert extracted["mod"].functions["foo"].ml_flags == METH_VARARGS
 
 
-def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_without_pyinit(
+def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_without_pyinit(
     tmp_path: Path,
 ) -> None:
     pytest.importorskip("clang.cindex")
@@ -1241,8 +1425,7 @@ def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_withou
     )
     extracted = engine.extract_modules()
 
-    assert extracted["orphan.mod"].functions["foo"].ml_name == "foo"
-    assert extracted["orphan.mod"].functions["foo"].ml_flags == METH_VARARGS
+    assert extracted == {}
 
 
 def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_without_methods(
@@ -1256,6 +1439,7 @@ def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_witho
     source.write_text(
         "\n".join(
             [
+                "typedef struct _object PyObject;",
                 "typedef struct PyMethodDef {",
                 "    const char* ml_name;",
                 "    void* ml_meth;",
@@ -1282,6 +1466,7 @@ def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_witho
                 "    0,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("mod"),
             ]
         ),
         encoding="utf-8",
@@ -1293,8 +1478,8 @@ def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_witho
     )
     extracted = engine.extract_modules()
 
-    assert "empty.mod" in extracted
-    assert extracted["empty.mod"].functions == {}
+    assert "mod" in extracted
+    assert extracted["mod"].functions == {}
 
 
 def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_without_m_name(
@@ -1392,6 +1577,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_ml_meth_definiti
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("mod"),
                 "",
             ]
         ),
@@ -1416,7 +1602,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_ml_meth_definiti
 
     extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
 
-    signatures = extracted["cross.func"].functions["foo"].signatures
+    signatures = extracted["mod"].functions["foo"].signatures
     assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
 
 
@@ -1450,6 +1636,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_method_table_def
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("mod"),
                 "",
             ]
         ),
@@ -1478,7 +1665,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_method_table_def
 
     extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
 
-    signatures = extracted["cross.methods"].functions["foo"].signatures
+    signatures = extracted["mod"].functions["foo"].signatures
     assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
 
 
@@ -1521,6 +1708,7 @@ def test_c_signature_extraction_engine_usr_index_deduplicates_same_location_head
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("inline"),
                 "",
             ]
         ),
@@ -1536,7 +1724,7 @@ def test_c_signature_extraction_engine_usr_index_deduplicates_same_location_head
         logger.remove(sink_id)
 
     assert "USR 定义冲突" not in log_output.getvalue()
-    assert extracted["inline.mod"].functions["foo"].signatures == [
+    assert extracted["inline"].functions["foo"].signatures == [
         ExtractedSignature(arguments=[_arg("value", "int")])
     ]
 
@@ -1575,6 +1763,7 @@ def test_c_signature_extraction_engine_usr_index_warns_for_conflicting_definitio
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("conflict"),
                 "",
             ]
         ),
@@ -1621,7 +1810,7 @@ def test_c_signature_extraction_engine_usr_index_warns_for_conflicting_definitio
         logger.remove(sink_id)
 
     assert "USR 定义冲突, 保留首个定义" in log_output.getvalue()
-    assert extracted["conflict.mod"].functions["foo"].signatures == [
+    assert extracted["conflict"].functions["foo"].signatures == [
         ExtractedSignature(arguments=[_arg("value", "int")])
     ]
 
@@ -1658,6 +1847,7 @@ def test_c_signature_extraction_engine_warns_and_skips_when_cross_tu_definition_
                 "    Methods,",
                 "    0, 0, 0, 0",
                 "};",
+                *_pyinit_lines("missing"),
                 "",
             ]
         ),
@@ -1672,7 +1862,7 @@ def test_c_signature_extraction_engine_warns_and_skips_when_cross_tu_definition_
         logger.remove(sink_id)
 
     assert "找不到 function definition, ml_name: foo" in log_output.getvalue()
-    assert extracted["missing.mod"].functions == {}
+    assert extracted["missing"].functions == {}
 
 
 def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(

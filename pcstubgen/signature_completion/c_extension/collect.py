@@ -24,9 +24,9 @@ def collect_modules(
     """
     基于 libclang 提取模块级 C 签名。
 
-    该流程从 `PyModuleDef` 变量定义出发，读取 `m_name` / `m_methods`
-    还原模块级 `PyMethodDef`，再结合 `PyArg_*` 调用和格式串规则推断
-    Python 侧参数信息。
+    该流程从 translation unit 顶层 `PyInit_*` 定义出发，反查对应的
+    `PyModuleDef` 与 `m_methods`，还原模块级 `PyMethodDef`，再结合
+    `PyArg_*` 调用和格式串规则推断 Python 侧参数信息。
     """
     check(source.exists())
 
@@ -54,7 +54,7 @@ def collect_modules(
     for tu in translation_units:
         try:
             modules = module_collection.collect_modules_from_translation_unit(
-                tu.cursor,
+                tu,
                 definition_index=definition_index,
             )
         except AssertionError:

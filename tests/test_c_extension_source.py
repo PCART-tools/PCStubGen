@@ -140,15 +140,15 @@ def test_c_signature_resolver_raises_for_methods_and_python_modules(
         resolver.resolve_function(python_module, python_module.functions[0])
 
 
-def test_c_signature_resolver_matches_exact_module_before_leaf_name(
+def test_c_signature_resolver_matches_leaf_module_name(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     _patch_c_signature_extractor(
         monkeypatch,
         modules={
-            "pkg.first": ExtractedModule(
-                name="pkg.first",
+            "first": ExtractedModule(
+                name="first",
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",
@@ -158,8 +158,8 @@ def test_c_signature_resolver_matches_exact_module_before_leaf_name(
                     )
                 },
             ),
-            "pkg.second": ExtractedModule(
-                name="pkg.second",
+            "second": ExtractedModule(
+                name="second",
                 functions={
                     "foo": ExtractedFunction(
                         ml_name="foo",

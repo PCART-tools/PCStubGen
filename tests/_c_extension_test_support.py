@@ -112,7 +112,7 @@ def _unknown_function(
 
 def _module_fixture(
     *,
-    name: str = "pkg.mod",
+    name: str = "mod",
     functions: dict[str, CFunction] | None = None,
 ) -> dict[str, CModule]:
     return {
