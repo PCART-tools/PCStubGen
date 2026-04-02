@@ -287,3 +287,49 @@ def test_c_signature_engine_extract_method_table_stops_at_sentinel(
     assert calls == [method_1, non_sentinel, method_2]
     assert list(output) == ["entry_1", "entry_2", "entry_3"]
 
+
+def test_c_signature_engine_collect_modules_from_translation_unit_reads_pyinit_under_top_level_linkage_spec(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    init_function = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="PyInit__dierckx",
+        is_definition=True,
+    )
+    translation_unit = _FakeTranslationUnit(
+        diagnostics=[],
+        cursor=_FakeNode(
+            kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+            children=[
+                _FakeNode(
+                    kind=clang.cindex.CursorKind.LINKAGE_SPEC,
+                    children=[init_function],
+                )
+            ],
+        ),
+    )
+    captured: list[object] = []
+
+    def fake_collect(
+        init_function_cursor: object,
+        *,
+        definition_index: DefinitionIndex,
+    ) -> CModule | None:
+        _ = definition_index
+        captured.append(init_function_cursor)
+        return CModule(name="_dierckx")
+
+    monkeypatch.setattr(
+        module_table_module,
+        "_collect_module_from_pyinit_function",
+        fake_collect,
+    )
+
+    extracted = module_table_module.collect_modules_from_translation_unit(
+        translation_unit,
+        definition_index=_definition_index(),
+    )
+
+    assert captured == [init_function]
+    assert extracted == [CModule(name="_dierckx")]
+

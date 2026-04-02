@@ -339,6 +339,36 @@ def _collect_module_from_pyinit_function(
     return extracted_module
 
 
+def _iter_top_level_pyinit_functions(translation_unit: TranslationUnit) -> list[Cursor]:
+    """枚举 translation unit 顶层可见的 `PyInit_*` 定义。
+
+    仅处理两种入口形态：
+    - 顶层直接出现的 `FUNCTION_DECL`
+    - 顶层 `LINKAGE_SPEC`（如 C++ `extern "C"`）下一层的 `FUNCTION_DECL`
+    """
+    result: list[Cursor] = []
+    for node in translation_unit.cursor.get_children():
+        if (
+            node.kind == CursorKind.FUNCTION_DECL
+            and node.is_definition()
+            and str(node.spelling).startswith(_PY_INIT_PREFIX)
+        ):
+            result.append(node)
+            continue
+
+        if node.kind != CursorKind.LINKAGE_SPEC:
+            continue
+
+        for child in node.get_children():
+            if (
+                child.kind == CursorKind.FUNCTION_DECL
+                and child.is_definition()
+                and str(child.spelling).startswith(_PY_INIT_PREFIX)
+            ):
+                result.append(child)
+    return result
+
+
 def collect_modules_from_translation_unit(
     translation_unit: TranslationUnit,
     *,
@@ -346,16 +376,11 @@ def collect_modules_from_translation_unit(
 ) -> list[CModule]:
     """从单个 translation unit 的 `PyInit_*` 定义提取模块。"""
     modules: list[CModule] = []
-    for node in translation_unit.cursor.get_children():
-        if (
-            node.kind == CursorKind.FUNCTION_DECL
-            and node.is_definition()
-            and str(node.spelling).startswith(_PY_INIT_PREFIX)
-        ):
-            extracted = _collect_module_from_pyinit_function(
-                node,
-                definition_index=definition_index,
-            )
-            if extracted is not None:
-                modules.append(extracted)
+    for node in _iter_top_level_pyinit_functions(translation_unit):
+        extracted = _collect_module_from_pyinit_function(
+            node,
+            definition_index=definition_index,
+        )
+        if extracted is not None:
+            modules.append(extracted)
     return modules
