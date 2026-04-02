@@ -26,20 +26,20 @@ class DefinitionIndex:
         indexed_definitions: dict[str, _IndexedDefinition] = {}
         for translation_unit in translation_units:
             for cursor in walk_cursor(translation_unit.cursor):
-                if not _is_definition_cursor(cursor):
+                if not cursor.is_definition():
                     continue
 
                 stable_usr = _get_usr_from_definition_cursor(cursor)
                 if stable_usr is None:
                     continue
 
-                location = getattr(cursor, "location", None)
-                file = getattr(location, "file", None)
+                location = cursor.location
+                file = location.file
                 record = _IndexedDefinition(
                     cursor=cursor,
                     file_name=None if file is None else str(file.name),
-                    line=0 if location is None else int(getattr(location, "line", 0)),
-                    column=0 if location is None else int(getattr(location, "column", 0)),
+                    line=int(location.line),
+                    column=int(location.column),
                 )
 
                 existing = indexed_definitions.get(stable_usr)
@@ -70,8 +70,8 @@ class DefinitionIndex:
         }
 
     def get_definition(self, cursor: Cursor) -> Cursor | None:
-        local_definition = _get_definition_from_cursor(cursor)
-        if local_definition is not None and local_definition.is_definition():
+        local_definition = cursor.get_definition()
+        if local_definition is not None:
             return local_definition
 
         stable_usr = _get_usr_from_lookup_cursor(cursor)
@@ -80,26 +80,12 @@ class DefinitionIndex:
         return self._definitions_by_usr.get(stable_usr)
 
 
-def _is_definition_cursor(cursor: Cursor) -> bool:
-    kind = getattr(cursor, "kind", None)
-    if kind is None or not kind.is_declaration():
-        return False
-    return cursor.is_definition()
-
-
 def _get_usr_from_definition_cursor(cursor: Cursor) -> str | None:
-    canonical = getattr(cursor, "canonical", None)
-    if canonical is not None:
-        getter = getattr(canonical, "get_usr", None)
-        if callable(getter):
-            stable_usr = getter()
-            if stable_usr:
-                return stable_usr
+    stable_usr = cursor.canonical.get_usr()
+    if stable_usr:
+        return stable_usr
 
-    getter = getattr(cursor, "get_usr", None)
-    if not callable(getter):
-        return None
-    stable_usr = getter()
+    stable_usr = cursor.get_usr()
     if stable_usr:
         return stable_usr
     return None
@@ -107,18 +93,14 @@ def _get_usr_from_definition_cursor(cursor: Cursor) -> str | None:
 
 def _get_usr_from_lookup_cursor(cursor: Cursor) -> str | None:
     seen: set[int] = set()
-    candidates = []
+    candidates: list[Cursor] = []
 
-    referenced = getattr(cursor, "referenced", None)
+    referenced = cursor.referenced
     if referenced is not None:
         candidates.append(referenced)
-        referenced_canonical = getattr(referenced, "canonical", None)
-        if referenced_canonical is not None:
-            candidates.append(referenced_canonical)
+        candidates.append(referenced.canonical)
 
-    canonical = getattr(cursor, "canonical", None)
-    if canonical is not None:
-        candidates.append(canonical)
+    candidates.append(cursor.canonical)
     candidates.append(cursor)
 
     for candidate in candidates:
@@ -127,17 +109,7 @@ def _get_usr_from_lookup_cursor(cursor: Cursor) -> str | None:
             continue
         seen.add(candidate_id)
 
-        getter = getattr(candidate, "get_usr", None)
-        if not callable(getter):
-            continue
-        stable_usr = getter()
+        stable_usr = candidate.get_usr()
         if stable_usr:
             return stable_usr
     return None
-
-
-def _get_definition_from_cursor(cursor: Cursor) -> Cursor | None:
-    getter = getattr(cursor, "get_definition", None)
-    if not callable(getter):
-        return None
-    return getter()

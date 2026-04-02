@@ -147,7 +147,6 @@ def collect_pymethoddef_init_list_expr(
     if (
         func_def_cursor is None
         or func_def_cursor.kind != CursorKind.FUNCTION_DECL
-        or not func_def_cursor.is_definition()
     ):
         logger.warning(
             "找不到 function definition, ml_name: {}, 位置: {}",
