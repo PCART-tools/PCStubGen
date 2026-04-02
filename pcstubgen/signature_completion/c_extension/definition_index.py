@@ -21,6 +21,11 @@ _DECL_CONTEXT_KINDS = {
     CursorKind.LINKAGE_SPEC,
 }
 
+def _should_index(cursor: Cursor):
+    return (cursor.kind in _INDEXED_DEFINITION_KINDS
+            and cursor.is_definition()
+            and cursor.linkage in _EXPORTABLE_LINKAGES)
+
 
 class DefinitionIndex:
     """为跨 translation unit 的定义查询建立索引。"""
@@ -28,11 +33,8 @@ class DefinitionIndex:
     def __init__(self, translation_units: Iterable[TranslationUnit]) -> None:
         self._usr_to_cursor: dict[str, Cursor] = {}
         for translation_unit in translation_units:
-            for cursor in _iter_exportable_definition_candidates(translation_unit.cursor):
-                if (
-                    not cursor.is_definition()
-                    or cursor.linkage not in _EXPORTABLE_LINKAGES
-                ):
+            for cursor in translation_unit.cursor.get_children():
+                if not _should_index(cursor):
                     continue
 
                 stable_usr = _get_usr_from_definition_cursor(cursor)

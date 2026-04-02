@@ -233,7 +233,7 @@ def test_definition_index_ignores_local_variable_definition_in_function_body() -
     assert definition_index.get_definition(cursor) is None
 
 
-def test_definition_index_recurses_into_namespace() -> None:
+def test_definition_index_does_not_recurse_into_namespace() -> None:
     definition = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         usr="usr:namespace_func",
@@ -259,10 +259,10 @@ def test_definition_index_recurses_into_namespace() -> None:
         )
     ])
 
-    assert definition_index.get_definition(cursor) is definition
+    assert definition_index.get_definition(cursor) is None
 
 
-def test_definition_index_recurses_into_linkage_spec() -> None:
+def test_definition_index_does_not_recurse_into_linkage_spec() -> None:
     definition = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         usr="usr:extern_c_func",
@@ -287,4 +287,4 @@ def test_definition_index_recurses_into_linkage_spec() -> None:
         )
     ])
 
-    assert definition_index.get_definition(cursor) is definition
+    assert definition_index.get_definition(cursor) is None
