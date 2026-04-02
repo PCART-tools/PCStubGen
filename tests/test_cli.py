@@ -42,7 +42,7 @@ def test_cli_passes_stub_generation_options(
             "--include-directory",
             "C:/IncludeA",
             "--include-directory=C:/IncludeB",
-            "--source-root",
+            "--source",
             str(tmp_path / "src"),
             "--c-std",
             "c99",
@@ -67,10 +67,27 @@ def test_cli_passes_stub_generation_options(
         Path("C:/IncludeA"),
         Path("C:/IncludeB"),
     ]
-    assert captured_options.source_root == tmp_path / "src"
+    assert captured_options.source == tmp_path / "src"
     assert captured_options.c_std == "c99"
     assert captured_options.cpp_std == "c++20"
     assert captured_options.include_c_inferred_source_comment is True
+
+
+def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "math",
+            "--output",
+            str(tmp_path),
+            "--source-root",
+            str(tmp_path / "src"),
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code != 0
+    assert "No such option: --source-root" in result.output
 
 
 def test_cli_preserves_include_without_validation(

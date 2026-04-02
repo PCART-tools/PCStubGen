@@ -124,14 +124,14 @@ def _module_fixture(
 
 def _make_extraction_config(
     *,
-    source_root: Path,
+    source: Path,
     include: list[str] = (),
     include_directory: list[Path] = (),
     c_std: str = "c11",
     cpp_std: str = "c++17",
 ) -> dict[str, object]:
     return {
-        "source_root": source_root,
+        "source": source,
         "include": list(include),
         "include_directory": translation_unit_module.inject_python_include_directories(
             list(include_directory)
@@ -144,14 +144,14 @@ def _make_extraction_config(
 class CSignatureExtractor:
     def __init__(
         self,
-        source_root: Path,
+        source: Path,
         *,
         include: list[str] = (),
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
     ) -> None:
-        self._source_root = source_root
+        self._source = source
         self._include = list(include)
         self._include_directory = translation_unit_module.inject_python_include_directories(
             list(include_directory)
@@ -161,7 +161,7 @@ class CSignatureExtractor:
 
     def extract_modules(self) -> dict[str, CModule]:
         return collect_modules(
-            self._source_root,
+            self._source,
             include=self._include,
             include_directory=self._include_directory,
             c_std=self._c_std,
@@ -189,14 +189,14 @@ def _patch_c_signature_extractor(
     extractor = _FakeExtractor(modules=modules)
 
     def _patched_collect_modules(
-        source_root: Path,
+        source: Path,
         *,
         include: list[str] = (),
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
     ) -> dict[str, CModule]:
-        _ = (source_root, include, include_directory, c_std, cpp_std)
+        _ = (source, include, include_directory, c_std, cpp_std)
         return extractor.extract_modules()
 
     monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)
@@ -207,14 +207,14 @@ def _patch_raising_c_signature_extractor(
     error: Exception,
 ) -> None:
     def _patched_collect_modules(
-        source_root: Path,
+        source: Path,
         *,
         include: list[str] = (),
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
     ) -> dict[str, CModule]:
-        _ = (source_root, include, include_directory, c_std, cpp_std)
+        _ = (source, include, include_directory, c_std, cpp_std)
         raise error
 
     monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)

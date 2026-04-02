@@ -99,7 +99,7 @@ def test_c_signature_extraction_engine_extract_modules_isolates_same_named_funct
         )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -164,7 +164,7 @@ def test_c_signature_extraction_engine_extract_modules_populates_inferred_return
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -236,7 +236,7 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -312,7 +312,7 @@ def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_ex
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -390,7 +390,7 @@ def test_c_signature_extraction_engine_extract_modules_emits_multiple_signatures
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -478,7 +478,7 @@ def test_c_signature_extraction_engine_extract_modules_handles_multiple_modulede
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -552,7 +552,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_across_files(
         )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -638,7 +638,7 @@ def test_c_signature_extraction_engine_discards_duplicate_modules_in_one_file(
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -713,7 +713,7 @@ def test_c_signature_extraction_engine_warns_and_keeps_first_duplicate_in_same_m
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -784,7 +784,7 @@ def test_c_signature_extraction_engine_warns_and_discards_duplicate_module_acros
         )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -876,7 +876,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_registered_types_
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -961,7 +961,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addobje
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1042,7 +1042,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_pymodule_addtype
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1102,7 +1102,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_designated_modul
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1169,7 +1169,7 @@ def test_c_signature_extraction_engine_extract_modules_supports_mixed_moduledef_
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1236,7 +1236,7 @@ def test_c_signature_extraction_engine_extract_modules_accepts_moduledefs_withou
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1288,7 +1288,7 @@ def test_c_signature_extraction_engine_extract_modules_keeps_named_modules_witho
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1351,7 +1351,7 @@ def test_c_signature_extraction_engine_extract_modules_ignores_moduledefs_withou
     )
 
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         c_std="c11",
     )
     extracted = engine.extract_modules()
@@ -1414,7 +1414,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_ml_meth_definiti
         encoding="utf-8",
     )
 
-    extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+    extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
 
     signatures = extracted["cross.func"].functions["foo"].signatures
     assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
@@ -1476,7 +1476,7 @@ def test_c_signature_extraction_engine_extract_modules_resolves_method_table_def
         encoding="utf-8",
     )
 
-    extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+    extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
 
     signatures = extracted["cross.methods"].functions["foo"].signatures
     assert signatures == [ExtractedSignature(arguments=[_arg("value", "int")])]
@@ -1531,7 +1531,7 @@ def test_c_signature_extraction_engine_usr_index_deduplicates_same_location_head
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+        extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
     finally:
         logger.remove(sink_id)
 
@@ -1616,7 +1616,7 @@ def test_c_signature_extraction_engine_usr_index_warns_for_conflicting_definitio
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+        extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
     finally:
         logger.remove(sink_id)
 
@@ -1667,7 +1667,7 @@ def test_c_signature_extraction_engine_warns_and_skips_when_cross_tu_definition_
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        extracted = CSignatureExtractor(source_root=tmp_path, c_std="c11").extract_modules()
+        extracted = CSignatureExtractor(source=tmp_path, c_std="c11").extract_modules()
     finally:
         logger.remove(sink_id)
 
@@ -1679,12 +1679,12 @@ def test_c_signature_engine_extract_modules_keeps_external_include_options_and_i
     tmp_path: Path,
 ) -> None:
     engine = CSignatureExtractor(
-        source_root=tmp_path,
+        source=tmp_path,
         include=["Python.h"],
         include_directory=[Path("C:/MyInclude")],
     )
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(translation_unit_module, "list_files", lambda source_root: [])
+    monkeypatch.setattr(translation_unit_module, "list_files", lambda source: [])
 
     try:
         assert engine.extract_modules() == {}
@@ -1721,7 +1721,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
         "list_files",
-        lambda source_root: [source_root / "sample.c"],
+        lambda source: [source / "sample.c"],
     )
     monkeypatch.setattr(
         c_signature_extraction_module.Index,
@@ -1793,7 +1793,7 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
         "list_files",
-        lambda source_root: [source_root / "sample.c"],
+        lambda source: [source / "sample.c"],
     )
     monkeypatch.setattr(
         c_signature_extraction_module.Index,
@@ -1845,4 +1845,5 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]
     assert "bad" in logged_messages[0]
+
 

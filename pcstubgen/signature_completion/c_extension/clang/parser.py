@@ -82,11 +82,11 @@ def inject_python_include_directories(include_directories: list[Path]) -> list[P
     return directories
 
 
-def resolve_missing_include_dir(source_root: Path, *, include_literal: str) -> Path | None:
+def resolve_missing_include_dir(source: Path, *, include_literal: str) -> Path | None:
     """在源码树内搜索缺失头文件，找到首个匹配的 include 目录后立即返回。"""
     include_root_depth = len(tuple(part for part in include_literal.split("/") if part)) - 1
 
-    for header_path in source_root.rglob(include_literal):
+    for header_path in source.rglob(include_literal):
         if not header_path.is_file():
             continue
         if include_root_depth >= len(header_path.parents):
@@ -110,14 +110,14 @@ def discover_missing_include_args(
     *,
     file_path: Path,
     diagnostics: list[Diagnostic],
-    source_root: Path,
+    source: Path,
     include_directory: list[Path],
 ) -> list[Path]:
     """基于缺失头文件诊断自动补全 clang include 目录。"""
     resolved_pairs: list[tuple[str, Path]] = []
     missing_literals = extract_missing_include_literals(diagnostics)
     for include_literal in missing_literals:
-        include_dir = resolve_missing_include_dir(source_root, include_literal=include_literal)
+        include_dir = resolve_missing_include_dir(source, include_literal=include_literal)
         if include_dir is None:
             continue
         resolved_pairs.append((include_literal, include_dir))
@@ -141,12 +141,12 @@ def discover_missing_include_args(
     return added
 
 
-def list_files(source_root: Path) -> list[Path]:
+def list_files(source: Path) -> list[Path]:
     """得到所有 C/C++ 源文件，不能只筛 PyModuleDef。
     因为有的写在头文件里，c再include进来。
     还有函数定义写在别的文件的问题"""
     result: list[Path] = []
-    for path in source_root.rglob("*"):
+    for path in source.rglob("*"):
         if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
                 result.append(path)
     result.sort()
@@ -200,7 +200,7 @@ def parse(
     index: Index,
     file_path: Path,
     *,
-    source_root: Path,
+    source: Path,
     include: list[str],
     include_directory: list[Path],
     c_std: str,
@@ -223,7 +223,7 @@ def parse(
         added = discover_missing_include_args(
             file_path=file_path,
             diagnostics=diagnostics,
-            source_root=source_root,
+            source=source,
             include_directory=include_directory,
         )
         if not added:

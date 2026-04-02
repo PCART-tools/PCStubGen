@@ -46,7 +46,7 @@ def test_c_signature_resolver_preserves_extracted_fields_and_source_comment(
             }
         ),
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -86,7 +86,7 @@ def test_c_signature_resolver_skips_missing_extent_text(
             }
         ),
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -117,7 +117,7 @@ def test_c_signature_resolver_raises_for_methods_and_python_modules(
             }
         ),
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     extension_module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -171,7 +171,7 @@ def test_c_signature_resolver_matches_exact_module_before_leaf_name(
             ),
         },
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
         module_type=IRModuleType.EXTENSION,
@@ -218,7 +218,7 @@ def test_c_signature_resolver_falls_back_to_unique_leaf_name(
             ),
         },
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -265,7 +265,7 @@ def test_c_signature_resolver_raises_for_ambiguous_leaf_name(
             ),
         },
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -299,7 +299,7 @@ def test_c_signature_resolver_raises_when_function_is_missing_or_empty(
             }
         ),
     )
-    resolver = CSignatureResolver(source_root=tmp_path)
+    resolver = CSignatureResolver(source=tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -320,7 +320,7 @@ def test_c_signature_resolver_propagates_extraction_errors(
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     with pytest.raises(RuntimeError, match="boom"):
-        CSignatureResolver(source_root=tmp_path)
+        CSignatureResolver(source=tmp_path)
 
 
 def test_c_signature_resolver_passes_clang_options_to_extractor(
@@ -330,14 +330,14 @@ def test_c_signature_resolver_passes_clang_options_to_extractor(
     captured: dict[str, object] = {}
 
     def _record_collect_modules(
-        source_root: Path,
+        source: Path,
         *,
         include: list[str] = (),
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
     ) -> dict[str, ExtractedModule]:
-        captured["source_root"] = source_root
+        captured["source"] = source
         captured["include"] = list(include)
         captured["include_directory"] = list(include_directory)
         captured["c_std"] = c_std
@@ -353,14 +353,14 @@ def test_c_signature_resolver_passes_clang_options_to_extractor(
     )
 
     CSignatureResolver(
-        source_root=tmp_path,
+        source=tmp_path,
         include=["Python.h"],
         include_directory=[Path("C:/MyInclude")],
         c_std="c99",
         cpp_std="c++20",
     )
 
-    assert captured["source_root"] == tmp_path
+    assert captured["source"] == tmp_path
     assert captured["include"] == ["Python.h"]
     assert captured["include_directory"] == [Path("C:/MyInclude")]
     assert captured["c_std"] == "c99"

@@ -101,7 +101,7 @@ def _build_definition_resolver(
 
 
 def collect_modules(
-    source_root: Path,
+    source: Path,
     *,
     include: list[str] = (),
     include_directory: list[Path] = (),
@@ -115,11 +115,11 @@ def collect_modules(
     还原模块级 `PyMethodDef`，再结合 `PyArg_*` 调用和格式串规则推断
     Python 侧参数信息。
     """
-    check(source_root.exists())
+    check(source.exists())
 
     normalized_include_dirs = clang_parser.inject_python_include_directories(include_directory)
 
-    source_files = clang_parser.list_files(source_root)
+    source_files = clang_parser.list_files(source)
 
     index = Index.create()
     translation_units = []
@@ -127,7 +127,7 @@ def collect_modules(
         tu = clang_parser.parse(
             index,
             file_path,
-            source_root=source_root,
+            source=source,
             include=include,
             include_directory=normalized_include_dirs,
             c_std=c_std,

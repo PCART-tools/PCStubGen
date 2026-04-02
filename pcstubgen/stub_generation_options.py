@@ -6,7 +6,7 @@ from pathlib import Path
 
 @dataclasses.dataclass
 class StubGenerationOptions:
-    source_root: Path | None = None
+    source: Path | None = None
     c_std: str = "c11"
     cpp_std: str = "c++17"
     include: list[str] = dataclasses.field(default_factory=list)

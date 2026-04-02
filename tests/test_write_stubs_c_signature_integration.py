@@ -30,7 +30,7 @@ def test_write_stubs_propagates_extract_errors(
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    options = StubGenerationOptions(source_root=tmp_path)
+    options = StubGenerationOptions(source=tmp_path)
     with pytest.raises(RuntimeError, match="boom"):
         stubgen_module.write_stubs("math", tmp_path, options=options)
 
@@ -93,7 +93,7 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
 
     options = StubGenerationOptions(
-        source_root=tmp_path,
+        source=tmp_path,
         include=["Python.h"],
         include_directory=[tmp_path / "include"],
         c_std="c99",

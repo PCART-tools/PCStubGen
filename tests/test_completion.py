@@ -74,7 +74,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
 
     summary = SignatureCompleter(
         StubGenerationOptions(
-            source_root=tmp_path,
+            source=tmp_path,
             include_c_inferred_source_comment=True,
         )
     ).run(module)
@@ -116,7 +116,7 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
     finally:
         logger.remove(sink_id)
 
@@ -180,7 +180,7 @@ def test_completer_skips_source_comment_when_option_disabled(
 
     SignatureCompleter(
         StubGenerationOptions(
-            source_root=tmp_path,
+            source=tmp_path,
             include_c_inferred_source_comment=False,
         )
     ).run(module)
@@ -231,7 +231,7 @@ def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
     finally:
         logger.remove(sink_id)
 
@@ -309,7 +309,7 @@ def test_completer_logs_explicit_reasons_when_both_paths_return_no_signature() -
         logger.remove(sink_id)
 
     assert summary.uncompleted == 1
-    assert "c_reason: 未配置 source_root，未启用C源码补全。" in log_output.getvalue()
+    assert "c_reason: 未配置 source，未启用C源码补全。" in log_output.getvalue()
     assert "docstring_reason: docstring首行不是可解析的签名声明。" in log_output.getvalue()
 
 
@@ -332,7 +332,7 @@ def test_completer_logs_docstring_parse_error_in_final_warning(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source_root=tmp_path)).run(module)
+        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
     finally:
         logger.remove(sink_id)
 

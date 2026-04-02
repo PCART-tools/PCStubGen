@@ -27,9 +27,9 @@ def main(
         "--output",
         help="输出 stub 的根目录",
     ),
-    source_root: Path | None = typer.Option(
+    source: Path | None = typer.Option(
         None,
-        "--source-root",
+        "--source",
         help="用于 C signature inference 的 C/C++ 源码根目录",
     ),
     include: list[str] = typer.Option(
@@ -90,7 +90,7 @@ def main(
             module_name=module_name,
             output=output,
             options=StubGenerationOptions(
-                source_root=source_root,
+                source=source,
                 c_std=c_std or default_options.c_std,
                 cpp_std=cpp_std or default_options.cpp_std,
                 include=list(include),

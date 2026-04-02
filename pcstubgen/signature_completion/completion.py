@@ -31,11 +31,11 @@ class SignatureCompletionResult:
 class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
-        if options.source_root is None:
+        if options.source is None:
             self._c_source = None
         else:
             self._c_source = CExtensionSource(
-                source_root=options.source_root,
+                source=options.source,
                 include=options.include,
                 include_directory=options.include_directory,
                 c_std=options.c_std,
@@ -87,7 +87,7 @@ class SignatureCompleter:
         is_method: bool,
     ) -> None:
         self._result.total_functions += 1
-        c_reason = "未配置 source_root，未启用C源码补全。"
+        c_reason = "未配置 source，未启用C源码补全。"
 
         if self._c_source is not None:
             try:
