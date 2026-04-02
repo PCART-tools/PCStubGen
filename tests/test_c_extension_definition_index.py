@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import clang.cindex
 import pytest
+from clang.cindex import LinkageKind
 
 from pcstubgen.signature_completion.c_extension import (
     definition_index as definition_index_module,
@@ -110,3 +111,180 @@ def test_definition_index_ignores_empty_usr_for_index_and_lookup() -> None:
     definition_index = DefinitionIndex([translation_unit])
 
     assert definition_index.get_definition(cursor) is None
+
+
+def test_definition_index_indexes_external_function_definition() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        usr="usr:external_func",
+        is_definition=True,
+        linkage=LinkageKind.EXTERNAL,
+        location=_FakeCursorLocation("module.c", line=10, column=2),
+    )
+    cursor = _token_identifier_node("external_func", usr="usr:external_func")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[definition],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is definition
+
+
+def test_definition_index_indexes_external_variable_definition() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        usr="usr:methods",
+        is_definition=True,
+        linkage=LinkageKind.EXTERNAL,
+        location=_FakeCursorLocation("module.c", line=12, column=4),
+    )
+    cursor = _token_identifier_node("Methods", usr="usr:methods")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[definition],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is definition
+
+
+def test_definition_index_ignores_internal_function_definition() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        usr="usr:internal_func",
+        is_definition=True,
+        linkage=LinkageKind.INTERNAL,
+    )
+    cursor = _token_identifier_node("internal_func", usr="usr:internal_func")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[definition],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is None
+
+
+def test_definition_index_ignores_internal_variable_definition() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        usr="usr:internal_methods",
+        is_definition=True,
+        linkage=LinkageKind.INTERNAL,
+    )
+    cursor = _token_identifier_node("Methods", usr="usr:internal_methods")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[definition],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is None
+
+
+def test_definition_index_ignores_local_variable_definition_in_function_body() -> None:
+    local_definition = _FakeNode(
+        kind=clang.cindex.CursorKind.VAR_DECL,
+        usr="usr:local_methods",
+        is_definition=True,
+        linkage=LinkageKind.NO_LINKAGE,
+    )
+    cursor = _token_identifier_node("Methods", usr="usr:local_methods")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+                        spelling="PyInit_mod",
+                        is_definition=True,
+                        linkage=LinkageKind.EXTERNAL,
+                        children=[local_definition],
+                    )
+                ],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is None
+
+
+def test_definition_index_recurses_into_namespace() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        usr="usr:namespace_func",
+        is_definition=True,
+        linkage=LinkageKind.EXTERNAL,
+        location=_FakeCursorLocation("module.cpp", line=6, column=3),
+    )
+    cursor = _token_identifier_node("namespace_func", usr="usr:namespace_func")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.NAMESPACE,
+                        spelling="ns",
+                        children=[definition],
+                    )
+                ],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is definition
+
+
+def test_definition_index_recurses_into_linkage_spec() -> None:
+    definition = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        usr="usr:extern_c_func",
+        is_definition=True,
+        linkage=LinkageKind.EXTERNAL,
+        location=_FakeCursorLocation("module.cpp", line=8, column=5),
+    )
+    cursor = _token_identifier_node("extern_c_func", usr="usr:extern_c_func")
+
+    definition_index = DefinitionIndex([
+        _FakeTranslationUnit(
+            diagnostics=[],
+            cursor=_FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.LINKAGE_SPEC,
+                        children=[definition],
+                    )
+                ],
+            ),
+        )
+    ])
+
+    assert definition_index.get_definition(cursor) is definition

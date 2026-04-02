@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import cast
 
 import clang.cindex
+from clang.cindex import LinkageKind
 import pytest
 
 from pcstubgen.signature_completion.c_extension.collect import collect_modules
@@ -375,6 +376,7 @@ class _FakeNode:
         usr: str = "",
         definition: object | None = None,
         is_definition: bool = False,
+        linkage: object = LinkageKind.EXTERNAL,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
@@ -387,6 +389,7 @@ class _FakeNode:
         self._usr = usr
         self._definition = definition
         self._is_definition = is_definition
+        self.linkage = linkage
         self.type = None
 
     def get_tokens(self) -> list[_FakeToken]:
