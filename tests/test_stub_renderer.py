@@ -91,6 +91,30 @@ def test_renderer_keeps_zero_argument_function_on_single_line() -> None:
     ]
 
 
+def test_renderer_prints_single_positional_only_object_argument_on_one_line() -> None:
+    func = IRFunction(
+        name="foo",
+        signatures=[
+            _signature(
+                args=[
+                    IRArgument(
+                        name="arg",
+                        type=RawType("object"),
+                        kind=IRArgumentKind.POSITIONAL_ONLY,
+                    )
+                ],
+            )
+        ],
+    )
+
+    lines = StubRenderer(include_docstrings=False).print_function(func)
+
+    assert lines == [
+        "def foo(arg: object, /):",
+        "    ...",
+    ]
+
+
 def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
     func = IRFunction(name="foo")
 

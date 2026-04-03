@@ -100,6 +100,37 @@ def test_c_signature_resolver_skips_missing_extent_text(
     assert source_comment is None
 
 
+def test_c_signature_resolver_accepts_zero_argument_signature(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_c_signature_extractor(
+        monkeypatch,
+        modules=_module_fixture(
+            functions={
+                "foo": ExtractedFunction(
+                    ml_name="foo",
+                    function_cursor=_fake_function_cursor("foo"),
+                    ml_flags=METH_NOARGS,
+                    signatures=[ExtractedSignature(arguments=[])],
+                )
+            }
+        ),
+    )
+    resolver = CSignatureResolver(source=tmp_path)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[_unknown_function("foo")],
+    )
+
+    resolved = resolver.resolve_function(module, module.functions[0])
+
+    assert resolved is not None
+    signatures, _ = resolved
+    assert signatures == [IRSignature(args=[])]
+
+
 def test_c_signature_resolver_raises_for_methods_and_python_modules(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

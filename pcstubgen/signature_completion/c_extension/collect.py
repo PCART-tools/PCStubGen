@@ -70,9 +70,7 @@ def collect_modules(
     for module in result.values():
         for function in module.functions.values():
             try:
-                function.signatures = inference.infer_signature(
-                    function.function_cursor
-                )
+                function.signatures = inference.infer_signature(function)
             except Exception:
                 logger.exception(
                     "推断 C 函数签名失败, module_name: {}, func_name: {}",

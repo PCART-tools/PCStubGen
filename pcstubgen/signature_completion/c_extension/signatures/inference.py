@@ -4,6 +4,8 @@ from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
 from ....checks import check
+from ....ir_modules import IRArgumentKind
+from ....types import RawType, Type, UnionType
 from ..clang.constant_eval import eval_int
 from ..clang.cursor_utils import (
     unwrap_transparent,
@@ -15,7 +17,8 @@ from ..clang.cursor_utils import (
     IDENTIFIER_RE,
     DECL_CURSOR_KINDS
 )
-from ..models import CArgument, CSignature
+from ..models import CArgument, CFunction, CSignature
+from ..modules.method_flags import METH_NOARGS, METH_O
 from .object_type_maps import OBJECT_NAME_TO_TYPE
 from .return_type_maps import FUNCTION_NAME_TO_TYPE
 from .py_arg_parse.parser_maps import (
@@ -30,14 +33,16 @@ from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from ....types import Type, UnionType
 from .py_build_value.parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
 
-def infer_signature(func_cursor: Cursor) -> list[CSignature]:
+def infer_signature(c_function: CFunction) -> list[CSignature]:
     """汇合参数推断与返回值推断结果，生成函数签名列表。"""
-    inferred_argument_lists = infer_argument_lists(func_cursor)
-    inferred_return_type = infer_return_type(func_cursor)
+    inferred_argument_lists = infer_argument_lists_from_flags(c_function)
+    if inferred_argument_lists is None:
+        inferred_argument_lists = infer_argument_lists(c_function.function_cursor)
+
+    inferred_return_type = infer_return_type(c_function.function_cursor)
 
     if inferred_argument_lists:
         return [
@@ -51,6 +56,27 @@ def infer_signature(func_cursor: Cursor) -> list[CSignature]:
     if inferred_return_type is None:
         return []
     return [CSignature(return_type=inferred_return_type)]
+
+
+def infer_argument_lists_from_flags(
+    c_function: CFunction,
+) -> list[list[CArgument]] | None:
+    """根据 `PyMethodDef.ml_flags` 推断最小参数形状。"""
+    ml_flags = c_function.ml_flags
+
+    if ml_flags & METH_NOARGS:
+        return [[]]
+
+    if ml_flags & METH_O:
+        return [[
+            CArgument(
+                name="arg",
+                type=RawType("object"),
+                kind=IRArgumentKind.POSITIONAL_ONLY,
+            )
+        ]]
+
+    return None
 
 
 def infer_argument_lists(func_cursor: Cursor) -> list[list[CArgument]]:

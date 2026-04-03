@@ -568,7 +568,9 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
     )
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == [
         ExtractedSignature(
@@ -590,7 +592,9 @@ def test_infer_signature_returns_signature_with_inferred_arguments_when_return_i
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
     )
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
 
@@ -600,7 +604,9 @@ def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
     )
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == []
 
@@ -608,7 +614,9 @@ def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
 def test_infer_signature_returns_empty_when_return_type_is_macro_expr() -> None:
     cursor = _fake_function_cursor_with_children(_return_stmt(_macro_expr("Py_RETURN_NONE")))
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == []
 
@@ -625,7 +633,9 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
     )
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == [
         ExtractedSignature(
@@ -647,9 +657,101 @@ def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() ->
         _return_stmt(_macro_expr("Py_RETURN_NONE")),
     )
 
-    inferred = signature_rules_module.infer_signature(cursor)
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+    )
 
     assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
+
+
+def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(
+            ml_name="foo",
+            function_cursor=cursor,
+            ml_flags=METH_NOARGS,
+        )
+    )
+
+    assert inferred == [ExtractedSignature(arguments=[])]
+
+
+def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(
+            ml_name="foo",
+            function_cursor=cursor,
+            ml_flags=METH_NOARGS,
+        )
+    )
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_uses_meth_o_argument_shape_without_pyarg_parse() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(
+            ml_name="foo",
+            function_cursor=cursor,
+            ml_flags=METH_O,
+        )
+    )
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                _arg(
+                    "arg",
+                    "object",
+                    kind=IRArgumentKind.POSITIONAL_ONLY,
+                )
+            ]
+        )
+    ]
+
+
+def test_infer_signature_keeps_return_type_for_meth_o() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        ExtractedFunction(
+            ml_name="foo",
+            function_cursor=cursor,
+            ml_flags=METH_O,
+        )
+    )
+
+    assert inferred == [
+        ExtractedSignature(
+            arguments=[
+                _arg(
+                    "arg",
+                    "object",
+                    kind=IRArgumentKind.POSITIONAL_ONLY,
+                )
+            ],
+            return_type=RawType("int"),
+        )
+    ]
 
 
 def test_infer_expr_type_raises_when_conditional_operator_children_count_is_invalid() -> None:

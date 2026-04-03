@@ -13,6 +13,8 @@ import pytest
 from pcstubgen.signature_completion.c_extension.collect import collect_modules
 from pcstubgen.signature_completion.c_extension.modules.method_flags import (
     METH_KEYWORDS,
+    METH_NOARGS,
+    METH_O,
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension import (

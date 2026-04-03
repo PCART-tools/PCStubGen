@@ -1939,8 +1939,8 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
         ],
     )
 
-    def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
-        if function_cursor is bad_cursor:
+    def _infer_signature(c_function: object) -> list[ExtractedSignature]:
+        if getattr(c_function, "function_cursor", None) is bad_cursor:
             raise RuntimeError("broken inference")
         return [ExtractedSignature(return_type=RawType("int"))]
 
@@ -2011,8 +2011,8 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
         ],
     )
 
-    def _infer_signature(function_cursor: object) -> list[ExtractedSignature]:
-        if function_cursor is bad_cursor:
+    def _infer_signature(c_function: object) -> list[ExtractedSignature]:
+        if getattr(c_function, "function_cursor", None) is bad_cursor:
             raise RuntimeError("broken inference")
         return [ExtractedSignature(return_type=RawType("int"))]
 
