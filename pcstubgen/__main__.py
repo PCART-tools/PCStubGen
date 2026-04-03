@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -17,6 +18,18 @@ MY_LOGURU_FORMAT = (
 )
 
 app = typer.Typer(add_completion=False)
+
+
+def _build_log_file_name(module_name: str, now: datetime | None = None) -> str:
+    """
+    为本次运行生成日志文件名。
+    """
+    if now is None:
+        now = datetime.now()
+
+    leaf_module_name = module_name.rsplit(".", maxsplit=1)[-1]
+    timestamp = now.strftime("%Y%m%d_%H%M%S")
+    return f"pcstubgen_{leaf_module_name}_{timestamp}.log"
 
 
 @app.command(help="使用 pcstubgen 为模块生成 Python stub。")
@@ -77,7 +90,7 @@ def main(
     logger.remove()
     console_sink_id = logger.add(sys.stderr, format=MY_LOGURU_FORMAT)
     file_sink_id = logger.add(
-        output / "pcstubgen.log",
+        output / _build_log_file_name(module_name),
         mode="w",
         encoding="utf-8",
         catch=False,

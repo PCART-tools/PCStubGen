@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -106,6 +107,64 @@ def test_cli_enables_docstrings_with_explicit_flag(
     assert result.exit_code == 0
     assert captured_options is not None
     assert captured_options.include_docstrings is True
+
+
+def test_cli_creates_timestamped_log_file_for_leaf_module_name(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
+        _ = module_name
+        _ = output
+        _ = options
+
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "math",
+            "--output",
+            str(tmp_path),
+        ],
+        prog_name="pcstubgen",
+    )
+
+    log_files = list(tmp_path.glob("pcstubgen_math_*.log"))
+
+    assert result.exit_code == 0
+    assert len(log_files) == 1
+    assert re.fullmatch(r"pcstubgen_math_\d{8}_\d{6}\.log", log_files[0].name) is not None
+    assert not (tmp_path / "pcstubgen.log").exists()
+
+
+def test_cli_uses_leaf_module_name_in_log_file_name(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
+        _ = module_name
+        _ = output
+        _ = options
+
+    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "numpy.linalg",
+            "--output",
+            str(tmp_path),
+        ],
+        prog_name="pcstubgen",
+    )
+
+    log_files = list(tmp_path.glob("pcstubgen_linalg_*.log"))
+
+    assert result.exit_code == 0
+    assert len(log_files) == 1
+    assert re.fullmatch(r"pcstubgen_linalg_\d{8}_\d{6}\.log", log_files[0].name) is not None
+    assert list(tmp_path.glob("pcstubgen_numpy.linalg_*.log")) == []
 
 
 def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:

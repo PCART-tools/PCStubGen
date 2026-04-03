@@ -11,6 +11,8 @@ requires-python = ">=3.12"
 dependencies = [
     "libclang>=18.1.1",
     "loguru>=0.7.3",
+    "meson>=1.10.2",
+    "ninja>=1.13.0",
     "typer>=0.24.1",
 ]
 
@@ -19,6 +21,7 @@ pcstubgen = "pcstubgen.__main__:app"
 
 [dependency-groups]
 dev = [
+    "cython>=3.2.4",
     "dask>=2026.3.0",
     "hypothesis>=6.151.10",
     "marray>=0.0.12",
