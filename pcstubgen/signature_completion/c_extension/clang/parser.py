@@ -1,17 +1,36 @@
 from __future__ import annotations
 
-import posixpath
-import re
-import sysconfig
+import contextlib
+import dataclasses
 from pathlib import Path
 
 import clang
-from clang.cindex import Diagnostic, Index, TranslationUnit
+from clang.cindex import CompilationDatabase, Diagnostic, Index, TranslationUnit
 from loguru import logger
 
-from .source_suffixes import CPP_SOURCE_SUFFIXES, NATIVE_SOURCE_SUFFIXES
+from .source_suffixes import NATIVE_SOURCE_SUFFIXES
 
-_FILE_NOT_FOUND_RE = re.compile(r"'([^']+)' file not found")
+_ARG_FLAGS_WITH_VALUE = {
+    "-o",
+    "-MF",
+    "-MT",
+    "-MQ",
+    "-MJ",
+}
+_ARG_FLAGS_WITHOUT_VALUE = {
+    "-c",
+    "-MD",
+    "-MMD",
+    "-MG",
+    "-MP",
+}
+
+
+@dataclasses.dataclass(frozen=True)
+class CompilationCommand:
+    file_path: Path
+    working_directory: Path
+    parse_args: list[str]
 
 
 def diagnostic_severity_to_str(severity: int) -> str:
@@ -39,153 +58,102 @@ def diagnostic_to_str(diagnostic: Diagnostic) -> str:
     return f"[{severity}] {location}: {message}"
 
 
-def normalize_include_literal(include_literal: str) -> str:
-    """规范化报错里的头文件字面量，便于后续路径匹配。"""
-    normalized = include_literal.replace("\\", "/").strip()
-    if not normalized:
-        return ""
-    normalized = posixpath.normpath(normalized)
-    if normalized == ".":
-        return ""
-    return normalized
-
-
-def extract_missing_include_literals(diagnostics: list[Diagnostic]) -> list[str]:
-    """从 clang 错误诊断中提取缺失头文件名。"""
-    missing: set[str] = set()
-    for diagnostic in diagnostics:
-        if diagnostic.severity != clang.cindex.Diagnostic.Fatal:
-            continue
-        message = str(diagnostic.spelling)
-        match = _FILE_NOT_FOUND_RE.search(message)
-        if match is None:
-            continue
-        include_literal = normalize_include_literal(match.group(1))
-        if not include_literal:
-            continue
-        missing.add(include_literal)
-    return sorted(missing)
-
-
-def inject_python_include_directories(include_directories: list[Path]) -> list[Path]:
-    """向 include 目录列表注入当前 Python 头文件目录。"""
-    directories = list(include_directories)
-    include_candidates = [
-        sysconfig.get_path("include"),
-        sysconfig.get_path("platinclude"),
-    ]
-    for include_dir in include_candidates:
-        include_path = Path(include_dir)
-        if include_path in directories:
-            continue
-        directories.append(include_path)
-    return directories
-
-
-def resolve_missing_include_dir(source: Path, *, include_literal: str) -> Path | None:
-    """在源码树内搜索缺失头文件，找到首个匹配的 include 目录后立即返回。"""
-    include_root_depth = len(tuple(part for part in include_literal.split("/") if part)) - 1
-
-    for header_path in source.rglob(include_literal):
-        if not header_path.is_file():
-            continue
-        if include_root_depth >= len(header_path.parents):
-            continue
-        return header_path.parents[include_root_depth]
-    return None
-
-
-def append_include_args(include_directory: list[Path], include_args: list[Path]) -> list[Path]:
-    """将新发现的 include 目录追加到 clang 参数中，并返回实际新增项。"""
-    added: list[Path] = []
-    for include_dir in include_args:
-        if include_dir in include_directory or include_dir in added:
-            continue
-        include_directory.append(include_dir)
-        added.append(include_dir)
-    return added
-
-
-def discover_missing_include_args(
-    *,
-    file_path: Path,
-    diagnostics: list[Diagnostic],
-    source: Path,
-    include_directory: list[Path],
-) -> list[Path]:
-    """基于缺失头文件诊断自动补全 clang include 目录。"""
-    resolved_pairs: list[tuple[str, Path]] = []
-    missing_literals = extract_missing_include_literals(diagnostics)
-    for include_literal in missing_literals:
-        include_dir = resolve_missing_include_dir(source, include_literal=include_literal)
-        if include_dir is None:
-            continue
-        resolved_pairs.append((include_literal, include_dir))
-
-    added = append_include_args(
-        include_directory,
-        [include_dir for _, include_dir in resolved_pairs],
-    )
-    if not added:
-        return added
-
-    for include_literal, include_dir in resolved_pairs:
-        if include_dir not in added:
-            continue
-        logger.info(
-            "补全 include path: {}, parse 文件: {}, include 字面量: {}",
-            include_dir,
-            file_path,
-            include_literal,
+def validate_compilation_database_path(compilation_database: Path) -> Path:
+    """校验 compile_commands.json 路径。"""
+    if not compilation_database.exists():
+        raise RuntimeError(f"编译数据库不存在: {compilation_database}")
+    if not compilation_database.is_file():
+        raise RuntimeError(f"编译数据库不是文件: {compilation_database}")
+    if compilation_database.name != "compile_commands.json":
+        raise RuntimeError(
+            f"编译数据库文件名必须为 compile_commands.json: {compilation_database}"
         )
-    return added
+    return compilation_database.resolve()
 
 
-def list_files(source: Path) -> list[Path]:
-    """得到所有 C/C++ 源文件，不能只筛 PyModuleDef。
-    因为有的写在头文件里，c再include进来。
-    还有函数定义写在别的文件的问题"""
-    result: list[Path] = []
-    for path in source.rglob("*"):
-        if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES:
-                result.append(path)
-    result.sort()
-    return result
+def load_compilation_database(compilation_database: Path) -> CompilationDatabase:
+    """从 compile_commands.json 所在目录加载编译数据库。"""
+    validated_path = validate_compilation_database_path(compilation_database)
+    try:
+        return CompilationDatabase.fromDirectory(str(validated_path.parent))
+    except Exception as ex:
+        raise RuntimeError(f"编译数据库加载失败: {validated_path}") from ex
 
 
-def get_std_value_for_file(
-    file_path: Path,
+def resolve_compile_command_file_path(command: object) -> Path:
+    """将 compile command 的 file 字段解析为绝对路径。"""
+    file_path = Path(str(command.filename))
+    if file_path.is_absolute():
+        return file_path.resolve()
+    return (Path(str(command.directory)) / file_path).resolve()
+
+
+def _is_source_file_operand(
+    arg: str,
     *,
-    c_std: str,
-    cpp_std: str,
-) -> str:
-    """按后缀为源码文件选择 C 或 C++ 标准值。"""
-    if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES:
-        return cpp_std
-    return c_std
-
-
-def build_clang_parse_args(
     file_path: Path,
-    *,
-    include: list[str],
-    include_directory: list[Path],
-    c_std: str,
-    cpp_std: str,
-) -> list[str]:
-    """为指定源码文件构建 clang 解析参数列表。"""
+    working_directory: Path,
+) -> bool:
+    if not arg or arg.startswith("-"):
+        return False
+    candidate = Path(arg)
+    if not candidate.is_absolute():
+        candidate = working_directory / candidate
+    return candidate.resolve() == file_path
+
+
+def sanitize_compile_command_arguments(command: object) -> list[str]:
+    """清理 compile command 中不应传递给 libclang parse 的参数。"""
+    arguments = [str(arg) for arg in command.arguments]
+    if not arguments:
+        return []
+
+    working_directory = Path(str(command.directory)).resolve()
+    file_path = resolve_compile_command_file_path(command)
     parse_args: list[str] = []
-    std_value = get_std_value_for_file(
-        file_path,
-        c_std=c_std,
-        cpp_std=cpp_std,
-    )
-    parse_args.extend(["--std", std_value])
-    for include_value in include:
-        parse_args.extend(["--include", include_value])
-    for include_dir in include_directory:
-        parse_args.extend(["--include-directory", str(include_dir)])
+    skip_next = False
+    for arg in arguments[1:]:
+        if skip_next:
+            skip_next = False
+            continue
+        if arg in _ARG_FLAGS_WITH_VALUE:
+            skip_next = True
+            continue
+        if arg in _ARG_FLAGS_WITHOUT_VALUE:
+            continue
+        if _is_source_file_operand(
+            arg,
+            file_path=file_path,
+            working_directory=working_directory,
+        ):
+            continue
+        parse_args.append(arg)
     return parse_args
+
+
+def list_compilation_commands(compilation_database: Path) -> list[CompilationCommand]:
+    """按编译数据库顺序列出首条唯一源码编译命令。"""
+    database = load_compilation_database(compilation_database)
+    result: list[CompilationCommand] = []
+    seen_file_paths: set[Path] = set()
+    all_compile_commands = database.getAllCompileCommands()
+    if all_compile_commands is None:
+        return result
+    for command in all_compile_commands:
+        file_path = resolve_compile_command_file_path(command)
+        if file_path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
+            continue
+        if file_path in seen_file_paths:
+            continue
+        seen_file_paths.add(file_path)
+        result.append(
+            CompilationCommand(
+                file_path=file_path,
+                working_directory=Path(str(command.directory)).resolve(),
+                parse_args=sanitize_compile_command_arguments(command),
+            )
+        )
+    return result
 
 
 def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
@@ -198,54 +166,37 @@ def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
 
 def parse(
     index: Index,
-    file_path: Path,
-    *,
-    source: Path,
-    include: list[str],
-    include_directory: list[Path],
-    c_std: str,
-    cpp_std: str,
+    compilation_command: CompilationCommand,
 ) -> TranslationUnit:
-    """解析单个源码文件为 clang translation unit。"""
-    translation_unit: TranslationUnit | None = None
-    diagnostics: list[Diagnostic] = []
-    parse_args: list[str] = []
-    for _ in range(10):
-        parse_args = build_clang_parse_args(
-            file_path,
-            include=include,
-            include_directory=include_directory,
-            c_std=c_std,
-            cpp_std=cpp_std,
+    """解析单个编译数据库条目为 clang translation unit。"""
+    with contextlib.chdir(compilation_command.working_directory):
+        translation_unit = index.parse(
+            str(compilation_command.file_path),
+            args=list(compilation_command.parse_args),
         )
-        translation_unit = index.parse(str(file_path), args=parse_args)
-        diagnostics = translation_unit.diagnostics
-        added = discover_missing_include_args(
-            file_path=file_path,
-            diagnostics=diagnostics,
-            source=source,
-            include_directory=include_directory,
-        )
-        if not added:
-            break
 
+    diagnostics = translation_unit.diagnostics
     if has_error_diagnostics(diagnostics):
         logger.warning(
             "Parse诊断\n"
             "文件路径: {}\n"
+            "工作目录: {}\n"
             "解析参数: {}\n"
             "诊断: \n"
             "{}",
-            file_path,
-            ' '.join(parse_args),
+            compilation_command.file_path,
+            compilation_command.working_directory,
+            ' '.join(compilation_command.parse_args),
             '\n'.join(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
         )
     else:
         logger.info(
             "Parse成功\n"
             "文件路径: {}\n"
+            "工作目录: {}\n"
             "解析参数: {}\n",
-            file_path,
-            ' '.join(parse_args),
+            compilation_command.file_path,
+            compilation_command.working_directory,
+            ' '.join(compilation_command.parse_args),
         )
     return translation_unit

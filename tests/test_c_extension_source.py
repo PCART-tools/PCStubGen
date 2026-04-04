@@ -354,25 +354,16 @@ def test_c_signature_resolver_propagates_extraction_errors(
         CSignatureResolver(source=tmp_path)
 
 
-def test_c_signature_resolver_passes_clang_options_to_extractor(
+def test_c_signature_resolver_passes_compilation_database_to_extractor(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
 
     def _record_collect_modules(
-        source: Path,
-        *,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
+        compilation_database: Path,
     ) -> dict[str, ExtractedModule]:
-        captured["source"] = source
-        captured["include"] = list(include)
-        captured["include_directory"] = list(include_directory)
-        captured["c_std"] = c_std
-        captured["cpp_std"] = cpp_std
+        captured["compilation_database"] = compilation_database
         return {}
 
     import pcstubgen.signature_completion.c_extension.source as resolver_module
@@ -383,17 +374,6 @@ def test_c_signature_resolver_passes_clang_options_to_extractor(
         _record_collect_modules,
     )
 
-    CSignatureResolver(
-        source=tmp_path,
-        include=["Python.h"],
-        include_directory=[Path("C:/MyInclude")],
-        c_std="c99",
-        cpp_std="c++20",
-    )
+    CSignatureResolver(compilation_database=tmp_path / "compile_commands.json")
 
-    assert captured["source"] == tmp_path
-    assert captured["include"] == ["Python.h"]
-    assert captured["include_directory"] == [Path("C:/MyInclude")]
-    assert captured["c_std"] == "c99"
-    assert captured["cpp_std"] == "c++20"
-
+    assert captured["compilation_database"] == tmp_path / "compile_commands.json"

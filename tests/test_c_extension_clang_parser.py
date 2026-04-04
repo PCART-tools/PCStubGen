@@ -1,11 +1,132 @@
 from __future__ import annotations
 
+import os
+
 from tests._c_extension_test_support import *
 
 
-def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path: Path) -> None:
-    config = _make_extraction_config(source=tmp_path, c_std="c11")
-    source = tmp_path / "module.c"
+class _FakeCompileCommand:
+    def __init__(
+        self,
+        *,
+        directory: Path,
+        filename: str,
+        arguments: list[str],
+    ) -> None:
+        self.directory = str(directory)
+        self.filename = filename
+        self.arguments = list(arguments)
+
+
+class _FakeCompilationDatabase:
+    def __init__(self, commands: list[_FakeCompileCommand]) -> None:
+        self._commands = commands
+
+    def getAllCompileCommands(self) -> list[_FakeCompileCommand]:
+        return list(self._commands)
+
+
+class _RecordingIndex:
+    def __init__(self, translation_unit: _FakeTranslationUnit) -> None:
+        self.translation_unit = translation_unit
+        self.calls: list[tuple[str, list[str], str]] = []
+
+    def parse(self, filename: str, args: list[str]) -> _FakeTranslationUnit:
+        self.calls.append((filename, list(args), os.getcwd()))
+        return self.translation_unit
+
+
+def test_validate_compilation_database_path_requires_compile_commands_json(tmp_path: Path) -> None:
+    wrong_file = tmp_path / "commands.json"
+    wrong_file.write_text("[]", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="文件名必须为 compile_commands.json"):
+        translation_unit_module.validate_compilation_database_path(wrong_file)
+
+
+def test_sanitize_compile_command_arguments_removes_driver_output_and_source_operands(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    command = _FakeCompileCommand(
+        directory=tmp_path,
+        filename="src/module.c",
+        arguments=[
+            "cc",
+            "-Iinclude",
+            "-DMODE=1",
+            "-c",
+            "-o",
+            "build/module.o",
+            "-MF",
+            "build/module.d",
+            "-MD",
+            "src/module.c",
+            str(source),
+        ],
+    )
+
+    parse_args = translation_unit_module.sanitize_compile_command_arguments(command)
+
+    assert parse_args == [
+        "-Iinclude",
+        "-DMODE=1",
+    ]
+
+
+def test_list_compilation_commands_keeps_first_command_per_source_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shared_source = tmp_path / "src" / "module.c"
+    shared_source.parent.mkdir(parents=True, exist_ok=True)
+    shared_source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    header = tmp_path / "src" / "module.h"
+    header.write_text("int demo(void);\n", encoding="utf-8")
+
+    commands = [
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="src/module.c",
+            arguments=["cc", "-DFIRST", "-c", "src/module.c"],
+        ),
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="src/module.c",
+            arguments=["cc", "-DSECOND", "-c", "src/module.c"],
+        ),
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="src/module.h",
+            arguments=["cc", "-c", "src/module.h"],
+        ),
+    ]
+
+    monkeypatch.setattr(
+        translation_unit_module,
+        "load_compilation_database",
+        lambda compilation_database: _FakeCompilationDatabase(commands),
+    )
+
+    result = translation_unit_module.list_compilation_commands(
+        tmp_path / "compile_commands.json"
+    )
+
+    assert len(result) == 1
+    assert result[0].file_path == shared_source.resolve()
+    assert result[0].parse_args == ["-DFIRST"]
+
+
+def test_parse_uses_compile_command_working_directory_and_preserves_translation_unit(
+    tmp_path: Path,
+) -> None:
+    working_directory = tmp_path / "build"
+    working_directory.mkdir(parents=True, exist_ok=True)
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
     translation_unit = _FakeTranslationUnit(
         diagnostics=[
             _FakeDiagnostic(
@@ -22,162 +143,22 @@ def test_c_signature_engine_returns_translation_unit_when_error_present(tmp_path
                 line=7,
                 column=9,
             ),
-            _FakeDiagnostic(
-                severity=_FakeDiagnosticType.Fatal,
-                message="fatal detail",
-                file_name=str(source),
-                line=11,
-                column=4,
-            ),
         ]
     )
-
-    result = translation_unit_module.parse(
-        index=_FakeIndex(translation_unit),
-        file_path=source,
-        source=config["source"],
-        include=config["include"],
-        include_directory=config["include_directory"],
-        c_std=config["c_std"],
-        cpp_std=config["cpp_std"],
+    index = _RecordingIndex(translation_unit)
+    command = translation_unit_module.CompilationCommand(
+        file_path=source.resolve(),
+        working_directory=working_directory.resolve(),
+        parse_args=["-I../include", "-DMODE=1"],
     )
+
+    result = translation_unit_module.parse(index, command)
 
     assert result is translation_unit
-
-
-def test_c_signature_engine_auto_adds_include_dir_for_nested_header_literal(tmp_path: Path) -> None:
-    config = _make_extraction_config(source=tmp_path, c_std="c11")
-    source = tmp_path / "src" / "module.c"
-    header_path = tmp_path / "numpy_core" / "include" / "numpy" / "npy_common.h"
-    header_path.parent.mkdir(parents=True, exist_ok=True)
-    header_path.write_text("/* header */", encoding="utf-8")
-
-    first = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=1,
-                column=1,
-            )
-        ]
-    )
-    second = _FakeTranslationUnit(diagnostics=[])
-    index = _SequentialIndex([first, second])
-
-    result = translation_unit_module.parse(
-        index=index,
-        file_path=source,
-        source=config["source"],
-        include=config["include"],
-        include_directory=config["include_directory"],
-        c_std=config["c_std"],
-        cpp_std=config["cpp_std"],
-    )
-
-    assert result is second
-    expected_include_root = header_path.parents[1]
-    assert expected_include_root in config["include_directory"]
-    assert header_path.parent not in config["include_directory"]
-    assert len(index.calls) == 2
-    assert _has_std_arg(index.calls[0][1], "c11")
-    assert _has_std_arg(index.calls[1][1], "c11")
-
-
-def test_c_signature_engine_retries_until_missing_includes_converge(tmp_path: Path) -> None:
-    config = _make_extraction_config(source=tmp_path, c_std="c11")
-    source = tmp_path / "pkg" / "src" / "module.c"
-
-    include_one = tmp_path / "vendor1" / "include"
-    include_two = tmp_path / "vendor2" / "include"
-    (include_one / "numpy").mkdir(parents=True, exist_ok=True)
-    (include_two / "pkg").mkdir(parents=True, exist_ok=True)
-    (include_one / "numpy" / "npy_common.h").write_text("/* one */", encoding="utf-8")
-    (include_two / "pkg" / "extra.h").write_text("/* two */", encoding="utf-8")
-
-    first = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=2,
-                column=7,
-            )
-        ]
-    )
-    second = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'pkg/extra.h' file not found",
-                file_name=str(source),
-                line=3,
-                column=5,
-            )
-        ]
-    )
-    third = _FakeTranslationUnit(diagnostics=[])
-    index = _SequentialIndex([first, second, third])
-
-    result = translation_unit_module.parse(
-        index=index,
-        file_path=source,
-        source=config["source"],
-        include=config["include"],
-        include_directory=config["include_directory"],
-        c_std=config["c_std"],
-        cpp_std=config["cpp_std"],
-    )
-
-    assert result is third
-    assert include_one in config["include_directory"]
-    assert include_two in config["include_directory"]
-    assert len(index.calls) == 3
-    assert _has_std_arg(index.calls[0][1], "c11")
-    assert _has_std_arg(index.calls[1][1], "c11")
-    assert _has_std_arg(index.calls[2][1], "c11")
-    assert not _has_include_directory_arg(index.calls[0][1], include_one)
-    assert _has_include_directory_arg(index.calls[1][1], include_one)
-    assert not _has_include_directory_arg(index.calls[1][1], include_two)
-    assert _has_include_directory_arg(index.calls[2][1], include_one)
-    assert _has_include_directory_arg(index.calls[2][1], include_two)
-
-
-def test_c_signature_engine_does_not_retry_when_missing_header_is_unresolved(tmp_path: Path) -> None:
-    config = _make_extraction_config(source=tmp_path, c_std="c11")
-    source = tmp_path / "src" / "module.c"
-    initial_include_dirs = list(config["include_directory"])
-
-    unrelated_header = tmp_path / "include" / "numpy" / "arrayobject.h"
-    unrelated_header.parent.mkdir(parents=True, exist_ok=True)
-    unrelated_header.write_text("/* unrelated */", encoding="utf-8")
-
-    unresolved = _FakeTranslationUnit(
-        diagnostics=[
-            _FakeDiagnostic(
-                severity=clang.cindex.Diagnostic.Fatal,
-                message="'numpy/npy_common.h' file not found",
-                file_name=str(source),
-                line=6,
-                column=3,
-            )
-        ]
-    )
-    index = _SequentialIndex([unresolved])
-
-    result = translation_unit_module.parse(
-        index=index,
-        file_path=source,
-        source=config["source"],
-        include=config["include"],
-        include_directory=config["include_directory"],
-        c_std=config["c_std"],
-        cpp_std=config["cpp_std"],
-    )
-
-    assert result is unresolved
-    assert config["include_directory"] == initial_include_dirs
-    assert len(index.calls) == 1
-
+    assert index.calls == [
+        (
+            str(source.resolve()),
+            ["-I../include", "-DMODE=1"],
+            str(working_directory.resolve()),
+        )
+    ]

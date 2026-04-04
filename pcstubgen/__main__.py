@@ -40,30 +40,10 @@ def main(
         "--output",
         help="输出 stub 的根目录",
     ),
-    source: Path | None = typer.Option(
+    compilation_database: Path | None = typer.Option(
         None,
-        "--source",
-        help="用于 C signature inference 的 C/C++ 源码根目录",
-    ),
-    include: list[str] = typer.Option(
-        [],
-        "--include",
-        help="额外的 include 头文件，可重复指定",
-    ),
-    include_directory: list[Path] = typer.Option(
-        [],
-        "--include-directory",
-        help="额外的 include 目录路径，可重复指定",
-    ),
-    c_std: str | None = typer.Option(
-        None,
-        "--c-std",
-        help="传给 clang 的 C standard，例如 c11",
-    ),
-    cpp_std: str | None = typer.Option(
-        None,
-        "--cpp-std",
-        help="传给 clang 的 C++ standard，例如 c++17",
+        "--compilation-database",
+        help="C源码补全使用的 compile_commands.json 文件路径",
     ),
     include_docstrings: bool = typer.Option(
         False,
@@ -84,7 +64,6 @@ def main(
     """
     使用 pcstubgen 为模块生成 Python stub。
     """
-    default_options = StubGenerationOptions()
     output.mkdir(parents=True, exist_ok=True)
 
     logger.remove()
@@ -103,11 +82,7 @@ def main(
             module_name=module_name,
             output=output,
             options=StubGenerationOptions(
-                source=source,
-                c_std=c_std or default_options.c_std,
-                cpp_std=cpp_std or default_options.cpp_std,
-                include=list(include),
-                include_directory=list(include_directory),
+                compilation_database=compilation_database,
                 include_docstrings=include_docstrings,
                 include_module_type_comment=include_module_type_comment,
                 include_c_inferred_source_comment=include_c_inferred_source_comment,

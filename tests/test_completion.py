@@ -74,7 +74,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
 
     summary = SignatureCompleter(
         StubGenerationOptions(
-            source=tmp_path,
+            compilation_database=tmp_path / "compile_commands.json",
             include_c_inferred_source_comment=True,
         )
     ).run(module)
@@ -116,7 +116,11 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
+        summary = SignatureCompleter(
+            StubGenerationOptions(
+                compilation_database=tmp_path / "compile_commands.json",
+            )
+        ).run(module)
     finally:
         logger.remove(sink_id)
 
@@ -130,6 +134,37 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     assert summary.uncompleted == 0
     assert "通过docstring补全成功" in log_output.getvalue()
     assert "补全失败" not in log_output.getvalue()
+
+
+def test_completer_falls_back_to_docstring_when_c_source_initialization_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
+        functions=[
+            _unknown_function(
+                "foo",
+                doc="foo(value: str) -> bool",
+            )
+        ],
+    )
+    _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
+
+    summary = SignatureCompleter(
+        StubGenerationOptions(
+            compilation_database=tmp_path / "compile_commands.json",
+        )
+    ).run(module)
+
+    parsed = module.functions[0]
+    assert parsed.signatures[0].args[0].name == "value"
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 1
+    assert summary.uncompleted == 0
 
 
 def test_completer_skips_source_comment_when_option_disabled(
@@ -180,7 +215,7 @@ def test_completer_skips_source_comment_when_option_disabled(
 
     SignatureCompleter(
         StubGenerationOptions(
-            source=tmp_path,
+            compilation_database=tmp_path / "compile_commands.json",
             include_c_inferred_source_comment=False,
         )
     ).run(module)
@@ -231,7 +266,11 @@ def test_completer_skips_c_for_methods_and_leaves_unresolved_without_docstring(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
+        summary = SignatureCompleter(
+            StubGenerationOptions(
+                compilation_database=tmp_path / "compile_commands.json",
+            )
+        ).run(module)
     finally:
         logger.remove(sink_id)
 
@@ -309,7 +348,7 @@ def test_completer_logs_explicit_reasons_when_both_paths_return_no_signature() -
         logger.remove(sink_id)
 
     assert summary.uncompleted == 1
-    assert "c_reason: 未配置 source，未启用C源码补全。" in log_output.getvalue()
+    assert "c_reason: 未配置 compilation_database，未启用C源码补全。" in log_output.getvalue()
     assert "docstring_reason: docstring首行不是可解析的签名声明。" in log_output.getvalue()
 
 
@@ -332,7 +371,11 @@ def test_completer_logs_docstring_parse_error_in_final_warning(
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
     try:
-        summary = SignatureCompleter(StubGenerationOptions(source=tmp_path)).run(module)
+        summary = SignatureCompleter(
+            StubGenerationOptions(
+                compilation_database=tmp_path / "compile_commands.json",
+            )
+        ).run(module)
     finally:
         logger.remove(sink_id)
 

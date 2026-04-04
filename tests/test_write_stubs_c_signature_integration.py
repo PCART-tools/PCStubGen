@@ -3,16 +3,17 @@ from __future__ import annotations
 from tests._c_extension_test_support import *
 
 
-def test_write_stubs_propagates_extract_errors(
+def test_write_stubs_falls_back_when_c_source_initialization_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     import pcstubgen.api as stubgen_module
 
+    captured: dict[str, object] = {}
     ir_module = IRModule(
         full_name=QualifiedName.from_str("pkg"),
         module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("foo")],
+        functions=[_unknown_function("foo", doc="foo(value: str) -> bool")],
         classes=[
             IRClass(
                 name="Builder",
@@ -27,12 +28,31 @@ def test_write_stubs_propagates_extract_errors(
             )
         ],
     )
+
+    class FakeWriter:
+        def write(
+            self,
+            module: IRModule,
+            renderer: object,
+            to: Path,
+        ) -> None:
+            captured["module"] = module
+            captured["renderer"] = renderer
+            captured["to"] = to
+
     monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    options = StubGenerationOptions(source=tmp_path)
-    with pytest.raises(RuntimeError, match="boom"):
-        stubgen_module.write_stubs("math", tmp_path, options=options)
+    options = StubGenerationOptions(
+        compilation_database=tmp_path / "compile_commands.json",
+    )
+    stubgen_module.write_stubs("math", tmp_path, options=options, writer=FakeWriter())
+
+    assert captured["module"] is ir_module
+    assert captured["to"] == tmp_path
+    assert ir_module.functions[0].signatures[0].args[0].name == "value"
+    assert ir_module.functions[0].signatures[0].return_type is not None
+    assert ir_module.functions[0].signatures[0].return_type.render() == "bool"
 
 
 def test_write_stubs_passes_options_to_completer_and_logs_summary(
@@ -93,11 +113,7 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
 
     options = StubGenerationOptions(
-        source=tmp_path,
-        include=["Python.h"],
-        include_directory=[tmp_path / "include"],
-        c_std="c99",
-        cpp_std="c++20",
+        compilation_database=tmp_path / "compile_commands.json",
         include_docstrings=False,
         include_module_type_comment=True,
         include_c_inferred_source_comment=True,

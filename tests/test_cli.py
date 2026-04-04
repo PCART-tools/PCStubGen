@@ -37,22 +37,8 @@ def test_cli_passes_stub_generation_options(
             "math",
             "--output",
             str(tmp_path),
-            "--include",
-            "Python.h",
-            "--include",
-            "  spaced/header.h  ",
-            "--include=numpy/arrayobject.h",
-            "--include",
-            "Python.h",
-            "--include-directory",
-            "C:/IncludeA",
-            "--include-directory=C:/IncludeB",
-            "--source",
-            str(tmp_path / "src"),
-            "--c-std",
-            "c99",
-            "--cpp-std",
-            "c++20",
+            "--compilation-database",
+            str(tmp_path / "compile_commands.json"),
             "--include-c-inferred-source-comment",
         ],
         prog_name="pcstubgen",
@@ -62,19 +48,7 @@ def test_cli_passes_stub_generation_options(
     assert captured_module_name == "math"
     assert captured_output == tmp_path
     assert captured_options is not None
-    assert captured_options.include == [
-        "Python.h",
-        "  spaced/header.h  ",
-        "numpy/arrayobject.h",
-        "Python.h",
-    ]
-    assert captured_options.include_directory == [
-        Path("C:/IncludeA"),
-        Path("C:/IncludeB"),
-    ]
-    assert captured_options.source == tmp_path / "src"
-    assert captured_options.c_std == "c99"
-    assert captured_options.cpp_std == "c++20"
+    assert captured_options.compilation_database == tmp_path / "compile_commands.json"
     assert captured_options.include_docstrings is False
     assert captured_options.include_c_inferred_source_comment is True
 
@@ -200,32 +174,25 @@ def test_cli_rejects_removed_no_docstrings_option(tmp_path: Path) -> None:
     assert "No such option: --no-docstrings" in result.output
 
 
-def test_cli_preserves_include_without_validation(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    captured_options: StubGenerationOptions | None = None
+def test_cli_rejects_removed_c_parse_options(tmp_path: Path) -> None:
+    for option, value in [
+        ("--source", str(tmp_path / "src")),
+        ("--include", "Python.h"),
+        ("--include-directory", str(tmp_path / "include")),
+        ("--c-std", "c11"),
+        ("--cpp-std", "c++17"),
+    ]:
+        result = RUNNER.invoke(
+            main_module.app,
+            [
+                "math",
+                "--output",
+                str(tmp_path),
+                option,
+                value,
+            ],
+            prog_name="pcstubgen",
+        )
 
-    def fake_write_stubs(*, module_name: str, output: Path, options: StubGenerationOptions) -> None:
-        nonlocal captured_options
-        _ = output
-        captured_options = options
-
-    monkeypatch.setattr(main_module, "write_stubs", fake_write_stubs)
-
-    result = RUNNER.invoke(
-        main_module.app,
-        [
-            "math",
-            "--output",
-            str(tmp_path),
-            "--include=-bad",
-            "--include",
-            "   ",
-        ],
-        prog_name="pcstubgen",
-    )
-
-    assert result.exit_code == 0
-    assert captured_options is not None
-    assert captured_options.include == ["-bad", "   "]
+        assert result.exit_code != 0
+        assert f"No such option: {option}" in result.output

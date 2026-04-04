@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sysconfig
+import json
 from collections.abc import Iterable
 from pathlib import Path
 from types import SimpleNamespace
@@ -67,6 +67,10 @@ from pcstubgen.signature_completion import (
     SignatureCompletionResult,
     SignatureCompleter,
 )
+from pcstubgen.signature_completion.c_extension.clang.source_suffixes import (
+    CPP_SOURCE_SUFFIXES,
+    NATIVE_SOURCE_SUFFIXES,
+)
 
 
 def _signature(
@@ -125,50 +129,66 @@ def _module_fixture(
     }
 
 
-def _make_extraction_config(
+def _write_compilation_database(
+    source_root: Path,
     *,
-    source: Path,
-    include: list[str] = (),
-    include_directory: list[Path] = (),
-    c_std: str = "c11",
-    cpp_std: str = "c++17",
-) -> dict[str, object]:
-    return {
-        "source": source,
-        "include": list(include),
-        "include_directory": translation_unit_module.inject_python_include_directories(
-            list(include_directory)
-        ),
-        "c_std": c_std,
-        "cpp_std": cpp_std,
-    }
+    files: list[Path] | None = None,
+) -> Path:
+    source_root.mkdir(parents=True, exist_ok=True)
+    if files is None:
+        files = sorted(
+            path
+            for path in source_root.rglob("*")
+            if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES
+        )
+
+    entries: list[dict[str, object]] = []
+    for file_path in files:
+        compiler = "c++" if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES else "cc"
+        std_value = "c++17" if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES else "c11"
+        relative_path = file_path.relative_to(source_root).as_posix()
+        entries.append(
+            {
+                "directory": str(source_root),
+                "arguments": [
+                    compiler,
+                    f"-std={std_value}",
+                    "-c",
+                    relative_path,
+                ],
+                "file": relative_path,
+            }
+        )
+
+    compilation_database = source_root / "compile_commands.json"
+    compilation_database.write_text(
+        json.dumps(entries),
+        encoding="utf-8",
+    )
+    return compilation_database
 
 
 class CSignatureExtractor:
     def __init__(
         self,
-        source: Path,
+        source: Path | None = None,
         *,
+        compilation_database: Path | None = None,
         include: list[str] = (),
         include_directory: list[Path] = (),
         c_std: str = "c11",
         cpp_std: str = "c++17",
     ) -> None:
-        self._source = source
-        self._include = list(include)
-        self._include_directory = translation_unit_module.inject_python_include_directories(
-            list(include_directory)
-        )
-        self._c_std = c_std
-        self._cpp_std = cpp_std
+        _ = (include, include_directory, c_std, cpp_std)
+        if compilation_database is None:
+            if source is None:
+                raise ValueError("source 与 compilation_database 不能同时为空")
+            compilation_database = _write_compilation_database(source)
+        self._compilation_database = compilation_database
 
     def extract_modules(self) -> dict[str, CModule]:
         return collect_modules(
-            self._source,
-            include=self._include,
-            include_directory=self._include_directory,
-            c_std=self._c_std,
-            cpp_std=self._cpp_std,
+            self._compilation_database,
         )
 
 
@@ -192,14 +212,9 @@ def _patch_c_signature_extractor(
     extractor = _FakeExtractor(modules=modules)
 
     def _patched_collect_modules(
-        source: Path,
-        *,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
+        compilation_database: Path,
     ) -> dict[str, CModule]:
-        _ = (source, include, include_directory, c_std, cpp_std)
+        _ = compilation_database
         return extractor.extract_modules()
 
     monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)
@@ -210,14 +225,9 @@ def _patch_raising_c_signature_extractor(
     error: Exception,
 ) -> None:
     def _patched_collect_modules(
-        source: Path,
-        *,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
+        compilation_database: Path,
     ) -> dict[str, CModule]:
-        _ = (source, include, include_directory, c_std, cpp_std)
+        _ = compilation_database
         raise error
 
     monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)
@@ -769,7 +779,27 @@ ExtractedArgument = CArgument
 ExtractedSignature = CSignature
 ExtractedFunction = CFunction
 ExtractedModule = CModule
-CSignatureResolver = CExtensionSource
+
+
+class CSignatureResolver(CExtensionSource):
+    def __init__(
+        self,
+        source: Path | None = None,
+        *,
+        compilation_database: Path | None = None,
+        include: list[str] = (),
+        include_directory: list[Path] = (),
+        c_std: str = "c11",
+        cpp_std: str = "c++17",
+    ) -> None:
+        _ = (include, include_directory, c_std, cpp_std)
+        if compilation_database is None:
+            if source is None:
+                raise ValueError("source 与 compilation_database 不能同时为空")
+            compilation_database = _write_compilation_database(source)
+        super().__init__(compilation_database=compilation_database)
+
+
 extract_c_signature_modules = collect_modules
 c_signature_extraction_module = c_extension_collect_module
 module_table_module = module_collection_module
@@ -794,4 +824,3 @@ module_table_module.extract_pymethoddef_init_list_expr = (
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]
-

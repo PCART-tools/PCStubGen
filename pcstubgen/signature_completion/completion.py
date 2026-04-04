@@ -31,16 +31,19 @@ class SignatureCompletionResult:
 class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
-        if options.source is None:
+        self._c_source_error: str | None = None
+        if options.compilation_database is None:
             self._c_source = None
         else:
-            self._c_source = CExtensionSource(
-                source=options.source,
-                include=options.include,
-                include_directory=options.include_directory,
-                c_std=options.c_std,
-                cpp_std=options.cpp_std,
-            )
+            try:
+                self._c_source = CExtensionSource(
+                    compilation_database=options.compilation_database,
+                )
+            except RuntimeError as ex:
+                self._c_source = None
+                self._c_source_error = str(ex)
+            else:
+                self._c_source_error = None
         self._result = SignatureCompletionResult()
 
     def run(self, module: IRModule) -> SignatureCompletionResult:
@@ -87,7 +90,10 @@ class SignatureCompleter:
         is_method: bool,
     ) -> None:
         self._result.total_functions += 1
-        c_reason = "未配置 source，未启用C源码补全。"
+        if self._c_source_error is not None:
+            c_reason = self._c_source_error
+        else:
+            c_reason = "未配置 compilation_database，未启用C源码补全。"
 
         if self._c_source is not None:
             try:

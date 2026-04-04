@@ -1865,32 +1865,13 @@ def test_c_signature_extraction_engine_warns_and_skips_when_cross_tu_definition_
     assert extracted["missing"].functions == {}
 
 
-def test_c_signature_engine_extract_modules_keeps_external_include_options_and_injects_python_include_dirs(
+def test_c_signature_engine_extract_modules_accepts_empty_compilation_database(
     tmp_path: Path,
 ) -> None:
-    engine = CSignatureExtractor(
-        source=tmp_path,
-        include=["Python.h"],
-        include_directory=[Path("C:/MyInclude")],
-    )
-    monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr(translation_unit_module, "list_files", lambda source: [])
+    compilation_database = _write_compilation_database(tmp_path, files=[])
+    engine = CSignatureExtractor(compilation_database=compilation_database)
 
-    try:
-        assert engine.extract_modules() == {}
-        expected_include_dirs = [Path("C:/MyInclude")]
-        for include_dir in [sysconfig.get_path("include"), sysconfig.get_path("platinclude")]:
-            if not include_dir:
-                continue
-            include_path = Path(include_dir)
-            if include_path in expected_include_dirs:
-                continue
-            expected_include_dirs.append(include_path)
-
-        assert engine._include == ["Python.h"]
-        assert engine._include_directory == expected_include_dirs
-    finally:
-        monkeypatch.undo()
+    assert engine.extract_modules() == {}
 
 
 def test_c_signature_extraction_engine_logs_exception_and_continues_next_function(
@@ -1903,15 +1884,15 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     good_function = ExtractedFunction(ml_name="good", function_cursor=good_cursor)
     logged_messages: list[str] = []
 
-    monkeypatch.setattr(
-        c_signature_extraction_module.clang_parser,
-        "inject_python_include_directories",
-        lambda include_directory: list(include_directory),
+    sample_command = translation_unit_module.CompilationCommand(
+        file_path=tmp_path / "sample.c",
+        working_directory=tmp_path,
+        parse_args=[],
     )
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
-        "list_files",
-        lambda source: [source / "sample.c"],
+        "list_compilation_commands",
+        lambda compilation_database: [sample_command],
     )
     monkeypatch.setattr(
         c_signature_extraction_module.Index,
@@ -1954,7 +1935,9 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     )
     monkeypatch.setattr(c_signature_extraction_module.logger, "exception", _exception)
 
-    extracted = c_signature_extraction_module.extract_c_signature_modules(tmp_path)
+    extracted = c_signature_extraction_module.extract_c_signature_modules(
+        tmp_path / "compile_commands.json"
+    )
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
@@ -1963,77 +1946,4 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]
     assert "bad" in logged_messages[0]
-
-
-def test_c_signature_extraction_engine_logs_exception_and_continues_next_function(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    bad_cursor = object()
-    good_cursor = object()
-    bad_function = ExtractedFunction(ml_name="bad", function_cursor=bad_cursor)
-    good_function = ExtractedFunction(ml_name="good", function_cursor=good_cursor)
-    logged_messages: list[str] = []
-
-    monkeypatch.setattr(
-        c_signature_extraction_module.clang_parser,
-        "inject_python_include_directories",
-        lambda include_directory: list(include_directory),
-    )
-    monkeypatch.setattr(
-        c_signature_extraction_module.clang_parser,
-        "list_files",
-        lambda source: [source / "sample.c"],
-    )
-    monkeypatch.setattr(
-        c_signature_extraction_module.Index,
-        "create",
-        staticmethod(lambda: object()),
-    )
-    monkeypatch.setattr(
-        c_signature_extraction_module.clang_parser,
-        "parse",
-        lambda *args, **kwargs: SimpleNamespace(
-            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT)
-        ),
-    )
-    monkeypatch.setattr(
-        c_signature_extraction_module.module_table,
-        "collect_modules_from_translation_unit",
-        lambda cursor, definition_index: [
-            ExtractedModule(
-                name="pkg.mod",
-                functions={
-                    "bad": bad_function,
-                    "good": good_function,
-                },
-            )
-        ],
-    )
-
-    def _infer_signature(c_function: object) -> list[ExtractedSignature]:
-        if getattr(c_function, "function_cursor", None) is bad_cursor:
-            raise RuntimeError("broken inference")
-        return [ExtractedSignature(return_type=RawType("int"))]
-
-    def _exception(message: str, *args: object) -> None:
-        logged_messages.append(message.format(*args))
-
-    monkeypatch.setattr(
-        c_signature_extraction_module.signature_inference,
-        "infer_signature",
-        _infer_signature,
-    )
-    monkeypatch.setattr(c_signature_extraction_module.logger, "exception", _exception)
-
-    extracted = c_signature_extraction_module.extract_c_signature_modules(tmp_path)
-
-    assert extracted["pkg.mod"].functions["bad"].signatures == []
-    assert extracted["pkg.mod"].functions["good"].signatures == [
-        ExtractedSignature(return_type=RawType("int"))
-    ]
-    assert len(logged_messages) == 1
-    assert "pkg.mod" in logged_messages[0]
-    assert "bad" in logged_messages[0]
-
 

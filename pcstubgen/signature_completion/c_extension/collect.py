@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from clang.cindex import Index
+from clang.cindex import Index, TranslationUnitLoadError
 from loguru import logger
 
-from ...checks import check
 from .definition_index import DefinitionIndex
 from .models import CModule
 from .clang import parser as clang_parser
@@ -14,12 +13,7 @@ from .signatures import inference
 
 
 def collect_modules(
-    source: Path,
-    *,
-    include: list[str] = (),
-    include_directory: list[Path] = (),
-    c_std: str = "c11",
-    cpp_std: str = "c++17",
+    compilation_database: Path,
 ) -> dict[str, CModule]:
     """
     基于 libclang 提取模块级 C 签名。
@@ -28,24 +22,24 @@ def collect_modules(
     `PyModuleDef` 与 `m_methods`，还原模块级 `PyMethodDef`，再结合
     `PyArg_*` 调用和格式串规则推断 Python 侧参数信息。
     """
-    check(source.exists())
-
-    normalized_include_dirs = clang_parser.inject_python_include_directories(include_directory)
-
-    source_files = clang_parser.list_files(source)
+    compilation_commands = clang_parser.list_compilation_commands(compilation_database)
 
     index = Index.create()
     translation_units = []
-    for file_path in source_files:
-        tu = clang_parser.parse(
-            index,
-            file_path,
-            source=source,
-            include=include,
-            include_directory=normalized_include_dirs,
-            c_std=c_std,
-            cpp_std=cpp_std,
-        )
+    for compilation_command in compilation_commands:
+        try:
+            tu = clang_parser.parse(index, compilation_command)
+        except TranslationUnitLoadError:
+            logger.warning(
+                "Parse失败, 跳过文件\n"
+                "文件路径: {}\n"
+                "工作目录: {}\n"
+                "解析参数: {}\n",
+                compilation_command.file_path,
+                compilation_command.working_directory,
+                ' '.join(compilation_command.parse_args),
+            )
+            continue
         translation_units.append(tu)
 
     definition_index = DefinitionIndex(translation_units)

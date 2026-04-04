@@ -15,18 +15,10 @@ class CExtensionSource:
     def __init__(
         self,
         *,
-        source: Path,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
+        compilation_database: Path,
     ) -> None:
         self._modules = collect_modules(
-            source,
-            include=list(include),
-            include_directory=list(include_directory),
-            c_std=c_std,
-            cpp_std=cpp_std,
+            compilation_database,
         )
 
     def resolve_function(
