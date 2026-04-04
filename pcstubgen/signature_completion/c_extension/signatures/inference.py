@@ -35,6 +35,16 @@ from .py_arg_parse.tuple_parser import (
 )
 from .py_build_value.parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
 
+_PYARG_PARSETUPLE_CALL_NAMES = {
+    "PyArg_ParseTuple",
+    "_PyArg_ParseTuple_SizeT",
+}
+
+_PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES = {
+    "PyArg_ParseTupleAndKeywords",
+    "_PyArg_ParseTupleAndKeywords_SizeT",
+}
+
 
 def infer_signature(c_function: CFunction) -> list[CSignature]:
     """汇合参数推断与返回值推断结果，生成函数签名列表。"""
@@ -89,9 +99,9 @@ def infer_argument_lists(func_cursor: Cursor) -> list[list[CArgument]]:
 
         call_name = call_expr.spelling
         args = list(call_expr.get_children())[1:]
-        if call_name == "PyArg_ParseTuple":
+        if call_name in _PYARG_PARSETUPLE_CALL_NAMES:
             inferred_argument_lists.append(_infer_pyarg_parsetuple_arguments(args))
-        elif call_name == "PyArg_ParseTupleAndKeywords":
+        elif call_name in _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES:
             inferred_argument_lists.append(
                 _infer_pyarg_parsetuple_and_keywords_arguments(args)
             )

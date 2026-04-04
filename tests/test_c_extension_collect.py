@@ -269,6 +269,85 @@ def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_argume
     ]
 
 
+def test_c_signature_extraction_engine_extract_modules_infers_parse_tuple_and_keywords_arguments_via_sizet_alias(
+    tmp_path: Path,
+) -> None:
+    pytest.importorskip("clang.cindex")
+    if _get_packaged_libclang_path() is None:
+        pytest.skip("Packaged libclang library is not available")
+
+    source = tmp_path / "parse_tuple_and_keywords_sizet.c"
+    source.write_text(
+        "\n".join(
+            [
+                "#define PY_SSIZE_T_CLEAN",
+                "typedef struct _object PyObject;",
+                "typedef struct PyMethodDef {",
+                "    const char* ml_name;",
+                "    void* ml_meth;",
+                "    int ml_flags;",
+                "    const char* ml_doc;",
+                "} PyMethodDef;",
+                "typedef struct PyModuleDef {",
+                "    int m_base;",
+                "    const char* m_name;",
+                "    const char* m_doc;",
+                "    int m_size;",
+                "    PyMethodDef* m_methods;",
+                "    void* m_slots;",
+                "    void* m_traverse;",
+                "    void* m_clear;",
+                "    void* m_free;",
+                "} PyModuleDef;",
+                "#define PyModuleDef_HEAD_INIT 0",
+                "#define METH_VARARGS 1",
+                "#define METH_KEYWORDS 2",
+                "#ifdef PY_SSIZE_T_CLEAN",
+                "#define PyArg_ParseTupleAndKeywords _PyArg_ParseTupleAndKeywords_SizeT",
+                "#endif",
+                "int _PyArg_ParseTupleAndKeywords_SizeT(PyObject* args, PyObject* kwds, const char* fmt, char** kwlist, ...);",
+                "static PyObject* foo_impl(PyObject* self, PyObject* args, PyObject* kwds) {",
+                "    double x = 0.0;",
+                "    static char* kwlist[] = {\"x\", 0};",
+                "    if (!PyArg_ParseTupleAndKeywords(args, kwds, \"|d\", kwlist, &x)) {",
+                "        return (PyObject*)0;",
+                "    }",
+                "    return (PyObject*)0;",
+                "}",
+                "static PyMethodDef Methods[] = {",
+                "    {\"foo\", foo_impl, METH_VARARGS | METH_KEYWORDS, \"doc\"},",
+                "    {0, 0, 0, 0}",
+                "};",
+                "static PyModuleDef moduledef = {",
+                "    PyModuleDef_HEAD_INIT,",
+                "    \"parse_tuple_and_keywords_sizet\",",
+                "    0,",
+                "    -1,",
+                "    Methods,",
+                "    0, 0, 0, 0",
+                "};",
+                *_pyinit_lines("parse_tuple_and_keywords_sizet"),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    engine = CSignatureExtractor(
+        source=tmp_path,
+        c_std="c11",
+    )
+    extracted = engine.extract_modules()
+
+    signatures = extracted["parse_tuple_and_keywords_sizet"].functions["foo"].signatures
+    assert signatures == [
+        ExtractedSignature(
+            arguments=[
+                _arg("x", "float", has_default=True),
+            ]
+        )
+    ]
+
+
 def test_c_signature_extraction_engine_extract_modules_reads_object_type_from_extent_source_text(
     tmp_path: Path,
 ) -> None:

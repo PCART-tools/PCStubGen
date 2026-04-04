@@ -490,6 +490,41 @@ def test_infer_argument_lists_returns_empty_when_no_supported_pyarg_calls_exist(
     assert inferred == []
 
 
+def test_infer_argument_lists_parses_pyarg_parsetuple_sizet_alias() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "_PyArg_ParseTuple_SizeT",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "int")]]
+
+
+def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias() -> None:
+    kwlist_decl = _var_decl("kwlist", _init_list(_string_literal("x"), _null_ptr_literal()))
+    x_decl = _var_decl("x", _float_literal("0.0"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "_PyArg_ParseTupleAndKeywords_SizeT",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("|d"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _address_of("x", referenced=x_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("x", "float", has_default=True)]]
+
+
 def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_kwlist() -> None:
     invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
@@ -762,4 +797,3 @@ def test_infer_expr_type_raises_when_conditional_operator_children_count_is_inva
 
     with pytest.raises(RuntimeError, match="CONDITIONAL_OPERATOR"):
         signature_rules_module.infer_expr_type(cast(clang.cindex.Cursor, expr))
-
