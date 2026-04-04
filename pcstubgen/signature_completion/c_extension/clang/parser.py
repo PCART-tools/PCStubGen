@@ -8,7 +8,6 @@ import subprocess
 
 import clang
 from clang.cindex import CompilationDatabase, Diagnostic, Index, TranslationUnit
-from loguru import logger
 
 from .source_suffixes import NATIVE_SOURCE_SUFFIXES
 
@@ -184,44 +183,28 @@ def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
     return False
 
 
-def parse(
-    index: Index,
-    compilation_command: CompilationCommand,
-) -> TranslationUnit:
-    """解析单个编译数据库条目为 clang translation unit。"""
+def build_effective_parse_args(compilation_command: CompilationCommand) -> list[str]:
+    """构造实际传给 libclang parse 的参数列表。"""
     effective_parse_args = list(compilation_command.parse_args)
     resource_dir = detect_clang_resource_dir()
     if resource_dir is not None:
         effective_parse_args.extend(["-resource-dir", resource_dir])
+    return effective_parse_args
+
+
+def parse(
+    index: Index,
+    compilation_command: CompilationCommand,
+    *,
+    effective_parse_args: list[str] | None = None,
+) -> TranslationUnit:
+    """解析单个编译数据库条目为 clang translation unit。"""
+    if effective_parse_args is None:
+        effective_parse_args = build_effective_parse_args(compilation_command)
 
     with contextlib.chdir(compilation_command.working_directory):
         translation_unit = index.parse(
             str(compilation_command.file_path),
             args=effective_parse_args,
-        )
-
-    diagnostics = translation_unit.diagnostics
-    if has_error_diagnostics(diagnostics):
-        logger.warning(
-            "Parse诊断\n"
-            "文件路径: {}\n"
-            "工作目录: {}\n"
-            "解析参数: {}\n"
-            "诊断: \n"
-            "{}",
-            compilation_command.file_path,
-            compilation_command.working_directory,
-            ' '.join(effective_parse_args),
-            '\n'.join(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
-        )
-    else:
-        logger.info(
-            "Parse成功\n"
-            "文件路径: {}\n"
-            "工作目录: {}\n"
-            "解析参数: {}\n",
-            compilation_command.file_path,
-            compilation_command.working_directory,
-            ' '.join(effective_parse_args),
         )
     return translation_unit

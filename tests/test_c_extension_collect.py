@@ -1874,21 +1874,17 @@ def test_c_signature_engine_extract_modules_accepts_empty_compilation_database(
     assert engine.extract_modules() == {}
 
 
-def test_c_signature_extraction_engine_logs_exception_and_continues_next_function(
+def test_c_signature_extraction_engine_logs_parse_success_after_tu_collection(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    bad_cursor = object()
-    good_cursor = object()
-    bad_function = ExtractedFunction(ml_name="bad", function_cursor=bad_cursor)
-    good_function = ExtractedFunction(ml_name="good", function_cursor=good_cursor)
-    logged_messages: list[str] = []
-
     sample_command = translation_unit_module.CompilationCommand(
         file_path=tmp_path / "sample.c",
         working_directory=tmp_path,
-        parse_args=[],
+        parse_args=["-Iinclude"],
     )
+    recorded_parse_calls: list[tuple[object, object, list[str] | None]] = []
+
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
         "list_compilation_commands",
@@ -1901,9 +1897,248 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     )
     monkeypatch.setattr(
         c_signature_extraction_module.clang_parser,
+        "build_effective_parse_args",
+        lambda compilation_command: ["-Iinclude", "-resource-dir", "/opt/clang/resource"],
+    )
+
+    def _parse(index: object, compilation_command: object, **kwargs: object) -> SimpleNamespace:
+        recorded_parse_calls.append(
+            (index, compilation_command, kwargs.get("effective_parse_args"))
+        )
+        return SimpleNamespace(
+            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT),
+            diagnostics=[],
+        )
+
+    monkeypatch.setattr(c_signature_extraction_module.clang_parser, "parse", _parse)
+    monkeypatch.setattr(
+        c_signature_extraction_module.module_table,
+        "collect_modules_from_translation_unit",
+        lambda cursor, definition_index: [],
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = c_signature_extraction_module.extract_c_signature_modules(
+            tmp_path / "compile_commands.json"
+        )
+    finally:
+        logger.remove(sink_id)
+
+    assert extracted == {}
+    assert "阶段进度 [1/4] 开始Parse, 文件数: 1" in log_output.getvalue()
+    assert f"Parse进度 [1/1], 文件: {sample_command.file_path}" in log_output.getvalue()
+    assert len(recorded_parse_calls) == 1
+    assert recorded_parse_calls[0][1] is sample_command
+    assert recorded_parse_calls[0][2] == [
+        "-Iinclude",
+        "-resource-dir",
+        "/opt/clang/resource",
+    ]
+    assert "Parse成功" in log_output.getvalue()
+    assert "阶段进度 [2/4] 开始构建索引, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [3/4] 开始收集模块, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [4/4] 开始推断签名, 模块数: 0, 函数数: 0" in log_output.getvalue()
+    assert f"文件路径: {sample_command.file_path}" in log_output.getvalue()
+    assert f"工作目录: {sample_command.working_directory}" in log_output.getvalue()
+    assert "解析参数: -Iinclude -resource-dir /opt/clang/resource" in log_output.getvalue()
+
+
+def test_c_signature_extraction_engine_logs_parse_diagnostics_after_tu_collection(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "sample.c"
+    sample_command = translation_unit_module.CompilationCommand(
+        file_path=source_path,
+        working_directory=tmp_path,
+        parse_args=["-Iinclude"],
+    )
+    translation_unit = _FakeTranslationUnit(
+        diagnostics=[
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Warning,
+                message="warning detail",
+                file_name=str(source_path),
+                line=3,
+                column=1,
+            ),
+            _FakeDiagnostic(
+                severity=_FakeDiagnosticType.Error,
+                message="error detail",
+                file_name=str(source_path),
+                line=7,
+                column=9,
+            ),
+        ]
+    )
+
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "list_compilation_commands",
+        lambda compilation_database: [sample_command],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.Index,
+        "create",
+        staticmethod(lambda: object()),
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "build_effective_parse_args",
+        lambda compilation_command: ["-Iinclude"],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "parse",
+        lambda *args, **kwargs: translation_unit,
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.module_table,
+        "collect_modules_from_translation_unit",
+        lambda cursor, definition_index: [],
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = c_signature_extraction_module.extract_c_signature_modules(
+            tmp_path / "compile_commands.json"
+        )
+    finally:
+        logger.remove(sink_id)
+
+    assert extracted == {}
+    assert "阶段进度 [1/4] 开始Parse, 文件数: 1" in log_output.getvalue()
+    assert f"Parse进度 [1/1], 文件: {sample_command.file_path}" in log_output.getvalue()
+    assert "Parse诊断" in log_output.getvalue()
+    assert "阶段进度 [2/4] 开始构建索引, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [3/4] 开始收集模块, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [4/4] 开始推断签名, 模块数: 0, 函数数: 0" in log_output.getvalue()
+    assert f"文件路径: {sample_command.file_path}" in log_output.getvalue()
+    assert f"工作目录: {sample_command.working_directory}" in log_output.getvalue()
+    assert "解析参数: -Iinclude" in log_output.getvalue()
+    assert "- [WARNING]" in log_output.getvalue()
+    assert "warning detail" in log_output.getvalue()
+    assert "- [ERROR]" in log_output.getvalue()
+    assert "error detail" in log_output.getvalue()
+
+
+def test_c_signature_extraction_engine_skips_failed_parse_and_continues_next_file(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    first_command = translation_unit_module.CompilationCommand(
+        file_path=tmp_path / "first.c",
+        working_directory=tmp_path,
+        parse_args=["-DFIRST"],
+    )
+    second_command = translation_unit_module.CompilationCommand(
+        file_path=tmp_path / "second.c",
+        working_directory=tmp_path,
+        parse_args=["-DSECOND"],
+    )
+    parse_calls: list[object] = []
+    second_tu = _FakeTranslationUnit(diagnostics=[])
+
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "list_compilation_commands",
+        lambda compilation_database: [first_command, second_command],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.Index,
+        "create",
+        staticmethod(lambda: object()),
+    )
+
+    def _build_effective_parse_args(
+        compilation_command: translation_unit_module.CompilationCommand,
+    ) -> list[str]:
+        return list(compilation_command.parse_args)
+
+    def _parse(index: object, compilation_command: object, **kwargs: object) -> _FakeTranslationUnit:
+        _ = (index, kwargs)
+        parse_calls.append(compilation_command)
+        if compilation_command is first_command:
+            raise clang.cindex.TranslationUnitLoadError("broken parse")
+        return second_tu
+
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "build_effective_parse_args",
+        _build_effective_parse_args,
+    )
+    monkeypatch.setattr(c_signature_extraction_module.clang_parser, "parse", _parse)
+    monkeypatch.setattr(
+        c_signature_extraction_module.module_table,
+        "collect_modules_from_translation_unit",
+        lambda cursor, definition_index: [],
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = c_signature_extraction_module.extract_c_signature_modules(
+            tmp_path / "compile_commands.json"
+        )
+    finally:
+        logger.remove(sink_id)
+
+    assert extracted == {}
+    assert parse_calls == [first_command, second_command]
+    assert "阶段进度 [1/4] 开始Parse, 文件数: 2" in log_output.getvalue()
+    assert f"Parse进度 [1/2], 文件: {first_command.file_path}" in log_output.getvalue()
+    assert f"Parse进度 [2/2], 文件: {second_command.file_path}" in log_output.getvalue()
+    assert "Parse失败, 跳过文件" in log_output.getvalue()
+    assert f"文件路径: {first_command.file_path}" in log_output.getvalue()
+    assert "解析参数: -DFIRST" in log_output.getvalue()
+    assert "Parse成功" in log_output.getvalue()
+    assert f"文件路径: {second_command.file_path}" in log_output.getvalue()
+    assert "解析参数: -DSECOND" in log_output.getvalue()
+    assert "阶段进度 [2/4] 开始构建索引, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [3/4] 开始收集模块, TU数: 1" in log_output.getvalue()
+    assert "阶段进度 [4/4] 开始推断签名, 模块数: 0, 函数数: 0" in log_output.getvalue()
+
+
+def test_c_signature_extraction_engine_logs_exception_and_continues_next_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    bad_cursor = object()
+    good_cursor = object()
+    bad_function = ExtractedFunction(ml_name="bad", function_cursor=bad_cursor)
+    good_function = ExtractedFunction(ml_name="good", function_cursor=good_cursor)
+    logged_messages: list[str] = []
+    log_output = StringIO()
+
+    sample_command = translation_unit_module.CompilationCommand(
+        file_path=tmp_path / "sample.c",
+        working_directory=tmp_path,
+        parse_args=[],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "list_compilation_commands",
+        lambda compilation_database: [sample_command],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
+        "build_effective_parse_args",
+        lambda compilation_command: [],
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.Index,
+        "create",
+        staticmethod(lambda: object()),
+    )
+    monkeypatch.setattr(
+        c_signature_extraction_module.clang_parser,
         "parse",
         lambda *args, **kwargs: SimpleNamespace(
-            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT)
+            cursor=_FakeNode(kind=clang.cindex.CursorKind.TRANSLATION_UNIT),
+            diagnostics=[],
         ),
     )
     monkeypatch.setattr(
@@ -1935,15 +2170,21 @@ def test_c_signature_extraction_engine_logs_exception_and_continues_next_functio
     )
     monkeypatch.setattr(c_signature_extraction_module.logger, "exception", _exception)
 
-    extracted = c_signature_extraction_module.extract_c_signature_modules(
-        tmp_path / "compile_commands.json"
-    )
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        extracted = c_signature_extraction_module.extract_c_signature_modules(
+            tmp_path / "compile_commands.json"
+        )
+    finally:
+        logger.remove(sink_id)
 
     assert extracted["pkg.mod"].functions["bad"].signatures == []
     assert extracted["pkg.mod"].functions["good"].signatures == [
         ExtractedSignature(return_type=RawType("int"))
     ]
+    assert "阶段进度 [4/4] 开始推断签名, 模块数: 1, 函数数: 2" in log_output.getvalue()
+    assert "签名推断进度 [1/2], module_name: pkg.mod, func_name: bad" in log_output.getvalue()
+    assert "签名推断进度 [2/2], module_name: pkg.mod, func_name: good" in log_output.getvalue()
     assert len(logged_messages) == 1
     assert "pkg.mod" in logged_messages[0]
     assert "bad" in logged_messages[0]
-

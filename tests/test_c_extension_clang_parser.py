@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from io import StringIO
 import os
 from types import SimpleNamespace
+
+from loguru import logger
 
 from tests._c_extension_test_support import *
 
@@ -204,6 +207,62 @@ def test_parse_appends_detected_clang_resource_dir(
             str(working_directory.resolve()),
         )
     ]
+
+
+def test_build_effective_parse_args_appends_detected_clang_resource_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translation_unit_module.detect_clang_resource_dir.cache_clear()
+    monkeypatch.setattr(
+        translation_unit_module,
+        "detect_clang_resource_dir",
+        lambda: "/opt/clang/resource",
+    )
+    command = translation_unit_module.CompilationCommand(
+        file_path=tmp_path / "module.c",
+        working_directory=tmp_path,
+        parse_args=["-I../include", "-DMODE=1"],
+    )
+
+    assert translation_unit_module.build_effective_parse_args(command) == [
+        "-I../include",
+        "-DMODE=1",
+        "-resource-dir",
+        "/opt/clang/resource",
+    ]
+
+
+def test_parse_does_not_emit_parse_logs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    translation_unit_module.detect_clang_resource_dir.cache_clear()
+    monkeypatch.setattr(
+        translation_unit_module,
+        "detect_clang_resource_dir",
+        lambda: None,
+    )
+    working_directory = tmp_path / "build"
+    working_directory.mkdir(parents=True, exist_ok=True)
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    index = _RecordingIndex(_FakeTranslationUnit(diagnostics=[]))
+    command = translation_unit_module.CompilationCommand(
+        file_path=source.resolve(),
+        working_directory=working_directory.resolve(),
+        parse_args=["-I../include"],
+    )
+
+    log_output = StringIO()
+    sink_id = logger.add(log_output, format="{message}")
+    try:
+        translation_unit_module.parse(index, command)
+    finally:
+        logger.remove(sink_id)
+
+    assert log_output.getvalue() == ""
 
 
 def test_detect_clang_resource_dir_returns_none_when_command_fails(
