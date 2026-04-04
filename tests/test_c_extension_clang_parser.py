@@ -123,6 +123,84 @@ def test_list_compilation_commands_keeps_first_command_per_source_file(
     assert result[0].parse_args == ["-DFIRST"]
 
 
+def test_list_compilation_commands_skips_subproject_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    kept_source = tmp_path / "src" / "module.c"
+    kept_source.parent.mkdir(parents=True, exist_ok=True)
+    kept_source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    skipped_source = tmp_path / "subprojects" / "pkg" / "module.c"
+    skipped_source.parent.mkdir(parents=True, exist_ok=True)
+    skipped_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
+
+    commands = [
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="subprojects/pkg/module.c",
+            arguments=["cc", "-DSUBPROJECT", "-c", "subprojects/pkg/module.c"],
+        ),
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="src/module.c",
+            arguments=["cc", "-DKEPT", "-c", "src/module.c"],
+        ),
+    ]
+
+    monkeypatch.setattr(
+        translation_unit_module,
+        "load_compilation_database",
+        lambda compilation_database: _FakeCompilationDatabase(commands),
+    )
+
+    result = translation_unit_module.list_compilation_commands(
+        tmp_path / "compile_commands.json"
+    )
+
+    assert len(result) == 1
+    assert result[0].file_path == kept_source.resolve()
+    assert result[0].parse_args == ["-DKEPT"]
+
+
+def test_list_compilation_commands_skips_absolute_subproject_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    absolute_subproject_source = tmp_path / "vendor" / "subprojects" / "pkg" / "module.cpp"
+    absolute_subproject_source.parent.mkdir(parents=True, exist_ok=True)
+    absolute_subproject_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
+    kept_source = tmp_path / "src" / "module.cpp"
+    kept_source.parent.mkdir(parents=True, exist_ok=True)
+    kept_source.write_text("int kept(void) { return 0; }\n", encoding="utf-8")
+
+    commands = [
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename=str(absolute_subproject_source),
+            arguments=["c++", "-DSUBPROJECT", "-c", str(absolute_subproject_source)],
+        ),
+        _FakeCompileCommand(
+            directory=tmp_path,
+            filename="src/module.cpp",
+            arguments=["c++", "-DKEPT", "-c", "src/module.cpp"],
+        ),
+    ]
+
+    monkeypatch.setattr(
+        translation_unit_module,
+        "load_compilation_database",
+        lambda compilation_database: _FakeCompilationDatabase(commands),
+    )
+
+    result = translation_unit_module.list_compilation_commands(
+        tmp_path / "compile_commands.json"
+    )
+
+    assert len(result) == 1
+    assert result[0].file_path == kept_source.resolve()
+    assert result[0].parse_args == ["-DKEPT"]
+
+
 def test_parse_uses_compile_command_working_directory_and_preserves_translation_unit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

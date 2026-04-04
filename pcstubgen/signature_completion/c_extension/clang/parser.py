@@ -150,6 +150,11 @@ def sanitize_compile_command_arguments(command: object) -> list[str]:
     return parse_args
 
 
+def _is_subproject_source(file_path: Path) -> bool:
+    """判断源码是否位于 `subprojects` 目录树下。"""
+    return "subprojects" in file_path.parts
+
+
 def list_compilation_commands(compilation_database: Path) -> list[CompilationCommand]:
     """按编译数据库顺序列出首条唯一源码编译命令。"""
     database = load_compilation_database(compilation_database)
@@ -161,6 +166,8 @@ def list_compilation_commands(compilation_database: Path) -> list[CompilationCom
     for command in all_compile_commands:
         file_path = resolve_compile_command_file_path(command)
         if file_path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
+            continue
+        if _is_subproject_source(file_path):
             continue
         if file_path in seen_file_paths:
             continue
