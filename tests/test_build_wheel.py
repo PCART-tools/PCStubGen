@@ -86,6 +86,7 @@ def test_cli_reports_mesonpy_mode(
     }
     assert "构建方式: mesonpy" in result.output
     assert f"build-backend: mesonpy" in result.output
+    assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
     assert str(wheel_path) in result.output
     assert str(project_dir / "build" / "compile_commands.json") in result.output
 
@@ -122,6 +123,7 @@ def test_cli_reports_bear_mode(
     assert captured["config_settings"] == {}
     assert "构建方式: bear" in result.output
     assert f"build-backend: setuptools.build_meta" in result.output
+    assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -427,8 +429,11 @@ def test_build_wheel_uses_isolated_env_and_build_api(
     captured: dict[str, object] = {}
 
     class FakeEnv:
-        def __init__(self, *, installer: str) -> None:
+        def __init__(self, srcdir: Path, *, installer: str = "pip") -> None:
+            captured["srcdir_for_env"] = srcdir
             captured["installer"] = installer
+            self.path = str(srcdir / build_wheel.PERSISTENT_BUILD_ENV_DIRNAME)
+            self._python_executable = str(Path(self.path) / "bin" / "python")
 
         def __enter__(self) -> "FakeEnv":
             captured["entered"] = True
@@ -439,6 +444,13 @@ def test_build_wheel_uses_isolated_env_and_build_api(
 
         def install(self, requirements: set[str]) -> None:
             captured.setdefault("installs", []).append(set(requirements))
+
+        @property
+        def python_executable(self) -> str:
+            return self._python_executable
+
+        def make_extra_environ(self) -> dict[str, str]:
+            return {"PATH": str(Path(self.path) / "bin")}
 
     class FakeBuilder:
         build_system_requires = {"setuptools", "wheel"}
@@ -470,7 +482,7 @@ def test_build_wheel_uses_isolated_env_and_build_api(
         captured["env_object"] = env
         return FakeBuilder()
 
-    monkeypatch.setattr(build_wheel, "DefaultIsolatedEnv", FakeEnv)
+    monkeypatch.setattr(build_wheel, "PersistentIsolatedEnv", FakeEnv)
     monkeypatch.setattr(
         build_wheel,
         "ProjectBuilder",
@@ -485,6 +497,7 @@ def test_build_wheel_uses_isolated_env_and_build_api(
     )
 
     assert wheel_path == project_dir / "dist" / "demo-0.1.0-py3-none-any.whl"
+    assert captured["srcdir_for_env"] == project_dir
     assert captured["installer"] == "pip"
     assert captured["source_dir"] == str(project_dir)
     assert captured["runner"] is runner
@@ -498,3 +511,181 @@ def test_build_wheel_uses_isolated_env_and_build_api(
         str(project_dir / "dist"),
         {"build-dir": "build"},
     )
+
+
+def test_persistent_isolated_env_reuses_existing_environment_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path.mkdir()
+    captured: dict[str, object] = {}
+
+    def fake_find_executable_and_scripts(path: str) -> tuple[str, str, str]:
+        captured["find_path"] = path
+        return (f"{path}/bin/python", f"{path}/bin", f"{path}/lib/python3.12/site-packages")
+
+    monkeypatch.setattr(build_wheel.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
+
+    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    with env:
+        assert env.python_executable == f"{env.path}/bin/python"
+        assert env.make_extra_environ() == {
+            "PATH": f"{env.path}/bin:{build_wheel.os.environ.get('PATH')}"
+        }
+
+    assert captured["find_path"] == str(env_path.resolve())
+    assert env_path.exists()
+
+
+def test_persistent_isolated_env_install_uses_backend_install_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    captured: dict[str, object] = {}
+
+    class FakeBackend:
+        python_executable = "/tmp/python"
+        scripts_dir = "/tmp/bin"
+
+        def install_dependencies(self, requirements: set[str], constraints: list[str]) -> None:
+            captured["requirements"] = set(requirements)
+            captured["constraints"] = list(constraints)
+
+    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    env._env_backend = FakeBackend()
+    env.install(["b>=1", "a>=2"])
+
+    assert captured["requirements"] == {"a>=2", "b>=1"}
+    assert captured["constraints"] == []
+
+
+def test_persistent_isolated_env_creates_environment_with_build_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    captured: dict[str, object] = {}
+
+    class FakeBackend:
+        display_name = "fake-backend"
+
+        def __init__(self) -> None:
+            self.python_executable = ""
+            self.scripts_dir = ""
+
+        def create(self, path: str) -> None:
+            captured["create_path"] = path
+            self.python_executable = f"{path}/bin/python"
+            self.scripts_dir = f"{path}/bin"
+
+        def install_dependencies(self, requirements: set[str], constraints: list[str]) -> None:
+            _ = requirements
+            _ = constraints
+
+    monkeypatch.setattr(build_wheel.build_env, "_PipBackend", FakeBackend)
+
+    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    with env:
+        assert env.python_executable == f"{env.path}/bin/python"
+
+    assert captured["create_path"] == str(build_wheel.get_persistent_build_env_path(project_dir).resolve())
+
+
+def test_persistent_isolated_env_rejects_invalid_existing_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path.mkdir()
+
+    def fake_find_executable_and_scripts(path: str) -> tuple[str, str, str]:
+        _ = path
+        raise RuntimeError("broken env")
+
+    monkeypatch.setattr(build_wheel.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
+
+    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    with pytest.raises(RuntimeError, match="无效持久构建环境"):
+        with env:
+            pass
+
+
+def test_cli_reports_persistent_build_env_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject(project_dir, "mesonpy")
+    wheel_path = project_dir / "dist" / "demo.whl"
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
+    monkeypatch.setattr(
+        build_wheel,
+        "build_wheel",
+        lambda srcdir, runner, config_settings: wheel_path,
+    )
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 0
+    assert f"持久构建环境: {build_wheel.get_persistent_build_env_path(project_dir)}" in result.output
+
+
+def test_build_wheel_failure_keeps_persistent_environment(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path.mkdir()
+
+    class FakeBuilder:
+        build_system_requires = {"setuptools"}
+
+        def get_requires_for_build(
+            self,
+            distribution: str,
+            config_settings: build_wheel.ConfigSettings,
+        ) -> set[str]:
+            _ = distribution
+            _ = config_settings
+            return set()
+
+        def build(
+            self,
+            distribution: str,
+            output_directory: str,
+            config_settings: build_wheel.ConfigSettings,
+        ) -> str:
+            _ = distribution
+            _ = output_directory
+            _ = config_settings
+            raise RuntimeError("backend boom")
+
+    monkeypatch.setattr(
+        build_wheel,
+        "ProjectBuilder",
+        SimpleNamespace(from_isolated_env=lambda env, source_dir, runner: FakeBuilder()),
+    )
+    monkeypatch.setattr(build_wheel.PersistentIsolatedEnv, "install", lambda self, requirements: None)
+    monkeypatch.setattr(
+        build_wheel.build_env,
+        "_find_executable_and_scripts",
+        lambda path: (f"{path}/bin/python", f"{path}/bin", f"{path}/lib/python3.12/site-packages"),
+    )
+
+    with pytest.raises(RuntimeError, match="持久构建环境失败"):
+        build_wheel.build_wheel(project_dir, lambda *args, **kwargs: None, {})
+
+    assert env_path.exists()

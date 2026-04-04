@@ -9,9 +9,10 @@ import subprocess
 import sys
 import tomllib
 
+from build import env as build_env
 from build import ProjectBuilder
-from build.env import DefaultIsolatedEnv
 from build._types import ConfigSettings, SubprocessRunner
+from build.env import DefaultIsolatedEnv
 import pyproject_hooks
 import typer
 
@@ -20,6 +21,7 @@ app = typer.Typer(add_completion=False)
 DEBUG_COMPILE_FLAGS = "-O0 -g -UNDEBUG"
 CLANG_CC = "clang"
 CLANG_CXX = "clang++"
+PERSISTENT_BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
 
 
 def load_build_backend(srcdir: Path) -> str:
@@ -97,6 +99,59 @@ def ensure_clang_compilers_available() -> None:
         )
 
 
+def get_persistent_build_env_path(srcdir: Path) -> Path:
+    return srcdir / PERSISTENT_BUILD_ENV_DIRNAME
+
+
+class PersistentIsolatedEnv(DefaultIsolatedEnv):
+    """在项目目录下维护可复用的持久隔离构建环境。"""
+
+    def __init__(
+        self,
+        srcdir: Path,
+        *,
+        installer: build_env.Installer = "pip",
+    ) -> None:
+        super().__init__(installer=installer)
+        self._persistent_srcdir = srcdir
+
+    def __enter__(self) -> PersistentIsolatedEnv:
+        try:
+            path = get_persistent_build_env_path(self._persistent_srcdir).resolve()
+            # 与 DefaultIsolatedEnv 保持一致，统一真实路径表示。
+            self._path = os.path.realpath(path)
+
+            self._env_backend: build_env._EnvBackend
+
+            if self.installer == "uv":
+                self._env_backend = build_env._UvBackend()
+            else:
+                self._env_backend = build_env._PipBackend()
+
+            if os.path.exists(self._path):
+                try:
+                    python_executable, scripts_dir, _ = build_env._find_executable_and_scripts(
+                        self._path
+                    )
+                except Exception as ex:
+                    raise RuntimeError(f"无效持久构建环境: {self._path}") from ex
+                self._env_backend.python_executable = python_executable
+                self._env_backend.scripts_dir = scripts_dir
+            else:
+                build_env._ctx.log(
+                    f"Creating isolated environment: {self._env_backend.display_name}..."
+                )
+                self._env_backend.create(self._path)
+        except Exception:
+            self.__exit__(*sys.exc_info())
+            raise
+
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        _ = args
+
+
 def build_wheel(
     srcdir: Path,
     runner: SubprocessRunner,
@@ -107,16 +162,17 @@ def build_wheel(
     """
     output_directory = srcdir / "dist"
     output_directory.mkdir(parents=True, exist_ok=True)
+    env = PersistentIsolatedEnv(srcdir)
 
-    try:
-        with contextlib.chdir(srcdir):
-            with DefaultIsolatedEnv(installer="pip") as env:
+    with contextlib.chdir(srcdir):
+        try:
+            with env:
                 builder = ProjectBuilder.from_isolated_env(env, str(srcdir), runner)
                 env.install(builder.build_system_requires)
                 env.install(builder.get_requires_for_build("wheel", config_settings))
                 wheel_path = Path(builder.build("wheel", str(output_directory), config_settings))
-    except Exception as ex:
-        raise RuntimeError(f"wheel 构建失败: {ex}") from ex
+        except Exception as ex:
+            raise RuntimeError(f"持久构建环境失败 [{env.path}]: {ex}") from ex
 
     return wheel_path.resolve()
 
@@ -172,6 +228,7 @@ def command(
     print("构建完成")
     print(f"- 构建方式: {build_mode_label}")
     print(f"- build-backend: {build_backend}")
+    print(f"- 持久构建环境: {get_persistent_build_env_path(srcdir)}")
     print(f"- wheel 文件: {wheel_path}")
     print(f"- compile_commands.json: {compile_commands_path}")
 
