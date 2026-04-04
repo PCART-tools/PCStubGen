@@ -43,6 +43,14 @@ def write_pyproject(project_dir: Path, backend: str) -> None:
     )
 
 
+def set_clang_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        build_wheel.shutil,
+        "which",
+        lambda executable: f"/usr/bin/{executable}",
+    )
+
+
 def test_cli_reports_mesonpy_mode(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -64,13 +72,14 @@ def test_cli_reports_mesonpy_mode(
         return wheel_path
 
     set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.pyproject_hooks.default_subprocess_runner
+    assert captured["runner"] is build_wheel.clang_runner
     assert captured["config_settings"] == {
         "build-dir": "build",
         "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
@@ -102,6 +111,7 @@ def test_cli_reports_bear_mode(
         return wheel_path
 
     set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
@@ -134,6 +144,7 @@ def test_cli_returns_error_when_build_fails(
         raise RuntimeError("boom")
 
     set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
@@ -170,6 +181,7 @@ def test_cli_rejects_build_path_that_is_not_directory(
     write_pyproject(project_dir, "mesonpy")
     (project_dir / "build").write_text("not a directory", encoding="utf-8")
     set_terminal_interactive(monkeypatch, interactive=True)
+    set_clang_available(monkeypatch)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
 
@@ -186,6 +198,7 @@ def test_cli_rejects_existing_build_dir_without_interactive_terminal(
     write_pyproject(project_dir, "mesonpy")
     (project_dir / "build").mkdir()
     set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
 
@@ -204,6 +217,7 @@ def test_cli_preserves_build_dir_when_user_declines(
     build_dir.mkdir()
 
     set_terminal_interactive(monkeypatch, interactive=True)
+    set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel.typer, "confirm", lambda message, default=False: False)
 
     result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
@@ -225,6 +239,7 @@ def test_cli_removes_build_dir_after_confirmation(
     wheel_path = project_dir / "dist" / "demo.whl"
 
     set_terminal_interactive(monkeypatch, interactive=True)
+    set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel.typer, "confirm", lambda message, default=False: True)
     monkeypatch.setattr(
         build_wheel,
@@ -293,6 +308,38 @@ def test_bear_runner_wraps_command_and_env(
     assert isinstance(env, dict)
     assert env["PATH"] == "/venv/bin"
     assert env["EXTRA"] == "1"
+    assert env["CC"] == "clang"
+    assert env["CXX"] == "clang++"
+    assert env["CFLAGS"] == "-O0 -g -UNDEBUG"
+    assert env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
+
+
+def test_bear_runner_overrides_compiler_related_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_check_call(cmd: list[str], cwd: str | None, env: dict[str, str]) -> None:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["env"] = env
+
+    monkeypatch.setattr(build_wheel.subprocess, "check_call", fake_check_call)
+
+    build_wheel.bear_runner(
+        ["python", "-m", "build"],
+        extra_environ={
+            "CC": "gcc",
+            "CXX": "g++",
+            "CFLAGS": "-O2",
+            "CXXFLAGS": "-O3",
+        },
+    )
+
+    env = captured["env"]
+    assert isinstance(env, dict)
+    assert env["CC"] == "clang"
+    assert env["CXX"] == "clang++"
     assert env["CFLAGS"] == "-O0 -g -UNDEBUG"
     assert env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
 
@@ -308,6 +355,67 @@ def test_bear_runner_requires_bear(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match="未找到 bear"):
         build_wheel.bear_runner(["python", "-m", "build"])
+
+
+def test_clang_runner_injects_clang_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_default_subprocess_runner(
+        cmd: list[str],
+        cwd: str | None = None,
+        extra_environ: dict[str, str] | None = None,
+    ) -> None:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["extra_environ"] = extra_environ
+
+    monkeypatch.setattr(
+        build_wheel.pyproject_hooks,
+        "default_subprocess_runner",
+        fake_default_subprocess_runner,
+    )
+
+    build_wheel.clang_runner(
+        ["python", "-m", "build"],
+        cwd="/tmp/demo",
+        extra_environ={"PATH": "/venv/bin", "CC": "gcc"},
+    )
+
+    assert captured["cmd"] == ["python", "-m", "build"]
+    assert captured["cwd"] == "/tmp/demo"
+    env = captured["extra_environ"]
+    assert isinstance(env, dict)
+    assert env["PATH"] == "/venv/bin"
+    assert env["CC"] == "clang"
+    assert env["CXX"] == "clang++"
+    assert env["CFLAGS"] == "-O0 -g -UNDEBUG"
+    assert env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
+
+
+def test_cli_reports_missing_clang_before_build(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject(project_dir, "mesonpy")
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+
+    def fake_which(executable: str) -> str | None:
+        if executable == "clang":
+            return None
+        return f"/usr/bin/{executable}"
+
+    monkeypatch.setattr(build_wheel.shutil, "which", fake_which)
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 1
+    assert "未找到 clang 编译器: clang" in result.output
+    assert "默认要求 clang 工具链" in result.output
 
 
 def test_build_wheel_uses_isolated_env_and_build_api(

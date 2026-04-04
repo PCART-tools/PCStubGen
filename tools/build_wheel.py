@@ -17,6 +17,10 @@ import typer
 
 app = typer.Typer(add_completion=False)
 
+DEBUG_COMPILE_FLAGS = "-O0 -g -UNDEBUG"
+CLANG_CC = "clang"
+CLANG_CXX = "clang++"
+
 
 def load_build_backend(srcdir: Path) -> str:
     pyproject_path = srcdir / "pyproject.toml"
@@ -42,21 +46,55 @@ def load_build_backend(srcdir: Path) -> str:
     return build_backend
 
 
+def build_clang_environ(
+    extra_environ: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    env = os.environ.copy()
+    if extra_environ is not None:
+        env.update(extra_environ)
+    env["CC"] = CLANG_CC
+    env["CXX"] = CLANG_CXX
+    env["CFLAGS"] = DEBUG_COMPILE_FLAGS
+    env["CXXFLAGS"] = DEBUG_COMPILE_FLAGS
+    return env
+
+
+def clang_runner(
+    cmd: Sequence[str],
+    cwd: str | None = None,
+    extra_environ: Mapping[str, str] | None = None,
+) -> None:
+    pyproject_hooks.default_subprocess_runner(
+        cmd,
+        cwd=cwd,
+        extra_environ=build_clang_environ(extra_environ),
+    )
+
+
 def bear_runner(
     cmd: Sequence[str],
     cwd: str | None = None,
     extra_environ: Mapping[str, str] | None = None,
 ) -> None:
-    debug_compile_flags = "-O0 -g -UNDEBUG"
-    env = os.environ.copy()
-    if extra_environ is not None:
-        env.update(extra_environ)
-    env["CFLAGS"] = debug_compile_flags
-    env["CXXFLAGS"] = debug_compile_flags
     try:
-        subprocess.check_call(["bear", "--", *cmd], cwd=cwd, env=env)
+        subprocess.check_call(
+            ["bear", "--", *cmd],
+            cwd=cwd,
+            env=build_clang_environ(extra_environ),
+        )
     except FileNotFoundError as ex:
         raise RuntimeError("未找到 bear 命令，无法为非 mesonpy 项目生成 compile_commands.json。") from ex
+
+
+def ensure_clang_compilers_available() -> None:
+    missing_compilers = [
+        compiler for compiler in (CLANG_CC, CLANG_CXX) if shutil.which(compiler) is None
+    ]
+    if missing_compilers:
+        missing_display = ", ".join(missing_compilers)
+        raise RuntimeError(
+            f"未找到 clang 编译器: {missing_display}。build_wheel 默认要求 clang 工具链。"
+        )
 
 
 def build_wheel(
@@ -113,7 +151,7 @@ def command(
 
         if build_backend == "mesonpy":
             build_mode_label = "mesonpy"
-            runner = pyproject_hooks.default_subprocess_runner
+            runner = clang_runner
             config_settings: ConfigSettings = {
                 "build-dir": build_dir_name,
                 "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
@@ -125,6 +163,7 @@ def command(
             config_settings = {}
             compile_commands_path = srcdir / "compile_commands.json"
 
+        ensure_clang_compilers_available()
         wheel_path = build_wheel(srcdir, runner, config_settings)
     except Exception as ex:
         print(f"错误: {ex}")
