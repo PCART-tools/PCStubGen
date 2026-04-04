@@ -16,7 +16,6 @@ import importlib.machinery
 import importlib.util
 import inspect
 from pathlib import Path
-import sys
 import types
 
 import typer
@@ -30,19 +29,6 @@ DEFAULT_OUTPUT_DIR = SCRIPT_DIR / f"{SCRIPT_PATH.stem}_output"
 EXIT_ERROR = 1
 
 app = typer.Typer(add_completion=False)
-
-
-def configure_output_encoding() -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError, ValueError):
-            pass
-    if hasattr(sys.stderr, "reconfigure"):
-        try:
-            sys.stderr.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError, ValueError):
-            pass
 
 
 def is_c_implemented(module_name: str) -> bool:
@@ -169,7 +155,6 @@ def command(
         help="CSV 输出目录，默认写入 tool/module_c_impl_output。",
     ),
 ) -> None:
-    configure_output_encoding()
     effective_output = DEFAULT_OUTPUT_DIR if output is None else output
     exit_code = run_single_module(module_name, output=effective_output)
     if exit_code != 0:

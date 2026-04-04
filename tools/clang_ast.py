@@ -32,19 +32,6 @@ class ClangAstDumpResult:
     returncode: int
 
 
-def configure_output_encoding() -> None:
-    if hasattr(sys.stdout, "reconfigure"):
-        try:
-            sys.stdout.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError, ValueError):
-            pass
-    if hasattr(sys.stderr, "reconfigure"):
-        try:
-            sys.stderr.reconfigure(encoding="utf-8")
-        except (AttributeError, OSError, ValueError):
-            pass
-
-
 def _safe_str(value: str | None) -> str | None:
     if value is None:
         return None
@@ -421,7 +408,6 @@ def run_ast_export(
     """
     导出单个源文件的 libclang 与 clang AST，并返回执行过程中收集到的失败。
     """
-    configure_output_encoding()
     source_path = source_path.resolve()
 
     libclang_output_path, clang_output_path = resolve_output_paths(source_path)
