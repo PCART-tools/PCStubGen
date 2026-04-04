@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 from pathlib import Path
+import subprocess
 
 import clang
 from clang.cindex import CompilationDatabase, Diagnostic, Index, TranslationUnit
@@ -31,6 +33,24 @@ class CompilationCommand:
     file_path: Path
     working_directory: Path
     parse_args: list[str]
+
+
+@functools.cache
+def detect_clang_resource_dir() -> str | None:
+    """调用系统 clang 自动探测 resource dir。"""
+    completed_process = subprocess.run(
+        ["clang", "-print-resource-dir"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if completed_process.returncode != 0:
+        return None
+
+    resource_dir = completed_process.stdout.strip()
+    if not resource_dir:
+        return None
+    return resource_dir
 
 
 def diagnostic_severity_to_str(severity: int) -> str:
@@ -169,10 +189,15 @@ def parse(
     compilation_command: CompilationCommand,
 ) -> TranslationUnit:
     """解析单个编译数据库条目为 clang translation unit。"""
+    effective_parse_args = list(compilation_command.parse_args)
+    resource_dir = detect_clang_resource_dir()
+    if resource_dir is not None:
+        effective_parse_args.extend(["-resource-dir", resource_dir])
+
     with contextlib.chdir(compilation_command.working_directory):
         translation_unit = index.parse(
             str(compilation_command.file_path),
-            args=list(compilation_command.parse_args),
+            args=effective_parse_args,
         )
 
     diagnostics = translation_unit.diagnostics
@@ -186,7 +211,7 @@ def parse(
             "{}",
             compilation_command.file_path,
             compilation_command.working_directory,
-            ' '.join(compilation_command.parse_args),
+            ' '.join(effective_parse_args),
             '\n'.join(f"- {diagnostic_to_str(diagnostic)}" for diagnostic in diagnostics)
         )
     else:
@@ -197,6 +222,6 @@ def parse(
             "解析参数: {}\n",
             compilation_command.file_path,
             compilation_command.working_directory,
-            ' '.join(compilation_command.parse_args),
+            ' '.join(effective_parse_args),
         )
     return translation_unit
