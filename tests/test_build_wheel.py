@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 from typer.testing import CliRunner
 
-from tools import build_wheel
+import pcstubgen.__main__ as main_module
+import pcstubgen.build as build_wheel
 
 RUNNER = CliRunner()
 
@@ -69,12 +70,28 @@ def write_setup_py(project_dir: Path) -> None:
     )
 
 
+def invoke_build(*args: str) -> object:
+    return RUNNER.invoke(
+        main_module.app,
+        ["build", *args],
+        prog_name="pcstubgen",
+    )
+
+
 def set_clang_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         build_wheel.shutil,
         "which",
         lambda executable: f"/usr/bin/{executable}",
     )
+
+
+def test_build_help_displays_srcdir_argument() -> None:
+    result = invoke_build("--help")
+
+    assert result.exit_code == 0
+    assert "SRCDIR" in result.output
+    assert "compile_commands.json" in result.output
 
 
 def test_cli_reports_mesonpy_mode(
@@ -101,7 +118,7 @@ def test_cli_reports_mesonpy_mode(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
@@ -140,7 +157,7 @@ def test_cli_reports_bear_mode(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
@@ -175,7 +192,7 @@ def test_cli_reports_legacy_setuptools_mode_for_setup_py_only(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
@@ -209,7 +226,7 @@ def test_cli_reports_legacy_setuptools_mode_for_pyproject_without_build_system(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
@@ -243,7 +260,7 @@ def test_cli_reports_legacy_setuptools_mode_for_missing_build_backend(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
@@ -275,7 +292,7 @@ def test_cli_returns_error_when_build_fails(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "错误: boom" in result.output
@@ -293,25 +310,21 @@ def test_cli_rejects_invalid_pyproject_even_when_setup_py_exists(
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "Failed to parse" in result.output
 
 
 def test_cli_requires_srcdir_argument() -> None:
-    result = RUNNER.invoke(build_wheel.app, [], prog_name="build_wheel")
+    result = invoke_build()
 
     assert result.exit_code != 0
     assert "Missing argument 'SRCDIR'" in result.output
 
 
 def test_cli_rejects_nonexistent_srcdir() -> None:
-    result = RUNNER.invoke(
-        build_wheel.app,
-        ["/definitely/missing/project"],
-        prog_name="build_wheel",
-    )
+    result = invoke_build("/definitely/missing/project")
 
     assert result.exit_code != 0
     assert "SRCDIR" in result.output
@@ -329,7 +342,7 @@ def test_cli_rejects_build_path_that_is_not_directory(
     set_terminal_interactive(monkeypatch, interactive=True)
     set_clang_available(monkeypatch)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "构建路径存在但不是目录" in result.output
@@ -346,7 +359,7 @@ def test_cli_rejects_existing_build_dir_without_interactive_terminal(
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "无法交互确认删除" in result.output
@@ -366,7 +379,7 @@ def test_cli_preserves_build_dir_when_user_declines(
     set_clang_available(monkeypatch)
     monkeypatch.setattr(build_wheel.typer, "confirm", lambda message, default=False: False)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "用户取消删除 build 目录" in result.output
@@ -393,7 +406,7 @@ def test_cli_removes_build_dir_after_confirmation(
         lambda srcdir, runner, config_settings: wheel_path,
     )
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert not build_dir.exists()
@@ -617,7 +630,7 @@ def test_cli_reports_missing_clang_before_build(
 
     monkeypatch.setattr(build_wheel.shutil, "which", fake_which)
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 1
     assert "未找到 clang 编译器: clang" in result.output
@@ -839,7 +852,7 @@ def test_cli_reports_persistent_build_env_path(
         lambda srcdir, runner, config_settings: wheel_path,
     )
 
-    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+    result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert f"持久构建环境: {build_wheel.get_persistent_build_env_path(project_dir)}" in result.output

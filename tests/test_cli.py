@@ -11,6 +11,42 @@ from pcstubgen.stub_generation_options import StubGenerationOptions
 RUNNER = CliRunner()
 
 
+def test_root_help_lists_gen_and_build_commands() -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        ["--help"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert "Commands" in result.output
+    assert "gen" in result.output
+    assert "build" in result.output
+
+
+def test_gen_help_displays_stub_generation_arguments() -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        ["gen", "--help"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert "MODULE_NAME" in result.output
+    assert "--compilation-database" in result.output
+
+
+def test_legacy_root_command_style_is_rejected() -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        ["math"],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code != 0
+    assert "No such command 'math'" in result.output
+
+
 def _read_single_log_file(log_dir: Path, leaf_module_name: str) -> str:
     log_files = list(log_dir.glob(f"pcstubgen_{leaf_module_name}_*.log"))
     assert len(log_files) == 1
@@ -40,6 +76,7 @@ def test_cli_passes_stub_generation_options(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -76,6 +113,7 @@ def test_cli_enables_docstrings_with_explicit_flag(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -103,6 +141,7 @@ def test_cli_creates_timestamped_log_file_for_leaf_module_name(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -132,6 +171,7 @@ def test_cli_uses_leaf_module_name_in_log_file_name(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "numpy.linalg",
             "--output",
             str(tmp_path),
@@ -162,6 +202,7 @@ def test_cli_logs_parsed_arguments_to_log_file(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "numpy.linalg",
             "--output",
             str(tmp_path),
@@ -201,6 +242,7 @@ def test_cli_logs_default_argument_values_to_log_file(
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -225,6 +267,7 @@ def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -242,6 +285,7 @@ def test_cli_rejects_removed_no_docstrings_option(tmp_path: Path) -> None:
     result = RUNNER.invoke(
         main_module.app,
         [
+            "gen",
             "math",
             "--output",
             str(tmp_path),
@@ -265,6 +309,7 @@ def test_cli_rejects_removed_c_parse_options(tmp_path: Path) -> None:
         result = RUNNER.invoke(
             main_module.app,
             [
+                "gen",
                 "math",
                 "--output",
                 str(tmp_path),

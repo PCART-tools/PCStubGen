@@ -8,6 +8,7 @@ import typer
 from loguru import logger
 
 from .api import write_stubs
+from .build import BUILD_COMMAND_HELP, build_command
 from .stub_generation_options import StubGenerationOptions
 
 MY_LOGURU_FORMAT = (
@@ -66,8 +67,8 @@ def _log_cli_arguments(
     )
 
 
-@app.command(help="使用 pcstubgen 为模块生成 Python stub。")
-def main(
+@app.command("gen", help="使用 pcstubgen 为模块生成 Python stub。")
+def gen(
     module_name: str = typer.Argument(..., metavar="MODULE_NAME", help="模块名"),
     output: Path = typer.Option(
         Path("./stubs"),
@@ -134,6 +135,9 @@ def main(
         logger.remove(console_sink_id)
         logger.remove(file_sink_id)
         logger.add(sys.stderr)
+
+
+app.command("build", help=BUILD_COMMAND_HELP)(build_command)
 
 
 if __name__ == "__main__":
