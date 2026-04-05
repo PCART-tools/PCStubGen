@@ -38,7 +38,33 @@ def set_terminal_interactive(
 def write_pyproject(project_dir: Path, backend: str) -> None:
     (project_dir / "pyproject.toml").write_text(
         "[build-system]\n"
+        "requires = ['setuptools']\n"
         f'build-backend = "{backend}"\n',
+        encoding="utf-8",
+    )
+
+
+def write_pyproject_without_build_system(project_dir: Path) -> None:
+    (project_dir / "pyproject.toml").write_text(
+        "[project]\n"
+        'name = "demo"\n'
+        'version = "0.1.0"\n',
+        encoding="utf-8",
+    )
+
+
+def write_pyproject_missing_build_backend(project_dir: Path) -> None:
+    (project_dir / "pyproject.toml").write_text(
+        "[build-system]\n"
+        "requires = ['setuptools']\n",
+        encoding="utf-8",
+    )
+
+
+def write_setup_py(project_dir: Path) -> None:
+    (project_dir / "setup.py").write_text(
+        "from setuptools import setup\n"
+        "setup(name='demo', version='0.1.0')\n",
         encoding="utf-8",
     )
 
@@ -84,7 +110,6 @@ def test_cli_reports_mesonpy_mode(
         "build-dir": "build",
         "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
     }
-    assert "构建方式: mesonpy" in result.output
     assert f"build-backend: mesonpy" in result.output
     assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
     assert str(wheel_path) in result.output
@@ -121,9 +146,110 @@ def test_cli_reports_bear_mode(
     assert captured["srcdir"] == project_dir
     assert captured["runner"] is build_wheel.bear_runner
     assert captured["config_settings"] == {}
-    assert "构建方式: bear" in result.output
     assert f"build-backend: setuptools.build_meta" in result.output
     assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
+    assert str(project_dir / "compile_commands.json") in result.output
+
+
+def test_cli_reports_legacy_setuptools_mode_for_setup_py_only(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_setup_py(project_dir)
+    wheel_path = project_dir / "dist" / "demo.whl"
+    captured: dict[str, object] = {}
+
+    def fake_build_wheel(
+        srcdir: Path,
+        runner: build_wheel.SubprocessRunner,
+        config_settings: build_wheel.ConfigSettings,
+    ) -> Path:
+        captured["srcdir"] = srcdir
+        captured["runner"] = runner
+        captured["config_settings"] = dict(config_settings)
+        return wheel_path
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
+    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 0
+    assert captured["srcdir"] == project_dir
+    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["config_settings"] == {}
+    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
+    assert str(project_dir / "compile_commands.json") in result.output
+
+
+def test_cli_reports_legacy_setuptools_mode_for_pyproject_without_build_system(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject_without_build_system(project_dir)
+    wheel_path = project_dir / "dist" / "demo.whl"
+    captured: dict[str, object] = {}
+
+    def fake_build_wheel(
+        srcdir: Path,
+        runner: build_wheel.SubprocessRunner,
+        config_settings: build_wheel.ConfigSettings,
+    ) -> Path:
+        captured["srcdir"] = srcdir
+        captured["runner"] = runner
+        captured["config_settings"] = dict(config_settings)
+        return wheel_path
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
+    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 0
+    assert captured["srcdir"] == project_dir
+    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["config_settings"] == {}
+    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
+    assert str(project_dir / "compile_commands.json") in result.output
+
+
+def test_cli_reports_legacy_setuptools_mode_for_missing_build_backend(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject_missing_build_backend(project_dir)
+    wheel_path = project_dir / "dist" / "demo.whl"
+    captured: dict[str, object] = {}
+
+    def fake_build_wheel(
+        srcdir: Path,
+        runner: build_wheel.SubprocessRunner,
+        config_settings: build_wheel.ConfigSettings,
+    ) -> Path:
+        captured["srcdir"] = srcdir
+        captured["runner"] = runner
+        captured["config_settings"] = dict(config_settings)
+        return wheel_path
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
+    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 0
+    assert captured["srcdir"] == project_dir
+    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["config_settings"] == {}
+    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -153,6 +279,24 @@ def test_cli_returns_error_when_build_fails(
 
     assert result.exit_code == 1
     assert "错误: boom" in result.output
+
+
+def test_cli_rejects_invalid_pyproject_even_when_setup_py_exists(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_setup_py(project_dir)
+    (project_dir / "pyproject.toml").write_text("[build-system\n", encoding="utf-8")
+
+    set_terminal_interactive(monkeypatch, interactive=False)
+    set_clang_available(monkeypatch)
+
+    result = RUNNER.invoke(build_wheel.app, [str(project_dir)], prog_name="build_wheel")
+
+    assert result.exit_code == 1
+    assert "Failed to parse" in result.output
 
 
 def test_cli_requires_srcdir_argument() -> None:
@@ -256,34 +400,94 @@ def test_cli_removes_build_dir_after_confirmation(
     assert f"已清理目录: {build_dir}" in result.output
 
 
-def test_load_build_backend_reads_mesonpy(tmp_path: Path) -> None:
+def test_resolve_build_context_reads_mesonpy(tmp_path: Path) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
     write_pyproject(project_dir, "mesonpy")
 
-    assert build_wheel.load_build_backend(project_dir) == "mesonpy"
+    context = build_wheel.resolve_build_context(project_dir)
+
+    assert context.build_backend == "mesonpy"
+    assert context.runner is build_wheel.clang_runner
+    assert context.config_settings == {
+        "build-dir": "build",
+        "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
+    }
+    assert context.compile_commands_path == project_dir / "build" / "compile_commands.json"
 
 
-def test_load_build_backend_rejects_invalid_toml(tmp_path: Path) -> None:
+def test_resolve_build_context_rejects_invalid_toml(tmp_path: Path) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
     (project_dir / "pyproject.toml").write_text("[build-system\n", encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="解析失败"):
-        build_wheel.load_build_backend(project_dir)
+    with pytest.raises(Exception, match="Failed to parse"):
+        build_wheel.resolve_build_context(project_dir)
 
 
-def test_load_build_backend_rejects_missing_build_backend(tmp_path: Path) -> None:
+def test_resolve_build_context_allows_missing_build_backend(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject_missing_build_backend(project_dir)
+
+    context = build_wheel.resolve_build_context(project_dir)
+
+    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_wheel.bear_runner
+    assert context.config_settings == {}
+    assert context.compile_commands_path == project_dir / "compile_commands.json"
+
+
+def test_resolve_build_context_allows_pyproject_without_build_system(
+    tmp_path: Path,
+) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject_without_build_system(project_dir)
+
+    context = build_wheel.resolve_build_context(project_dir)
+
+    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_wheel.bear_runner
+
+
+def test_resolve_build_context_allows_setup_py_only(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_setup_py(project_dir)
+
+    context = build_wheel.resolve_build_context(project_dir)
+
+    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_wheel.bear_runner
+
+
+def test_resolve_build_context_reports_pyproject_backend(tmp_path: Path) -> None:
+    project_dir = tmp_path / "demo"
+    project_dir.mkdir()
+    write_pyproject(project_dir, "setuptools.build_meta")
+
+    context = build_wheel.resolve_build_context(project_dir)
+
+    assert context.build_backend == "setuptools.build_meta"
+    assert context.runner is build_wheel.bear_runner
+    assert context.config_settings == {}
+    assert context.compile_commands_path == project_dir / "compile_commands.json"
+
+
+def test_resolve_build_context_rejects_missing_requires_in_build_system(
+    tmp_path: Path,
+) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
     (project_dir / "pyproject.toml").write_text(
         "[build-system]\n"
-        "requires = ['setuptools']\n",
+        'build-backend = "setuptools.build_meta"\n',
         encoding="utf-8",
     )
 
-    with pytest.raises(RuntimeError, match="build-backend"):
-        build_wheel.load_build_backend(project_dir)
+    with pytest.raises(Exception, match="`requires` is a required property"):
+        build_wheel.resolve_build_context(project_dir)
 
 
 def test_bear_runner_wraps_command_and_env(

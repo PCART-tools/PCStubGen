@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import contextlib
+from dataclasses import dataclass
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 import shutil
 import subprocess
 import sys
-import tomllib
 
 from build import env as build_env
 from build import ProjectBuilder
@@ -22,30 +22,44 @@ DEBUG_COMPILE_FLAGS = "-O0 -g -UNDEBUG"
 CLANG_CC = "clang"
 CLANG_CXX = "clang++"
 PERSISTENT_BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
+LEGACY_SETUPTOOLS_BACKEND = "setuptools.build_meta:__legacy__"
 
 
-def load_build_backend(srcdir: Path) -> str:
-    pyproject_path = srcdir / "pyproject.toml"
-    if not pyproject_path.is_file():
-        raise RuntimeError(f"未找到 pyproject.toml: {pyproject_path}")
+@dataclass(frozen=True)
+class BuildContext:
+    """封装 build 解析后的构建模式信息。"""
 
-    try:
-        with pyproject_path.open("rb") as file:
-            pyproject_data = tomllib.load(file)
-    except tomllib.TOMLDecodeError as ex:
-        raise RuntimeError(f"pyproject.toml 解析失败: {ex}") from ex
-    except OSError as ex:
-        raise RuntimeError(f"读取 pyproject.toml 失败: {ex}") from ex
+    builder: ProjectBuilder
+    build_backend: str
+    runner: SubprocessRunner
+    config_settings: ConfigSettings
+    compile_commands_path: Path
 
-    build_system = pyproject_data.get("build-system")
-    if not isinstance(build_system, dict):
-        raise RuntimeError("pyproject.toml 缺少 [build-system] 表。")
 
-    build_backend = build_system.get("build-backend")
-    if not isinstance(build_backend, str) or not build_backend.strip():
-        raise RuntimeError("pyproject.toml 缺少 build-system.build-backend。")
+def resolve_build_context(srcdir: Path) -> BuildContext:
+    """复用 ProjectBuilder 的解析结果，确定构建模式。"""
+    builder = ProjectBuilder(str(srcdir))
+    build_backend = builder._backend
 
-    return build_backend
+    if build_backend == "mesonpy":
+        return BuildContext(
+            builder=builder,
+            build_backend=build_backend,
+            runner=clang_runner,
+            config_settings={
+                "build-dir": "build",
+                "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
+            },
+            compile_commands_path=srcdir / "build" / "compile_commands.json",
+        )
+
+    return BuildContext(
+        builder=builder,
+        build_backend=build_backend,
+        runner=bear_runner,
+        config_settings={},
+        compile_commands_path=srcdir / "compile_commands.json",
+    )
 
 
 def build_clang_environ(
@@ -68,7 +82,7 @@ def clang_runner(
 ) -> None:
     pyproject_hooks.default_subprocess_runner(
         cmd,
-        cwd=cwd,
+        cwd,
         extra_environ=build_clang_environ(extra_environ),
     )
 
@@ -177,7 +191,7 @@ def build_wheel(
     return wheel_path.resolve()
 
 
-@app.command(help="根据 pyproject.toml 构建 wheel，并在非 mesonpy 项目中生成 compile_commands.json。")
+@app.command(help="构建 Python 项目的 wheel，并在非 mesonpy 项目中生成 compile_commands.json。")
 def command(
     srcdir: Path = typer.Argument(
         ...,
@@ -190,10 +204,9 @@ def command(
         resolve_path=True,
     ),
 ) -> None:
-    build_dir_name = "build"
-    build_dir = srcdir / build_dir_name
+    build_dir = srcdir / "build"
     try:
-        build_backend = load_build_backend(srcdir)
+        build_context = resolve_build_context(srcdir)
 
         if build_dir.exists():
             if not build_dir.is_dir():
@@ -205,32 +218,21 @@ def command(
             shutil.rmtree(build_dir)
             print(f"- 已清理目录: {build_dir}")
 
-        if build_backend == "mesonpy":
-            build_mode_label = "mesonpy"
-            runner = clang_runner
-            config_settings: ConfigSettings = {
-                "build-dir": build_dir_name,
-                "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
-            }
-            compile_commands_path = srcdir / build_dir_name / "compile_commands.json"
-        else:
-            build_mode_label = "bear"
-            runner = bear_runner
-            config_settings = {}
-            compile_commands_path = srcdir / "compile_commands.json"
-
         ensure_clang_compilers_available()
-        wheel_path = build_wheel(srcdir, runner, config_settings)
+        wheel_path = build_wheel(
+            srcdir,
+            build_context.runner,
+            build_context.config_settings,
+        )
     except Exception as ex:
         print(f"错误: {ex}")
         raise typer.Exit(1) from ex
 
     print("构建完成")
-    print(f"- 构建方式: {build_mode_label}")
-    print(f"- build-backend: {build_backend}")
+    print(f"- build-backend: {build_context.build_backend}")
     print(f"- 持久构建环境: {get_persistent_build_env_path(srcdir)}")
     print(f"- wheel 文件: {wheel_path}")
-    print(f"- compile_commands.json: {compile_commands_path}")
+    print(f"- compile_commands.json: {build_context.compile_commands_path}")
 
 
 if __name__ == "__main__":
