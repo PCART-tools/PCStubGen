@@ -33,7 +33,7 @@ class DefinitionIndex:
     def __init__(self, translation_units: Iterable[TranslationUnit]) -> None:
         self._usr_to_cursor: dict[str, Cursor] = {}
         for translation_unit in translation_units:
-            for cursor in translation_unit.cursor.get_children():
+            for cursor in _iter_exportable_definition_candidates(translation_unit.cursor):
                 if not _should_index(cursor):
                     continue
 
