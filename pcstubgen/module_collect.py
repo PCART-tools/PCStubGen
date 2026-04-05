@@ -19,11 +19,11 @@ from .ir_modules import (
 )
 
 __all__ = [
-    "build_bases",
-    "build_class",
-    "build_function",
-    "build_method",
-    "build_module",
+    "collect_bases",
+    "collect_class",
+    "collect_function",
+    "collect_method",
+    "collect_module",
 ]
 
 
@@ -48,7 +48,7 @@ def is_package(module: types.ModuleType) -> bool:
     return spec.submodule_search_locations is not None
 
 
-def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
+def collect_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
     module_type = _detect_module_type(module)
     irmodule = IRModule(
         full_name=path,
@@ -66,11 +66,11 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
 
         if inspect.isbuiltin(member):
             irmodule.functions.append(
-                build_function(member_path, member, module_type=module_type)
+                collect_function(member_path, member, module_type=module_type)
             )
         elif inspect.isclass(member):
             irmodule.classes.append(
-                build_class(member_path, member, module_type=module_type)
+                collect_class(member_path, member, module_type=module_type)
             )
 
     if irmodule.is_package:
@@ -85,7 +85,7 @@ def build_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
                 )
                 continue
             irmodule.sub_modules.append(
-                build_module(QualifiedName.from_str(submodule_name), sub_module)
+                collect_module(QualifiedName.from_str(submodule_name), sub_module)
             )
 
     return irmodule
@@ -128,14 +128,14 @@ def _iter_submodule_names(module: types.ModuleType) -> list[str]:
     )
 
 
-def build_class(
+def collect_class(
     path: QualifiedName,
     class_: type,
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRClass:
     irclass = IRClass(name=path.name, doc=get_doc(class_))
-    irclass.bases = build_bases(class_)
+    irclass.bases = collect_bases(class_)
 
     for name, member in inspect.getmembers(class_):
         member_path = path.concat(name)
@@ -148,17 +148,17 @@ def build_class(
 
         if inspect.isbuiltin(member):
             irclass.methods.append(
-                build_method(member_path, member, module_type=module_type)
+                collect_method(member_path, member, module_type=module_type)
             )
         elif inspect.isclass(member):
             irclass.classes.append(
-                build_class(member_path, member, module_type=module_type)
+                collect_class(member_path, member, module_type=module_type)
             )
 
     return irclass
 
 
-def build_function(
+def collect_function(
     path: QualifiedName,
     func: Any,
     *,
@@ -173,17 +173,17 @@ def build_function(
     return IRFunction(name=path.name, doc=get_doc(func))
 
 
-def build_method(
+def collect_method(
     path: QualifiedName,
     method: Any,
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRMethod:
-    func = build_function(path, method, module_type=module_type)
+    func = collect_function(path, method, module_type=module_type)
     return IRMethod(function=func, decorator=None)
 
 
-def build_bases(class_: type) -> list[QualifiedName]:
+def collect_bases(class_: type) -> list[QualifiedName]:
     bases = class_.__bases__
     result: list[QualifiedName] = []
     for t in bases:

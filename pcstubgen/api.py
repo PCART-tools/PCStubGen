@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from .module_build import build_module
+from .module_collect import collect_module
 from .stub_generation_options import StubGenerationOptions
 from .ir_modules import QualifiedName
 from .signature_completion import SignatureCompleter
@@ -31,7 +31,7 @@ def write_stubs(
     output.mkdir(parents=True, exist_ok=True)
 
     module = importlib.import_module(module_name)
-    ir_module = build_module(
+    ir_module = collect_module(
         QualifiedName.from_str(module_name),
         module,
     )

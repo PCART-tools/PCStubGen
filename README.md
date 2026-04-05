@@ -10,7 +10,7 @@ uv run pcstubgen gen numpy --output ./stubs
 uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_commands.json
 ```
 
-构建 wheel 并生成 `compile_commands.json`:
+构建 Python 项目，并为 stub 生成准备 `compile_commands.json`:
 
 ```bash
 uv run pcstubgen build /path/to/python-project

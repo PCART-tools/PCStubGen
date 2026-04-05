@@ -4,7 +4,7 @@ import importlib.machinery
 import types
 
 from pcstubgen.ir_modules import IRModuleType, QualifiedName
-from pcstubgen.module_build import build_module
+from pcstubgen.module_collect import collect_module
 
 
 def _module_with_loader(
@@ -42,15 +42,15 @@ def test_detect_module_type_uses_loader_mapping() -> None:
 
     for module_name, loader, expected in cases:
         module = _module_with_loader(module_name, loader)
-        ir_module = build_module(QualifiedName.from_str(module_name), module)
+        ir_module = collect_module(QualifiedName.from_str(module_name), module)
         assert ir_module.module_type == expected
 
 
 def test_detect_module_type_returns_unknown_for_unrecognized_loader() -> None:
     native_module = _module_with_loader("native_mod", loader=None, file_path="native_mod.pyd")
-    native_ir = build_module(QualifiedName.from_str("native_mod"), native_module)
+    native_ir = collect_module(QualifiedName.from_str("native_mod"), native_module)
     assert native_ir.module_type == IRModuleType.UNKNOWN
 
     py_module = _module_with_loader("py_mod", loader=None, file_path="py_mod.py")
-    py_ir = build_module(QualifiedName.from_str("py_mod"), py_module)
+    py_ir = collect_module(QualifiedName.from_str("py_mod"), py_module)
     assert py_ir.module_type == IRModuleType.UNKNOWN

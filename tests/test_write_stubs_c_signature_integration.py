@@ -40,7 +40,7 @@ def test_write_stubs_falls_back_when_c_source_initialization_fails(
             captured["renderer"] = renderer
             captured["to"] = to
 
-    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     options = StubGenerationOptions(
@@ -107,7 +107,7 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
             captured["completed_module"] = module
             return FakeSummary()
 
-    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
@@ -186,7 +186,7 @@ def test_write_stubs_uses_default_options_when_none(
 
             return FakeSummary()
 
-    monkeypatch.setattr(stubgen_module, "build_module", lambda path, module: ir_module)
+    monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))

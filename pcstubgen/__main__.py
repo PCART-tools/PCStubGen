@@ -8,7 +8,7 @@ import typer
 from loguru import logger
 
 from .api import write_stubs
-from .build import BUILD_COMMAND_HELP, build_command
+from ._build import BUILD_COMMAND_HELP, build_command
 from .stub_generation_options import StubGenerationOptions
 
 MY_LOGURU_FORMAT = (

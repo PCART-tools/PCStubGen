@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 import pcstubgen.__main__ as main_module
-import pcstubgen.build as build_wheel
+import pcstubgen._build as build_impl
 
 RUNNER = CliRunner()
 
@@ -26,7 +26,7 @@ def set_terminal_interactive(
     interactive: bool,
 ) -> None:
     monkeypatch.setattr(
-        build_wheel,
+        build_impl,
         "sys",
         SimpleNamespace(
             stdin=FakeStream(interactive=interactive),
@@ -80,7 +80,7 @@ def invoke_build(*args: str) -> object:
 
 def set_clang_available(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        build_wheel.shutil,
+        build_impl.shutil,
         "which",
         lambda executable: f"/usr/bin/{executable}",
     )
@@ -106,8 +106,8 @@ def test_cli_reports_mesonpy_mode(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         captured["srcdir"] = srcdir
         captured["runner"] = runner
@@ -116,19 +116,19 @@ def test_cli_reports_mesonpy_mode(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.clang_runner
+    assert captured["runner"] is build_impl.clang_runner
     assert captured["config_settings"] == {
         "build-dir": "build",
         "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
     }
     assert f"build-backend: mesonpy" in result.output
-    assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
+    assert str(build_impl.get_persistent_build_env_path(project_dir)) in result.output
     assert str(wheel_path) in result.output
     assert str(project_dir / "build" / "compile_commands.json") in result.output
 
@@ -145,8 +145,8 @@ def test_cli_reports_bear_mode(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         captured["srcdir"] = srcdir
         captured["runner"] = runner
@@ -155,16 +155,16 @@ def test_cli_reports_bear_mode(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["runner"] is build_impl.bear_runner
     assert captured["config_settings"] == {}
     assert f"build-backend: setuptools.build_meta" in result.output
-    assert str(build_wheel.get_persistent_build_env_path(project_dir)) in result.output
+    assert str(build_impl.get_persistent_build_env_path(project_dir)) in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -180,8 +180,8 @@ def test_cli_reports_legacy_setuptools_mode_for_setup_py_only(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         captured["srcdir"] = srcdir
         captured["runner"] = runner
@@ -190,15 +190,15 @@ def test_cli_reports_legacy_setuptools_mode_for_setup_py_only(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["runner"] is build_impl.bear_runner
     assert captured["config_settings"] == {}
-    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
+    assert f"build-backend: {build_impl.LEGACY_SETUPTOOLS_BACKEND}" in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -214,8 +214,8 @@ def test_cli_reports_legacy_setuptools_mode_for_pyproject_without_build_system(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         captured["srcdir"] = srcdir
         captured["runner"] = runner
@@ -224,15 +224,15 @@ def test_cli_reports_legacy_setuptools_mode_for_pyproject_without_build_system(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["runner"] is build_impl.bear_runner
     assert captured["config_settings"] == {}
-    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
+    assert f"build-backend: {build_impl.LEGACY_SETUPTOOLS_BACKEND}" in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -248,8 +248,8 @@ def test_cli_reports_legacy_setuptools_mode_for_missing_build_backend(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         captured["srcdir"] = srcdir
         captured["runner"] = runner
@@ -258,15 +258,15 @@ def test_cli_reports_legacy_setuptools_mode_for_missing_build_backend(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
     assert captured["srcdir"] == project_dir
-    assert captured["runner"] is build_wheel.bear_runner
+    assert captured["runner"] is build_impl.bear_runner
     assert captured["config_settings"] == {}
-    assert f"build-backend: {build_wheel.LEGACY_SETUPTOOLS_BACKEND}" in result.output
+    assert f"build-backend: {build_impl.LEGACY_SETUPTOOLS_BACKEND}" in result.output
     assert str(project_dir / "compile_commands.json") in result.output
 
 
@@ -280,8 +280,8 @@ def test_cli_returns_error_when_build_fails(
 
     def fake_build_wheel(
         srcdir: Path,
-        runner: build_wheel.SubprocessRunner,
-        config_settings: build_wheel.ConfigSettings,
+        runner: build_impl.SubprocessRunner,
+        config_settings: build_impl.ConfigSettings,
     ) -> Path:
         _ = srcdir
         _ = runner
@@ -290,7 +290,7 @@ def test_cli_returns_error_when_build_fails(
 
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_impl, "build_wheel", fake_build_wheel)
 
     result = invoke_build(str(project_dir))
 
@@ -377,7 +377,7 @@ def test_cli_preserves_build_dir_when_user_declines(
 
     set_terminal_interactive(monkeypatch, interactive=True)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel.typer, "confirm", lambda message, default=False: False)
+    monkeypatch.setattr(build_impl.typer, "confirm", lambda message, default=False: False)
 
     result = invoke_build(str(project_dir))
 
@@ -399,9 +399,9 @@ def test_cli_removes_build_dir_after_confirmation(
 
     set_terminal_interactive(monkeypatch, interactive=True)
     set_clang_available(monkeypatch)
-    monkeypatch.setattr(build_wheel.typer, "confirm", lambda message, default=False: True)
+    monkeypatch.setattr(build_impl.typer, "confirm", lambda message, default=False: True)
     monkeypatch.setattr(
-        build_wheel,
+        build_impl,
         "build_wheel",
         lambda srcdir, runner, config_settings: wheel_path,
     )
@@ -418,10 +418,10 @@ def test_resolve_build_context_reads_mesonpy(tmp_path: Path) -> None:
     project_dir.mkdir()
     write_pyproject(project_dir, "mesonpy")
 
-    context = build_wheel.resolve_build_context(project_dir)
+    context = build_impl.resolve_build_context(project_dir)
 
     assert context.build_backend == "mesonpy"
-    assert context.runner is build_wheel.clang_runner
+    assert context.runner is build_impl.clang_runner
     assert context.config_settings == {
         "build-dir": "build",
         "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
@@ -435,7 +435,7 @@ def test_resolve_build_context_rejects_invalid_toml(tmp_path: Path) -> None:
     (project_dir / "pyproject.toml").write_text("[build-system\n", encoding="utf-8")
 
     with pytest.raises(Exception, match="Failed to parse"):
-        build_wheel.resolve_build_context(project_dir)
+        build_impl.resolve_build_context(project_dir)
 
 
 def test_resolve_build_context_allows_missing_build_backend(tmp_path: Path) -> None:
@@ -443,10 +443,10 @@ def test_resolve_build_context_allows_missing_build_backend(tmp_path: Path) -> N
     project_dir.mkdir()
     write_pyproject_missing_build_backend(project_dir)
 
-    context = build_wheel.resolve_build_context(project_dir)
+    context = build_impl.resolve_build_context(project_dir)
 
-    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
-    assert context.runner is build_wheel.bear_runner
+    assert context.build_backend == build_impl.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_impl.bear_runner
     assert context.config_settings == {}
     assert context.compile_commands_path == project_dir / "compile_commands.json"
 
@@ -458,10 +458,10 @@ def test_resolve_build_context_allows_pyproject_without_build_system(
     project_dir.mkdir()
     write_pyproject_without_build_system(project_dir)
 
-    context = build_wheel.resolve_build_context(project_dir)
+    context = build_impl.resolve_build_context(project_dir)
 
-    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
-    assert context.runner is build_wheel.bear_runner
+    assert context.build_backend == build_impl.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_impl.bear_runner
 
 
 def test_resolve_build_context_allows_setup_py_only(tmp_path: Path) -> None:
@@ -469,10 +469,10 @@ def test_resolve_build_context_allows_setup_py_only(tmp_path: Path) -> None:
     project_dir.mkdir()
     write_setup_py(project_dir)
 
-    context = build_wheel.resolve_build_context(project_dir)
+    context = build_impl.resolve_build_context(project_dir)
 
-    assert context.build_backend == build_wheel.LEGACY_SETUPTOOLS_BACKEND
-    assert context.runner is build_wheel.bear_runner
+    assert context.build_backend == build_impl.LEGACY_SETUPTOOLS_BACKEND
+    assert context.runner is build_impl.bear_runner
 
 
 def test_resolve_build_context_reports_pyproject_backend(tmp_path: Path) -> None:
@@ -480,10 +480,10 @@ def test_resolve_build_context_reports_pyproject_backend(tmp_path: Path) -> None
     project_dir.mkdir()
     write_pyproject(project_dir, "setuptools.build_meta")
 
-    context = build_wheel.resolve_build_context(project_dir)
+    context = build_impl.resolve_build_context(project_dir)
 
     assert context.build_backend == "setuptools.build_meta"
-    assert context.runner is build_wheel.bear_runner
+    assert context.runner is build_impl.bear_runner
     assert context.config_settings == {}
     assert context.compile_commands_path == project_dir / "compile_commands.json"
 
@@ -500,7 +500,7 @@ def test_resolve_build_context_rejects_missing_requires_in_build_system(
     )
 
     with pytest.raises(Exception, match="`requires` is a required property"):
-        build_wheel.resolve_build_context(project_dir)
+        build_impl.resolve_build_context(project_dir)
 
 
 def test_bear_runner_wraps_command_and_env(
@@ -513,9 +513,9 @@ def test_bear_runner_wraps_command_and_env(
         captured["cwd"] = cwd
         captured["env"] = env
 
-    monkeypatch.setattr(build_wheel.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(build_impl.subprocess, "check_call", fake_check_call)
 
-    build_wheel.bear_runner(
+    build_impl.bear_runner(
         ["python", "-m", "build"],
         cwd="/tmp/demo",
         extra_environ={"PATH": "/venv/bin", "EXTRA": "1"},
@@ -543,9 +543,9 @@ def test_bear_runner_overrides_compiler_related_env(
         captured["cwd"] = cwd
         captured["env"] = env
 
-    monkeypatch.setattr(build_wheel.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(build_impl.subprocess, "check_call", fake_check_call)
 
-    build_wheel.bear_runner(
+    build_impl.bear_runner(
         ["python", "-m", "build"],
         extra_environ={
             "CC": "gcc",
@@ -570,10 +570,10 @@ def test_bear_runner_requires_bear(monkeypatch: pytest.MonkeyPatch) -> None:
         _ = env
         raise FileNotFoundError("bear")
 
-    monkeypatch.setattr(build_wheel.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(build_impl.subprocess, "check_call", fake_check_call)
 
     with pytest.raises(RuntimeError, match="未找到 bear"):
-        build_wheel.bear_runner(["python", "-m", "build"])
+        build_impl.bear_runner(["python", "-m", "build"])
 
 
 def test_clang_runner_injects_clang_environment(
@@ -591,12 +591,12 @@ def test_clang_runner_injects_clang_environment(
         captured["extra_environ"] = extra_environ
 
     monkeypatch.setattr(
-        build_wheel.pyproject_hooks,
+        build_impl.pyproject_hooks,
         "default_subprocess_runner",
         fake_default_subprocess_runner,
     )
 
-    build_wheel.clang_runner(
+    build_impl.clang_runner(
         ["python", "-m", "build"],
         cwd="/tmp/demo",
         extra_environ={"PATH": "/venv/bin", "CC": "gcc"},
@@ -628,7 +628,7 @@ def test_cli_reports_missing_clang_before_build(
             return None
         return f"/usr/bin/{executable}"
 
-    monkeypatch.setattr(build_wheel.shutil, "which", fake_which)
+    monkeypatch.setattr(build_impl.shutil, "which", fake_which)
 
     result = invoke_build(str(project_dir))
 
@@ -649,7 +649,7 @@ def test_build_wheel_uses_isolated_env_and_build_api(
         def __init__(self, srcdir: Path, *, installer: str = "pip") -> None:
             captured["srcdir_for_env"] = srcdir
             captured["installer"] = installer
-            self.path = str(srcdir / build_wheel.PERSISTENT_BUILD_ENV_DIRNAME)
+            self.path = str(srcdir / build_impl.PERSISTENT_BUILD_ENV_DIRNAME)
             self._python_executable = str(Path(self.path) / "bin" / "python")
 
         def __enter__(self) -> "FakeEnv":
@@ -675,7 +675,7 @@ def test_build_wheel_uses_isolated_env_and_build_api(
         def get_requires_for_build(
             self,
             distribution: str,
-            config_settings: build_wheel.ConfigSettings,
+            config_settings: build_impl.ConfigSettings,
         ) -> set[str]:
             captured["requires"] = (distribution, dict(config_settings))
             return {"backend-extra"}
@@ -684,7 +684,7 @@ def test_build_wheel_uses_isolated_env_and_build_api(
             self,
             distribution: str,
             output_directory: str,
-            config_settings: build_wheel.ConfigSettings,
+            config_settings: build_impl.ConfigSettings,
         ) -> str:
             captured["build"] = (distribution, output_directory, dict(config_settings))
             return str(Path(output_directory) / "demo-0.1.0-py3-none-any.whl")
@@ -692,22 +692,22 @@ def test_build_wheel_uses_isolated_env_and_build_api(
     def fake_from_isolated_env(
         env: FakeEnv,
         source_dir: str,
-        runner: build_wheel.SubprocessRunner,
+        runner: build_impl.SubprocessRunner,
     ) -> FakeBuilder:
         captured["source_dir"] = source_dir
         captured["runner"] = runner
         captured["env_object"] = env
         return FakeBuilder()
 
-    monkeypatch.setattr(build_wheel, "PersistentIsolatedEnv", FakeEnv)
+    monkeypatch.setattr(build_impl, "PersistentIsolatedEnv", FakeEnv)
     monkeypatch.setattr(
-        build_wheel,
+        build_impl,
         "ProjectBuilder",
         SimpleNamespace(from_isolated_env=fake_from_isolated_env),
     )
 
     runner = lambda cmd, cwd=None, extra_environ=None: None
-    wheel_path = build_wheel.build_wheel(
+    wheel_path = build_impl.build_wheel(
         project_dir,
         runner,
         {"build-dir": "build"},
@@ -736,7 +736,7 @@ def test_persistent_isolated_env_reuses_existing_environment_path(
 ) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
-    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path = build_impl.get_persistent_build_env_path(project_dir)
     env_path.mkdir()
     captured: dict[str, object] = {}
 
@@ -744,13 +744,13 @@ def test_persistent_isolated_env_reuses_existing_environment_path(
         captured["find_path"] = path
         return (f"{path}/bin/python", f"{path}/bin", f"{path}/lib/python3.12/site-packages")
 
-    monkeypatch.setattr(build_wheel.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
+    monkeypatch.setattr(build_impl.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
 
-    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    env = build_impl.PersistentIsolatedEnv(project_dir)
     with env:
         assert env.python_executable == f"{env.path}/bin/python"
         assert env.make_extra_environ() == {
-            "PATH": f"{env.path}/bin:{build_wheel.os.environ.get('PATH')}"
+            "PATH": f"{env.path}/bin:{build_impl.os.environ.get('PATH')}"
         }
 
     assert captured["find_path"] == str(env_path.resolve())
@@ -773,7 +773,7 @@ def test_persistent_isolated_env_install_uses_backend_install_dependencies(
             captured["requirements"] = set(requirements)
             captured["constraints"] = list(constraints)
 
-    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    env = build_impl.PersistentIsolatedEnv(project_dir)
     env._env_backend = FakeBackend()
     env.install(["b>=1", "a>=2"])
 
@@ -805,13 +805,13 @@ def test_persistent_isolated_env_creates_environment_with_build_backend(
             _ = requirements
             _ = constraints
 
-    monkeypatch.setattr(build_wheel.build_env, "_PipBackend", FakeBackend)
+    monkeypatch.setattr(build_impl.build_env, "_PipBackend", FakeBackend)
 
-    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    env = build_impl.PersistentIsolatedEnv(project_dir)
     with env:
         assert env.python_executable == f"{env.path}/bin/python"
 
-    assert captured["create_path"] == str(build_wheel.get_persistent_build_env_path(project_dir).resolve())
+    assert captured["create_path"] == str(build_impl.get_persistent_build_env_path(project_dir).resolve())
 
 
 def test_persistent_isolated_env_rejects_invalid_existing_environment(
@@ -820,16 +820,16 @@ def test_persistent_isolated_env_rejects_invalid_existing_environment(
 ) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
-    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path = build_impl.get_persistent_build_env_path(project_dir)
     env_path.mkdir()
 
     def fake_find_executable_and_scripts(path: str) -> tuple[str, str, str]:
         _ = path
         raise RuntimeError("broken env")
 
-    monkeypatch.setattr(build_wheel.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
+    monkeypatch.setattr(build_impl.build_env, "_find_executable_and_scripts", fake_find_executable_and_scripts)
 
-    env = build_wheel.PersistentIsolatedEnv(project_dir)
+    env = build_impl.PersistentIsolatedEnv(project_dir)
     with pytest.raises(RuntimeError, match="无效持久构建环境"):
         with env:
             pass
@@ -847,7 +847,7 @@ def test_cli_reports_persistent_build_env_path(
     set_terminal_interactive(monkeypatch, interactive=False)
     set_clang_available(monkeypatch)
     monkeypatch.setattr(
-        build_wheel,
+        build_impl,
         "build_wheel",
         lambda srcdir, runner, config_settings: wheel_path,
     )
@@ -855,7 +855,7 @@ def test_cli_reports_persistent_build_env_path(
     result = invoke_build(str(project_dir))
 
     assert result.exit_code == 0
-    assert f"持久构建环境: {build_wheel.get_persistent_build_env_path(project_dir)}" in result.output
+    assert f"持久构建环境: {build_impl.get_persistent_build_env_path(project_dir)}" in result.output
 
 
 def test_build_wheel_failure_keeps_persistent_environment(
@@ -864,7 +864,7 @@ def test_build_wheel_failure_keeps_persistent_environment(
 ) -> None:
     project_dir = tmp_path / "demo"
     project_dir.mkdir()
-    env_path = build_wheel.get_persistent_build_env_path(project_dir)
+    env_path = build_impl.get_persistent_build_env_path(project_dir)
     env_path.mkdir()
 
     class FakeBuilder:
@@ -873,7 +873,7 @@ def test_build_wheel_failure_keeps_persistent_environment(
         def get_requires_for_build(
             self,
             distribution: str,
-            config_settings: build_wheel.ConfigSettings,
+            config_settings: build_impl.ConfigSettings,
         ) -> set[str]:
             _ = distribution
             _ = config_settings
@@ -883,7 +883,7 @@ def test_build_wheel_failure_keeps_persistent_environment(
             self,
             distribution: str,
             output_directory: str,
-            config_settings: build_wheel.ConfigSettings,
+            config_settings: build_impl.ConfigSettings,
         ) -> str:
             _ = distribution
             _ = output_directory
@@ -891,18 +891,18 @@ def test_build_wheel_failure_keeps_persistent_environment(
             raise RuntimeError("backend boom")
 
     monkeypatch.setattr(
-        build_wheel,
+        build_impl,
         "ProjectBuilder",
         SimpleNamespace(from_isolated_env=lambda env, source_dir, runner: FakeBuilder()),
     )
-    monkeypatch.setattr(build_wheel.PersistentIsolatedEnv, "install", lambda self, requirements: None)
+    monkeypatch.setattr(build_impl.PersistentIsolatedEnv, "install", lambda self, requirements: None)
     monkeypatch.setattr(
-        build_wheel.build_env,
+        build_impl.build_env,
         "_find_executable_and_scripts",
         lambda path: (f"{path}/bin/python", f"{path}/bin", f"{path}/lib/python3.12/site-packages"),
     )
 
     with pytest.raises(RuntimeError, match="持久构建环境失败"):
-        build_wheel.build_wheel(project_dir, lambda *args, **kwargs: None, {})
+        build_impl.build_wheel(project_dir, lambda *args, **kwargs: None, {})
 
     assert env_path.exists()
