@@ -48,7 +48,6 @@ def _log_cli_arguments(
     output: Path,
     compilation_database: Path | None,
     include_docstrings: bool,
-    include_module_type_comment: bool,
     include_c_inferred_source_comment: bool,
 ) -> None:
     """
@@ -56,13 +55,11 @@ def _log_cli_arguments(
     """
     logger.info(
         "CLI参数: module_name={}, output={}, compilation_database={}, "
-        "include_docstrings={}, include_module_type_comment={}, "
-        "include_c_inferred_source_comment={}",
+        "include_docstrings={}, include_c_inferred_source_comment={}",
         module_name,
         _format_path_for_log(output),
         _format_path_for_log(compilation_database),
         include_docstrings,
-        include_module_type_comment,
         include_c_inferred_source_comment,
     )
 
@@ -84,11 +81,6 @@ def gen(
         False,
         "--include-docstrings",
         help="生成 stub 时包含 docstring",
-    ),
-    include_module_type_comment: bool = typer.Option(
-        False,
-        "--include-module-type-comment",
-        help="在生成的 stub 中包含 module type comment",
     ),
     include_c_inferred_source_comment: bool = typer.Option(
         False,
@@ -118,7 +110,6 @@ def gen(
             output=output,
             compilation_database=compilation_database,
             include_docstrings=include_docstrings,
-            include_module_type_comment=include_module_type_comment,
             include_c_inferred_source_comment=include_c_inferred_source_comment,
         )
         write_stubs(
@@ -127,7 +118,6 @@ def gen(
             options=StubGenerationOptions(
                 compilation_database=compilation_database,
                 include_docstrings=include_docstrings,
-                include_module_type_comment=include_module_type_comment,
                 include_c_inferred_source_comment=include_c_inferred_source_comment,
             ),
         )

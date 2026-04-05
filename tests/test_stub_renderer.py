@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from pcstubgen.types import RawType, Type
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
+from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRModuleType, IRSignature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 
 
@@ -264,6 +264,17 @@ def test_renderer_does_not_render_module_docstring_by_default() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         doc="module docs",
+    )
+
+    lines = StubRenderer().print_module(module)
+
+    assert lines == []
+
+
+def test_renderer_never_prints_module_type_comment() -> None:
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        module_type=IRModuleType.EXTENSION,
     )
 
     lines = StubRenderer().print_module(module)

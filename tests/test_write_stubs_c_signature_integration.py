@@ -75,11 +75,9 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
         def __init__(
             self,
             include_docstrings: bool = False,
-            include_module_type_comment: bool = False,
             include_c_inferred_source_comment: bool = False,
         ) -> None:
             captured["renderer_include_docstrings"] = include_docstrings
-            captured["renderer_include_module_type_comment"] = include_module_type_comment
             captured["renderer_include_c_inferred_source_comment"] = (
                 include_c_inferred_source_comment
             )
@@ -115,7 +113,6 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
     options = StubGenerationOptions(
         compilation_database=tmp_path / "compile_commands.json",
         include_docstrings=False,
-        include_module_type_comment=True,
         include_c_inferred_source_comment=True,
     )
 
@@ -129,7 +126,6 @@ def test_write_stubs_passes_options_to_completer_and_logs_summary(
     assert captured["completed_module"] is ir_module
     assert captured["completion_options"] is options
     assert captured["renderer_include_docstrings"] is False
-    assert captured["renderer_include_module_type_comment"] is True
     assert captured["renderer_include_c_inferred_source_comment"] is True
     assert captured["written_module"] is ir_module
     assert isinstance(captured["written_renderer"], FakeStubRenderer)
@@ -149,11 +145,9 @@ def test_write_stubs_uses_default_options_when_none(
         def __init__(
             self,
             include_docstrings: bool = False,
-            include_module_type_comment: bool = False,
             include_c_inferred_source_comment: bool = False,
         ) -> None:
             captured["renderer_include_docstrings"] = include_docstrings
-            captured["renderer_include_module_type_comment"] = include_module_type_comment
             captured["renderer_include_c_inferred_source_comment"] = (
                 include_c_inferred_source_comment
             )
@@ -202,7 +196,6 @@ def test_write_stubs_uses_default_options_when_none(
     assert isinstance(captured["completion_options"], StubGenerationOptions)
     assert captured["completion_options"].include_docstrings is False
     assert captured["renderer_include_docstrings"] is False
-    assert captured["renderer_include_module_type_comment"] is False
     assert captured["renderer_include_c_inferred_source_comment"] is False
     assert captured["written_module"] is ir_module
     assert isinstance(captured["written_renderer"], FakeStubRenderer)

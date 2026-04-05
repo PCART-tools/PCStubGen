@@ -34,6 +34,7 @@ def test_gen_help_displays_stub_generation_arguments() -> None:
     assert result.exit_code == 0
     assert "MODULE_NAME" in result.output
     assert "--compilation-database" in result.output
+    assert "--include-module-type-comment" not in result.output
 
 
 def test_legacy_root_command_style_is_rejected() -> None:
@@ -209,7 +210,6 @@ def test_cli_logs_parsed_arguments_to_log_file(
             "--compilation-database",
             str(compilation_database),
             "--include-docstrings",
-            "--include-module-type-comment",
             "--include-c-inferred-source-comment",
         ],
         prog_name="pcstubgen",
@@ -224,8 +224,8 @@ def test_cli_logs_parsed_arguments_to_log_file(
     assert f"output={tmp_path}" in log_text
     assert f"compilation_database={compilation_database}" in log_text
     assert "include_docstrings=True" in log_text
-    assert "include_module_type_comment=True" in log_text
     assert "include_c_inferred_source_comment=True" in log_text
+    assert "include_module_type_comment" not in log_text
 
 
 def test_cli_logs_default_argument_values_to_log_file(
@@ -259,8 +259,25 @@ def test_cli_logs_default_argument_values_to_log_file(
     assert f"output={tmp_path}" in log_text
     assert "compilation_database=None" in log_text
     assert "include_docstrings=False" in log_text
-    assert "include_module_type_comment=False" in log_text
     assert "include_c_inferred_source_comment=False" in log_text
+    assert "include_module_type_comment" not in log_text
+
+
+def test_cli_rejects_removed_include_module_type_comment_option(tmp_path: Path) -> None:
+    result = RUNNER.invoke(
+        main_module.app,
+        [
+            "gen",
+            "math",
+            "--output",
+            str(tmp_path),
+            "--include-module-type-comment",
+        ],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code != 0
+    assert "No such option: --include-module-type-comment" in result.output
 
 
 def test_cli_rejects_legacy_source_root_option(tmp_path: Path) -> None:

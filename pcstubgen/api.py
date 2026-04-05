@@ -41,7 +41,6 @@ def write_stubs(
 
     renderer = StubRenderer(
         include_docstrings=options.include_docstrings,
-        include_module_type_comment=options.include_module_type_comment,
         include_c_inferred_source_comment=options.include_c_inferred_source_comment,
     )
     writer.write(ir_module, renderer, to=output)

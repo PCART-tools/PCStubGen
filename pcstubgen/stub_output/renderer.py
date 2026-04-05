@@ -20,11 +20,9 @@ class StubRenderer:
     def __init__(
         self,
         include_docstrings: bool = False,
-        include_module_type_comment: bool = False,
         include_c_inferred_source_comment: bool = False,
     ):
         self.include_docstrings = include_docstrings
-        self.include_module_type_comment = include_module_type_comment
         self.include_c_inferred_source_comment = include_c_inferred_source_comment
 
     @staticmethod
@@ -35,9 +33,6 @@ class StubRenderer:
     def print_module(self, node: IRModule) -> list[str]:
         """渲染整个模块。"""
         result: list[str] = []
-
-        if self.include_module_type_comment:
-            result.append(f"# module type: {node.module_type.value}")
 
         if self.include_docstrings and node.doc is not None:
             result.extend(self.print_docstring(node.doc))
