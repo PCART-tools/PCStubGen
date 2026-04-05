@@ -32,6 +32,40 @@ def _build_log_file_name(module_name: str, now: datetime | None = None) -> str:
     return f"pcstubgen_{leaf_module_name}_{timestamp}.log"
 
 
+def _format_path_for_log(path: Path | None) -> str:
+    """
+    将路径格式化为稳定的日志输出。
+    """
+    if path is None:
+        return "None"
+    return str(path)
+
+
+def _log_cli_arguments(
+    *,
+    module_name: str,
+    output: Path,
+    compilation_database: Path | None,
+    include_docstrings: bool,
+    include_module_type_comment: bool,
+    include_c_inferred_source_comment: bool,
+) -> None:
+    """
+    记录本次 CLI 解析后的参数。
+    """
+    logger.info(
+        "CLI参数: module_name={}, output={}, compilation_database={}, "
+        "include_docstrings={}, include_module_type_comment={}, "
+        "include_c_inferred_source_comment={}",
+        module_name,
+        _format_path_for_log(output),
+        _format_path_for_log(compilation_database),
+        include_docstrings,
+        include_module_type_comment,
+        include_c_inferred_source_comment,
+    )
+
+
 @app.command(help="使用 pcstubgen 为模块生成 Python stub。")
 def main(
     module_name: str = typer.Argument(..., metavar="MODULE_NAME", help="模块名"),
@@ -78,6 +112,14 @@ def main(
         format=MY_LOGURU_FORMAT,
     )
     try:
+        _log_cli_arguments(
+            module_name=module_name,
+            output=output,
+            compilation_database=compilation_database,
+            include_docstrings=include_docstrings,
+            include_module_type_comment=include_module_type_comment,
+            include_c_inferred_source_comment=include_c_inferred_source_comment,
+        )
         write_stubs(
             module_name=module_name,
             output=output,
