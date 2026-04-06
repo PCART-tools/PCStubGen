@@ -25,6 +25,7 @@ _ARG_FLAGS_WITHOUT_VALUE = {
     "-MG",
     "-MP",
 }
+_IGNORED_SOURCE_DIRECTORY_NAMES = frozenset({"subprojects", "third_party"})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -150,9 +151,9 @@ def sanitize_compile_command_arguments(command: object) -> list[str]:
     return parse_args
 
 
-def _is_subproject_source(file_path: Path) -> bool:
-    """判断源码是否位于 `subprojects` 目录树下。"""
-    return "subprojects" in file_path.parts
+def _is_ignored_source(file_path: Path) -> bool:
+    """判断源码是否位于应忽略的第三方目录树下。"""
+    return any(part in _IGNORED_SOURCE_DIRECTORY_NAMES for part in file_path.parts)
 
 
 def list_compilation_commands(compilation_database: Path) -> list[CompilationCommand]:
@@ -167,7 +168,7 @@ def list_compilation_commands(compilation_database: Path) -> list[CompilationCom
         file_path = resolve_compile_command_file_path(command)
         if file_path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
             continue
-        if _is_subproject_source(file_path):
+        if _is_ignored_source(file_path):
             continue
         if file_path in seen_file_paths:
             continue
