@@ -12,7 +12,6 @@ import sys
 from build import env as build_env
 from build import ProjectBuilder
 from build._types import ConfigSettings, SubprocessRunner
-import pyproject_hooks
 import typer
 
 from ._persistent_build_env import PersistentIsolatedEnv
@@ -27,7 +26,6 @@ LEGACY_SETUPTOOLS_BACKEND = "setuptools.build_meta:__legacy__"
 class BuildContext:
     """封装 build 解析后的构建模式信息。"""
 
-    builder: ProjectBuilder
     build_backend: str
     runner: SubprocessRunner
     config_settings: ConfigSettings
@@ -51,9 +49,8 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
 
     if build_backend == "mesonpy":
         return BuildContext(
-            builder=builder,
             build_backend=build_backend,
-            runner=clang_runner,
+            runner=default_runner,
             config_settings={
                 "build-dir": "build",
                 "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
@@ -61,19 +58,13 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
         )
 
     return BuildContext(
-        builder=builder,
         build_backend=build_backend,
         runner=bear_runner,
         config_settings={},
     )
 
 
-def build_clang_environ(
-    extra_environ: Mapping[str, str] | None = None,
-) -> dict[str, str]:
-    env = os.environ.copy()
-    if extra_environ is not None:
-        env.update(extra_environ)
+def add_clang_environ(env: dict[str, str]) -> None:
     # C/C++ 编译器前端。
     env["CC"] = "clang"
     env["CXX"] = "clang++"
@@ -95,18 +86,21 @@ def build_clang_environ(
     env["CMAKE_BUILD_TYPE"] = "Debug"
     env["CFLAGS"] = "-O0 -g -UNDEBUG"
     env["CXXFLAGS"] = "-O0 -g -UNDEBUG"
-    return env
 
 
-def clang_runner(
+def default_runner(
     cmd: Sequence[str],
     cwd: str | None = None,
     extra_environ: Mapping[str, str] | None = None,
 ) -> None:
-    pyproject_hooks.default_subprocess_runner(
+    env = os.environ.copy()
+    if extra_environ is not None:
+        env.update(extra_environ)
+    add_clang_environ(env)
+    subprocess.check_call(
         cmd,
-        cwd,
-        extra_environ=build_clang_environ(extra_environ),
+        cwd=cwd,
+        env=env,
     )
 
 
@@ -115,24 +109,28 @@ def bear_runner(
     cwd: str | None = None,
     extra_environ: Mapping[str, str] | None = None,
 ) -> None:
-    try:
-        subprocess.check_call(
-            ["bear", "--", *cmd],
-            cwd=cwd,
-            env=build_clang_environ(extra_environ),
-        )
-    except FileNotFoundError as ex:
-        raise RuntimeError("未找到 bear 命令，无法为非 mesonpy 项目生成 compile_commands.json。") from ex
+    env = os.environ.copy()
+    if extra_environ is not None:
+        env.update(extra_environ)
+    add_clang_environ(env)
+    subprocess.check_call(
+        ["bear", "--", *cmd],
+        cwd=cwd,
+        env=env,
+    )
 
 
-def ensure_clang_compilers_available() -> None:
-    missing_compilers = [
-        compiler for compiler in ("clang", "clang++") if shutil.which(compiler) is None
+def ensure_build_programs_available() -> None:
+    missing_programs = [
+        program
+        for program in ("clang", "clang++", "llvm-config", "bear")
+        if shutil.which(program) is None
     ]
-    if missing_compilers:
-        missing_display = ", ".join(missing_compilers)
+    if missing_programs:
+        missing_display = ", ".join(missing_programs)
         raise RuntimeError(
-            f"未找到 clang 编译器: {missing_display}。build_wheel 默认要求 clang 工具链。"
+            "build 命令缺少外部程序依赖: "
+            f"{missing_display}。请先安装这些程序并确保它们在 PATH 中。"
         )
 
 
@@ -220,17 +218,18 @@ def build_command(
 ) -> None:
     build_dir = srcdir / "build"
     try:
-        build_context = resolve_build_context(srcdir)
-
         if build_dir.exists():
             if not build_dir.is_dir():
                 raise RuntimeError(f"构建路径存在但不是目录: {build_dir}")
-            if clean_build:
-                shutil.rmtree(build_dir)
-                print(f"- 已清理目录: {build_dir}")
+
+        ensure_build_programs_available()
+        build_context = resolve_build_context(srcdir)
+
+        if build_dir.exists() and clean_build:
+            shutil.rmtree(build_dir)
+            print(f"- 已清理目录: {build_dir}")
 
         with build_verbose_context(verbose):
-            ensure_clang_compilers_available()
             wheel_path = build_wheel(
                 srcdir,
                 build_context.runner,
