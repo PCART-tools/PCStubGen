@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 import shutil
 import subprocess
@@ -118,6 +118,39 @@ def get_persistent_build_env_path(srcdir: Path) -> Path:
     return srcdir / PERSISTENT_BUILD_ENV_DIRNAME
 
 
+def _build_verbose_logger(
+    message: str,
+    *,
+    origin: tuple[str, ...] | None = None,
+) -> None:
+    """
+    以最小格式透传 build 库 verbose 日志到 stderr。
+    """
+    if build_env._ctx.verbosity <= 0:
+        return
+
+    prefix = ""
+    if origin is not None and origin[0] == "subprocess":
+        prefix = "> " if origin[1] == "cmd" else "< "
+
+    for line in message.splitlines():
+        print(f"{prefix}{line}", file=sys.stderr)
+
+
+@contextlib.contextmanager
+def build_verbose_context(verbose: int) -> Iterator[None]:
+    """
+    在当前上下文中临时接入 build 库的 verbose 输出。
+    """
+    logger_token = build_env._ctx.LOGGER.set(_build_verbose_logger)
+    verbosity_token = build_env._ctx.VERBOSITY.set(verbose)
+    try:
+        yield
+    finally:
+        build_env._ctx.VERBOSITY.reset(verbosity_token)
+        build_env._ctx.LOGGER.reset(logger_token)
+
+
 class PersistentIsolatedEnv(DefaultIsolatedEnv):
     """在项目目录下维护可复用的持久隔离构建环境。"""
 
@@ -193,6 +226,13 @@ def build_wheel(
 
 
 def build_command(
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="输出详细构建日志。",
+    ),
     srcdir: Path = typer.Argument(
         ...,
         metavar="SRCDIR",
@@ -218,12 +258,13 @@ def build_command(
             shutil.rmtree(build_dir)
             print(f"- 已清理目录: {build_dir}")
 
-        ensure_clang_compilers_available()
-        wheel_path = build_wheel(
-            srcdir,
-            build_context.runner,
-            build_context.config_settings,
-        )
+        with build_verbose_context(verbose):
+            ensure_clang_compilers_available()
+            wheel_path = build_wheel(
+                srcdir,
+                build_context.runner,
+                build_context.config_settings,
+            )
     except Exception as ex:
         print(f"错误: {ex}")
         raise typer.Exit(1) from ex
