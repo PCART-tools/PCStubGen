@@ -12,14 +12,14 @@ import sys
 from build import env as build_env
 from build import ProjectBuilder
 from build._types import ConfigSettings, SubprocessRunner
-from build.env import DefaultIsolatedEnv
 import pyproject_hooks
 import typer
+
+from ._persistent_build_env import PersistentIsolatedEnv
 
 BUILD_COMMAND_HELP = (
     "构建 Python 项目，并为 stub 工作流提供可用的 compile_commands.json。"
 )
-PERSISTENT_BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
 LEGACY_SETUPTOOLS_BACKEND = "setuptools.build_meta:__legacy__"
 
 
@@ -63,7 +63,6 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
 def build_clang_environ(
     extra_environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
-    debug_compile_flags = "-O0 -g -UNDEBUG"
     env = os.environ.copy()
     if extra_environ is not None:
         env.update(extra_environ)
@@ -84,8 +83,8 @@ def build_clang_environ(
     # 显式打开 debug 构建，避免上游构建后端按 release 路径生成产物。
     env["DEBUG"] = "1"
     env["CMAKE_BUILD_TYPE"] = "Debug"
-    env["CFLAGS"] = debug_compile_flags
-    env["CXXFLAGS"] = debug_compile_flags
+    env["CFLAGS"] = "-O0 -g -UNDEBUG"
+    env["CXXFLAGS"] = "-O0 -g -UNDEBUG"
     return env
 
 
@@ -127,10 +126,6 @@ def ensure_clang_compilers_available() -> None:
         )
 
 
-def get_persistent_build_env_path(srcdir: Path) -> Path:
-    return srcdir / PERSISTENT_BUILD_ENV_DIRNAME
-
-
 def _build_verbose_logger(
     message: str,
     *,
@@ -162,55 +157,6 @@ def build_verbose_context(verbose: int) -> Iterator[None]:
     finally:
         build_env._ctx.VERBOSITY.reset(verbosity_token)
         build_env._ctx.LOGGER.reset(logger_token)
-
-
-class PersistentIsolatedEnv(DefaultIsolatedEnv):
-    """在项目目录下维护可复用的持久隔离构建环境。"""
-
-    def __init__(
-        self,
-        srcdir: Path,
-        *,
-        installer: build_env.Installer = "pip",
-    ) -> None:
-        super().__init__(installer=installer)
-        self._persistent_srcdir = srcdir
-
-    def __enter__(self) -> PersistentIsolatedEnv:
-        try:
-            path = get_persistent_build_env_path(self._persistent_srcdir).resolve()
-            # 与 DefaultIsolatedEnv 保持一致，统一真实路径表示。
-            self._path = os.path.realpath(path)
-
-            self._env_backend: build_env._EnvBackend
-
-            if self.installer == "uv":
-                self._env_backend = build_env._UvBackend()
-            else:
-                self._env_backend = build_env._PipBackend()
-
-            if os.path.exists(self._path):
-                try:
-                    python_executable, scripts_dir, _ = build_env._find_executable_and_scripts(
-                        self._path
-                    )
-                except Exception as ex:
-                    raise RuntimeError(f"无效持久构建环境: {self._path}") from ex
-                self._env_backend.python_executable = python_executable
-                self._env_backend.scripts_dir = scripts_dir
-            else:
-                build_env._ctx.log(
-                    f"Creating isolated environment: {self._env_backend.display_name}..."
-                )
-                self._env_backend.create(self._path)
-        except Exception:
-            self.__exit__(*sys.exc_info())
-            raise
-
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        _ = args
 
 
 def build_wheel(
@@ -286,6 +232,6 @@ def build_command(
 
     print("构建完成")
     print(f"- build-backend: {build_context.build_backend}")
-    print(f"- 持久构建环境: {get_persistent_build_env_path(srcdir)}")
+    print(f"- 持久构建环境: {PersistentIsolatedEnv.get_build_env_path(srcdir)}")
     print(f"- wheel 文件: {wheel_path}")
     print(f"- compile_commands.json: {build_context.compile_commands_path}")

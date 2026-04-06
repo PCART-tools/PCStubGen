@@ -11,6 +11,7 @@ from build import env as build_env
 
 import pcstubgen.__main__ as main_module
 import pcstubgen._build as build_module
+from pcstubgen._persistent_build_env import PersistentIsolatedEnv
 
 
 RUNNER = CliRunner()
@@ -135,6 +136,12 @@ def _fake_build_wheel(
     return _impl
 
 
+def test_persistent_isolated_env_build_path_uses_class_dirname(tmp_path: Path) -> None:
+    assert PersistentIsolatedEnv.get_build_env_path(tmp_path) == (
+        tmp_path / PersistentIsolatedEnv.BUILD_ENV_DIRNAME
+    )
+
+
 @pytest.mark.parametrize(
     ("cli_args", "expected_verbosity", "should_log"),
     [
@@ -177,6 +184,7 @@ def test_build_command_sets_build_verbosity_and_restores_context(
     assert build_env._ctx.verbosity == original_verbosity
     assert "构建完成" in result.output
     assert "- build-backend: test-backend" in result.output
+    assert f"- 持久构建环境: {PersistentIsolatedEnv.get_build_env_path(tmp_path)}" in result.output
     assert "- wheel 文件:" in result.output
     if should_log:
         assert "build verbose message" in result.output
