@@ -131,6 +131,10 @@ def _fake_build_context(srcdir: Path) -> build_module.BuildContext:
     )
 
 
+def _fake_ensure_build_programs_available() -> None:
+    return None
+
+
 def _fake_build_wheel(
     observed_verbosity: list[int],
 ):
@@ -153,6 +157,31 @@ def test_persistent_isolated_env_build_path_uses_class_dirname(tmp_path: Path) -
     )
 
 
+def test_persistent_isolated_env_reports_clean_env_hint_for_invalid_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    env_dir = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    env_dir.mkdir()
+
+    def fail_find_executable_and_scripts(path: str) -> tuple[str, str, str]:
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(
+        build_env,
+        "_find_executable_and_scripts",
+        fail_find_executable_and_scripts,
+    )
+
+    with pytest.raises(RuntimeError) as exc_info:
+        with PersistentIsolatedEnv(tmp_path):
+            pass
+
+    assert str(exc_info.value) == (
+        f"无效持久构建环境: {env_dir}。可使用 --clean-env 重新创建。"
+    )
+
+
 @pytest.mark.parametrize(
     ("cli_args", "expected_verbosity", "should_log"),
     [
@@ -172,14 +201,11 @@ def test_build_command_sets_build_verbosity_and_restores_context(
     original_logger = build_env._ctx.LOGGER.get()
     original_verbosity = build_env._ctx.verbosity
 
-    def fake_ensure_build_programs_available() -> None:
-        return None
-
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fake_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
 
@@ -221,14 +247,11 @@ def test_build_command_detects_compile_commands_path_after_build(
 ) -> None:
     observed_verbosity: list[int] = []
 
-    def fake_ensure_build_programs_available() -> None:
-        return None
-
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fake_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
 
@@ -257,14 +280,11 @@ def test_build_command_reports_missing_compile_commands_json(
 ) -> None:
     observed_verbosity: list[int] = []
 
-    def fake_ensure_build_programs_available() -> None:
-        return None
-
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fake_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
 
@@ -287,17 +307,14 @@ def test_build_command_keeps_existing_build_directory_by_default(
     build_dir = tmp_path / "build"
     build_dir.mkdir()
 
-    def fake_ensure_build_programs_available() -> None:
-        return None
-
     def fail_rmtree(path: Path) -> None:
         raise AssertionError(f"不应删除 build 目录: {path}")
 
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fake_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
     monkeypatch.setattr(build_module.shutil, "rmtree", fail_rmtree)
@@ -314,6 +331,38 @@ def test_build_command_keeps_existing_build_directory_by_default(
     assert "- 已清理目录:" not in result.output
 
 
+def test_build_command_keeps_persistent_build_env_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+    env_dir = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    env_dir.mkdir()
+
+    def fail_rmtree(path: Path) -> None:
+        raise AssertionError(f"不应删除持久构建环境: {path}")
+
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_build_programs_available",
+        _fake_ensure_build_programs_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fail_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert env_dir.exists()
+    assert "- 已清理持久构建环境:" not in result.output
+
+
 def test_build_command_removes_existing_build_directory_when_clean_build_is_enabled(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -324,18 +373,15 @@ def test_build_command_removes_existing_build_directory_when_clean_build_is_enab
     removed_paths: list[Path] = []
     original_rmtree = shutil.rmtree
 
-    def fake_ensure_build_programs_available() -> None:
-        return None
-
     def fake_rmtree(path: Path) -> None:
         removed_paths.append(path)
         original_rmtree(path)
 
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fake_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
     monkeypatch.setattr(build_module.shutil, "rmtree", fake_rmtree)
@@ -353,15 +399,77 @@ def test_build_command_removes_existing_build_directory_when_clean_build_is_enab
     assert f"- 已清理目录: {build_dir}" in result.output
 
 
+def test_build_command_removes_existing_persistent_build_env_when_clean_env_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+    env_dir = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    env_dir.mkdir()
+    removed_paths: list[Path] = []
+    original_rmtree = shutil.rmtree
+
+    def fake_rmtree(path: Path) -> None:
+        removed_paths.append(path)
+        original_rmtree(path)
+
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_build_programs_available",
+        _fake_ensure_build_programs_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fake_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-env", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert removed_paths == [env_dir]
+    assert not env_dir.exists()
+    assert f"- 已清理持久构建环境: {env_dir}" in result.output
+
+
+def test_build_command_silently_skips_missing_persistent_build_env_when_clean_env_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+
+    def fail_rmtree(path: Path) -> None:
+        raise AssertionError(f"不应删除任何路径: {path}")
+
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_build_programs_available",
+        _fake_ensure_build_programs_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fail_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-env", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert "- 已清理持久构建环境:" not in result.output
+
+
 def test_build_command_rejects_non_directory_build_path(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     build_file = tmp_path / "build"
     build_file.write_text("not a directory", encoding="utf-8")
-
-    def fail_ensure_build_programs_available() -> None:
-        raise AssertionError("不应进入编译器检查")
 
     def fail_build_wheel(
         srcdir: Path,
@@ -370,11 +478,14 @@ def test_build_command_rejects_non_directory_build_path(
     ) -> Path:
         raise AssertionError(f"不应调用 build_wheel: {srcdir}, {runner}, {config_settings}")
 
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    def fail_get_build_context(srcdir: Path) -> build_module.BuildContext:
+        raise AssertionError(f"不应解析构建上下文: {srcdir}")
+
+    monkeypatch.setattr(build_module, "get_build_context", fail_get_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_build_programs_available",
-        fail_ensure_build_programs_available,
+        _fake_ensure_build_programs_available,
     )
     monkeypatch.setattr(build_module, "build_wheel", fail_build_wheel)
 
@@ -386,6 +497,41 @@ def test_build_command_rejects_non_directory_build_path(
 
     assert result.exit_code == 1
     assert f"错误: 构建路径存在但不是目录: {build_file}" in result.output
+
+
+def test_build_command_rejects_non_directory_persistent_build_env_path_when_clean_env_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    env_path = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    env_path.write_text("not a directory", encoding="utf-8")
+
+    def fail_build_wheel(
+        srcdir: Path,
+        runner: object,
+        config_settings: object,
+    ) -> Path:
+        raise AssertionError(f"不应调用 build_wheel: {srcdir}, {runner}, {config_settings}")
+
+    def fail_get_build_context(srcdir: Path) -> build_module.BuildContext:
+        raise AssertionError(f"不应解析构建上下文: {srcdir}")
+
+    monkeypatch.setattr(build_module, "get_build_context", fail_get_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_build_programs_available",
+        _fake_ensure_build_programs_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", fail_build_wheel)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-env", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 1
+    assert f"错误: 持久构建环境路径存在但不是可清理目录: {env_path}" in result.output
 
 
 def test_build_command_reports_missing_single_program_before_build(
@@ -408,7 +554,7 @@ def test_build_command_reports_missing_single_program_before_build(
         "which",
         lambda program: None if program == "bear" else f"/usr/bin/{program}",
     )
-    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
     monkeypatch.setattr(build_module, "build_wheel", fail_build_wheel)
 
     result = RUNNER.invoke(
@@ -472,3 +618,72 @@ def test_build_command_does_not_clean_build_directory_when_program_check_fails(
     assert result.exit_code == 1
     assert build_dir.exists()
     assert "- 已清理目录:" not in result.output
+
+
+def test_build_command_does_not_clean_persistent_build_env_when_program_check_fails(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    env_dir = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    env_dir.mkdir()
+
+    def fail_rmtree(path: Path) -> None:
+        raise AssertionError(f"缺依赖时不应删除持久构建环境: {path}")
+
+    monkeypatch.setattr(
+        build_module.shutil,
+        "which",
+        lambda program: None if program == "clang++" else f"/usr/bin/{program}",
+    )
+    monkeypatch.setattr(build_module.shutil, "rmtree", fail_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-env", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 1
+    assert env_dir.exists()
+    assert "- 已清理持久构建环境:" not in result.output
+
+
+def test_build_command_cleans_persistent_build_env_before_build_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+    env_dir = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    build_dir = tmp_path / "build"
+    env_dir.mkdir()
+    build_dir.mkdir()
+    removed_paths: list[Path] = []
+    original_rmtree = shutil.rmtree
+
+    def fake_rmtree(path: Path) -> None:
+        removed_paths.append(path)
+        original_rmtree(path)
+
+    monkeypatch.setattr(build_module, "get_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_build_programs_available",
+        _fake_ensure_build_programs_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fake_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-env", "--clean-build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert removed_paths == [env_dir, build_dir]
+    assert not env_dir.exists()
+    assert not build_dir.exists()
+    clean_env_index = result.output.index(f"- 已清理持久构建环境: {env_dir}")
+    clean_build_index = result.output.index(f"- 已清理目录: {build_dir}")
+    assert clean_env_index < clean_build_index

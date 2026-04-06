@@ -45,7 +45,9 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
                         self._path
                     )
                 except Exception as ex:
-                    raise RuntimeError(f"无效持久构建环境: {self._path}") from ex
+                    raise RuntimeError(
+                        f"无效持久构建环境: {self._path}。可使用 --clean-env 重新创建。"
+                    ) from ex
                 self._env_backend.python_executable = python_executable
                 self._env_backend.scripts_dir = scripts_dir
             else:

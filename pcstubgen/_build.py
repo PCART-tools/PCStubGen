@@ -42,8 +42,8 @@ def resolve_compile_commands_path(srcdir: Path) -> Path | None:
     return None
 
 
-def resolve_build_context(srcdir: Path) -> BuildContext:
-    """复用 ProjectBuilder 的解析结果，确定构建模式。"""
+def get_build_context(srcdir: Path) -> BuildContext:
+    """借用 ProjectBuilder 解析后的 backend，确定构建模式。"""
     builder = ProjectBuilder(str(srcdir))
     build_backend = builder._backend
 
@@ -193,18 +193,6 @@ def build_wheel(
 
 
 def build_command(
-    verbose: int = typer.Option(
-        0,
-        "--verbose",
-        "-v",
-        count=True,
-        help="输出详细构建日志。",
-    ),
-    clean_build: bool = typer.Option(
-        False,
-        "--clean-build",
-        help="构建前删除已有的 build 目录。",
-    ),
     srcdir: Path = typer.Argument(
         ...,
         metavar="SRCDIR",
@@ -215,19 +203,43 @@ def build_command(
         readable=True,
         resolve_path=True,
     ),
+    clean_env: bool = typer.Option(
+        False,
+        "--clean-env",
+        help="构建前删除已有的持久构建环境。",
+    ),
+    clean_build: bool = typer.Option(
+        False,
+        "--clean-build",
+        help="构建前删除已有的 build 目录。",
+    ),
+    verbose: int = typer.Option(
+        0,
+        "--verbose",
+        "-v",
+        count=True,
+        help="输出详细构建日志。",
+    ),
 ) -> None:
     build_dir = srcdir / "build"
+    env_dir = PersistentIsolatedEnv.get_build_env_path(srcdir)
     try:
+        ensure_build_programs_available()
+
+        if env_dir.exists():
+            if env_dir.is_symlink() or not env_dir.is_dir():
+                raise RuntimeError(f"持久构建环境路径存在但不是可清理目录: {env_dir}")
+            if clean_env:
+                shutil.rmtree(env_dir)
+                print(f"- 已清理持久构建环境: {env_dir}")
         if build_dir.exists():
             if not build_dir.is_dir():
                 raise RuntimeError(f"构建路径存在但不是目录: {build_dir}")
+            if clean_build:
+                shutil.rmtree(build_dir)
+                print(f"- 已清理目录: {build_dir}")
 
-        ensure_build_programs_available()
-        build_context = resolve_build_context(srcdir)
-
-        if build_dir.exists() and clean_build:
-            shutil.rmtree(build_dir)
-            print(f"- 已清理目录: {build_dir}")
+        build_context = get_build_context(srcdir)
 
         with build_verbose_context(verbose):
             wheel_path = build_wheel(
@@ -242,6 +254,6 @@ def build_command(
 
     print("构建完成")
     print(f"- build-backend: {build_context.build_backend}")
-    print(f"- 持久构建环境: {PersistentIsolatedEnv.get_build_env_path(srcdir)}")
+    print(f"- 持久构建环境: {env_dir}")
     print(f"- wheel 文件: {wheel_path}")
     print(f"- compile_commands.json: {resolve_compile_commands_path(srcdir)}")
