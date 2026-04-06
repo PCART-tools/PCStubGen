@@ -31,7 +31,17 @@ class BuildContext:
     build_backend: str
     runner: SubprocessRunner
     config_settings: ConfigSettings
-    compile_commands_path: Path
+
+
+def resolve_compile_commands_path(srcdir: Path) -> Path | None:
+    """按优先级探测可用的 compile_commands.json 路径。"""
+    for path in (
+        srcdir / "build" / "compile_commands.json",
+        srcdir / "compile_commands.json",
+    ):
+        if path.exists():
+            return path
+    return None
 
 
 def resolve_build_context(srcdir: Path) -> BuildContext:
@@ -48,7 +58,6 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
                 "build-dir": "build",
                 "setup-args": ["-Dbuildtype=debug", "-Db_ndebug=false"],
             },
-            compile_commands_path=srcdir / "build" / "compile_commands.json",
         )
 
     return BuildContext(
@@ -56,7 +65,6 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
         build_backend=build_backend,
         runner=bear_runner,
         config_settings={},
-        compile_commands_path=srcdir / "compile_commands.json",
     )
 
 
@@ -69,6 +77,7 @@ def build_clang_environ(
     # C/C++ 编译器前端。
     env["CC"] = "clang"
     env["CXX"] = "clang++"
+
     # 让 LLVM lib 目录进入隐式库搜索路径，便于上游 CMake 的
     # find_library(NAMES omp gomp iomp5 ...) 优先命中 libomp 而不是 libgomp。
     llvm_libdir = subprocess.check_output(
@@ -80,6 +89,7 @@ def build_clang_environ(
         env["LIBRARY_PATH"] = os.pathsep.join([llvm_libdir, existing_library_path])
     else:
         env["LIBRARY_PATH"] = llvm_libdir
+
     # 显式打开 debug 构建，避免上游构建后端按 release 路径生成产物。
     env["DEBUG"] = "1"
     env["CMAKE_BUILD_TYPE"] = "Debug"
@@ -226,6 +236,7 @@ def build_command(
                 build_context.runner,
                 build_context.config_settings,
             )
+
     except Exception as ex:
         print(f"错误: {ex}")
         raise typer.Exit(1) from ex
@@ -234,4 +245,4 @@ def build_command(
     print(f"- build-backend: {build_context.build_backend}")
     print(f"- 持久构建环境: {PersistentIsolatedEnv.get_build_env_path(srcdir)}")
     print(f"- wheel 文件: {wheel_path}")
-    print(f"- compile_commands.json: {build_context.compile_commands_path}")
+    print(f"- compile_commands.json: {resolve_compile_commands_path(srcdir)}")

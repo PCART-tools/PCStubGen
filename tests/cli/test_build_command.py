@@ -116,7 +116,6 @@ def _fake_build_context(srcdir: Path) -> build_module.BuildContext:
         build_backend="test-backend",
         runner=build_module.clang_runner,
         config_settings={},
-        compile_commands_path=srcdir / "compile_commands.json",
     )
 
 
@@ -186,10 +185,86 @@ def test_build_command_sets_build_verbosity_and_restores_context(
     assert "- build-backend: test-backend" in result.output
     assert f"- 持久构建环境: {PersistentIsolatedEnv.get_build_env_path(tmp_path)}" in result.output
     assert "- wheel 文件:" in result.output
+    assert "- compile_commands.json: None" in result.output
     if should_log:
         assert "build verbose message" in result.output
     else:
         assert "build verbose message" not in result.output
+
+
+@pytest.mark.parametrize(
+    ("build_exists", "root_exists", "expected_path"),
+    [
+        (True, False, "build/compile_commands.json"),
+        (False, True, "compile_commands.json"),
+        (True, True, "build/compile_commands.json"),
+    ],
+)
+def test_build_command_detects_compile_commands_path_after_build(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    build_exists: bool,
+    root_exists: bool,
+    expected_path: str,
+) -> None:
+    observed_verbosity: list[int] = []
+
+    def fake_ensure_clang_compilers_available() -> None:
+        return None
+
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_clang_compilers_available",
+        fake_ensure_clang_compilers_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+
+    if build_exists:
+        build_compile_commands = tmp_path / "build" / "compile_commands.json"
+        build_compile_commands.parent.mkdir(parents=True, exist_ok=True)
+        build_compile_commands.write_text("[]", encoding="utf-8")
+    if root_exists:
+        root_compile_commands = tmp_path / "compile_commands.json"
+        root_compile_commands.write_text("[]", encoding="utf-8")
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert f"- compile_commands.json: {tmp_path / expected_path}" in result.output
+
+
+def test_build_command_reports_missing_compile_commands_json(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+
+    def fake_ensure_clang_compilers_available() -> None:
+        return None
+
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_clang_compilers_available",
+        fake_ensure_clang_compilers_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert "- compile_commands.json: None" in result.output
 
 
 def test_build_command_keeps_existing_build_directory_by_default(
