@@ -19,11 +19,6 @@ import typer
 BUILD_COMMAND_HELP = (
     "构建 Python 项目，并为 stub 工作流提供可用的 compile_commands.json。"
 )
-DEBUG_COMPILE_FLAGS = "-O0 -g -UNDEBUG"
-DEBUG_BUILD_FLAG = "1"
-CMAKE_DEBUG_BUILD_TYPE = "Debug"
-CLANG_CC = "clang"
-CLANG_CXX = "clang++"
 PERSISTENT_BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
 LEGACY_SETUPTOOLS_BACKEND = "setuptools.build_meta:__legacy__"
 
@@ -68,15 +63,29 @@ def resolve_build_context(srcdir: Path) -> BuildContext:
 def build_clang_environ(
     extra_environ: Mapping[str, str] | None = None,
 ) -> dict[str, str]:
+    debug_compile_flags = "-O0 -g -UNDEBUG"
     env = os.environ.copy()
     if extra_environ is not None:
         env.update(extra_environ)
-    env["CC"] = CLANG_CC
-    env["CXX"] = CLANG_CXX
-    env["DEBUG"] = DEBUG_BUILD_FLAG
-    env["CMAKE_BUILD_TYPE"] = CMAKE_DEBUG_BUILD_TYPE
-    env["CFLAGS"] = DEBUG_COMPILE_FLAGS
-    env["CXXFLAGS"] = DEBUG_COMPILE_FLAGS
+    # C/C++ 编译器前端。
+    env["CC"] = "clang"
+    env["CXX"] = "clang++"
+    # 让 LLVM lib 目录进入隐式库搜索路径，便于上游 CMake 的
+    # find_library(NAMES omp gomp iomp5 ...) 优先命中 libomp 而不是 libgomp。
+    llvm_libdir = subprocess.check_output(
+        ["llvm-config", "--libdir"],
+        text=True,
+    ).strip()
+    existing_library_path = env.get("LIBRARY_PATH")
+    if existing_library_path:
+        env["LIBRARY_PATH"] = os.pathsep.join([llvm_libdir, existing_library_path])
+    else:
+        env["LIBRARY_PATH"] = llvm_libdir
+    # 显式打开 debug 构建，避免上游构建后端按 release 路径生成产物。
+    env["DEBUG"] = "1"
+    env["CMAKE_BUILD_TYPE"] = "Debug"
+    env["CFLAGS"] = debug_compile_flags
+    env["CXXFLAGS"] = debug_compile_flags
     return env
 
 
@@ -109,7 +118,7 @@ def bear_runner(
 
 def ensure_clang_compilers_available() -> None:
     missing_compilers = [
-        compiler for compiler in (CLANG_CC, CLANG_CXX) if shutil.which(compiler) is None
+        compiler for compiler in ("clang", "clang++") if shutil.which(compiler) is None
     ]
     if missing_compilers:
         missing_display = ", ".join(missing_compilers)
@@ -237,6 +246,11 @@ def build_command(
         count=True,
         help="输出详细构建日志。",
     ),
+    clean_build: bool = typer.Option(
+        False,
+        "--clean-build",
+        help="构建前删除已有的 build 目录。",
+    ),
     srcdir: Path = typer.Argument(
         ...,
         metavar="SRCDIR",
@@ -255,12 +269,9 @@ def build_command(
         if build_dir.exists():
             if not build_dir.is_dir():
                 raise RuntimeError(f"构建路径存在但不是目录: {build_dir}")
-            if not sys.stdin.isatty() or not sys.stdout.isatty():
-                raise RuntimeError("检测到 build 目录存在，但当前环境无法交互确认删除。")
-            if not typer.confirm(f"将删除构建目录 {build_dir}，是否继续？", default=False):
-                raise RuntimeError("用户取消删除 build 目录，构建已终止。")
-            shutil.rmtree(build_dir)
-            print(f"- 已清理目录: {build_dir}")
+            if clean_build:
+                shutil.rmtree(build_dir)
+                print(f"- 已清理目录: {build_dir}")
 
         with build_verbose_context(verbose):
             ensure_clang_compilers_available()

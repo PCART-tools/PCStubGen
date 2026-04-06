@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from typing import Any
 
 import pytest
@@ -15,15 +16,33 @@ import pcstubgen._build as build_module
 RUNNER = CliRunner()
 
 
-def test_build_clang_environ_includes_debug_environment_variables() -> None:
+def test_build_clang_environ_includes_debug_environment_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_library_path = build_module.os.environ.get("LIBRARY_PATH")
+    build_module.os.environ.pop("LIBRARY_PATH", None)
+
+    def fake_check_output(cmd: list[str], text: bool = False) -> str:
+        assert cmd == ["llvm-config", "--libdir"]
+        assert text is True
+        return "/opt/llvm/lib\n"
+
+    monkeypatch.setattr(build_module.subprocess, "check_output", fake_check_output)
     env = build_module.build_clang_environ()
 
-    assert env["CC"] == build_module.CLANG_CC
-    assert env["CXX"] == build_module.CLANG_CXX
-    assert env["DEBUG"] == build_module.DEBUG_BUILD_FLAG
-    assert env["CMAKE_BUILD_TYPE"] == build_module.CMAKE_DEBUG_BUILD_TYPE
-    assert env["CFLAGS"] == build_module.DEBUG_COMPILE_FLAGS
-    assert env["CXXFLAGS"] == build_module.DEBUG_COMPILE_FLAGS
+    try:
+        assert env["CC"] == "clang"
+        assert env["CXX"] == "clang++"
+        assert env["LIBRARY_PATH"] == "/opt/llvm/lib"
+        assert env["DEBUG"] == "1"
+        assert env["CMAKE_BUILD_TYPE"] == "Debug"
+        assert env["CFLAGS"] == "-O0 -g -UNDEBUG"
+        assert env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
+    finally:
+        if original_library_path is None:
+            build_module.os.environ.pop("LIBRARY_PATH", None)
+        else:
+            build_module.os.environ["LIBRARY_PATH"] = original_library_path
 
 
 def test_clang_runner_passes_debug_environment_variables(
@@ -45,16 +64,19 @@ def test_clang_runner_passes_debug_environment_variables(
         "default_subprocess_runner",
         fake_default_subprocess_runner,
     )
+    monkeypatch.setattr(
+        build_module.subprocess,
+        "check_output",
+        lambda cmd, text=False: "/opt/llvm/lib\n",
+    )
 
     build_module.clang_runner(["python", "-m", "build"], cwd="/tmp/demo")
 
     assert captured["cmd"] == ["python", "-m", "build"]
     assert captured["cwd"] == "/tmp/demo"
-    assert captured["extra_environ"]["DEBUG"] == build_module.DEBUG_BUILD_FLAG
-    assert (
-        captured["extra_environ"]["CMAKE_BUILD_TYPE"]
-        == build_module.CMAKE_DEBUG_BUILD_TYPE
-    )
+    assert captured["extra_environ"]["DEBUG"] == "1"
+    assert captured["extra_environ"]["CMAKE_BUILD_TYPE"] == "Debug"
+    assert captured["extra_environ"]["LIBRARY_PATH"].startswith("/opt/llvm/lib")
 
 
 def test_bear_runner_passes_debug_environment_variables(
@@ -72,13 +94,45 @@ def test_bear_runner_passes_debug_environment_variables(
         captured["env"] = env
 
     monkeypatch.setattr(build_module.subprocess, "check_call", fake_check_call)
+    monkeypatch.setattr(
+        build_module.subprocess,
+        "check_output",
+        lambda cmd, text=False: "/opt/llvm/lib\n",
+    )
 
     build_module.bear_runner(["python", "-m", "build"], cwd="/tmp/demo")
 
     assert captured["cmd"] == ["bear", "--", "python", "-m", "build"]
     assert captured["cwd"] == "/tmp/demo"
-    assert captured["env"]["DEBUG"] == build_module.DEBUG_BUILD_FLAG
-    assert captured["env"]["CMAKE_BUILD_TYPE"] == build_module.CMAKE_DEBUG_BUILD_TYPE
+    assert captured["env"]["DEBUG"] == "1"
+    assert captured["env"]["CMAKE_BUILD_TYPE"] == "Debug"
+    assert captured["env"]["LIBRARY_PATH"].startswith("/opt/llvm/lib")
+
+
+def _fake_build_context(srcdir: Path) -> build_module.BuildContext:
+    return build_module.BuildContext(
+        builder=None,
+        build_backend="test-backend",
+        runner=build_module.clang_runner,
+        config_settings={},
+        compile_commands_path=srcdir / "compile_commands.json",
+    )
+
+
+def _fake_build_wheel(
+    observed_verbosity: list[int],
+):
+    def _impl(
+        srcdir: Path,
+        runner: object,
+        config_settings: object,
+    ) -> Path:
+        _ = (runner, config_settings)
+        observed_verbosity.append(build_env._ctx.verbosity)
+        build_env._ctx.log("build verbose message")
+        return srcdir / "dist" / "demo.whl"
+
+    return _impl
 
 
 @pytest.mark.parametrize(
@@ -100,35 +154,16 @@ def test_build_command_sets_build_verbosity_and_restores_context(
     original_logger = build_env._ctx.LOGGER.get()
     original_verbosity = build_env._ctx.verbosity
 
-    def fake_resolve_build_context(srcdir: Path) -> build_module.BuildContext:
-        return build_module.BuildContext(
-            builder=None,
-            build_backend="test-backend",
-            runner=build_module.clang_runner,
-            config_settings={},
-            compile_commands_path=srcdir / "compile_commands.json",
-        )
-
     def fake_ensure_clang_compilers_available() -> None:
         return None
 
-    def fake_build_wheel(
-        srcdir: Path,
-        runner: object,
-        config_settings: object,
-    ) -> Path:
-        _ = (runner, config_settings)
-        observed_verbosity.append(build_env._ctx.verbosity)
-        build_env._ctx.log("build verbose message")
-        return srcdir / "dist" / "demo.whl"
-
-    monkeypatch.setattr(build_module, "resolve_build_context", fake_resolve_build_context)
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
     monkeypatch.setattr(
         build_module,
         "ensure_clang_compilers_available",
         fake_ensure_clang_compilers_available,
     )
-    monkeypatch.setattr(build_module, "build_wheel", fake_build_wheel)
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
 
     result = RUNNER.invoke(
         main_module.app,
@@ -147,3 +182,112 @@ def test_build_command_sets_build_verbosity_and_restores_context(
         assert "build verbose message" in result.output
     else:
         assert "build verbose message" not in result.output
+
+
+def test_build_command_keeps_existing_build_directory_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+
+    def fake_ensure_clang_compilers_available() -> None:
+        return None
+
+    def fail_rmtree(path: Path) -> None:
+        raise AssertionError(f"不应删除 build 目录: {path}")
+
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_clang_compilers_available",
+        fake_ensure_clang_compilers_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fail_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert build_dir.exists()
+    assert "- 已清理目录:" not in result.output
+
+
+def test_build_command_removes_existing_build_directory_when_clean_build_is_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    observed_verbosity: list[int] = []
+    build_dir = tmp_path / "build"
+    build_dir.mkdir()
+    removed_paths: list[Path] = []
+    original_rmtree = shutil.rmtree
+
+    def fake_ensure_clang_compilers_available() -> None:
+        return None
+
+    def fake_rmtree(path: Path) -> None:
+        removed_paths.append(path)
+        original_rmtree(path)
+
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_clang_compilers_available",
+        fake_ensure_clang_compilers_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", _fake_build_wheel(observed_verbosity))
+    monkeypatch.setattr(build_module.shutil, "rmtree", fake_rmtree)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", "--clean-build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 0
+    assert observed_verbosity == [0]
+    assert removed_paths == [build_dir]
+    assert not build_dir.exists()
+    assert f"- 已清理目录: {build_dir}" in result.output
+
+
+def test_build_command_rejects_non_directory_build_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    build_file = tmp_path / "build"
+    build_file.write_text("not a directory", encoding="utf-8")
+
+    def fail_ensure_clang_compilers_available() -> None:
+        raise AssertionError("不应进入编译器检查")
+
+    def fail_build_wheel(
+        srcdir: Path,
+        runner: object,
+        config_settings: object,
+    ) -> Path:
+        raise AssertionError(f"不应调用 build_wheel: {srcdir}, {runner}, {config_settings}")
+
+    monkeypatch.setattr(build_module, "resolve_build_context", _fake_build_context)
+    monkeypatch.setattr(
+        build_module,
+        "ensure_clang_compilers_available",
+        fail_ensure_clang_compilers_available,
+    )
+    monkeypatch.setattr(build_module, "build_wheel", fail_build_wheel)
+
+    result = RUNNER.invoke(
+        main_module.app,
+        ["build", str(tmp_path)],
+        prog_name="pcstubgen",
+    )
+
+    assert result.exit_code == 1
+    assert f"错误: 构建路径存在但不是目录: {build_file}" in result.output
