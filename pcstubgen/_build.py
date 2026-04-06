@@ -20,6 +20,8 @@ BUILD_COMMAND_HELP = (
     "构建 Python 项目，并为 stub 工作流提供可用的 compile_commands.json。"
 )
 DEBUG_COMPILE_FLAGS = "-O0 -g -UNDEBUG"
+DEBUG_BUILD_FLAG = "1"
+CMAKE_DEBUG_BUILD_TYPE = "Debug"
 CLANG_CC = "clang"
 CLANG_CXX = "clang++"
 PERSISTENT_BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
@@ -71,6 +73,8 @@ def build_clang_environ(
         env.update(extra_environ)
     env["CC"] = CLANG_CC
     env["CXX"] = CLANG_CXX
+    env["DEBUG"] = DEBUG_BUILD_FLAG
+    env["CMAKE_BUILD_TYPE"] = CMAKE_DEBUG_BUILD_TYPE
     env["CFLAGS"] = DEBUG_COMPILE_FLAGS
     env["CXXFLAGS"] = DEBUG_COMPILE_FLAGS
     return env

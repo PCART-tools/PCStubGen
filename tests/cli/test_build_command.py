@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from typer.testing import CliRunner
@@ -12,6 +13,72 @@ import pcstubgen._build as build_module
 
 
 RUNNER = CliRunner()
+
+
+def test_build_clang_environ_includes_debug_environment_variables() -> None:
+    env = build_module.build_clang_environ()
+
+    assert env["CC"] == build_module.CLANG_CC
+    assert env["CXX"] == build_module.CLANG_CXX
+    assert env["DEBUG"] == build_module.DEBUG_BUILD_FLAG
+    assert env["CMAKE_BUILD_TYPE"] == build_module.CMAKE_DEBUG_BUILD_TYPE
+    assert env["CFLAGS"] == build_module.DEBUG_COMPILE_FLAGS
+    assert env["CXXFLAGS"] == build_module.DEBUG_COMPILE_FLAGS
+
+
+def test_clang_runner_passes_debug_environment_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_default_subprocess_runner(
+        cmd: object,
+        cwd: object,
+        extra_environ: dict[str, str] | None = None,
+    ) -> None:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["extra_environ"] = extra_environ
+
+    monkeypatch.setattr(
+        build_module.pyproject_hooks,
+        "default_subprocess_runner",
+        fake_default_subprocess_runner,
+    )
+
+    build_module.clang_runner(["python", "-m", "build"], cwd="/tmp/demo")
+
+    assert captured["cmd"] == ["python", "-m", "build"]
+    assert captured["cwd"] == "/tmp/demo"
+    assert captured["extra_environ"]["DEBUG"] == build_module.DEBUG_BUILD_FLAG
+    assert (
+        captured["extra_environ"]["CMAKE_BUILD_TYPE"]
+        == build_module.CMAKE_DEBUG_BUILD_TYPE
+    )
+
+
+def test_bear_runner_passes_debug_environment_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_check_call(
+        cmd: object,
+        cwd: object = None,
+        env: dict[str, str] | None = None,
+    ) -> None:
+        captured["cmd"] = cmd
+        captured["cwd"] = cwd
+        captured["env"] = env
+
+    monkeypatch.setattr(build_module.subprocess, "check_call", fake_check_call)
+
+    build_module.bear_runner(["python", "-m", "build"], cwd="/tmp/demo")
+
+    assert captured["cmd"] == ["bear", "--", "python", "-m", "build"]
+    assert captured["cwd"] == "/tmp/demo"
+    assert captured["env"]["DEBUG"] == build_module.DEBUG_BUILD_FLAG
+    assert captured["env"]["CMAKE_BUILD_TYPE"] == build_module.CMAKE_DEBUG_BUILD_TYPE
 
 
 @pytest.mark.parametrize(
