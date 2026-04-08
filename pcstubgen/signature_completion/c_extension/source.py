@@ -10,11 +10,11 @@ from ...ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, IRSign
 from ...types import AnyType, Type
 from .clang import parser as clang_parser
 from .clang.cursor_utils import source_range_get_text, walk_cursor
-from .dwarf import ResolvedAddressLocation, resolve_address_location
 from .models import CArgument, CFunction, CSignature
 from .modules.method_flags import METH_FASTCALL, METH_KEYWORDS, METH_NOARGS, METH_O, METH_VARARGS
 from .runtime import resolve_runtime_pymethoddef
 from .signatures import inference
+from .symbolizer import SymbolizedAddressLocation, resolve_symbolized_address
 from ...ir_modules import IRArgumentKind
 
 ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
@@ -43,15 +43,16 @@ class CExtensionSource:
             raise RuntimeError(f"函数 {irfunction.name} 缺少运行时对象引用。")
 
         runtime_method = resolve_runtime_pymethoddef(irfunction.runtime_handle)
-        location = resolve_address_location(runtime_method.method_address)
+        location = resolve_symbolized_address(runtime_method.method_address)
+        source_path, source_line = self._require_source_location(location)
         c_function = CFunction(
             ml_name=runtime_method.name,
             ml_flags=runtime_method.flags,
             ml_meth_address=runtime_method.method_address,
             library_path=location.binary_path,
-            source_path=location.source_path or location.declaration_path,
-            source_line=location.source_line or location.declaration_line,
-            symbol_name=location.symbol_name or location.linkage_name,
+            source_path=source_path,
+            source_line=source_line,
+            symbol_name=location.function_name,
         )
 
         function_cursor = self._resolve_function_cursor(location=location, c_function=c_function)
@@ -74,20 +75,23 @@ class CExtensionSource:
     def _resolve_function_cursor(
         self,
         *,
-        location: ResolvedAddressLocation,
+        location: SymbolizedAddressLocation,
         c_function: CFunction,
     ) -> Cursor | None:
         """按需 parse 已定位到的源码文件，并找到对应的函数 cursor。"""
         if self._compilation_database is None:
             return None
 
-        source_path = location.source_path or location.declaration_path
-        if source_path is None:
+        source_path_candidates = self._source_path_candidates(location)
+        if len(source_path_candidates) == 0:
             return None
 
-        compilation_command = self._match_compilation_command(source_path)
+        compilation_command = self._match_compilation_command(source_path_candidates)
         if compilation_command is None:
-            logger.info("未在编译数据库中找到源码文件, source_path: {}", source_path)
+            logger.info(
+                "未在编译数据库中找到源码文件, source_paths: {}",
+                ", ".join(str(path) for path in source_path_candidates),
+            )
             return None
 
         translation_unit = self._load_translation_unit(compilation_command)
@@ -97,7 +101,10 @@ class CExtensionSource:
         matched = self._find_function_cursor(
             translation_unit=translation_unit,
             source_path=compilation_command.file_path,
-            line_candidates=[location.source_line, location.declaration_line],
+            line_candidates=[
+                location.function_start_line,
+                location.resolved_line,
+            ],
             symbol_candidates=[c_function.symbol_name, c_function.ml_name],
         )
         if matched is None:
@@ -111,21 +118,27 @@ class CExtensionSource:
 
     def _match_compilation_command(
         self,
-        source_path: Path,
+        source_paths: list[Path],
     ) -> clang_parser.CompilationCommand | None:
         commands = self._get_compilation_commands()
-        resolved_source_path = source_path.resolve()
+        resolved_source_paths = {source_path.resolve() for source_path in source_paths}
         for command in commands:
-            if command.file_path == resolved_source_path:
+            if command.file_path in resolved_source_paths:
                 return command
         return None
 
     def _get_compilation_commands(self) -> list[clang_parser.CompilationCommand]:
         if self._compilation_commands is None:
+            compilation_database = self._compilation_database
+            if compilation_database is None:
+                raise RuntimeError("缺少 compile_commands.json，无法加载编译数据库。")
             self._compilation_commands = clang_parser.list_compilation_commands(
-                self._compilation_database
+                compilation_database
             )
-        return self._compilation_commands
+        compilation_commands = self._compilation_commands
+        if compilation_commands is None:
+            raise RuntimeError("编译数据库加载失败。")
+        return compilation_commands
 
     def _load_translation_unit(
         self,
@@ -137,11 +150,14 @@ class CExtensionSource:
 
         if self._index is None:
             self._index = Index.create()
+        index = self._index
+        if index is None:
+            raise RuntimeError("libclang Index 初始化失败。")
 
         effective_parse_args = clang_parser.build_effective_parse_args(compilation_command)
         try:
             translation_unit = clang_parser.parse(
-                self._index,
+                index,
                 compilation_command,
                 effective_parse_args=effective_parse_args,
             )
@@ -217,6 +233,31 @@ class CExtensionSource:
         if symbol_matches:
             return symbol_matches[0]
         return None
+
+    @staticmethod
+    def _require_source_location(location: SymbolizedAddressLocation) -> tuple[Path, int]:
+        for path, line in (
+            (location.function_start_path, location.function_start_line),
+            (location.resolved_path, location.resolved_line),
+        ):
+            if path is not None and line is not None:
+                return path, line
+
+        raise RuntimeError(
+            "llvm-symbolizer 未返回可用源码位置，无法执行严格的C源码补全。"
+        )
+
+    @staticmethod
+    def _source_path_candidates(location: SymbolizedAddressLocation) -> list[Path]:
+        result: list[Path] = []
+        for path in (
+            location.function_start_path,
+            location.resolved_path,
+        ):
+            if path is None or path in result:
+                continue
+            result.append(path)
+        return result
 
     @staticmethod
     def _infer_minimal_signatures(c_function: CFunction) -> list[CSignature]:
