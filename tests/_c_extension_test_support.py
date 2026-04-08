@@ -3,42 +3,22 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from pathlib import Path
-from types import SimpleNamespace
 from typing import cast
 
 import clang.cindex
 from clang.cindex import LinkageKind
 import pytest
 
-from pcstubgen.signature_completion.c_extension.collect import collect_modules
 from pcstubgen.signature_completion.c_extension.modules.method_flags import (
     METH_KEYWORDS,
-    METH_NOARGS,
-    METH_O,
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
-from pcstubgen.signature_completion.c_extension import collect as c_extension_collect_module
 from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
 from pcstubgen.signature_completion.c_extension.clang import parser as translation_unit_module
-from pcstubgen.signature_completion.c_extension.definition_index import DefinitionIndex
-from pcstubgen.signature_completion.c_extension.modules import collect_modules as module_collection_module
-from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
-from pcstubgen.types import (
-    AnyType,
-    ListType,
-    RawType,
-    Type,
-    TupleType,
-    UnionType,
-)
-from pcstubgen.signature_completion.c_extension.modules.collect_modules import (
-    collect_method_table as _collect_method_table_impl,
-    collect_pymethoddef_init_list_expr as _collect_PyMethodDef_INIT_LIST_EXPR_impl,
-    resolve_init_list_expr as _resolve_INIT_LIST_EXPR,
-)
+from pcstubgen.types import RawType, Type
 from pcstubgen.signature_completion.c_extension.models import (
     CArgument,
     CFunction,
@@ -48,24 +28,12 @@ from pcstubgen.signature_completion.c_extension.models import (
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
 )
-from pcstubgen.signature_completion.docstring_source import (
-    resolve_docstring_signatures,
-)
 from pcstubgen.ir_modules import (
     IRArgument,
     IRArgumentKind,
-    IRClass,
     IRFunction,
-    IRMethod,
     IRModule,
-    IRModuleType,
     IRSignature,
-    QualifiedName,
-)
-from pcstubgen.stub_generation_options import StubGenerationOptions
-from pcstubgen.signature_completion import (
-    SignatureCompletionResult,
-    SignatureCompleter,
 )
 from pcstubgen.signature_completion.c_extension.clang.source_suffixes import (
     CPP_SOURCE_SUFFIXES,
@@ -168,30 +136,6 @@ def _write_compilation_database(
     return compilation_database
 
 
-class CSignatureExtractor:
-    def __init__(
-        self,
-        source: Path | None = None,
-        *,
-        compilation_database: Path | None = None,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
-    ) -> None:
-        _ = (include, include_directory, c_std, cpp_std)
-        if compilation_database is None:
-            if source is None:
-                raise ValueError("source 与 compilation_database 不能同时为空")
-            compilation_database = _write_compilation_database(source)
-        self._compilation_database = compilation_database
-
-    def extract_modules(self) -> dict[str, CModule]:
-        return collect_modules(
-            self._compilation_database,
-        )
-
-
 class _FakeExtractor:
     def __init__(
         self,
@@ -211,26 +155,62 @@ def _patch_c_signature_extractor(
 ) -> _FakeExtractor:
     extractor = _FakeExtractor(modules=modules)
 
-    def _patched_collect_modules(
-        compilation_database: Path,
-    ) -> dict[str, CModule]:
-        _ = compilation_database
-        return extractor.extract_modules()
+    def _patched_resolve_function(
+        self: CExtensionSource,
+        irmodule: IRModule,
+        irfunction: IRFunction,
+    ) -> tuple[list[IRSignature], str | None]:
+        _ = self
+        extractor.extract_modules()
+        c_module = extractor.modules.get(irmodule.full_name.name)
+        if c_module is None:
+            raise RuntimeError(f"未匹配到唯一C模块: {irmodule.full_name}")
+        extracted = c_module.functions.get(irfunction.name)
+        if extracted is None:
+            raise RuntimeError(f"C模块 {c_module.name} 中未找到函数 {irfunction.name}")
+        if not extracted.signatures:
+            raise RuntimeError(f"C函数 {c_module.name}.{irfunction.name} 没有可用签名")
 
-    monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)
+        source_comment = None
+        if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
+            source_comment = cursor_utils_module.source_range_get_text(extracted.function_cursor.extent)
+
+        return (
+            [
+                IRSignature(
+                    args=[
+                        IRArgument(
+                            name=argument.name,
+                            type=argument.type,
+                            default_value=argument.default_value,
+                            has_default=argument.has_default,
+                            kind=argument.kind,
+                        )
+                        for argument in signature.arguments
+                    ],
+                    return_type=signature.return_type,
+                )
+                for signature in extracted.signatures
+            ],
+            source_comment,
+        )
+
+    monkeypatch.setattr(c_extension_source_module.CExtensionSource, "resolve_function", _patched_resolve_function)
     return extractor
 
 def _patch_raising_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
 ) -> None:
-    def _patched_collect_modules(
-        compilation_database: Path,
-    ) -> dict[str, CModule]:
-        _ = compilation_database
+    def _patched_resolve_function(
+        self: CExtensionSource,
+        irmodule: IRModule,
+        irfunction: IRFunction,
+    ) -> tuple[list[IRSignature], str | None]:
+        _ = (self, irmodule, irfunction)
         raise error
 
-    monkeypatch.setattr(c_extension_source_module, "collect_modules", _patched_collect_modules)
+    monkeypatch.setattr(c_extension_source_module.CExtensionSource, "resolve_function", _patched_resolve_function)
 
 
 def _get_packaged_libclang_path() -> str | None:
@@ -423,64 +403,6 @@ class _FakeNode:
             if self.referenced.is_definition():
                 return self.referenced
         return None
-
-
-def _build_definition_translation_unit(
-    definitions_by_usr: dict[str, object],
-) -> _FakeTranslationUnit:
-    definition_nodes = []
-    for stable_usr, definition in definitions_by_usr.items():
-        if isinstance(definition, _FakeNode):
-            definition._usr = stable_usr
-            definition._is_definition = True
-            if getattr(definition, "canonical", None) is None or definition.canonical is definition:
-                definition.canonical = definition
-            definition_nodes.append(definition)
-            continue
-
-        definition_nodes.append(
-            _FakeNode(
-                kind=clang.cindex.CursorKind.FUNCTION_DECL,
-                usr=stable_usr,
-                definition=definition,
-                is_definition=True,
-            )
-        )
-
-    return _FakeTranslationUnit(
-        diagnostics=[],
-        cursor=_FakeNode(
-            kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
-            children=definition_nodes,
-        ),
-    )
-
-
-def _definition_index(
-    definitions_by_usr: dict[str, object] | None = None,
-) -> DefinitionIndex:
-    return DefinitionIndex([
-        _build_definition_translation_unit(definitions_by_usr or {})
-    ])
-
-
-def _collect_method_table(cursor: object, *, module_name: str) -> dict[str, CFunction]:
-    return _collect_method_table_impl(
-        cursor,
-        module_name=module_name,
-        definition_index=_definition_index(),
-    )
-
-
-def _collect_PyMethodDef_INIT_LIST_EXPR(
-    *,
-    init_list_expr: object,
-) -> tuple[bool, CFunction | None]:
-    return _collect_PyMethodDef_INIT_LIST_EXPR_impl(
-        init_list_expr=init_list_expr,
-        definition_index=_definition_index(),
-    )
-
 
 def _fake_function_cursor(name: str = "fake_function") -> clang.cindex.Cursor:
     """构造可复用的假函数游标。"""
@@ -779,48 +701,6 @@ ExtractedArgument = CArgument
 ExtractedSignature = CSignature
 ExtractedFunction = CFunction
 ExtractedModule = CModule
-
-
-class CSignatureResolver(CExtensionSource):
-    def __init__(
-        self,
-        source: Path | None = None,
-        *,
-        compilation_database: Path | None = None,
-        include: list[str] = (),
-        include_directory: list[Path] = (),
-        c_std: str = "c11",
-        cpp_std: str = "c++17",
-    ) -> None:
-        _ = (include, include_directory, c_std, cpp_std)
-        if compilation_database is None:
-            if source is None:
-                raise ValueError("source 与 compilation_database 不能同时为空")
-            compilation_database = _write_compilation_database(source)
-        super().__init__(compilation_database=compilation_database)
-
-
-extract_c_signature_modules = collect_modules
-c_signature_extraction_module = c_extension_collect_module
-module_table_module = module_collection_module
-def _extract_method_table(cursor: object, *, module_name: str) -> dict[str, CFunction]:
-    return _collect_method_table(cursor, module_name=module_name)
-
-
-def _extract_PyMethodDef_INIT_LIST_EXPR(
-    *,
-    init_list_expr: object,
-) -> tuple[bool, CFunction | None]:
-    return _collect_PyMethodDef_INIT_LIST_EXPR(init_list_expr=init_list_expr)
-
-c_signature_extraction_module.clang_parser = translation_unit_module
-c_signature_extraction_module.module_table = module_collection_module
-c_signature_extraction_module.signature_inference = signature_rules_module
-c_signature_extraction_module.extract_c_signature_modules = collect_modules
-module_table_module.extract_method_table = module_collection_module.collect_method_table
-module_table_module.extract_pymethoddef_init_list_expr = (
-    module_collection_module.collect_pymethoddef_init_list_expr
-)
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]

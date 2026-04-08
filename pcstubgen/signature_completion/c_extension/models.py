@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ...ir_modules import IRArgumentKind
@@ -41,8 +42,13 @@ class CFunction:
     """按 PyMethodDef 条目聚合的函数提取结果。"""
 
     ml_name: str
-    function_cursor: Cursor = field(repr=False, compare=False)
+    function_cursor: Cursor | None = field(default=None, repr=False, compare=False)
     ml_flags: int = 0
+    ml_meth_address: int | None = None
+    library_path: Path | None = None
+    source_path: Path | None = None
+    source_line: int | None = None
+    symbol_name: str | None = None
     signatures: list[CSignature] = field(default_factory=list)
 
 

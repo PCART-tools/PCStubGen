@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Literal, Tuple, TypeAlias
+from typing import Any, Literal, Tuple, TypeAlias
 
 from .types import Type
 
@@ -65,12 +65,14 @@ class IRFunction:
     signatures: list[IRSignature] = field(default_factory=list)
     doc: str | None = field(default=None)
     c_inferred_source_comment: str | None = field(default=None)
+    runtime_handle: Any | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass
 class IRMethod:
     function: IRFunction
     decorator: IRMethodDecorator
+    runtime_owner: type | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass

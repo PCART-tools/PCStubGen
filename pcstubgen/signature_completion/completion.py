@@ -31,19 +31,9 @@ class SignatureCompletionResult:
 class SignatureCompleter:
     def __init__(self, options: StubGenerationOptions) -> None:
         self._options = options
-        self._c_source_error: str | None = None
-        if options.compilation_database is None:
-            self._c_source = None
-        else:
-            try:
-                self._c_source = CExtensionSource(
-                    compilation_database=options.compilation_database,
-                )
-            except RuntimeError as ex:
-                self._c_source = None
-                self._c_source_error = str(ex)
-            else:
-                self._c_source_error = None
+        self._c_source = CExtensionSource(
+            compilation_database=options.compilation_database,
+        )
         self._result = SignatureCompletionResult()
 
     def run(self, module: IRModule) -> SignatureCompletionResult:
@@ -90,28 +80,28 @@ class SignatureCompleter:
         is_method: bool,
     ) -> None:
         self._result.total_functions += 1
-        if self._c_source_error is not None:
-            c_reason = self._c_source_error
-        else:
-            c_reason = "未配置 compilation_database，未启用C源码补全。"
+        c_reason = "未启用C扩展补全。"
 
-        if self._c_source is not None:
-            try:
-                c_result = self._c_source.resolve_function(
-                    module,
-                    func,
-                    is_method,
-                )
-            except RuntimeError as ex:
-                c_reason = str(ex)
-            else:
-                signatures, c_inferred_source_comment = c_result
-                func.signatures = signatures
-                if self._options.include_c_inferred_source_comment:
-                    func.c_inferred_source_comment = c_inferred_source_comment
-                self._result.c_completed += 1
-                logger.info("通过C源码补全成功, module: {}, func: {}", module.full_name, func.name)
-                return
+        try:
+            c_result = self._c_source.resolve_function(
+                module,
+                func,
+            )
+        except RuntimeError as ex:
+            c_reason = str(ex)
+        else:
+            signatures, c_inferred_source_comment = c_result
+            func.signatures = signatures
+            if self._options.include_c_inferred_source_comment:
+                func.c_inferred_source_comment = c_inferred_source_comment
+            self._result.c_completed += 1
+            logger.info(
+                "通过C源码补全成功, module: {}, func: {}, is_method: {}",
+                module.full_name,
+                func.name,
+                is_method,
+            )
+            return
 
         try:
             docstring_result = resolve_docstring_signatures(module, func)

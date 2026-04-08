@@ -217,7 +217,7 @@ def test_completer_skips_source_comment_when_option_disabled(
     assert parsed.c_inferred_source_comment is None
 
 
-def test_completer_skips_c_for_methods_and_reports_unresolved_reasons(
+def test_completer_completes_extension_methods_via_c_source(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -250,22 +250,18 @@ def test_completer_skips_c_for_methods_and_reports_unresolved_reasons(
         ],
     )
 
-    log_output = StringIO()
-    sink_id = logger.add(log_output, format="{message}")
-    try:
-        summary = SignatureCompleter(
-            StubGenerationOptions(
-                compilation_database=tmp_path / "compile_commands.json",
-            )
-        ).run(module)
-    finally:
-        logger.remove(sink_id)
+    summary = SignatureCompleter(
+        StubGenerationOptions(
+            compilation_database=tmp_path / "compile_commands.json",
+        )
+    ).run(module)
 
     parsed = module.classes[0].methods[0].function
-    assert parsed.signatures == []
-    assert summary.uncompleted == 1
-    assert "c_reason:" in log_output.getvalue()
-    assert "docstring_reason:" in log_output.getvalue()
+    assert parsed.signatures[0].args[0].name == "from_c"
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
+    assert summary.c_completed == 1
+    assert summary.uncompleted == 0
 
 
 def test_completer_uses_docstring_when_available_for_python_module() -> None:

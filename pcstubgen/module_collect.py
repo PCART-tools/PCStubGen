@@ -137,18 +137,20 @@ def collect_class(
     irclass = IRClass(name=path.name, doc=get_doc(class_))
     irclass.bases = collect_bases(class_)
 
-    for name, member in inspect.getmembers(class_):
+    for name, member in class_.__dict__.items():
         member_path = path.concat(name)
 
-        # 跳过从基类继承的成员（不在类自己的 __dict__ 中）
-        if not hasattr(class_, "__dict__") or name not in class_.__dict__:
-            continue
         if _is_member_alias(member_path, member):
             continue
 
-        if inspect.isbuiltin(member):
+        if _is_c_method_member(member):
             irclass.methods.append(
-                collect_method(member_path, member, module_type=module_type)
+                collect_method(
+                    member_path,
+                    member,
+                    module_type=module_type,
+                    owner=class_,
+                )
             )
         elif inspect.isclass(member):
             irclass.classes.append(
@@ -164,13 +166,12 @@ def collect_function(
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRFunction:
-    extension = module_type == IRModuleType.EXTENSION
-    # self = getattr(func, "__self__", None)
-    # module = type(self or func).__module__
-    # logger.warning("发现函数, extension: {}, type: {}, self: {}, module: {}, path: {}",
-    #                extension, type(func).__name__, self, module, path)
     _ = module_type
-    return IRFunction(name=path.name, doc=get_doc(func))
+    return IRFunction(
+        name=path.name,
+        doc=get_doc(func),
+        runtime_handle=func,
+    )
 
 
 def collect_method(
@@ -178,9 +179,14 @@ def collect_method(
     method: Any,
     *,
     module_type: IRModuleType = IRModuleType.UNKNOWN,
+    owner: type | None = None,
 ) -> IRMethod:
     func = collect_function(path, method, module_type=module_type)
-    return IRMethod(function=func, decorator=None)
+    return IRMethod(
+        function=func,
+        decorator=None,
+        runtime_owner=owner,
+    )
 
 
 def collect_bases(class_: type) -> list[QualifiedName]:
@@ -229,3 +235,7 @@ def _is_member_alias(path: QualifiedName, member: Any) -> bool:
     ):
         return path.name != member.__name__
     return False
+
+
+def _is_c_method_member(member: Any) -> bool:
+    return inspect.isbuiltin(member) or inspect.ismethoddescriptor(member)

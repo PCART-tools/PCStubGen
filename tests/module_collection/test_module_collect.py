@@ -22,6 +22,7 @@ def test_module_collect_collect_function_keeps_doc_without_completing_signatures
 
     assert parsed.doc == "sample doc"
     assert parsed.signatures == []
+    assert parsed.runtime_handle is sample
 
 
 def test_module_collect_keeps_only_tree_functions_and_methods() -> None:
@@ -52,12 +53,29 @@ def test_module_collect_keeps_only_tree_functions_and_methods() -> None:
 
     root_cls = ir_module.classes[0]
     assert [method.function.name for method in root_cls.methods] == ["sin"]
+    assert root_cls.methods[0].function.runtime_handle is math.sin
+    assert root_cls.methods[0].runtime_owner is RootClass
     assert root_cls.classes == []
 
     # 精简后的 IR 不再携带变量/属性/字段等节点
     assert not hasattr(ir_module, "variables")
     assert not hasattr(root_cls, "properties")
     assert not hasattr(root_cls, "fields")
+
+
+def test_module_collect_collects_extension_method_descriptors() -> None:
+    ir_class = module_collect_module.collect_class(
+        QualifiedName.from_str("builtins.list"),
+        list,
+        module_type=module_collect_module.IRModuleType.EXTENSION,
+    )
+
+    method_names = [method.function.name for method in ir_class.methods]
+
+    assert "append" in method_names
+    append_method = next(method for method in ir_class.methods if method.function.name == "append")
+    assert type(append_method.function.runtime_handle).__name__ == "method_descriptor"
+    assert append_method.runtime_owner is list
 
 
 def test_module_collect_discovers_direct_submodules_from_package_path(
