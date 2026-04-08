@@ -48,8 +48,8 @@ class SignatureCompleter:
         for sub_module in module.sub_modules:
             self._complete_module(sub_module)
 
-        for cls in module.classes:
-            self._complete_class(cls, module)
+        # for cls in module.classes:
+        #     self._complete_class(cls, module)
 
         for func in module.functions:
             self._complete_function(func, module, is_method=False)

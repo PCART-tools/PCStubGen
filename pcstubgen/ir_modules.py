@@ -42,11 +42,11 @@ class IRArgumentKind(Enum):
 
 @dataclass
 class IRArgument:
-    name: str | None
-    type: Type | None = field(default=None)
-    default_value: str | None = field(default=None)
-    has_default: bool = field(default=False)
-    kind: IRArgumentKind = field(default=IRArgumentKind.POSITIONAL_OR_KEYWORD)
+    name: str
+    type: Type | None = None
+    default_value: str | None = None
+    has_default: bool = False
+    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD
 
 
 @dataclass
@@ -54,7 +54,7 @@ class IRSignature:
     """IR 中的单条函数签名。"""
 
     args: list[IRArgument] = field(default_factory=list)
-    return_type: Type | None = field(default=None)
+    return_type: Type | None = None
 
 
 @dataclass
@@ -62,10 +62,10 @@ class IRFunction:
     """IR 中的函数节点。"""
 
     name: str
+    runtime_handle: Any = field(repr=False, compare=False)
     signatures: list[IRSignature] = field(default_factory=list)
-    doc: str | None = field(default=None)
-    c_inferred_source_comment: str | None = field(default=None)
-    runtime_handle: Any | None = field(default=None, repr=False, compare=False)
+    doc: str | None = None
+    c_inferred_source_comment: str | None = None
 
 
 @dataclass
@@ -78,7 +78,7 @@ class IRMethod:
 @dataclass
 class IRClass:
     name: str
-    doc: str | None = field(default=None)
+    doc: str | None = None
     bases: list[QualifiedName] = field(default_factory=list)
     classes: list[IRClass] = field(default_factory=list)
     methods: list[IRMethod] = field(default_factory=list)
@@ -96,10 +96,10 @@ class IRModule:
     full_name: QualifiedName
 
     # 文档
-    doc: str | None = field(default=None)
+    doc: str | None = None
 
     # 模块实现类型
-    module_type: IRModuleType = field(default=IRModuleType.UNKNOWN)
+    module_type: IRModuleType = IRModuleType.UNKNOWN
 
     # 类
     classes: list[IRClass] = field(default_factory=list)
@@ -111,7 +111,7 @@ class IRModule:
     sub_modules: list[IRModule] = field(default_factory=list)
 
     # 是否是包
-    is_package: bool = field(default=False)
+    is_package: bool = False
 
 
 __all__ = [

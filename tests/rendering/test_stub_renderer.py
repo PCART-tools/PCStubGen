@@ -17,13 +17,31 @@ def _signature(
         args=list(args or ()),
         return_type=return_type,
     )
+
+
+def _function(
+    name: str,
+    *,
+    signatures: list[IRSignature] | None = None,
+    doc: str | None = None,
+    c_inferred_source_comment: str | None = None,
+) -> IRFunction:
+    return IRFunction(
+        name=name,
+        runtime_handle=object(),
+        signatures=list(signatures or ()),
+        doc=doc,
+        c_inferred_source_comment=c_inferred_source_comment,
+    )
+
+
 def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
     """构造签名未知的测试函数。"""
-    return IRFunction(name=name, doc=doc)
+    return _function(name=name, doc=doc)
 
 
 def test_renderer_preserves_raw_optional_annotation_text() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -42,7 +60,7 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
 
 
 def test_renderer_prints_default_values_as_is() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -60,7 +78,7 @@ def test_renderer_prints_default_values_as_is() -> None:
 
 
 def test_renderer_prints_ellipsis_for_unknown_default_value() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -78,7 +96,7 @@ def test_renderer_prints_ellipsis_for_unknown_default_value() -> None:
 
 
 def test_renderer_keeps_zero_argument_function_on_single_line() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature()],
     )
@@ -92,7 +110,7 @@ def test_renderer_keeps_zero_argument_function_on_single_line() -> None:
 
 
 def test_renderer_prints_single_positional_only_object_argument_on_one_line() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -116,7 +134,7 @@ def test_renderer_prints_single_positional_only_object_argument_on_one_line() ->
 
 
 def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
-    func = IRFunction(name="foo")
+    func = _function(name="foo")
 
     lines = StubRenderer(include_docstrings=False).print_function(func)
 
@@ -130,7 +148,7 @@ def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
 
 
 def test_renderer_prints_function_doc_for_single_signature() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         doc="original docs",
@@ -147,7 +165,7 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
 
 
 def test_renderer_prints_function_doc_for_placeholder_signature() -> None:
-    func = IRFunction(name="foo", doc="original docs")
+    func = _function(name="foo", doc="original docs")
 
     lines = StubRenderer(include_docstrings=True).print_function(func)
 
@@ -173,7 +191,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
         "\n"
         "second overload"
     )
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("str")),
@@ -194,7 +212,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
 
 
 def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("bool"))],
         doc="foo(value: str) -> str\n\nparsed from docstring",
@@ -208,7 +226,7 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
 
 
 def test_renderer_does_not_render_function_docstring_by_default() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         doc="original docs",
@@ -259,7 +277,7 @@ def test_renderer_never_prints_module_type_comment() -> None:
 
 
 def test_renderer_prints_positional_only_marker_on_its_own_line() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -284,7 +302,7 @@ def test_renderer_prints_positional_only_marker_on_its_own_line() -> None:
 
 
 def test_renderer_prints_bare_star_on_its_own_line() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -311,7 +329,7 @@ def test_renderer_prints_bare_star_on_its_own_line() -> None:
 
 
 def test_renderer_prints_var_args_and_var_kwargs_on_their_own_lines() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -337,7 +355,7 @@ def test_renderer_prints_var_args_and_var_kwargs_on_their_own_lines() -> None:
 
 
 def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
@@ -361,7 +379,7 @@ def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
 
 
 def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[
             _signature(
@@ -392,7 +410,7 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
 
 
 def test_renderer_skips_c_inferred_source_comment_when_disabled() -> None:
-    func = IRFunction(
+    func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
         c_inferred_source_comment="static int foo_impl(int value) { return value; }",
@@ -412,6 +430,7 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
         functions=[
             IRFunction(
                 name="foo",
+                runtime_handle=object(),
                 signatures=[
                     _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
                     _signature(
@@ -440,6 +459,7 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
     method = IRMethod(
         function=IRFunction(
             name="build",
+            runtime_handle=object(),
             signatures=[
                 _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
                 _signature(args=[IRArgument(name="x", type=RawType("str"))], return_type=RawType("str")),

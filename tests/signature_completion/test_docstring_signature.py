@@ -24,7 +24,7 @@ def _resolve(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
     )
-    irfunction = IRFunction(name=function_name, doc=doc)
+    irfunction = IRFunction(name=function_name, runtime_handle=object(), doc=doc)
     return resolve_docstring_signatures(irmodule, irfunction)
 
 

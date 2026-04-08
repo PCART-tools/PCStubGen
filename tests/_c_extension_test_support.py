@@ -76,7 +76,7 @@ def _unknown_function(
     doc: str | None = None,
 ) -> IRFunction:
     """构造签名未知的测试函数。"""
-    return IRFunction(name=name, doc=doc)
+    return IRFunction(name=name, runtime_handle=object(), doc=doc)
 
 
 @dataclass

@@ -300,6 +300,7 @@ def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
         functions=[
             IRFunction(
                 name="known",
+                runtime_handle=object(),
                 signatures=[_signature(args=[IRArgument(name="value")])],
             ),
             _unknown_function("missing"),

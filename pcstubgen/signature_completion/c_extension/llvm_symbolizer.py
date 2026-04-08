@@ -17,14 +17,16 @@ class SymbolizerError(msgspec.Struct):
 
 
 class SymbolizerSymbol(msgspec.Struct):
-    Column: int
-    Discriminator: int
-    FileName: str
-    FunctionName: str
-    Line: int
-    StartAddress: str
-    StartFileName: str
-    StartLine: int
+    FunctionName: str      # 当前 frame 的函数名
+
+    FileName: str          # 当前查询地址命中的源码文件
+    Line: int              # 当前查询地址命中的源码行
+    Column: int            # 当前查询地址命中的源码列
+    Discriminator: int     # 同一行内区分不同代码位置的编号
+
+    StartFileName: str     # 该函数 / inline frame 的起始文件
+    StartLine: int         # 该函数 / inline frame 的起始行
+    StartAddress: str      # 该函数 / inline frame 的起始机器码地址
 
 
 class SymbolizerEntry(msgspec.Struct):

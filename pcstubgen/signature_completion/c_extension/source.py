@@ -38,8 +38,6 @@ class CExtensionSource:
         """按函数懒解析 C 扩展签名。"""
         if irmodule.module_type is not IRModuleType.EXTENSION:
             raise RuntimeError(f"模块 {irmodule.full_name} 不是扩展模块。")
-        if irfunction.runtime_handle is None:
-            raise RuntimeError(f"函数 {irfunction.name} 缺少运行时对象引用。")
 
         runtime_method = resolve_runtime_pymethoddef(irfunction.runtime_handle)
         location = resolve_symbolized_address(runtime_method.method_address)
