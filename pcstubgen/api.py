@@ -9,7 +9,7 @@ from .module_collect import collect_module
 from .ir_modules import QualifiedName
 from .ir_modules import IRModule, IRModuleType
 from .signature_completion import SignatureCompleter
-from .signature_completion.c_extension.symbolizer import require_llvm_symbolizer
+from .signature_completion.c_extension.llvm_symbolizer import require_llvm_symbolizer
 from .stub_generation_options import StubGenerationOptions
 from .stub_output import StubRenderer, StubWriter
 

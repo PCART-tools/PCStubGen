@@ -15,7 +15,7 @@ from pcstubgen.signature_completion.c_extension.modules.method_flags import (
 )
 from pcstubgen.signature_completion.c_extension.runtime import RuntimePyMethodDef
 from pcstubgen.signature_completion.c_extension.source import CExtensionSource
-from pcstubgen.signature_completion.c_extension.symbolizer import SymbolizedAddressLocation
+from pcstubgen.signature_completion.c_extension.address_resolver import SymbolizedAddressLocation
 from pcstubgen.types import AnyType, RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
 
@@ -24,11 +24,11 @@ def _symbolized_location(
     *,
     binary_path: Path,
     relative_address: int,
-    function_name: str | None = "foo_impl",
-    resolved_path: Path | None = None,
-    resolved_line: int | None = None,
-    function_start_path: Path | None = None,
-    function_start_line: int | None = None,
+    function_name: str = "foo_impl",
+    resolved_path: Path,
+    resolved_line: int,
+    function_start_path: Path,
+    function_start_line: int,
 ) -> SymbolizedAddressLocation:
     return SymbolizedAddressLocation(
         binary_path=binary_path,
@@ -171,11 +171,12 @@ def test_c_extension_source_prefers_function_start_location(
     assert captured["source_line"] == 11
 
 
-def test_c_extension_source_uses_resolved_location_when_function_start_missing(
+def test_c_extension_source_uses_function_start_location_for_minimal_inference(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
+    function_start_path = tmp_path / "foo_start.c"
     resolved_path = tmp_path / "foo_impl.c"
 
     monkeypatch.setattr(
@@ -193,6 +194,8 @@ def test_c_extension_source_uses_resolved_location_when_function_start_missing(
         lambda address: _symbolized_location(
             binary_path=tmp_path / "sample.so",
             relative_address=address,
+            function_start_path=function_start_path,
+            function_start_line=7,
             resolved_path=resolved_path,
             resolved_line=19,
         ),
@@ -223,41 +226,8 @@ def test_c_extension_source_uses_resolved_location_when_function_start_missing(
     assert signatures[0].args[0].name == "arg"
     assert signatures[0].args[0].kind is IRArgumentKind.POSITIONAL_ONLY
     assert signatures[0].args[0].type == AnyType()
-    assert captured["source_path"] == resolved_path
-    assert captured["source_line"] == 19
-
-
-def test_c_extension_source_rejects_missing_symbolized_source_location(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(
-            name="foo",
-            method_address=0x1234,
-            flags=METH_NOARGS,
-            doc=None,
-            handle=handle,
-        ),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
-        lambda address: _symbolized_location(
-            binary_path=tmp_path / "sample.so",
-            relative_address=address,
-        ),
-    )
-
-    source = CExtensionSource()
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", runtime_handle=object())],
-    )
-
-    with pytest.raises(RuntimeError, match="未返回可用源码位置"):
-        source.resolve_function(module, module.functions[0])
+    assert captured["source_path"] == function_start_path
+    assert captured["source_line"] == 7
 
 
 def test_c_extension_source_uses_minimal_varargs_keywords_shape_without_ast(
@@ -281,6 +251,8 @@ def test_c_extension_source_uses_minimal_varargs_keywords_shape_without_ast(
             relative_address=address,
             function_start_path=tmp_path / "foo_impl.c",
             function_start_line=1,
+            resolved_path=tmp_path / "foo_impl.c",
+            resolved_line=1,
         ),
     )
 
@@ -309,6 +281,8 @@ def test_c_extension_source_supports_method_descriptors(
             relative_address=address,
             function_start_path=tmp_path / "append.c",
             function_start_line=1,
+            resolved_path=tmp_path / "append.c",
+            resolved_line=1,
         ),
     )
 
