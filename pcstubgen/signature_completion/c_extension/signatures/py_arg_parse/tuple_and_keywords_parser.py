@@ -7,8 +7,7 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from .....ir_modules import IRArgumentKind
-from ...models import CArgument
+from .....ir_modules import IRArgument, IRArgumentKind
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 from .....types import RawType, Type
 
@@ -44,13 +43,13 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._arg_index = 0
         self._python_arg_index = 0
 
-    def parse(self) -> list[CArgument]:
+    def parse(self) -> list[IRArgument]:
         """解析格式串并返回参数列表。"""
         self._char_index = 0
         self._arg_index = 0
         self._python_arg_index = 0
 
-        arguments: list[CArgument] = []
+        arguments: list[IRArgument] = []
         section = _ArgumentSection.REQUIRED
 
         while True:
@@ -91,7 +90,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._validate_counts()
         return arguments
 
-    def _parse_argument(self, section: _ArgumentSection) -> CArgument:
+    def _parse_argument(self, section: _ArgumentSection) -> IRArgument:
         """解析一个格式单元并产出单个 Python 参数。"""
         name = self._advance_keyword_name_required()
         spec = self._advance_format_unit_required()
@@ -111,7 +110,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         if section is _ArgumentSection.KEYWORD_ONLY:
             kind = IRArgumentKind.KEYWORD_ONLY
 
-        return CArgument(
+        return IRArgument(
             name=name,
             type=arg_type,
             default_value=default_value,

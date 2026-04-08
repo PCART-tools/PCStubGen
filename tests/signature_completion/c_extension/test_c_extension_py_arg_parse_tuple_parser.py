@@ -6,8 +6,8 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
+from pcstubgen.ir_modules import IRArgument
 from pcstubgen.types import RawType, Type, UnionType
-from pcstubgen.signature_completion.c_extension.models import CArgument
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
@@ -37,7 +37,7 @@ def _parse(
     resolve_name_func=None,
     resolve_object_type_func=None,
     resolve_default_value_func=None,
-) -> list[CArgument]:
+) -> list[IRArgument]:
     return PyArgParseTupleTypeParser(
         format_string,
         args,
@@ -62,8 +62,8 @@ def _arg(
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
-) -> CArgument:
-    return CArgument(
+) -> IRArgument:
+    return IRArgument(
         name=name,
         type=type_text if isinstance(type_text, Type) else RawType(type_text, imports=imports),
         default_value=default_value,
@@ -386,4 +386,3 @@ def test_parse_accepts_empty_invalid_and_duplicate_resolved_names() -> None:
         _arg("same", "int"),
         _arg("same", "int"),
     ]
-

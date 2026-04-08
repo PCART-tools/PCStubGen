@@ -13,17 +13,15 @@ from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.stub_generation_options import StubGenerationOptions
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
-    ExtractedFunction,
-    ExtractedSignature,
     METH_VARARGS,
     _FakeNode,
     _arg,
     _extent_for_source_snippet,
     _fake_function_cursor,
-    _module_fixture,
     _patch_c_signature_extractor,
     _patch_raising_c_signature_extractor,
     _signature,
+    ResolvedFunctionFixture,
     _unknown_function,
 )
 
@@ -62,21 +60,17 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    function_cursor=func_cursor,
-                    ml_flags=METH_VARARGS,
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[_arg("value", "int")],
-                            return_type=RawType("bool"),
-                        )
-                    ],
-                )
-            }
-        ),
+        functions={
+            "foo": ResolvedFunctionFixture(
+                function_cursor=func_cursor,
+                signatures=[
+                    _signature(
+                        args=[_arg("value", "int")],
+                        return_type=RawType("bool"),
+                    )
+                ],
+            )
+        },
     )
 
     summary = SignatureCompleter(
@@ -115,7 +109,7 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
             )
         ],
     )
-    _patch_c_signature_extractor(monkeypatch, modules={})
+    _patch_c_signature_extractor(monkeypatch, functions={})
 
     log_output = StringIO()
     sink_id = logger.add(log_output, format="{message}")
@@ -183,21 +177,17 @@ def test_completer_skips_source_comment_when_option_disabled(
     )
     _patch_c_signature_extractor(
         monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "foo": ExtractedFunction(
-                    ml_name="foo",
-                    function_cursor=func_cursor,
-                    ml_flags=METH_VARARGS,
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[_arg("value", "int")],
-                            return_type=RawType("bool"),
-                        )
-                    ],
-                )
-            }
-        ),
+        functions={
+            "foo": ResolvedFunctionFixture(
+                function_cursor=func_cursor,
+                signatures=[
+                    _signature(
+                        args=[_arg("value", "int")],
+                        return_type=RawType("bool"),
+                    )
+                ],
+            )
+        },
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -223,21 +213,17 @@ def test_completer_completes_extension_methods_via_c_source(
 ) -> None:
     _patch_c_signature_extractor(
         monkeypatch,
-        modules=_module_fixture(
-            functions={
-                "build": ExtractedFunction(
-                    ml_name="build",
-                    function_cursor=_fake_function_cursor("build"),
-                    ml_flags=METH_VARARGS,
-                    signatures=[
-                        ExtractedSignature(
-                            arguments=[_arg("from_c", "bool")],
-                            return_type=RawType("bool"),
-                        )
-                    ],
-                )
-            }
-        ),
+        functions={
+            "build": ResolvedFunctionFixture(
+                function_cursor=_fake_function_cursor("build"),
+                signatures=[
+                    _signature(
+                        args=[_arg("from_c", "bool")],
+                        return_type=RawType("bool"),
+                    )
+                ],
+            )
+        },
     )
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),

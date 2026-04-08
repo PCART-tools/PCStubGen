@@ -10,25 +10,20 @@ from pcstubgen.signature_completion.c_extension.runtime import resolve_runtime_p
 def test_runtime_supports_builtin_function_or_method() -> None:
     result = resolve_runtime_pymethoddef(object.__dict__["__new__"])
 
-    assert result.name == "__new__"
     assert result.method_address != 0
 
 
 def test_runtime_supports_method_descriptor() -> None:
     result = resolve_runtime_pymethoddef(list.__dict__["append"])
 
-    assert result.name == "append"
     assert result.method_address != 0
 
 
 def test_runtime_supports_wrapper_descriptor() -> None:
     result = resolve_runtime_pymethoddef(object.__dict__["__init__"])
 
-    assert result.name == "__init__"
     assert result.method_address != 0
     assert result.flags == 0
-    assert result.doc is not None
-    assert result.doc.startswith("__init__(")
 
 
 def test_runtime_unwraps_staticmethod_before_classification() -> None:
@@ -37,7 +32,6 @@ def test_runtime_unwraps_staticmethod_before_classification() -> None:
 
     result = resolve_runtime_pymethoddef(StaticBox.__dict__["method"])
 
-    assert result.name == "len"
     assert result.method_address != 0
 
 
@@ -47,7 +41,6 @@ def test_runtime_unwraps_classmethod_before_classification() -> None:
 
     result = resolve_runtime_pymethoddef(ClassBox.__dict__["method"])
 
-    assert result.name == "fromkeys"
     assert result.method_address != 0
 
 

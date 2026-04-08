@@ -5,15 +5,18 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRArgumentKind
-from pcstubgen.signature_completion.c_extension.models import CArgument, CFunction, CSignature
-from pcstubgen.signature_completion.c_extension.modules.method_flags import METH_NOARGS, METH_O
+from pcstubgen.ir_modules import IRArgumentKind, IRSignature
+from pcstubgen.signature_completion.c_extension.modules.method_flags import (
+    METH_FASTCALL,
+    METH_KEYWORDS,
+    METH_NOARGS,
+    METH_O,
+    METH_VARARGS,
+)
 from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
 from pcstubgen.signature_completion.c_extension.signatures.return_type_maps import FUNCTION_NAME_TO_TYPE
 from pcstubgen.types import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
-    ExtractedFunction,
-    ExtractedSignature,
     _FakeNode,
     _address_of,
     _arg,
@@ -552,7 +555,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias()
 
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
-    assert inferred == [[_arg("x", "float", has_default=True)]]
+    assert inferred == [[_arg("x", "float", default_value="0.0", has_default=True)]]
 
 
 def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_kwlist() -> None:
@@ -634,12 +637,12 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[],
+        IRSignature(
+            args=[],
             return_type=RawType("int"),
         )
     ]
@@ -658,10 +661,10 @@ def test_infer_signature_returns_signature_with_inferred_arguments_when_return_i
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
-    assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
+    assert inferred == [IRSignature(args=[_arg("value", "int")], return_type=AnyType())]
 
 
 def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
@@ -670,7 +673,7 @@ def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
     assert inferred == []
@@ -680,7 +683,7 @@ def test_infer_signature_returns_empty_when_return_type_is_macro_expr() -> None:
     cursor = _fake_function_cursor_with_children(_return_stmt(_macro_expr("Py_RETURN_NONE")))
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
     assert inferred == []
@@ -699,12 +702,12 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[_arg("value", "int")],
+        IRSignature(
+            args=[_arg("value", "int")],
             return_type=RawType("int"),
         )
     ]
@@ -723,10 +726,10 @@ def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() ->
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(ml_name="foo", function_cursor=cursor)
+        cursor
     )
 
-    assert inferred == [ExtractedSignature(arguments=[_arg("value", "int")])]
+    assert inferred == [IRSignature(args=[_arg("value", "int")], return_type=AnyType())]
 
 
 def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
@@ -735,14 +738,11 @@ def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(
-            ml_name="foo",
-            function_cursor=cursor,
-            ml_flags=METH_NOARGS,
-        )
+        cursor,
+        ml_flags=METH_NOARGS,
     )
 
-    assert inferred == [ExtractedSignature(arguments=[])]
+    assert inferred == [IRSignature(args=[], return_type=AnyType())]
 
 
 def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
@@ -751,16 +751,13 @@ def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(
-            ml_name="foo",
-            function_cursor=cursor,
-            ml_flags=METH_NOARGS,
-        )
+        cursor,
+        ml_flags=METH_NOARGS,
     )
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[],
+        IRSignature(
+            args=[],
             return_type=RawType("int"),
         )
     ]
@@ -772,22 +769,20 @@ def test_infer_signature_uses_meth_o_argument_shape_without_pyarg_parse() -> Non
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(
-            ml_name="foo",
-            function_cursor=cursor,
-            ml_flags=METH_O,
-        )
+        cursor,
+        ml_flags=METH_O,
     )
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[
+        IRSignature(
+            args=[
                 _arg(
                     "arg",
                     "object",
                     kind=IRArgumentKind.POSITIONAL_ONLY,
                 )
-            ]
+            ],
+            return_type=AnyType(),
         )
     ]
 
@@ -798,16 +793,13 @@ def test_infer_signature_keeps_return_type_for_meth_o() -> None:
     )
 
     inferred = signature_rules_module.infer_signature(
-        ExtractedFunction(
-            ml_name="foo",
-            function_cursor=cursor,
-            ml_flags=METH_O,
-        )
+        cursor,
+        ml_flags=METH_O,
     )
 
     assert inferred == [
-        ExtractedSignature(
-            arguments=[
+        IRSignature(
+            args=[
                 _arg(
                     "arg",
                     "object",
@@ -815,6 +807,34 @@ def test_infer_signature_keeps_return_type_for_meth_o() -> None:
                 )
             ],
             return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_minimal_signatures_supports_varargs_and_keywords() -> None:
+    inferred = signature_rules_module.infer_minimal_signatures(METH_VARARGS | METH_KEYWORDS)
+
+    assert inferred == [
+        IRSignature(
+            args=[
+                _arg("args", "object", kind=IRArgumentKind.VAR_POSITIONAL),
+                _arg("kwargs", "object", kind=IRArgumentKind.VAR_KEYWORD),
+            ],
+            return_type=AnyType(),
+        )
+    ]
+
+
+def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
+    inferred = signature_rules_module.infer_minimal_signatures(METH_FASTCALL | METH_KEYWORDS)
+
+    assert inferred == [
+        IRSignature(
+            args=[
+                _arg("args", "object", kind=IRArgumentKind.VAR_POSITIONAL),
+                _arg("kwargs", "object", kind=IRArgumentKind.VAR_KEYWORD),
+            ],
+            return_type=AnyType(),
         )
     ]
 

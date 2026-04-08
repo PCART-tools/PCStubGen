@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import ctypes
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
 class RuntimePyMethodDef:
-    name: str
     method_address: int
     flags: int
-    doc: str | None
-    handle: Any = field(repr=False, compare=False)
 
 
 class _PyMethodDef(ctypes.Structure):
@@ -73,26 +69,22 @@ class _PyWrapperDescrObject(ctypes.Structure):
 
 def resolve_runtime_pymethoddef(handle: object) -> RuntimePyMethodDef:
     """从受支持的 CPython 运行时对象读取函数入口元信息。"""
-    original_handle = handle
     handle = _unwrap_runtime_handle(handle)
     runtime_type = _runtime_type_key(handle)
 
     if runtime_type == ("builtins", "builtin_function_or_method"):
         _reject_if_pybind11_builtin(handle)
         return _build_runtime_methoddef(
-            handle=original_handle,
             method_def=_read_cfunction_methoddef(handle),
         )
 
     if runtime_type == ("builtins", "method_descriptor"):
         return _build_runtime_methoddef(
-            handle=original_handle,
             method_def=_read_method_descriptor_methoddef(handle),
         )
 
     if runtime_type == ("builtins", "wrapper_descriptor"):
         return _build_runtime_wrapperdef(
-            handle=original_handle,
             wrapper_object=_read_wrapper_descriptor(handle),
         )
 
@@ -101,7 +93,6 @@ def resolve_runtime_pymethoddef(handle: object) -> RuntimePyMethodDef:
 
 def _build_runtime_methoddef(
     *,
-    handle: object,
     method_def: _PyMethodDef,
 ) -> RuntimePyMethodDef:
     method_address = int(method_def.ml_meth)
@@ -109,17 +100,13 @@ def _build_runtime_methoddef(
         raise RuntimeError("PyMethodDef.ml_meth 为空。")
 
     return RuntimePyMethodDef(
-        name=_decode_c_string(method_def.ml_name) or getattr(handle, "__name__", "<unnamed>"),
         method_address=method_address,
         flags=int(method_def.ml_flags),
-        doc=_decode_c_string(method_def.ml_doc),
-        handle=handle,
     )
 
 
 def _build_runtime_wrapperdef(
     *,
-    handle: object,
     wrapper_object: _PyWrapperDescrObject,
 ) -> RuntimePyMethodDef:
     base_ptr = wrapper_object.d_base
@@ -130,14 +117,10 @@ def _build_runtime_wrapperdef(
     if method_address == 0:
         raise RuntimeError("PyWrapperDescrObject.d_wrapped 为空。")
 
-    base = base_ptr.contents
     return RuntimePyMethodDef(
-        name=_decode_c_string(base.name) or getattr(handle, "__name__", "<unnamed>"),
         method_address=method_address,
         # wrapper_descriptor 使用 CPython slot wrapper flags，不是 PyMethodDef.ml_flags。
         flags=0,
-        doc=_decode_c_string(base.doc),
-        handle=handle,
     )
 
 
@@ -199,12 +182,3 @@ def _reject_if_pybind11_builtin(handle: object) -> None:
         raise RuntimeError(
             f"不支持的C函数运行时目标: {self_type.__module__}.{self_type.__name__}"
         )
-
-
-def _decode_c_string(value: bytes | None) -> str | None:
-    if value is None:
-        return None
-    decoded = value.decode("utf-8", errors="replace")
-    if not decoded:
-        return None
-    return decoded

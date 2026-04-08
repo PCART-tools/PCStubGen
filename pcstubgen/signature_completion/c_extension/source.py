@@ -1,23 +1,22 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import TypeAlias
 
 from clang.cindex import Cursor, CursorKind, Index, TranslationUnit, TranslationUnitLoadError
 from loguru import logger
 
-from ...ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, IRSignature
-from ...types import AnyType, Type
+from ...ir_modules import IRFunction, IRModule, IRModuleType, IRSignature
+from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_address
 from .clang import parser as clang_parser
 from .clang.cursor_utils import source_range_get_text, walk_cursor
-from .models import CArgument, CFunction, CSignature
-from .modules.method_flags import METH_FASTCALL, METH_KEYWORDS, METH_NOARGS, METH_O, METH_VARARGS
 from .runtime import resolve_runtime_pymethoddef
 from .signatures import inference
-from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_address
-from ...ir_modules import IRArgumentKind
 
 ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
+
+_SPACE_RE = re.compile(r"\s+")
 
 
 class CExtensionSource:
@@ -44,85 +43,80 @@ class CExtensionSource:
 
         runtime_method = resolve_runtime_pymethoddef(irfunction.runtime_handle)
         location = resolve_symbolized_address(runtime_method.method_address)
-        c_function = CFunction(
-            ml_name=runtime_method.name,
-            ml_flags=runtime_method.flags,
-            ml_meth_address=runtime_method.method_address,
-            library_path=location.binary_path,
-            source_path=location.function_start_path,
-            source_line=location.function_start_line,
-            symbol_name=location.function_name,
-        )
+        function_cursor = self._resolve_function_cursor(location=location)
+        source_comment = self._get_source_comment(function_cursor)
 
-        function_cursor = self._resolve_function_cursor(location=location, c_function=c_function)
         if function_cursor is not None:
-            c_function.function_cursor = function_cursor
-            signatures = inference.infer_signature(c_function)
+            try:
+                signatures = inference.infer_signature(
+                    function_cursor,
+                    ml_flags=runtime_method.flags,
+                )
+            except RuntimeError as ex:
+                logger.info(
+                    "AST推断失败，回退到最小签名, module: {}, func: {}, reason: {}",
+                    irmodule.full_name,
+                    irfunction.name,
+                    ex,
+                )
+                signatures = inference.infer_minimal_signatures(runtime_method.flags)
         else:
-            signatures = self._infer_minimal_signatures(c_function)
-        if function_cursor is not None and not signatures:
-            signatures = self._infer_minimal_signatures(c_function)
+            signatures = inference.infer_minimal_signatures(runtime_method.flags)
 
         if not signatures:
             raise RuntimeError(f"C函数 {irmodule.full_name}.{irfunction.name} 没有可用签名")
 
-        return (
-            [self._build_ir_signature(signature.arguments, signature.return_type) for signature in signatures],
-            self._get_source_comment(c_function),
-        )
+        return signatures, source_comment
 
     def _resolve_function_cursor(
         self,
         *,
         location: SymbolizedAddressLocation,
-        c_function: CFunction,
     ) -> Cursor | None:
         """按需 parse 已定位到的源码文件，并找到对应的函数 cursor。"""
         if self._compilation_database is None:
             return None
 
-        source_path_candidates = self._source_path_candidates(location)
-        if len(source_path_candidates) == 0:
-            return None
+        for source_path, line in self._source_location_candidates(location):
+            compilation_command = self._match_compilation_command(source_path)
+            if compilation_command is None:
+                continue
 
-        compilation_command = self._match_compilation_command(source_path_candidates)
-        if compilation_command is None:
-            logger.info(
-                "未在编译数据库中找到源码文件, source_paths: {}",
-                ", ".join(str(path) for path in source_path_candidates),
+            translation_unit = self._load_translation_unit(compilation_command)
+            if translation_unit is None:
+                continue
+
+            matched = self._find_function_cursor(
+                translation_unit=translation_unit,
+                source_path=compilation_command.file_path,
+                line=line,
+                symbol_name=location.function_name,
             )
-            return None
+            if matched is not None:
+                return matched
 
-        translation_unit = self._load_translation_unit(compilation_command)
-        if translation_unit is None:
-            return None
-
-        matched = self._find_function_cursor(
-            translation_unit=translation_unit,
-            source_path=compilation_command.file_path,
-            line_candidates=[
-                location.function_start_line,
-                location.resolved_line,
-            ],
-            symbol_candidates=[c_function.symbol_name, c_function.ml_name],
-        )
-        if matched is None:
             logger.info(
-                "未在 translation unit 中定位到函数定义, source_path: {}, ml_name: {}, symbol_name: {}",
+                "未在 translation unit 中定位到函数定义, source_path: {}, symbol_name: {}, line: {}",
                 compilation_command.file_path,
-                c_function.ml_name,
-                c_function.symbol_name,
+                location.function_name,
+                line,
             )
-        return matched
+
+        logger.info(
+            "未在编译数据库中定位到函数定义, source_paths: {}, symbol_name: {}",
+            ", ".join(str(path) for path, _ in self._source_location_candidates(location)),
+            location.function_name,
+        )
+        return None
 
     def _match_compilation_command(
         self,
-        source_paths: list[Path],
+        source_path: Path,
     ) -> clang_parser.CompilationCommand | None:
         commands = self._get_compilation_commands()
-        resolved_source_paths = {source_path.resolve() for source_path in source_paths}
+        resolved_source_path = source_path.resolve()
         for command in commands:
-            if command.file_path in resolved_source_paths:
+            if command.file_path == resolved_source_path:
                 return command
         return None
 
@@ -188,17 +182,11 @@ class CExtensionSource:
         *,
         translation_unit: TranslationUnit,
         source_path: Path,
-        line_candidates: list[int],
-        symbol_candidates: list[str],
+        line: int,
+        symbol_name: str,
     ) -> Cursor | None:
         normalized_source_path = source_path.resolve()
-        available_symbols = {
-            symbol
-            for symbol in symbol_candidates
-            if symbol != ""
-        }
 
-        line_matches: list[Cursor] = []
         symbol_matches: list[Cursor] = []
         for cursor in walk_cursor(translation_unit.cursor):
             if cursor.kind != CursorKind.FUNCTION_DECL:
@@ -206,106 +194,31 @@ class CExtensionSource:
             location_file = cursor.location.file
             if location_file is None or Path(location_file.name).resolve() != normalized_source_path:
                 continue
+            if not _cursor_matches_symbol(cursor, symbol_name):
+                continue
+            symbol_matches.append(cursor)
 
-            if _cursor_covers_any_line(cursor, line_candidates):
-                line_matches.append(cursor)
-
-            cursor_names = {
-                name
-                for name in (
-                    cursor.spelling,
-                    cursor.mangled_name,
-                    cursor.displayname,
-                )
-                if name
-            }
-            if available_symbols and cursor_names & available_symbols:
-                symbol_matches.append(cursor)
-
-        if len(line_matches) == 1:
-            return line_matches[0]
-        if len(symbol_matches) == 1:
-            return symbol_matches[0]
-        if line_matches:
-            return line_matches[0]
-        if symbol_matches:
-            return symbol_matches[0]
-        return None
+        line_matches = [cursor for cursor in symbol_matches if _cursor_covers_line(cursor, line)]
+        if len(line_matches) != 1:
+            return None
+        return line_matches[0]
 
     @staticmethod
-    def _source_path_candidates(location: SymbolizedAddressLocation) -> list[Path]:
-        result: list[Path] = []
-        for path in (
-            location.function_start_path,
-            location.resolved_path,
+    def _source_location_candidates(
+        location: SymbolizedAddressLocation,
+    ) -> list[tuple[Path, int]]:
+        result: list[tuple[Path, int]] = []
+        for candidate in (
+            (location.function_start_path, location.function_start_line),
+            (location.resolved_path, location.resolved_line),
         ):
-            if path in result:
+            if candidate in result:
                 continue
-            result.append(path)
+            result.append(candidate)
         return result
 
     @staticmethod
-    def _infer_minimal_signatures(c_function: CFunction) -> list[CSignature]:
-        """无法进入 AST 深推断时，根据 `ml_flags` 构造最小签名。"""
-        flags = c_function.ml_flags
-        if flags & METH_NOARGS:
-            return [inference.CSignature(arguments=[])]
-
-        if flags & METH_O:
-            return [
-                inference.CSignature(
-                    arguments=[
-                        CArgument(
-                            name="arg",
-                            type=AnyType(),
-                            kind=IRArgumentKind.POSITIONAL_ONLY,
-                        )
-                    ]
-                )
-            ]
-
-        if flags & (METH_VARARGS | METH_FASTCALL):
-            arguments = [
-                CArgument(
-                    name="args",
-                    type=AnyType(),
-                    kind=IRArgumentKind.VAR_POSITIONAL,
-                )
-            ]
-            if flags & METH_KEYWORDS:
-                arguments.append(
-                    CArgument(
-                        name="kwargs",
-                        type=AnyType(),
-                        kind=IRArgumentKind.VAR_KEYWORD,
-                    )
-                )
-            return [inference.CSignature(arguments=arguments)]
-
-        return []
-
-    @staticmethod
-    def _build_ir_signature(
-        arguments: list[CArgument],
-        return_type: Type | None,
-    ) -> IRSignature:
-        return IRSignature(
-            args=[
-                IRArgument(
-                    name=argument.name,
-                    type=argument.type,
-                    default_value=argument.default_value,
-                    has_default=argument.has_default,
-                    kind=argument.kind,
-                )
-                for argument in arguments
-            ],
-            return_type=return_type,
-        )
-
-    @staticmethod
-    def _get_source_comment(c_function: CFunction) -> str | None:
-        function_cursor = c_function.function_cursor
+    def _get_source_comment(function_cursor: Cursor | None) -> str | None:
         if function_cursor is None or function_cursor.extent is None:
             return None
         source_text = source_range_get_text(function_cursor.extent)
@@ -314,10 +227,70 @@ class CExtensionSource:
         return source_text
 
 
-def _cursor_covers_any_line(cursor: Cursor, lines: list[int]) -> bool:
+def _cursor_matches_symbol(cursor: Cursor, symbol_name: str) -> bool:
+    normalized_symbol = _normalize_symbol_name(symbol_name)
+    if normalized_symbol is None:
+        return False
+
+    return any(
+        _symbol_candidates_match(normalized_symbol, candidate)
+        for candidate in _cursor_symbol_candidates(cursor)
+    )
+
+
+def _cursor_symbol_candidates(cursor: Cursor) -> list[str]:
+    candidates: list[str] = []
+    for value in (
+        _build_qualified_cursor_name(cursor, include_displayname=False),
+        _build_qualified_cursor_name(cursor, include_displayname=True),
+        getattr(cursor, "spelling", None),
+        getattr(cursor, "displayname", None),
+    ):
+        if not value:
+            continue
+        candidates.append(value)
+    return candidates
+
+
+def _build_qualified_cursor_name(cursor: Cursor, *, include_displayname: bool) -> str | None:
+    leaf_name = getattr(cursor, "displayname" if include_displayname else "spelling", None)
+    if not leaf_name:
+        return None
+
+    parent_names: list[str] = []
+    current = getattr(cursor, "semantic_parent", None)
+    while current is not None:
+        current_name = getattr(current, "spelling", "")
+        if current_name:
+            parent_names.append(str(current_name))
+        current = getattr(current, "semantic_parent", None)
+
+    if not parent_names:
+        return str(leaf_name)
+    return "::".join([*reversed(parent_names), str(leaf_name)])
+
+
+def _symbol_candidates_match(normalized_symbol: str, candidate: str) -> bool:
+    normalized_candidate = _normalize_symbol_name(candidate)
+    if normalized_candidate is None:
+        return False
+
+    if normalized_symbol == normalized_candidate:
+        return True
+    return normalized_symbol.endswith(f"::{normalized_candidate}")
+
+
+def _normalize_symbol_name(name: str) -> str | None:
+    stripped = name.strip()
+    if not stripped:
+        return None
+    return _SPACE_RE.sub("", stripped)
+
+
+def _cursor_covers_line(cursor: Cursor, line: int) -> bool:
     extent = cursor.extent
     if extent is None:
         return False
     start_line = int(extent.start.line)
     end_line = int(extent.end.line)
-    return any(start_line <= line <= end_line for line in lines)
+    return start_line <= line <= end_line

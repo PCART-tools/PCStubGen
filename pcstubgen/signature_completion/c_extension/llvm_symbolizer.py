@@ -55,7 +55,6 @@ def run(binary_path: Path, relative_address: int) -> tuple[SymbolizerEntry, ...]
             "--output-style=JSON",
             "--relative-address",
             f"--obj={binary_path}",
-            "--no-demangle",
             f"0x{relative_address:x}",
         ],
         capture_output=True,

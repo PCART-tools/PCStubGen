@@ -7,8 +7,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.types import RawType, Type, UnionType
-from pcstubgen.ir_modules import IRArgumentKind
-from pcstubgen.signature_completion.c_extension.models import CArgument
+from pcstubgen.ir_modules import IRArgument, IRArgumentKind
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
@@ -31,7 +30,7 @@ def _parse(
     *,
     resolve_object_type_func=None,
     resolve_default_value_func=None,
-) -> list[CArgument]:
+) -> list[IRArgument]:
     return PyArgParseTupleAndKeywordsTypeParser(
         format_string,
         kwlist,
@@ -58,8 +57,8 @@ def _arg(
     default_value: str | None = None,
     has_default: bool = False,
     kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
-) -> CArgument:
-    return CArgument(
+) -> IRArgument:
+    return IRArgument(
         name=name,
         type=type_text if isinstance(type_text, Type) else RawType(type_text, imports=imports),
         default_value=default_value,
@@ -322,4 +321,3 @@ def test_parse_raises_for_invalid_control_separator_usage(
 ) -> None:
     with pytest.raises(PyArgParseTupleAndKeywordsTypeParserError):
         _parse(format_string, kwlist, args)
-

@@ -54,7 +54,6 @@ def test_run_invokes_cli_and_parses_payload(
         "--output-style=JSON",
         "--relative-address",
         f"--obj={binary_path}",
-        "--no-demangle",
         "0x234",
     ]
     assert len(payload) == 1

@@ -19,15 +19,6 @@ PY_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyBaseObject_Type": RawType("object"),
     "PyArray_Type": RawType("numpy.ndarray", imports=("numpy",)),
 }
-
-PARSE_CONVERTER_NAME_TO_TYPE: dict[str, str] = {
-    "NI_ObjectToInputArray": "",
-    "NI_ObjectToOptionalInputArray": "",
-    "NI_ObjectToOutputArray": "",
-    "NI_ObjectToOptionalOutputArray": "",
-    "NI_ObjectToIoArray": "",
-}
-
 DEFAULT_IDENTIFIER_TO_VALUE: dict[str, str] = {
     "Py_None": "None",
     "Py_True": "True",

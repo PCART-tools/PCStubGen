@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -19,12 +20,6 @@ from pcstubgen.signature_completion.c_extension import (
 from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
 from pcstubgen.signature_completion.c_extension.clang import parser as translation_unit_module
 from pcstubgen.types import RawType, Type
-from pcstubgen.signature_completion.c_extension.models import (
-    CArgument,
-    CFunction,
-    CModule,
-    CSignature,
-)
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
 )
@@ -59,8 +54,8 @@ def _arg(
     default_value: str | None = None,
     has_default: bool = False,
     kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
-) -> CArgument:
-    return CArgument(
+) -> IRArgument:
+    return IRArgument(
         name=name,
         type=(
             None
@@ -84,17 +79,10 @@ def _unknown_function(
     return IRFunction(name=name, doc=doc)
 
 
-def _module_fixture(
-    *,
-    name: str = "mod",
-    functions: dict[str, CFunction] | None = None,
-) -> dict[str, CModule]:
-    return {
-        name: CModule(
-            name=name,
-            functions=functions or {},
-        )
-    }
+@dataclass
+class ResolvedFunctionFixture:
+    signatures: list[IRSignature]
+    function_cursor: clang.cindex.Cursor | None = None
 
 
 def _write_compilation_database(
@@ -139,21 +127,21 @@ def _write_compilation_database(
 class _FakeExtractor:
     def __init__(
         self,
-        modules: dict[str, CModule] | None = None,
+        functions: dict[str, ResolvedFunctionFixture] | None = None,
     ) -> None:
-        self.modules = modules or {}
+        self.functions = functions or {}
         self.called = 0
 
-    def extract_modules(self) -> dict[str, CModule]:
+    def resolve_functions(self) -> dict[str, ResolvedFunctionFixture]:
         self.called += 1
-        return self.modules
+        return self.functions
 
 
 def _patch_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
-    modules: dict[str, CModule] | None = None,
+    functions: dict[str, ResolvedFunctionFixture] | None = None,
 ) -> _FakeExtractor:
-    extractor = _FakeExtractor(modules=modules)
+    extractor = _FakeExtractor(functions=functions)
 
     def _patched_resolve_function(
         self: CExtensionSource,
@@ -161,39 +149,18 @@ def _patch_c_signature_extractor(
         irfunction: IRFunction,
     ) -> tuple[list[IRSignature], str | None]:
         _ = self
-        extractor.extract_modules()
-        c_module = extractor.modules.get(irmodule.full_name.name)
-        if c_module is None:
-            raise RuntimeError(f"未匹配到唯一C模块: {irmodule.full_name}")
-        extracted = c_module.functions.get(irfunction.name)
+        extractor.resolve_functions()
+        extracted = extractor.functions.get(irfunction.name)
         if extracted is None:
-            raise RuntimeError(f"C模块 {c_module.name} 中未找到函数 {irfunction.name}")
+            raise RuntimeError(f"未找到函数 {irmodule.full_name}.{irfunction.name}")
         if not extracted.signatures:
-            raise RuntimeError(f"C函数 {c_module.name}.{irfunction.name} 没有可用签名")
+            raise RuntimeError(f"C函数 {irmodule.full_name}.{irfunction.name} 没有可用签名")
 
         source_comment = None
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
             source_comment = cursor_utils_module.source_range_get_text(extracted.function_cursor.extent)
 
-        return (
-            [
-                IRSignature(
-                    args=[
-                        IRArgument(
-                            name=argument.name,
-                            type=argument.type,
-                            default_value=argument.default_value,
-                            has_default=argument.has_default,
-                            kind=argument.kind,
-                        )
-                        for argument in signature.arguments
-                    ],
-                    return_type=signature.return_type,
-                )
-                for signature in extracted.signatures
-            ],
-            source_comment,
-        )
+        return extracted.signatures, source_comment
 
     monkeypatch.setattr(c_extension_source_module.CExtensionSource, "resolve_function", _patched_resolve_function)
     return extractor
@@ -697,10 +664,8 @@ def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cursor_utils_module.constant_eval, "eval_int", _eval_int)
 
 
-ExtractedArgument = CArgument
-ExtractedSignature = CSignature
-ExtractedFunction = CFunction
-ExtractedModule = CModule
+ExtractedArgument = IRArgument
+ExtractedSignature = IRSignature
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]
