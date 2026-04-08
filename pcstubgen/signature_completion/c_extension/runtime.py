@@ -47,20 +47,53 @@ class _PyMethodDescrObject(ctypes.Structure):
     ]
 
 
-def resolve_runtime_pymethoddef(handle: object) -> RuntimePyMethodDef:
-    """从运行时对象读取 `PyMethodDef` 元信息。"""
-    import inspect
+class _WrapperBase(ctypes.Structure):
+    _fields_ = [
+        ("name", ctypes.c_char_p),
+        ("offset", ctypes.c_int),
+        ("function", ctypes.c_void_p),
+        ("wrapper", ctypes.c_void_p),
+        ("doc", ctypes.c_char_p),
+        ("flags", ctypes.c_int),
+        ("name_strobj", ctypes.py_object),
+    ]
 
-    if inspect.isbuiltin(handle):
+
+class _PyWrapperDescrObject(ctypes.Structure):
+    _fields_ = [
+        ("ob_refcnt", ctypes.c_ssize_t),
+        ("ob_type", ctypes.c_void_p),
+        ("d_type", ctypes.c_void_p),
+        ("d_name", ctypes.py_object),
+        ("d_qualname", ctypes.py_object),
+        ("d_base", ctypes.POINTER(_WrapperBase)),
+        ("d_wrapped", ctypes.c_void_p),
+    ]
+
+
+def resolve_runtime_pymethoddef(handle: object) -> RuntimePyMethodDef:
+    """从受支持的 CPython 运行时对象读取函数入口元信息。"""
+    original_handle = handle
+    handle = _unwrap_runtime_handle(handle)
+    runtime_type = _runtime_type_key(handle)
+
+    if runtime_type == ("builtins", "builtin_function_or_method"):
+        _reject_if_pybind11_builtin(handle)
         return _build_runtime_methoddef(
-            handle=handle,
-            method_def=_PyCFunctionObject.from_address(id(handle)).m_ml.contents,
+            handle=original_handle,
+            method_def=_read_cfunction_methoddef(handle),
         )
 
-    if inspect.ismethoddescriptor(handle):
+    if runtime_type == ("builtins", "method_descriptor"):
         return _build_runtime_methoddef(
-            handle=handle,
-            method_def=_PyMethodDescrObject.from_address(id(handle)).d_method.contents,
+            handle=original_handle,
+            method_def=_read_method_descriptor_methoddef(handle),
+        )
+
+    if runtime_type == ("builtins", "wrapper_descriptor"):
+        return _build_runtime_wrapperdef(
+            handle=original_handle,
+            wrapper_object=_read_wrapper_descriptor(handle),
         )
 
     raise RuntimeError(f"不支持的C函数对象类型: {type(handle).__name__}")
@@ -82,6 +115,90 @@ def _build_runtime_methoddef(
         doc=_decode_c_string(method_def.ml_doc),
         handle=handle,
     )
+
+
+def _build_runtime_wrapperdef(
+    *,
+    handle: object,
+    wrapper_object: _PyWrapperDescrObject,
+) -> RuntimePyMethodDef:
+    base_ptr = wrapper_object.d_base
+    if not bool(base_ptr):
+        raise RuntimeError("PyWrapperDescrObject.d_base 为空。")
+
+    method_address = int(wrapper_object.d_wrapped)
+    if method_address == 0:
+        raise RuntimeError("PyWrapperDescrObject.d_wrapped 为空。")
+
+    base = base_ptr.contents
+    return RuntimePyMethodDef(
+        name=_decode_c_string(base.name) or getattr(handle, "__name__", "<unnamed>"),
+        method_address=method_address,
+        # wrapper_descriptor 使用 CPython slot wrapper flags，不是 PyMethodDef.ml_flags。
+        flags=0,
+        doc=_decode_c_string(base.doc),
+        handle=handle,
+    )
+
+
+def _unwrap_runtime_handle(handle: object) -> object:
+    while True:
+        runtime_type = _runtime_type_key(handle)
+        if runtime_type not in {
+            ("builtins", "staticmethod"),
+            ("builtins", "classmethod"),
+            ("builtins", "instancemethod"),
+        }:
+            return handle
+
+        wrapped = getattr(handle, "__func__", None)
+        if wrapped is None:
+            raise RuntimeError(f"{type(handle).__name__} 缺少 __func__。")
+        handle = wrapped
+
+
+def _runtime_type_key(handle: object) -> tuple[str, str]:
+    handle_type = type(handle)
+    return handle_type.__module__, handle_type.__name__
+
+
+def _read_cfunction_methoddef(handle: object) -> _PyMethodDef:
+    try:
+        method_ptr = _PyCFunctionObject.from_address(id(handle)).m_ml
+    except (TypeError, ValueError) as ex:
+        raise RuntimeError("读取 PyCFunctionObject 失败。") from ex
+    if not bool(method_ptr):
+        raise RuntimeError("PyCFunctionObject.m_ml 为空。")
+    return method_ptr.contents
+
+
+def _read_method_descriptor_methoddef(handle: object) -> _PyMethodDef:
+    try:
+        method_ptr = _PyMethodDescrObject.from_address(id(handle)).d_method
+    except (TypeError, ValueError) as ex:
+        raise RuntimeError("读取 PyMethodDescrObject 失败。") from ex
+    if not bool(method_ptr):
+        raise RuntimeError("PyMethodDescrObject.d_method 为空。")
+    return method_ptr.contents
+
+
+def _read_wrapper_descriptor(handle: object) -> _PyWrapperDescrObject:
+    try:
+        return _PyWrapperDescrObject.from_address(id(handle))
+    except (TypeError, ValueError) as ex:
+        raise RuntimeError("读取 PyWrapperDescrObject 失败。") from ex
+
+
+def _reject_if_pybind11_builtin(handle: object) -> None:
+    self_obj = getattr(handle, "__self__", None)
+    if self_obj is None:
+        return
+
+    self_type = type(self_obj)
+    if self_type.__module__.startswith("pybind11_builtins"):
+        raise RuntimeError(
+            f"不支持的C函数运行时目标: {self_type.__module__}.{self_type.__name__}"
+        )
 
 
 def _decode_c_string(value: bytes | None) -> str | None:
