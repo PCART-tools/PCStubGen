@@ -4,18 +4,14 @@ import ctypes
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import llvm_symbolizer
+from . import dwarfdump
 
 
 @dataclass(frozen=True)
 class SymbolizedAddressLocation:
-    binary_path: Path
-    relative_address: int
+    compilation_unit_path: Path
     function_name: str
-    resolved_path: Path
-    resolved_line: int
-    function_start_path: Path
-    function_start_line: int
+    linkage_name: str | None = None
 
 
 class _DlInfo(ctypes.Structure):
@@ -33,17 +29,18 @@ _dladdr.restype = ctypes.c_int
 
 
 def resolve_symbolized_address(address: int) -> SymbolizedAddressLocation:
-    """将运行时函数地址解析为共享库内相对地址和源码位置。"""
+    """将运行时函数入口地址解析为编译单元路径、函数名和可选 linkage name。"""
     binary_path, relative_address = _get_binary_and_ra(address)
-    payload = llvm_symbolizer.run(binary_path, relative_address)
-    return _parse_symbolizer_payload(
-        payload=payload,
-        binary_path=binary_path,
-        relative_address=relative_address,
+    result = dwarfdump.lookup(binary_path, relative_address)
+    return SymbolizedAddressLocation(
+        compilation_unit_path=result.compilation_unit_path,
+        function_name=result.function_name,
+        linkage_name=result.linkage_name,
     )
 
 
 def _get_binary_and_ra(address: int) -> tuple[Path, int]:
+    """用 dladdr 将运行时地址拆解为共享库路径和库内相对地址。"""
     dl_info = _DlInfo()
     if _dladdr(ctypes.c_void_p(address), ctypes.byref(dl_info)) != 1:
         raise RuntimeError(f"无法定位函数地址所属共享库: 0x{address:x}")
@@ -53,31 +50,3 @@ def _get_binary_and_ra(address: int) -> tuple[Path, int]:
     binary_path = Path(dl_info.dli_fname.decode("utf-8", errors="replace")).resolve()
     base_address = int(dl_info.dli_fbase)
     return binary_path, address - base_address
-
-
-def _parse_symbolizer_payload(
-    *,
-    payload: tuple[llvm_symbolizer.SymbolizerEntry, ...],
-    binary_path: Path,
-    relative_address: int,
-) -> SymbolizedAddressLocation:
-    if len(payload) != 1:
-        raise RuntimeError("llvm-symbolizer 返回了非单地址结果。")
-
-    entry = payload[0]
-    if entry.Error is not None:
-        raise RuntimeError(f"llvm-symbolizer 解析地址失败: {entry.Error.Message}")
-
-    if entry.Symbol is None or len(entry.Symbol) == 0:
-        raise RuntimeError("llvm-symbolizer 未返回任何符号信息。")
-
-    symbol = entry.Symbol[0]
-    return SymbolizedAddressLocation(
-        binary_path=binary_path,
-        relative_address=relative_address,
-        function_name=symbol.FunctionName,
-        resolved_path=Path(symbol.FileName).resolve(),
-        resolved_line=symbol.Line,
-        function_start_path=Path(symbol.StartFileName).resolve(),
-        function_start_line=symbol.StartLine,
-    )

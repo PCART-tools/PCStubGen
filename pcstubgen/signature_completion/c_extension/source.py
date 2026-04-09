@@ -75,35 +75,33 @@ class CExtensionSource:
         if self._compilation_database is None:
             return None
 
-        for source_path, line in self._source_location_candidates(location):
-            compilation_command = self._match_compilation_command(source_path)
-            if compilation_command is None:
-                continue
-
-            translation_unit = self._load_translation_unit(compilation_command)
-            if translation_unit is None:
-                continue
-
-            matched = self._find_function_cursor(
-                translation_unit=translation_unit,
-                source_path=compilation_command.file_path,
-                line=line,
-                symbol_name=location.function_name,
-            )
-            if matched is not None:
-                return matched
-
+        compilation_command = self._match_compilation_command(location.compilation_unit_path)
+        if compilation_command is None:
             logger.info(
-                "未在 translation unit 中定位到函数定义, source_path: {}, symbol_name: {}, line: {}",
-                compilation_command.file_path,
+                "未在编译数据库中定位到编译单元, source_path: {}, symbol_name: {}",
+                location.compilation_unit_path,
                 location.function_name,
-                line,
             )
+            return None
+
+        translation_unit = self._load_translation_unit(compilation_command)
+        if translation_unit is None:
+            return None
+
+        matched = self._find_function_cursor(
+            translation_unit=translation_unit,
+            source_path=compilation_command.file_path,
+            symbol_name=location.function_name,
+            linkage_name=location.linkage_name,
+        )
+        if matched is not None:
+            return matched
 
         logger.info(
-            "未在编译数据库中定位到函数定义, source_paths: {}, symbol_name: {}",
-            ", ".join(str(path) for path, _ in self._source_location_candidates(location)),
+            "未在 translation unit 中定位到函数定义, source_path: {}, symbol_name: {}, linkage_name: {}",
+            compilation_command.file_path,
             location.function_name,
+            location.linkage_name,
         )
         return None
 
@@ -180,40 +178,37 @@ class CExtensionSource:
         *,
         translation_unit: TranslationUnit,
         source_path: Path,
-        line: int,
         symbol_name: str,
+        linkage_name: str | None = None,
     ) -> Cursor | None:
         normalized_source_path = source_path.resolve()
 
-        symbol_matches: list[Cursor] = []
+        candidates: list[Cursor] = []
         for cursor in walk_cursor(translation_unit.cursor):
             if cursor.kind != CursorKind.FUNCTION_DECL:
                 continue
             location_file = cursor.location.file
             if location_file is None or Path(location_file.name).resolve() != normalized_source_path:
                 continue
-            if not _cursor_matches_symbol(cursor, symbol_name):
-                continue
-            symbol_matches.append(cursor)
+            candidates.append(cursor)
 
-        line_matches = [cursor for cursor in symbol_matches if _cursor_covers_line(cursor, line)]
-        if len(line_matches) != 1:
+        if linkage_name is not None:
+            linkage_matches = [
+                cursor
+                for cursor in candidates
+                if _cursor_matches_linkage_name(cursor, linkage_name)
+            ]
+            if len(linkage_matches) == 1:
+                return linkage_matches[0]
+            if len(linkage_matches) > 1:
+                return None
+
+        symbol_matches = [
+            cursor for cursor in candidates if _cursor_matches_symbol(cursor, symbol_name)
+        ]
+        if len(symbol_matches) != 1:
             return None
-        return line_matches[0]
-
-    @staticmethod
-    def _source_location_candidates(
-        location: SymbolizedAddressLocation,
-    ) -> list[tuple[Path, int]]:
-        result: list[tuple[Path, int]] = []
-        for candidate in (
-            (location.function_start_path, location.function_start_line),
-            (location.resolved_path, location.resolved_line),
-        ):
-            if candidate in result:
-                continue
-            result.append(candidate)
-        return result
+        return symbol_matches[0]
 
     @staticmethod
     def _get_source_comment(function_cursor: Cursor | None) -> str | None:
@@ -234,6 +229,13 @@ def _cursor_matches_symbol(cursor: Cursor, symbol_name: str) -> bool:
         _symbol_candidates_match(normalized_symbol, candidate)
         for candidate in _cursor_symbol_candidates(cursor)
     )
+
+
+def _cursor_matches_linkage_name(cursor: Cursor, linkage_name: str) -> bool:
+    cursor_mangled_name = getattr(cursor, "mangled_name", None)
+    if not cursor_mangled_name:
+        return False
+    return str(cursor_mangled_name) == linkage_name
 
 
 def _cursor_symbol_candidates(cursor: Cursor) -> list[str]:
@@ -283,12 +285,3 @@ def _normalize_symbol_name(name: str) -> str | None:
     if not stripped:
         return None
     return _SPACE_RE.sub("", stripped)
-
-
-def _cursor_covers_line(cursor: Cursor, line: int) -> bool:
-    extent = cursor.extent
-    if extent is None:
-        return False
-    start_line = int(extent.start.line)
-    end_line = int(extent.end.line)
-    return start_line <= line <= end_line

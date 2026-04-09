@@ -1,23 +1,14 @@
 from __future__ import annotations
 
 from pathlib import Path
-import subprocess
 
 import pytest
 
 from pcstubgen.signature_completion.c_extension import address_resolver as resolver_module
+from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
 
 
-@pytest.fixture(autouse=True)
-def stub_llvm_symbolizer_path(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer,
-        "require_llvm_symbolizer",
-        lambda: "/usr/bin/llvm-symbolizer",
-    )
-
-
-def test_resolve_symbolized_address_parses_json_output(
+def test_resolve_symbolized_address_delegates_to_dwarfdump_lookup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -27,210 +18,48 @@ def test_resolve_symbolized_address_parses_json_output(
     monkeypatch.setattr(
         resolver_module,
         "_get_binary_and_ra",
-        lambda address: (binary_path, address - 0x1000),
+        lambda address: (binary_path, 0x234),
     )
-
-    def fake_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        captured["cmd"] = cmd
-        captured["kwargs"] = kwargs
-        return subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout=(
-                '[{"Address":"0x234","ModuleName":"sample.so","Symbol":[{"FileName":"%s",'
-                '"FunctionName":"foo_impl","Line":17,"Column":3,"StartAddress":"0x200",'
-                '"StartFileName":"%s","StartLine":11,"Discriminator":0}]}]'
-            )
-            % (tmp_path / "foo_body.c", tmp_path / "foo_impl.c"),
-            stderr="",
+    monkeypatch.setattr(
+        resolver_module.dwarfdump,
+        "lookup",
+        lambda binary_path_arg, relative_address_arg: captured.update(
+            {
+                "binary_path": binary_path_arg,
+                "relative_address": relative_address_arg,
+            }
         )
-
-    monkeypatch.setattr(resolver_module.llvm_symbolizer.subprocess, "run", fake_run)
+        or LookupResult(
+            compilation_unit_path=(tmp_path / "sample.c").resolve(),
+            function_name="foo_impl",
+            linkage_name="_Z8foo_implv",
+        ),
+    )
 
     result = resolver_module.resolve_symbolized_address(0x1234)
 
-    assert captured["cmd"] == [
-        "/usr/bin/llvm-symbolizer",
-        "--output-style=JSON",
-        "--relative-address",
-        f"--obj={binary_path}",
-        "0x234",
-    ]
-    assert result.binary_path == binary_path
-    assert result.relative_address == 0x234
+    assert captured == {
+        "binary_path": binary_path,
+        "relative_address": 0x234,
+    }
+    assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
-    assert result.resolved_path == (tmp_path / "foo_body.c").resolve()
-    assert result.resolved_line == 17
-    assert result.function_start_path == (tmp_path / "foo_impl.c").resolve()
-    assert result.function_start_line == 11
+    assert result.linkage_name == "_Z8foo_implv"
 
 
-def test_resolve_symbolized_address_rejects_nonzero_exit_code(
+def test_get_binary_and_ra_rejects_unresolved_address(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=1,
-            stdout="",
-            stderr="boom",
-        ),
-    )
+    monkeypatch.setattr(resolver_module, "_dladdr", lambda *args: 0)
 
-    with pytest.raises(RuntimeError, match="执行失败"):
-        resolver_module.resolve_symbolized_address(0x1234)
+    with pytest.raises(RuntimeError, match="无法定位函数地址所属共享库"):
+        resolver_module._get_binary_and_ra(0x1234)
 
 
-def test_resolve_symbolized_address_rejects_invalid_json(
+def test_get_binary_and_ra_rejects_incomplete_shared_library_info(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout="[",
-            stderr="",
-        ),
-    )
+    monkeypatch.setattr(resolver_module, "_dladdr", lambda *args: 1)
 
-    with pytest.raises(RuntimeError, match="非预期JSON结果"):
-        resolver_module.resolve_symbolized_address(0x1234)
-
-
-def test_resolve_symbolized_address_rejects_error_result_entry(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout=(
-                '[{"Address":"0x1234","ModuleName":"sample.so",'
-                '"Error":{"Message":"No such file or directory","Code":2,"Type":"IO"}}]'
-            ),
-            stderr="",
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="No such file or directory"):
-        resolver_module.resolve_symbolized_address(0x1234)
-
-
-def test_resolve_symbolized_address_rejects_empty_result(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout="[]",
-            stderr="",
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="非单地址结果"):
-        resolver_module.resolve_symbolized_address(0x1234)
-
-
-def test_resolve_symbolized_address_rejects_missing_symbol_field(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout='[{"Address":"0x1234","ModuleName":"sample.so"}]',
-            stderr="",
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="未返回任何符号信息"):
-        resolver_module.resolve_symbolized_address(0x1234)
-
-
-def test_resolve_symbolized_address_rejects_missing_symbol_information(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout='[{"Address":"0x1234","ModuleName":"sample.so","Symbol":[]}]',
-            stderr="",
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="未返回任何符号信息"):
-        resolver_module.resolve_symbolized_address(0x1234)
-
-
-def test_resolve_symbolized_address_rejects_invalid_first_symbol(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (tmp_path / "sample.so", address),
-    )
-    monkeypatch.setattr(
-        resolver_module.llvm_symbolizer.subprocess,
-        "run",
-        lambda cmd, **kwargs: subprocess.CompletedProcess(
-            args=cmd,
-            returncode=0,
-            stdout='[{"Address":"0x1234","ModuleName":"sample.so","Symbol":["bad"]}]',
-            stderr="",
-        ),
-    )
-
-    with pytest.raises(RuntimeError, match="非预期JSON结果"):
-        resolver_module.resolve_symbolized_address(0x1234)
+    with pytest.raises(RuntimeError, match="共享库位置信息不完整"):
+        resolver_module._get_binary_and_ra(0x1234)

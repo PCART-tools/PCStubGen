@@ -60,7 +60,6 @@ def test_write_stubs_orchestrates_completion_renderer_and_writer(
     monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
     monkeypatch.setattr(stubgen_module, "StubRenderer", FakeStubRenderer)
-    monkeypatch.setattr(stubgen_module, "require_llvm_symbolizer", lambda: "/usr/bin/llvm-symbolizer")
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
 
     options = StubGenerationOptions(
@@ -100,7 +99,6 @@ def test_write_stubs_writes_rendered_stub_file(
         lambda module_name: ModuleType(module_name),
     )
     monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
-    monkeypatch.setattr(stubgen_module, "require_llvm_symbolizer", lambda: "/usr/bin/llvm-symbolizer")
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
     stubgen_module.write_stubs(
@@ -117,35 +115,7 @@ def test_write_stubs_writes_rendered_stub_file(
 
 
 @pytest.mark.integration
-def test_write_stubs_requires_llvm_symbolizer_for_extension_modules(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path,
-) -> None:
-    import pcstubgen.api as stubgen_module
-
-    ir_module = IRModule(
-        full_name=QualifiedName.from_str("math"),
-        module_type=IRModuleType.EXTENSION,
-    )
-
-    monkeypatch.setattr(
-        stubgen_module.importlib,
-        "import_module",
-        lambda module_name: ModuleType(module_name),
-    )
-    monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
-    monkeypatch.setattr(
-        stubgen_module,
-        "require_llvm_symbolizer",
-        lambda: (_ for _ in ()).throw(RuntimeError("missing llvm-symbolizer")),
-    )
-
-    with pytest.raises(RuntimeError, match="missing llvm-symbolizer"):
-        stubgen_module.write_stubs("math", tmp_path, options=StubGenerationOptions())
-
-
-@pytest.mark.integration
-def test_write_stubs_does_not_require_llvm_symbolizer_for_python_modules(
+def test_write_stubs_runs_without_tool_precheck_for_python_modules(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,
 ) -> None:
@@ -181,11 +151,6 @@ def test_write_stubs_does_not_require_llvm_symbolizer_for_python_modules(
     )
     monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(stubgen_module, "SignatureCompleter", FakeSignatureCompleter)
-    monkeypatch.setattr(
-        stubgen_module,
-        "require_llvm_symbolizer",
-        lambda: (_ for _ in ()).throw(AssertionError("should not be called")),
-    )
     monkeypatch.setattr(stubgen_module, "logger", SimpleNamespace(info=lambda *args: None))
 
     writer = FakeWriter()

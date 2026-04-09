@@ -68,7 +68,7 @@ class _PyWrapperDescrObject(ctypes.Structure):
 
 
 def resolve_runtime_pymethoddef(handle: object) -> RuntimePyMethodDef:
-    """从受支持的 CPython 运行时对象读取函数入口元信息。"""
+    """从受支持的 CPython 运行时对象读取函数入口地址与调用约定。"""
     handle = _unwrap_runtime_handle(handle)
     runtime_type = _runtime_type_key(handle)
 
