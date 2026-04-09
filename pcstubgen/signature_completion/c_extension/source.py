@@ -10,13 +10,18 @@ from loguru import logger
 from ...ir_modules import IRFunction, IRModule, IRModuleType, IRSignature
 from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_address
 from .clang import parser as clang_parser
-from .clang.cursor_utils import source_range_get_text, walk_cursor
+from .clang.cursor_utils import source_range_get_text
 from .runtime import resolve_runtime_pymethoddef
 from .signatures import inference
 
 ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
 
 _SPACE_RE = re.compile(r"\s+")
+_FUNCTION_DECL_CONTEXT_KINDS = {
+    CursorKind.TRANSLATION_UNIT,
+    CursorKind.NAMESPACE,
+    CursorKind.LINKAGE_SPEC,
+}
 
 
 class CExtensionSource:
@@ -90,7 +95,6 @@ class CExtensionSource:
 
         matched = self._find_function_cursor(
             translation_unit=translation_unit,
-            source_path=compilation_command.file_path,
             symbol_name=location.function_name,
             linkage_name=location.linkage_name,
         )
@@ -177,20 +181,10 @@ class CExtensionSource:
     def _find_function_cursor(
         *,
         translation_unit: TranslationUnit,
-        source_path: Path,
         symbol_name: str,
         linkage_name: str | None = None,
     ) -> Cursor | None:
-        normalized_source_path = source_path.resolve()
-
-        candidates: list[Cursor] = []
-        for cursor in walk_cursor(translation_unit.cursor):
-            if cursor.kind != CursorKind.FUNCTION_DECL:
-                continue
-            location_file = cursor.location.file
-            if location_file is None or Path(location_file.name).resolve() != normalized_source_path:
-                continue
-            candidates.append(cursor)
+        candidates = list(_iter_function_definition_candidates(translation_unit.cursor))
 
         if linkage_name is not None:
             linkage_matches = [
@@ -218,6 +212,19 @@ class CExtensionSource:
         if not source_text:
             return None
         return source_text
+
+
+def _iter_function_definition_candidates(node: Cursor) -> list[Cursor]:
+    """仅在声明上下文中递归收集函数定义节点。"""
+    candidates: list[Cursor] = []
+    for child in node.get_children():
+        if child.kind == CursorKind.FUNCTION_DECL:
+            if child.is_definition():
+                candidates.append(child)
+            continue
+        if child.kind in _FUNCTION_DECL_CONTEXT_KINDS:
+            candidates.extend(_iter_function_definition_candidates(child))
+    return candidates
 
 
 def _cursor_matches_symbol(cursor: Cursor, symbol_name: str) -> bool:

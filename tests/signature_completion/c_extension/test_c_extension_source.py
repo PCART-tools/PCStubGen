@@ -357,6 +357,7 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
     first_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo",
+        is_definition=True,
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=_extent_for_source_snippet(source_path, "int foo(int value) {\n    return value;\n}"),
     )
@@ -366,6 +367,7 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
     second_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo",
+        is_definition=True,
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=_extent_for_source_snippet(source_path, "int foo(int value) {\n    return value;\n}"),
     )
@@ -385,7 +387,6 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
 
     matched = CExtensionSource._find_function_cursor(
         translation_unit=translation_unit,
-        source_path=source_path,
         symbol_name="foo",
         linkage_name="_Z3fooi",
     )
@@ -412,6 +413,7 @@ def test_find_function_cursor_matches_demangled_name_without_linkage_name(
     function_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        is_definition=True,
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
     )
@@ -433,8 +435,49 @@ def test_find_function_cursor_matches_demangled_name_without_linkage_name(
 
     matched = CExtensionSource._find_function_cursor(
         translation_unit=translation_unit,
-        source_path=source_path,
         symbol_name="ns::foo_impl(int)",
+    )
+
+    assert matched is function_cursor
+
+
+def test_find_function_cursor_matches_symbol_across_different_location_file(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.cpp"
+    other_path = tmp_path / "other.cpp"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(other_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[function_cursor],
+            )
+        },
+    )()
+
+    matched = CExtensionSource._find_function_cursor(
+        translation_unit=translation_unit,
+        symbol_name="foo_impl",
     )
 
     assert matched is function_cursor
@@ -459,12 +502,14 @@ def test_find_function_cursor_rejects_multiple_name_matches_without_linkage_name
     first_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        is_definition=True,
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=shared_extent,
     )
     second_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        is_definition=True,
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=shared_extent,
     )
@@ -481,8 +526,168 @@ def test_find_function_cursor_rejects_multiple_name_matches_without_linkage_name
 
     matched = CExtensionSource._find_function_cursor(
         translation_unit=translation_unit,
-        source_path=source_path,
         symbol_name="foo_impl",
     )
 
     assert matched is None
+
+
+def test_find_function_cursor_prefers_definition_over_matching_declaration(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.c"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value);",
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    declaration_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=False,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+    )
+    declaration_cursor.displayname = "foo_impl(int)"
+
+    definition_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    definition_cursor.displayname = "foo_impl(int)"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[declaration_cursor, definition_cursor],
+            )
+        },
+    )()
+
+    matched = CExtensionSource._find_function_cursor(
+        translation_unit=translation_unit,
+        symbol_name="foo_impl(int)",
+    )
+
+    assert matched is definition_cursor
+
+
+def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.cpp"
+    source_path.write_text(
+        "\n".join(
+            [
+                "namespace outer {",
+                'extern "C" {',
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+                "}",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.displayname = "foo_impl(int)"
+    namespace_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.NAMESPACE,
+        spelling="outer",
+    )
+    linkage_cursor = _FakeNode(kind=clang.cindex.CursorKind.LINKAGE_SPEC)
+    linkage_cursor.semantic_parent = namespace_cursor
+    function_cursor.semantic_parent = linkage_cursor
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.NAMESPACE,
+                        children=[
+                            _FakeNode(
+                                kind=clang.cindex.CursorKind.LINKAGE_SPEC,
+                                children=[function_cursor],
+                            )
+                        ],
+                    )
+                ],
+            )
+        },
+    )()
+
+    matched = CExtensionSource._find_function_cursor(
+        translation_unit=translation_unit,
+        symbol_name="outer::foo_impl(int)",
+    )
+
+    assert matched is function_cursor
+
+
+def test_find_function_cursor_matches_definition_from_header_candidate(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.c"
+    header_path = tmp_path / "foo_impl.h"
+    source_path.write_text('#include "foo_impl.h"\n', encoding="utf-8", newline="\n")
+    header_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(header_path)})()})(),
+        extent=_extent_for_source_snippet(header_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.displayname = "foo_impl(int)"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[function_cursor],
+            )
+        },
+    )()
+
+    matched = CExtensionSource._find_function_cursor(
+        translation_unit=translation_unit,
+        symbol_name="foo_impl",
+    )
+
+    assert matched is function_cursor
