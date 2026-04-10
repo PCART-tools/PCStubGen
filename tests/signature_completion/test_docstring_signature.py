@@ -30,7 +30,6 @@ def _resolve(
 def test_docstring_parser_parses_generic_function_signature() -> None:
     parsed = _resolve("foo", "foo(x: int, y: str) -> str\n\nparsed from docstring")
 
-    assert parsed is not None
     signature = parsed[0]
     assert [arg.name for arg in signature.args] == ["x", "y"]
     assert _render_type(signature.return_type) == "str"
@@ -45,7 +44,6 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         ),
     )
 
-    assert parsed is not None
     signature = parsed[0]
     assert [arg.name for arg in signature.args] == ["x", "y", "w", "out", "p"]
     assert [_render_type(arg.type) for arg in signature.args] == [
@@ -72,7 +70,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
     assert _render_type(signature.return_type) == "numpy.ndarray"
 
 
-def test_docstring_parser_preserves_overload_docs() -> None:
+def test_docstring_parser_parses_overload_signatures() -> None:
     parsed = _resolve(
         "foo",
         (
@@ -83,7 +81,6 @@ def test_docstring_parser_preserves_overload_docs() -> None:
         ),
     )
 
-    assert parsed is not None
     assert len(parsed) == 2
     assert [_render_type(sig.return_type) for sig in parsed] == ["str", "int"]
 
