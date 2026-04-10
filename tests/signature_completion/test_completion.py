@@ -35,7 +35,23 @@ def _patch_c_runtime_support(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_completer_prefers_c_over_docstring_and_writes_source_comment(
+def _make_pybind11_builtin_handle() -> object:
+    """构造满足 pybind11 判定的 builtin-like 句柄。"""
+    class _PybindBoundSelf:
+        __module__ = "pybind11_builtins.fake_module"
+
+    builtin_function_like = type(
+        "builtin_function_or_method",
+        (),
+        {
+            "__module__": "builtins",
+            "__self__": _PybindBoundSelf(),
+        },
+    )
+    return builtin_function_like()
+
+
+def test_completer_prefers_c_branch_over_docstring_and_writes_source_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -97,7 +113,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     assert summary.docstring_completed == 0
 
 
-def test_completer_raises_when_c_has_no_candidates(
+def test_completer_marks_uncompleted_when_c_has_no_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -117,11 +133,15 @@ def test_completer_raises_when_c_has_no_candidates(
     )
     _patch_c_signature_extractor(monkeypatch, functions={})
 
-    with pytest.raises(RuntimeError, match="未找到函数|没有可用签名"):
-        SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
 
 
-def test_completer_raises_when_c_source_resolution_fails(
+def test_completer_marks_uncompleted_when_c_source_resolution_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -133,11 +153,15 @@ def test_completer_raises_when_c_source_resolution_fails(
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    with pytest.raises(RuntimeError, match="boom"):
-        SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
 
 
-def test_completer_uses_docstring_when_available_for_python_module(
+def test_completer_uses_docstring_for_pybind11_builtin(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -145,8 +169,9 @@ def test_completer_uses_docstring_when_available_for_python_module(
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            _unknown_function(
-                "fallback",
+            IRFunction(
+                name="fallback",
+                runtime_handle=_make_pybind11_builtin_handle(),
                 doc="fallback(value: str) -> bool\n\nparsed from docstring",
             )
         ],
@@ -161,6 +186,53 @@ def test_completer_uses_docstring_when_available_for_python_module(
     assert parsed.signatures[0].return_type.render() == "bool"
     assert summary.docstring_completed == 1
     assert summary.uncompleted == 0
+
+
+def test_completer_does_not_use_docstring_for_unsupported_function(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            _unknown_function(
+                "fallback",
+                doc="fallback(value: str) -> bool\n\nparsed from docstring",
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
+
+
+def test_completer_marks_uncompleted_when_pybind11_docstring_is_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            IRFunction(
+                name="fallback",
+                runtime_handle=_make_pybind11_builtin_handle(),
+                doc="not a signature",
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
 
 
 def test_completer_keeps_known_signatures_and_counts_unresolved(
