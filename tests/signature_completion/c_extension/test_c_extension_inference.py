@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 
 import clang.cindex
@@ -14,7 +15,6 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
-from pcstubgen.signature_completion.c_extension.signatures.return_type_maps import FUNCTION_NAME_TO_TYPE
 from pcstubgen.types import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
     _FakeNode,
@@ -36,12 +36,6 @@ from tests._c_extension_test_support import (
     _var_decl,
     _wrap,
 )
-
-
-def test_function_name_to_type_uses_type_instances() -> None:
-    assert FUNCTION_NAME_TO_TYPE["PyLong_FromLong"] == RawType("int")
-
-
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [

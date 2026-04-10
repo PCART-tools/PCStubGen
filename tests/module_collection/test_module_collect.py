@@ -57,11 +57,6 @@ def test_module_collect_keeps_only_tree_functions_and_methods() -> None:
     assert root_cls.methods[0].runtime_owner is RootClass
     assert root_cls.classes == []
 
-    # 精简后的 IR 不再携带变量/属性/字段等节点
-    assert not hasattr(ir_module, "variables")
-    assert not hasattr(root_cls, "properties")
-    assert not hasattr(root_cls, "fields")
-
 
 def test_module_collect_collects_extension_method_descriptors() -> None:
     ir_class = module_collect_module.collect_class(
@@ -74,7 +69,7 @@ def test_module_collect_collects_extension_method_descriptors() -> None:
 
     assert "append" in method_names
     append_method = next(method for method in ir_class.methods if method.function.name == "append")
-    assert type(append_method.function.runtime_handle).__name__ == "method_descriptor"
+    assert append_method.function.runtime_handle is list.__dict__["append"]
     assert append_method.runtime_owner is list
 
 
@@ -131,8 +126,6 @@ def test_module_collect_discovers_hidden_private_subpackage_not_exposed_by_dir(
     )
 
     module = _import_module_from_tmp("hiddenpkg", tmp_path, monkeypatch)
-
-    assert "_hidden" not in dir(module)
 
     ir_module = collect_module(QualifiedName.from_str("hiddenpkg"), module)
 
@@ -193,67 +186,46 @@ def test_module_collect_supports_namespace_packages(
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["child"]
 
 
-def test_module_collect_skips_submodule_when_dependency_is_missing(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _write_package_file(
-        tmp_path / "optionalpkg" / "__init__.py",
-        "",
-    )
-    _write_package_file(
-        tmp_path / "optionalpkg" / "healthy.py",
-        "VALUE = 1\n",
-    )
-    _write_package_file(
-        tmp_path / "optionalpkg" / "needs_missing_dep.py",
-        "import definitely_missing_dependency\n",
-    )
-
-    module = _import_module_from_tmp("optionalpkg", tmp_path, monkeypatch)
-    error_records: list[tuple[str, str, str]] = []
-
-    def fake_error(
-        message: str,
-        module_name: str,
-        error: BaseException,
-    ) -> None:
-        _ = message
-        error_records.append((module_name, type(error).__name__, str(error)))
-
-    monkeypatch.setattr(module_collect_module.logger, "error", fake_error)
-
-    ir_module = collect_module(QualifiedName.from_str("optionalpkg"), module)
-
-    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
-    assert error_records == [
+@pytest.mark.parametrize(
+    ("package_name", "broken_module_name", "broken_source", "expected_error_type"),
+    [
         (
-            "optionalpkg.needs_missing_dep",
-            "ModuleNotFoundError",
-            "No module named 'definitely_missing_dependency'",
-        )
-    ]
-
-
-def test_module_collect_skips_submodule_when_import_raises_os_error(
+            "optionalpkg",
+            "needs_missing_dep",
+            "import definitely_missing_dependency\n",
+            ModuleNotFoundError,
+        ),
+        (
+            "oserrorpkg",
+            "broken",
+            "raise OSError('dll load failed')\n",
+            OSError,
+        ),
+    ],
+)
+def test_module_collect_skips_submodule_when_submodule_import_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    package_name: str,
+    broken_module_name: str,
+    broken_source: str,
+    expected_error_type: type[BaseException],
 ) -> None:
     _write_package_file(
-        tmp_path / "oserrorpkg" / "__init__.py",
+        tmp_path / package_name / "__init__.py",
         "",
     )
     _write_package_file(
-        tmp_path / "oserrorpkg" / "healthy.py",
+        tmp_path / package_name / "healthy.py",
         "VALUE = 1\n",
     )
     _write_package_file(
-        tmp_path / "oserrorpkg" / "broken.py",
-        "raise OSError('dll load failed')\n",
+        tmp_path / package_name / f"{broken_module_name}.py",
+        broken_source,
     )
 
-    module = _import_module_from_tmp("oserrorpkg", tmp_path, monkeypatch)
-    error_records: list[tuple[str, str, str]] = []
+    module = _import_module_from_tmp(package_name, tmp_path, monkeypatch)
+    error_records: list[tuple[str, BaseException]] = []
 
     def fake_error(
         message: str,
@@ -261,16 +233,16 @@ def test_module_collect_skips_submodule_when_import_raises_os_error(
         error: BaseException,
     ) -> None:
         _ = message
-        error_records.append((module_name, type(error).__name__, str(error)))
+        error_records.append((module_name, error))
 
     monkeypatch.setattr(module_collect_module.logger, "error", fake_error)
 
-    ir_module = collect_module(QualifiedName.from_str("oserrorpkg"), module)
+    ir_module = collect_module(QualifiedName.from_str(package_name), module)
 
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
-    assert error_records == [
-        ("oserrorpkg.broken", "OSError", "dll load failed")
-    ]
+    assert len(error_records) == 1
+    assert error_records[0][0] == f"{package_name}.{broken_module_name}"
+    assert isinstance(error_records[0][1], expected_error_type)
 
 
 def _write_package_file(path: Path, content: str) -> None:

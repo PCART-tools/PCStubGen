@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from types import ModuleType
 
-import pytest
-
 from pcstubgen.ir_modules import IRModule, IRModuleType, QualifiedName
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
@@ -15,9 +13,8 @@ from tests._c_extension_test_support import (
 )
 
 
-@pytest.mark.integration
 def test_write_stubs_writes_rendered_stub_file(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch,
     tmp_path,
 ) -> None:
     import pcstubgen.api as stubgen_module

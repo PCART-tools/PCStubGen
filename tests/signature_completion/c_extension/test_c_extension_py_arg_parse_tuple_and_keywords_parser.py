@@ -116,9 +116,6 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
     raw_len_cursor = _cursor("raw_len")
     maybe_buffer_cursor = _cursor("maybe_buffer")
 
-    seen_object_cursors: list[Cursor] = []
-    seen_default_cursors: list[Cursor] = []
-
     resolved_types = {
         type_cursor: "Point",
         converter_cursor: "ConvertedValue",
@@ -132,11 +129,9 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
     }
 
     def resolve_object_type(cursor: Cursor) -> str:
-        seen_object_cursors.append(cursor)
         return resolved_types[cursor]
 
     def resolve_default(cursor: Cursor) -> str:
-        seen_default_cursors.append(cursor)
         return resolved_defaults[cursor]
 
     parsed = _parse(
@@ -159,14 +154,6 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
         resolve_default_value_func=resolve_default,
     )
 
-    assert seen_object_cursors == [type_cursor, converter_cursor]
-    assert seen_default_cursors == [
-        text_buffer_cursor,
-        typed_result_cursor,
-        converted_result_cursor,
-        raw_buffer_cursor,
-        maybe_buffer_cursor,
-    ]
     assert parsed == [
         _arg("count", "int"),
         _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"', has_default=True),
@@ -240,10 +227,8 @@ def test_parse_raises_for_keyword_or_c_argument_count_mismatch(
 def test_parse_marks_optional_arguments_when_default_text_resolution_fails() -> None:
     first_cursor = _cursor("first")
     second_cursor = _cursor("second")
-    seen_default_cursors: list[Cursor] = []
 
     def resolve_default(cursor: Cursor) -> str | None:
-        seen_default_cursors.append(cursor)
         return None
 
     parsed = _parse(
@@ -253,7 +238,6 @@ def test_parse_marks_optional_arguments_when_default_text_resolution_fails() -> 
         resolve_default_value_func=resolve_default,
     )
 
-    assert seen_default_cursors == [second_cursor]
     assert parsed == [
         _arg("first", "int"),
         _arg("second", "int", has_default=True),

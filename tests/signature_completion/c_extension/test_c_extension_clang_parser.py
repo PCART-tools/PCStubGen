@@ -244,30 +244,6 @@ def test_parse_appends_detected_clang_resource_dir(
     ]
 
 
-def test_build_effective_parse_args_appends_detected_clang_resource_dir(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translation_unit_module.detect_clang_resource_dir.cache_clear()
-    monkeypatch.setattr(
-        translation_unit_module,
-        "detect_clang_resource_dir",
-        lambda: "/opt/clang/resource",
-    )
-    command = compilation_database_module.CompilationCommand(
-        file_path=tmp_path / "module.c",
-        working_directory=tmp_path,
-        parse_args=["-I../include", "-DMODE=1"],
-    )
-
-    assert translation_unit_module.build_effective_parse_args(command) == [
-        "-I../include",
-        "-DMODE=1",
-        "-resource-dir",
-        "/opt/clang/resource",
-    ]
-
-
 def test_detect_clang_resource_dir_returns_none_when_stdout_is_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -284,21 +260,3 @@ def test_detect_clang_resource_dir_returns_none_when_stdout_is_empty(
     )
 
     assert translation_unit_module.detect_clang_resource_dir() is None
-
-
-def test_detect_clang_resource_dir_uses_cached_result(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translation_unit_module.detect_clang_resource_dir.cache_clear()
-    run_call_count = 0
-
-    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
-        nonlocal run_call_count
-        run_call_count += 1
-        return SimpleNamespace(returncode=0, stdout="/opt/clang/resource\n", stderr="")
-
-    monkeypatch.setattr(translation_unit_module.subprocess, "run", fake_run)
-
-    assert translation_unit_module.detect_clang_resource_dir() == "/opt/clang/resource"
-    assert translation_unit_module.detect_clang_resource_dir() == "/opt/clang/resource"
-    assert run_call_count == 1

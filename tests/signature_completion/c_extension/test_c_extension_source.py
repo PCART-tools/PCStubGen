@@ -5,18 +5,17 @@ from pathlib import Path
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRArgumentKind, IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
+from pcstubgen.ir_modules import IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import SymbolizedAddressLocation
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
-    METH_NOARGS,
     METH_O,
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension.runtime import RuntimePyMethodDef
 from pcstubgen.signature_completion.c_extension.source import CExtensionSource
-from pcstubgen.types import AnyType, RawType
+from pcstubgen.types import RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
 
 
@@ -107,71 +106,22 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     assert source_comment == snippet
 
 
-def test_c_extension_source_passes_resolved_scope_to_cursor_resolver(
+@pytest.mark.parametrize(
+    "flags",
+    [
+        METH_O,
+        METH_VARARGS | METH_KEYWORDS,
+        METH_FASTCALL | METH_KEYWORDS,
+    ],
+)
+def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functions(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-) -> None:
-    captured: dict[str, object] = {}
-    compilation_unit_path = tmp_path / "foo_impl.c"
-
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=METH_NOARGS),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
-        lambda address: _symbolized_location(
-            compilation_unit_path=compilation_unit_path,
-            function_name="foo_impl",
-        ),
-    )
-
-    def fake_resolve_function_cursor(
-        self: CExtensionSource,
-        *,
-        location: SymbolizedAddressLocation,
-    ):
-        _ = self
-        captured["location"] = location
-        return _FakeNode(
-            kind=clang.cindex.CursorKind.FUNCTION_DECL,
-            spelling="foo_impl",
-        )
-
-    monkeypatch.setattr(CExtensionSource, "_resolve_function_cursor", fake_resolve_function_cursor)
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, ml_flags=0: [
-            IRSignature(
-                args=[],
-                return_type=AnyType(),
-            )
-        ],
-    )
-
-    source = _make_source(monkeypatch, tmp_path)
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", runtime_handle=object())],
-    )
-
-    signatures, _ = source.resolve_function(module, module.functions[0])
-
-    assert signatures[0].args == []
-    assert captured["location"] == _symbolized_location(
-        compilation_unit_path=compilation_unit_path,
-        function_name="foo_impl",
-    )
-
-
-def test_c_extension_source_raises_when_function_cursor_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    flags: int,
 ) -> None:
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=METH_O),
+        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=flags),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
@@ -197,42 +147,7 @@ def test_c_extension_source_raises_when_function_cursor_is_missing(
         source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_raises_when_function_cursor_lookup_fails_for_varargs(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(
-            method_address=0x1234,
-            flags=METH_VARARGS | METH_KEYWORDS,
-        ),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
-        lambda address: _symbolized_location(
-            compilation_unit_path=tmp_path / "foo_impl.c",
-            function_name="foo_impl",
-        ),
-    )
-    monkeypatch.setattr(
-        CExtensionSource,
-        "_resolve_function_cursor",
-        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
-    )
-
-    source = _make_source(monkeypatch, tmp_path)
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", runtime_handle=object())],
-    )
-
-    with pytest.raises(RuntimeError, match="cursor missing"):
-        source.resolve_function(module, module.functions[0])
-
-
-def test_c_extension_source_raises_when_method_descriptor_cursor_lookup_fails(
+def test_c_extension_source_propagates_cursor_lookup_failures_for_method_descriptors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -243,7 +158,6 @@ def test_c_extension_source_raises_when_method_descriptor_cursor_lookup_fails(
             function_name="append",
         ),
     )
-
     monkeypatch.setattr(
         CExtensionSource,
         "_resolve_function_cursor",
@@ -255,42 +169,6 @@ def test_c_extension_source_raises_when_method_descriptor_cursor_lookup_fails(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="append", runtime_handle=list.__dict__["append"])],
-    )
-
-    with pytest.raises(RuntimeError, match="cursor missing"):
-        source.resolve_function(module, module.functions[0])
-
-
-def test_c_extension_source_raises_when_fastcall_cursor_lookup_fails(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(
-            method_address=0x1234,
-            flags=METH_FASTCALL | METH_KEYWORDS,
-        ),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
-        lambda address: _symbolized_location(
-            compilation_unit_path=tmp_path / "foo_impl.c",
-            function_name="foo_impl",
-        ),
-    )
-
-    monkeypatch.setattr(
-        CExtensionSource,
-        "_resolve_function_cursor",
-        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
-    )
-
-    source = _make_source(monkeypatch, tmp_path)
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
     with pytest.raises(RuntimeError, match="cursor missing"):

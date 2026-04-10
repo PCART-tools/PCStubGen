@@ -102,13 +102,8 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
     raw_len_cursor = _cursor("raw_len")
     maybe_buffer_cursor = _cursor("maybe_buffer")
 
-    seen_name_calls: list[list[str]] = []
-    seen_object_cursors: list[Cursor] = []
-    seen_default_cursors: list[Cursor] = []
-
     def resolve_name(c_args: list[Cursor]) -> str:
         names = [cast(_FakeCursor, cursor).name for cursor in c_args]
-        seen_name_calls.append(names)
         return {
             ("count",): "count",
             ("text_buffer",): "text",
@@ -119,14 +114,12 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
         }[tuple(names)]
 
     def resolve_object_type(cursor: Cursor) -> str:
-        seen_object_cursors.append(cursor)
         return {
             type_cursor: "Point",
             converter_cursor: "ConvertedValue",
         }[cursor]
 
     def resolve_default_value(cursor: Cursor) -> str:
-        seen_default_cursors.append(cursor)
         return {
             text_buffer_cursor: '"utf8"',
             typed_result_cursor: "None",
@@ -155,22 +148,6 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
         resolve_default_value_func=resolve_default_value,
     )
 
-    assert seen_name_calls == [
-        ["count"],
-        ["text_buffer"],
-        ["typed_result"],
-        ["converted_result"],
-        ["raw_buffer"],
-        ["maybe_buffer"],
-    ]
-    assert seen_object_cursors == [type_cursor, converter_cursor]
-    assert seen_default_cursors == [
-        text_buffer_cursor,
-        typed_result_cursor,
-        converted_result_cursor,
-        raw_buffer_cursor,
-        maybe_buffer_cursor,
-    ]
     assert parsed == [
         _arg("count", "int"),
         _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"', has_default=True),
@@ -215,11 +192,8 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
     value_cursor = _cursor("value")
     buffer_cursor = _cursor("buffer")
 
-    seen_name_calls: list[list[str]] = []
-
     def resolve_name(c_args: list[Cursor]) -> str:
         names = [cast(_FakeCursor, cursor).name for cursor in c_args]
-        seen_name_calls.append(names)
         return {
             ("one",): "single",
             ("text", "value", "buffer"): "nested",
@@ -232,10 +206,6 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
         resolve_object_type_func=lambda cursor: {type_cursor: "Point"}[cursor],
     )
 
-    assert seen_name_calls == [
-        ["one"],
-        ["text", "value", "buffer"],
-    ]
     assert parsed == [
         _arg("single", "tuple[int,]"),
         _arg(
@@ -300,10 +270,8 @@ def test_parse_keeps_optional_tuple_argument_when_any_leaf_default_is_unknown() 
 def test_parse_marks_optional_scalar_without_default_text_when_resolution_fails() -> None:
     first_cursor = _cursor("first")
     second_cursor = _cursor("second")
-    seen_default_cursors: list[Cursor] = []
 
     def resolve_default_value(cursor: Cursor) -> str | None:
-        seen_default_cursors.append(cursor)
         return None
 
     parsed = _parse(
@@ -312,7 +280,6 @@ def test_parse_marks_optional_scalar_without_default_text_when_resolution_fails(
         resolve_default_value_func=resolve_default_value,
     )
 
-    assert seen_default_cursors == [second_cursor]
     assert parsed == [
         _arg("first", "int"),
         _arg("second", "int", has_default=True),

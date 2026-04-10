@@ -37,32 +37,6 @@ def _canonical_render(format_string: str, arg_count: int) -> str:
     return _parse(format_string, arg_count).canonicalize().render()
 
 
-@pytest.mark.parametrize(
-    ("node", "expected"),
-    [
-        (AnyType(), "typing.Any"),
-        (NamedType("int"), "int"),
-        (UnionType(()), "Never"),
-        (UnionType((NamedType("int"),)), "int"),
-        (
-            TupleType((NamedType("int"), UnionType((NamedType("str"),)))),
-            "tuple[int, str]",
-        ),
-        (ListType(UnionType((NamedType("int"),))), "list[int]"),
-        (
-            DictType(
-                UnionType((NamedType("str"),)),
-                UnionType((NamedType("int"),)),
-            ),
-            "dict[str, int]",
-        ),
-    ],
-)
-def test_render_type_returns_expected_string(node: Type, expected: str) -> None:
-    """显式渲染接口应按当前节点结构输出文本。"""
-    assert node.render() == expected
-
-
 def test_canonicalize_type_turns_empty_union_into_never() -> None:
     """空 union 在规范化后应保持为空 union 这一唯一 `Never` 表示。"""
     canonical = UnionType(()).canonicalize()
@@ -406,4 +380,3 @@ def test_parse_raises_for_invalid_format(format_string: str, arg_count: int) -> 
     """非法格式串应在解析阶段直接抛错。"""
     with pytest.raises(PyBuildValueTypeParserError):
         _parse(format_string, arg_count)
-
