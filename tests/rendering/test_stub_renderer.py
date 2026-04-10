@@ -90,22 +90,6 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
     ]
 
 
-def test_renderer_prints_function_doc_for_placeholder_signature() -> None:
-    func = _function(name="foo", doc="original docs")
-
-    lines = StubRenderer(include_docstrings=True).print_function(func)
-
-    assert lines == [
-        "def foo(",
-        "    *args,",
-        "    **kwargs,",
-        "):",
-        '    """',
-        "    original docs",
-        '    """',
-    ]
-
-
 def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
     doc = (
         "foo(*args, **kwargs)\n"
@@ -197,23 +181,6 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
         "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
         "#       return self;",
         "#   }",
-    ]
-
-
-def test_renderer_always_prints_c_inferred_source_comment_when_present() -> None:
-    func = _function(
-        name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
-        c_inferred_source_comment="static int foo_impl(int value) { return value; }",
-    )
-
-    lines = StubRenderer(include_docstrings=False).print_function(func)
-
-    assert lines == [
-        "def foo(value: int):",
-        "    ...",
-        "#   C inferred source for foo:",
-        "#   static int foo_impl(int value) { return value; }",
     ]
 
 

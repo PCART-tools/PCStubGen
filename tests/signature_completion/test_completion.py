@@ -300,7 +300,7 @@ def test_completer_continues_after_pybind11_docstring_base_exception(
     assert summary.uncompleted == 1
 
 
-def test_completer_keeps_known_signatures_and_counts_unresolved(
+def test_completer_keeps_known_signatures_and_counts_only_unknown_functions_as_uncompleted(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -320,7 +320,7 @@ def test_completer_keeps_known_signatures_and_counts_unresolved(
     summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
     assert summary.total_functions == 3
-    assert summary.uncompleted == 3
+    assert summary.uncompleted == 2
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
     assert module.functions[2].signatures == []

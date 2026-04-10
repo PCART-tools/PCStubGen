@@ -167,31 +167,23 @@ def test_format_cursor_line_renders_tokens_and_escapes_spellings() -> None:
     assert "C:\\\\tmp" in output
 
 
-def test_run_ast_export_writes_available_outputs_even_when_clang_reports_error(
+def _run_ast_export_case(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+    *,
+    parse_translation_unit_impl,
+    build_ast_payload_impl=None,
+    clang_dump_result: clang_ast.ClangAstDumpResult,
+) -> tuple[list[str], Path, Path]:
     source_path = tmp_path / "sample.c"
     output_dir = tmp_path / "ast_output"
     source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
 
     monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
-    monkeypatch.setattr(
-        clang_ast,
-        "parse_translation_unit",
-        lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]),
-    )
-    monkeypatch.setattr(clang_ast, "build_ast_payload", lambda *args, **kwargs: "libclang payload")
-    monkeypatch.setattr(
-        clang_ast,
-        "run_clang_ast_dump",
-        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(
-            stdout="partial ast\n",
-            stderr="syntax error",
-            returncode=1,
-        ),
-    )
+    monkeypatch.setattr(clang_ast, "parse_translation_unit", parse_translation_unit_impl)
+    if build_ast_payload_impl is not None:
+        monkeypatch.setattr(clang_ast, "build_ast_payload", build_ast_payload_impl)
+    monkeypatch.setattr(clang_ast, "run_clang_ast_dump", lambda *args, **kwargs: clang_dump_result)
 
     errors = clang_ast.run_ast_export(
         source_path=source_path,
@@ -202,6 +194,25 @@ def test_run_ast_export_writes_available_outputs_even_when_clang_reports_error(
         clang_library_path=None,
     )
     libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+    return errors, libclang_path, clang_path
+
+
+def test_run_ast_export_writes_available_outputs_even_when_clang_reports_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    errors, libclang_path, clang_path = _run_ast_export_case(
+        tmp_path,
+        monkeypatch,
+        parse_translation_unit_impl=lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]),
+        build_ast_payload_impl=lambda *args, **kwargs: "libclang payload",
+        clang_dump_result=clang_ast.ClangAstDumpResult(
+            stdout="partial ast\n",
+            stderr="syntax error",
+            returncode=1,
+        ),
+    )
     captured = capsys.readouterr()
 
     assert len(errors) == 1
@@ -215,31 +226,12 @@ def test_run_ast_export_allows_partial_success_when_libclang_export_fails(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    source_path = tmp_path / "sample.c"
-    output_dir = tmp_path / "ast_output"
-    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
-
-    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
-    monkeypatch.setattr(
-        clang_ast,
-        "parse_translation_unit",
-        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("libclang unavailable")),
+    errors, libclang_path, clang_path = _run_ast_export_case(
+        tmp_path,
+        monkeypatch,
+        parse_translation_unit_impl=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("libclang unavailable")),
+        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
     )
-    monkeypatch.setattr(
-        clang_ast,
-        "run_clang_ast_dump",
-        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
-    )
-
-    errors = clang_ast.run_ast_export(
-        source_path=source_path,
-        include=[],
-        include_directory=[],
-        c_std=None,
-        cpp_std=None,
-        clang_library_path=None,
-    )
-    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
     captured = capsys.readouterr()
 
     assert len(errors) == 1
@@ -252,32 +244,13 @@ def test_run_ast_export_writes_both_outputs_when_exports_succeed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    source_path = tmp_path / "sample.c"
-    output_dir = tmp_path / "ast_output"
-    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
-
-    monkeypatch.setattr(clang_ast, "DEFAULT_OUTPUT_DIR", output_dir)
-    monkeypatch.setattr(
-        clang_ast,
-        "parse_translation_unit",
-        lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]),
+    errors, libclang_path, clang_path = _run_ast_export_case(
+        tmp_path,
+        monkeypatch,
+        parse_translation_unit_impl=lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]),
+        build_ast_payload_impl=lambda *args, **kwargs: "libclang payload",
+        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
     )
-    monkeypatch.setattr(clang_ast, "build_ast_payload", lambda *args, **kwargs: "libclang payload")
-    monkeypatch.setattr(
-        clang_ast,
-        "run_clang_ast_dump",
-        lambda *args, **kwargs: clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
-    )
-
-    errors = clang_ast.run_ast_export(
-        source_path=source_path,
-        include=[],
-        include_directory=[],
-        c_std=None,
-        cpp_std=None,
-        clang_library_path=None,
-    )
-    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
 
     assert errors == []
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"

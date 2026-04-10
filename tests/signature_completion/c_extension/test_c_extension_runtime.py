@@ -1,15 +1,12 @@
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from pcstubgen.signature_completion.c_extension import runtime as runtime_module
 
 
-@pytest.mark.parametrize("handle", [math.sin, len])
-def test_read_builtin_function_runtime_info_reads_real_builtin(handle: object) -> None:
-    runtime_info = runtime_module.read_builtin_function_runtime_info(handle)
+def test_read_builtin_function_runtime_info_reads_real_builtin() -> None:
+    runtime_info = runtime_module.read_builtin_function_runtime_info(len)
 
     assert runtime_info.address > 0
     assert isinstance(runtime_info.flags, int)

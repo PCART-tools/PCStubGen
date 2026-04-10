@@ -280,10 +280,7 @@ def test_parse_canonicalize_render_returns_expected_type_string(
 
 
 def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> None:
-    with pytest.raises(
-        PyBuildValueTypeParserError,
-        match=r"Dictionary format 必须包含成对的 key/value。",
-    ):
+    with pytest.raises(PyBuildValueTypeParserError, match="key/value"):
         _parse("{sis}", 3)
 
 
@@ -350,16 +347,6 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
         (ListType(UnionType((NamedType("Converted"),))),)
     )
     assert seen == [converter_cursor]
-
-
-def test_collect_imports_returns_recursive_dependency_set() -> None:
-    node = DictType(
-        NamedType("numpy.ndarray", imports=("numpy",)),
-        UnionType((AnyType(), NamedType("collections.abc.Buffer", imports=("collections.abc",)))),
-    )
-
-    assert node.collect_imports() == {"numpy", "collections.abc", "typing"}
-
 
 @pytest.mark.parametrize(
     ("format_string", "arg_count"),

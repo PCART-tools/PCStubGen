@@ -1,26 +1,23 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import cast
 
 import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.ir_modules import IRArgument
-from pcstubgen.types import RawType, Type, UnionType
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-
-
-@dataclass(frozen=True)
-class _FakeCursor:
-    name: str
-
-
-def _cursor(name: str) -> Cursor:
-    return cast(Cursor, _FakeCursor(name))
+from tests.signature_completion.c_extension._py_arg_parse_test_support import (
+    _FakeCursor,
+    _STR_OR_BUFFER_OR_NONE_TYPE,
+    _STR_OR_BUFFER_TYPE,
+    _STR_OR_BYTES_OR_BYTEARRAY_TYPE,
+    _arg,
+    _cursor,
+)
 
 
 def _default_resolve_name(c_args: list[Cursor]) -> str:
@@ -45,30 +42,6 @@ def _parse(
         resolve_object_type_func=resolve_object_type_func,
         resolve_default_value_func=resolve_default_value_func,
     ).parse()
-
-
-_BUFFER_TYPE = RawType("collections.abc.Buffer", imports=("collections.abc",))
-_STR_OR_BUFFER_TYPE = UnionType((RawType("str"), _BUFFER_TYPE))
-_STR_OR_BUFFER_OR_NONE_TYPE = UnionType((RawType("str"), _BUFFER_TYPE, RawType("None")))
-_STR_OR_BYTES_OR_BYTEARRAY_TYPE = UnionType(
-    (RawType("str"), RawType("bytes"), RawType("bytearray"))
-)
-
-
-def _arg(
-    name: str,
-    type_text: str | Type,
-    *,
-    imports: tuple[str, ...] = (),
-    default_value: str | None = None,
-    has_default: bool = False,
-) -> IRArgument:
-    return IRArgument(
-        name=name,
-        type=type_text if isinstance(type_text, Type) else RawType(type_text, imports=imports),
-        default_value=default_value,
-        has_default=has_default,
-    )
 
 
 def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators() -> None:
