@@ -253,7 +253,34 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
         )
 
 
-def test_parse_uses_compile_command_working_directory_and_preserves_translation_unit(
+def test_try_resolve_clang_resource_dir_returns_valid_directory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    resource_dir = tmp_path / "clang-resource"
+    (resource_dir / "include").mkdir(parents=True)
+    monkeypatch.setattr(
+        translation_unit_module.subprocess,
+        "check_output",
+        lambda command, *, text: f"{resource_dir}\n",
+    )
+
+    assert translation_unit_module.try_get_clang_resource_dir() == resource_dir
+
+
+def test_try_resolve_clang_resource_dir_returns_none_when_command_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        translation_unit_module.subprocess,
+        "check_output",
+        lambda command, *, text: (_ for _ in ()).throw(FileNotFoundError()),
+    )
+
+    assert translation_unit_module.try_get_clang_resource_dir() is None
+
+
+def test_parse_uses_compile_command_working_directory_and_injects_resource_dir(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -282,6 +309,8 @@ def test_parse_uses_compile_command_working_directory_and_preserves_translation_
     )
     index = Index.create()
     calls: list[tuple[Index, list[str], str]] = []
+    resource_dir = tmp_path / "clang-resource"
+    resource_dir.mkdir()
 
     def _fake_parse_translation_unit_full_argv(
         received_index: Index,
@@ -294,6 +323,11 @@ def test_parse_uses_compile_command_working_directory_and_preserves_translation_
         translation_unit_module,
         "parse_translation_unit_full_argv",
         _fake_parse_translation_unit_full_argv,
+    )
+    monkeypatch.setattr(
+        translation_unit_module,
+        "try_resolve_clang_resource_dir",
+        lambda: resource_dir,
     )
     compile_command = compilation_database_module.MyCompileCommand(
         cast(
@@ -315,7 +349,66 @@ def test_parse_uses_compile_command_working_directory_and_preserves_translation_
     assert calls == [
         (
             index,
-            ["clang", "-I../include", "-DMODE=1", "src/module.c"],
+            [
+                "clang",
+                "-I../include",
+                "-DMODE=1",
+                "src/module.c",
+                "-resource-dir",
+                str(resource_dir),
+            ],
             str(working_directory.resolve()),
         )
     ]
+
+
+def test_parse_skips_resource_dir_when_not_found(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    working_directory = tmp_path / "build"
+    working_directory.mkdir(parents=True, exist_ok=True)
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    translation_unit = _FakeTranslationUnit(diagnostics=[])
+    index = Index.create()
+    calls: list[list[str]] = []
+
+    def _fake_parse_translation_unit_full_argv(
+        received_index: Index,
+        arguments: list[str],
+    ) -> _FakeTranslationUnit:
+        _ = received_index
+        calls.append(list(arguments))
+        return translation_unit
+
+    monkeypatch.setattr(
+        translation_unit_module,
+        "parse_translation_unit_full_argv",
+        _fake_parse_translation_unit_full_argv,
+    )
+    monkeypatch.setattr(
+        translation_unit_module,
+        "try_resolve_clang_resource_dir",
+        lambda: None,
+    )
+
+    compile_command = compilation_database_module.MyCompileCommand(
+        cast(
+            CompileCommand,
+            cast(
+                object,
+                _FakeCompileCommand(
+                    directory=working_directory.resolve(),
+                    filename=str(source.resolve()),
+                    arguments=["clang", "-I../include", "-DMODE=1", "src/module.c"],
+                ),
+            ),
+        )
+    )
+
+    result = translation_unit_module.parse(index, compile_command)
+
+    assert result is translation_unit
+    assert calls == [["clang", "-I../include", "-DMODE=1", "src/module.c"]]

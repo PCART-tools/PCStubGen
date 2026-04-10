@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import contextlib
+import functools
+from pathlib import Path
+import subprocess
 
 import clang
 from clang.cindex import Diagnostic, Index, TranslationUnit
@@ -47,9 +50,30 @@ def parse(
     compile_command: MyCompileCommand,
 ) -> TranslationUnit:
     """解析单个编译数据库条目为 clang translation unit。"""
+    arguments = list(compile_command.arguments)
+    resource_dir = try_get_clang_resource_dir()
+    if resource_dir is not None:
+        arguments.extend(["-resource-dir", str(resource_dir)])
+
     with contextlib.chdir(compile_command.directory):
         translation_unit = parse_translation_unit_full_argv(
             index,
-            compile_command.arguments,
+            arguments,
         )
     return translation_unit
+
+@functools.cache
+def try_get_clang_resource_dir() -> Path | None:
+    """尝试解析 clang resource dir，失败时返回 None。"""
+    try:
+        resource_dir_text = subprocess.check_output(
+            ["clang", "-print-resource-dir"],
+            text=True,
+        ).strip()
+    except BaseException:
+        return None
+
+    if not resource_dir_text:
+        return None
+
+    return Path(resource_dir_text)
