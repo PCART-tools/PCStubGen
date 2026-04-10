@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .renderer import StubRenderer
-from ..ir_modules import IRModule, IRModuleType
+from ..ir_modules import IRModule
 
 
 class StubWriter:
@@ -24,10 +24,9 @@ class StubWriter:
             module_dir = to
             module_file = to / f"{module.full_name.name}.pyi"
 
-        if module.module_type == IRModuleType.EXTENSION:
-            with open(module_file, "w", encoding="utf-8") as f:
-                for line in renderer.print_module(module):
-                    f.write(line + "\n")
+        with open(module_file, "w", encoding="utf-8") as f:
+            for line in renderer.print_module(module):
+                f.write(line + "\n")
 
         for sub_module in module.sub_modules:
             self.write(sub_module, renderer, module_dir)

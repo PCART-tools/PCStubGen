@@ -62,7 +62,6 @@ def test_module_collect_collects_extension_method_descriptors() -> None:
     ir_class = module_collect_module.collect_class(
         QualifiedName.from_str("builtins.list"),
         list,
-        module_type=module_collect_module.IRModuleType.EXTENSION,
     )
 
     method_names = [method.function.name for method in ir_class.methods]

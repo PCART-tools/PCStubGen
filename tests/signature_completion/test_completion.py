@@ -6,7 +6,7 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRArgument, IRFunction, IRModule, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
@@ -28,11 +28,19 @@ def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def _patch_c_runtime_support(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.resolve_runtime_pymethoddef",
+        lambda handle: object(),
+    )
+
+
 def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
     source = tmp_path / "foo_impl.c"
     snippet = "\n".join(
         [
@@ -53,7 +61,6 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
 
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[
             _unknown_function(
                 "foo",
@@ -95,9 +102,9 @@ def test_completer_raises_when_c_has_no_candidates(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[
             _unknown_function(
                 "cdist_minkowski",
@@ -119,9 +126,9 @@ def test_completer_raises_when_c_source_resolution_fails(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[_unknown_function("foo", doc="foo(value: str) -> bool")],
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
@@ -137,7 +144,6 @@ def test_completer_uses_docstring_when_available_for_python_module(
     _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.PYTHON,
         functions=[
             _unknown_function(
                 "fallback",
@@ -164,7 +170,6 @@ def test_completer_keeps_known_signatures_and_counts_unresolved(
     _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.PYTHON,
         functions=[
             IRFunction(
                 name="known",
@@ -193,12 +198,10 @@ def test_completer_run_recreates_summary_for_each_invocation(
 
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),
-        module_type=IRModuleType.PYTHON,
         functions=[_unknown_function("missing")],
     )
     second_module = IRModule(
         full_name=QualifiedName.from_str("pkg.second"),
-        module_type=IRModuleType.PYTHON,
         functions=[],
     )
 

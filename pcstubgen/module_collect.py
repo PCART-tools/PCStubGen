@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import importlib
-import importlib.machinery
 import inspect
 import pkgutil
 import types
@@ -14,7 +13,6 @@ from .ir_modules import (
     IRFunction,
     IRMethod,
     IRModule,
-    IRModuleType,
     QualifiedName,
 )
 
@@ -49,12 +47,10 @@ def is_package(module: types.ModuleType) -> bool:
 
 
 def collect_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
-    module_type = _detect_module_type(module)
     irmodule = IRModule(
         full_name=path,
         doc=get_doc(module),
         is_package=is_package(module),
-        module_type=module_type,
     )
     for name, member in inspect.getmembers(module):
         member_path = irmodule.full_name.concat(name)
@@ -65,13 +61,9 @@ def collect_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             continue
 
         if inspect.isbuiltin(member):
-            irmodule.functions.append(
-                collect_function(member_path, member, module_type=module_type)
-            )
+            irmodule.functions.append(collect_function(member_path, member))
         elif inspect.isclass(member):
-            irmodule.classes.append(
-                collect_class(member_path, member, module_type=module_type)
-            )
+            irmodule.classes.append(collect_class(member_path, member))
 
     if irmodule.is_package:
         for submodule_name in _iter_submodule_names(module):
@@ -89,28 +81,6 @@ def collect_module(path: QualifiedName, module: types.ModuleType) -> IRModule:
             )
 
     return irmodule
-
-
-def _detect_module_type(module: types.ModuleType) -> IRModuleType:
-    spec = module.__spec__
-    loader = getattr(spec, "loader", None) if spec is not None else None
-
-    if loader is importlib.machinery.BuiltinImporter:  # 编译进Python
-        return IRModuleType.BUILTIN
-
-    if isinstance(loader, importlib.machinery.ExtensionFileLoader):  # .pyd .so
-        return IRModuleType.EXTENSION
-
-    if isinstance(
-        loader,
-        (
-            importlib.machinery.SourcelessFileLoader,  # .pyc
-            importlib.machinery.SourceFileLoader,  # .py
-        ),
-    ):
-        return IRModuleType.PYTHON
-
-    return IRModuleType.UNKNOWN
 
 
 def _iter_submodule_names(module: types.ModuleType) -> list[str]:
@@ -131,8 +101,6 @@ def _iter_submodule_names(module: types.ModuleType) -> list[str]:
 def collect_class(
     path: QualifiedName,
     class_: type,
-    *,
-    module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRClass:
     irclass = IRClass(name=path.name, doc=get_doc(class_))
     irclass.bases = collect_bases(class_)
@@ -148,14 +116,11 @@ def collect_class(
                 collect_method(
                     member_path,
                     member,
-                    module_type=module_type,
                     owner=class_,
                 )
             )
         elif inspect.isclass(member):
-            irclass.classes.append(
-                collect_class(member_path, member, module_type=module_type)
-            )
+            irclass.classes.append(collect_class(member_path, member))
 
     return irclass
 
@@ -163,10 +128,7 @@ def collect_class(
 def collect_function(
     path: QualifiedName,
     func: Any,
-    *,
-    module_type: IRModuleType = IRModuleType.UNKNOWN,
 ) -> IRFunction:
-    _ = module_type
     return IRFunction(
         name=path.name,
         doc=get_doc(func),
@@ -178,10 +140,9 @@ def collect_method(
     path: QualifiedName,
     method: Any,
     *,
-    module_type: IRModuleType = IRModuleType.UNKNOWN,
     owner: type | None = None,
 ) -> IRMethod:
-    func = collect_function(path, method, module_type=module_type)
+    func = collect_function(path, method)
     return IRMethod(
         function=func,
         decorator=None,

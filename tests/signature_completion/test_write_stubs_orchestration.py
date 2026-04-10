@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import ModuleType
 
-from pcstubgen.ir_modules import IRModule, IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRModule, QualifiedName
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
     _arg,
@@ -21,7 +21,6 @@ def test_write_stubs_writes_rendered_stub_file(
 
     ir_module = IRModule(
         full_name=QualifiedName.from_str("math"),
-        module_type=IRModuleType.EXTENSION,
         functions=[_unknown_function("foo", doc="foo(value: str) -> bool")],
     )
 
@@ -34,6 +33,10 @@ def test_write_stubs_writes_rendered_stub_file(
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
         lambda path: object(),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.resolve_runtime_pymethoddef",
+        lambda handle: object(),
     )
     _patch_c_signature_extractor(
         monkeypatch,

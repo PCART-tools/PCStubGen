@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from pcstubgen.types import RawType, Type
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRModuleType, IRSignature, QualifiedName
+from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 
 

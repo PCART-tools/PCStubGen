@@ -7,7 +7,7 @@ from typing import TypeAlias
 from clang.cindex import Cursor, CursorKind, Index, TranslationUnit, TranslationUnitLoadError
 from loguru import logger
 
-from ...ir_modules import IRFunction, IRModule, IRModuleType, IRSignature
+from ...ir_modules import IRFunction, IRModule, IRSignature
 from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_address
 from .clang import compilation_database as compilation_database_loader
 from .clang import translation_unit as translation_unit_loader
@@ -42,9 +42,6 @@ class CExtensionSource:
         irfunction: IRFunction,
     ) -> ResolvedCExtensionFunction:
         """按函数懒解析 C 扩展签名。"""
-        if irmodule.module_type is not IRModuleType.EXTENSION:
-            raise RuntimeError(f"模块 {irmodule.full_name} 不是扩展模块。")
-
         runtime_method = resolve_runtime_pymethoddef(irfunction.runtime_handle)
         location = resolve_symbolized_address(runtime_method.method_address)
         function_cursor = self._resolve_function_cursor(location=location)

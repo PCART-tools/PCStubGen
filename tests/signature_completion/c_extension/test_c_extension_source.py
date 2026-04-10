@@ -5,7 +5,7 @@ from pathlib import Path
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
+from pcstubgen.ir_modules import IRFunction, IRModule, IRSignature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import SymbolizedAddressLocation
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
@@ -92,7 +92,6 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
@@ -139,7 +138,6 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
     source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
@@ -167,7 +165,6 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_method_descrip
     source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="append", runtime_handle=list.__dict__["append"])],
     )
 
@@ -218,26 +215,10 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
     with pytest.raises(RuntimeError, match="boom"):
-        source.resolve_function(module, module.functions[0])
-
-
-def test_c_extension_source_rejects_non_extension_modules(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    source = _make_source(monkeypatch, tmp_path)
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.PYTHON,
-        functions=[IRFunction(name="foo", runtime_handle=object())],
-    )
-
-    with pytest.raises(RuntimeError, match="不是扩展模块"):
         source.resolve_function(module, module.functions[0])
 
 

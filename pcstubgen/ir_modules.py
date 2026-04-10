@@ -84,22 +84,12 @@ class IRClass:
     methods: list[IRMethod] = field(default_factory=list)
 
 
-class IRModuleType(Enum):
-    UNKNOWN = "unknown"
-    PYTHON = "python"
-    BUILTIN = "builtin"
-    EXTENSION = "extension"
-
-
 @dataclass
 class IRModule:
     full_name: QualifiedName
 
     # 文档
     doc: str | None = None
-
-    # 模块实现类型
-    module_type: IRModuleType = IRModuleType.UNKNOWN
 
     # 类
     classes: list[IRClass] = field(default_factory=list)
@@ -122,7 +112,6 @@ __all__ = [
     "IRMethod",
     "IRMethodDecorator",
     "IRModule",
-    "IRModuleType",
     "IRSignature",
     "QualifiedName",
 ]

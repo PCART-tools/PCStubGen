@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.ir_modules import IRFunction, IRModule, IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRFunction, IRModule, QualifiedName
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
     resolve_docstring_signatures,
@@ -22,7 +22,6 @@ def _resolve(
 ):
     irmodule = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.PYTHON,
     )
     irfunction = IRFunction(name=function_name, runtime_handle=object(), doc=doc)
     return resolve_docstring_signatures(irmodule, irfunction)
