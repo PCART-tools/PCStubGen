@@ -17,7 +17,7 @@ from ..clang.cursor_utils import (
     var_decl_to_init_list_expr,
     walk_cursor,
 )
-from ..modules.method_flags import (
+from ..method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
     METH_NOARGS,

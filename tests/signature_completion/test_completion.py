@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from io import StringIO
 from pathlib import Path
 from typing import cast
 
 import clang.cindex
 import pytest
-from loguru import logger
 
 from pcstubgen.ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
-from pcstubgen.stub_generation_options import StubGenerationOptions
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
     _FakeNode,
@@ -24,10 +21,18 @@ from tests._c_extension_test_support import (
 )
 
 
+def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
+        lambda path: object(),
+    )
+
+
 def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    _patch_compilation_database_loader(monkeypatch)
     source = tmp_path / "foo_impl.c"
     snippet = "\n".join(
         [
@@ -71,12 +76,7 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
         },
     )
 
-    summary = SignatureCompleter(
-        StubGenerationOptions(
-            compilation_database=tmp_path / "compile_commands.json",
-            include_c_inferred_source_comment=True,
-        )
-    ).run(module)
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
@@ -90,10 +90,11 @@ def test_completer_prefers_c_over_docstring_and_writes_source_comment(
     assert summary.docstring_completed == 0
 
 
-def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
+def test_completer_raises_when_c_has_no_candidates(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -109,29 +110,15 @@ def test_completer_falls_back_to_docstring_when_c_has_no_candidates(
     )
     _patch_c_signature_extractor(monkeypatch, functions={})
 
-    log_output = StringIO()
-    sink_id = logger.add(log_output, format="{message}")
-    try:
-        summary = SignatureCompleter(
-            StubGenerationOptions(
-                compilation_database=tmp_path / "compile_commands.json",
-            )
-        ).run(module)
-    finally:
-        logger.remove(sink_id)
-
-    parsed = module.functions[0]
-    assert [arg.name for arg in parsed.signatures[0].args] == ["x", "y", "w", "out", "p"]
-    assert parsed.signatures[0].return_type is not None
-    assert parsed.signatures[0].return_type.render() == "numpy.ndarray"
-    assert summary.docstring_completed == 1
-    assert "docstring" in log_output.getvalue()
+    with pytest.raises(RuntimeError, match="未找到函数|没有可用签名"):
+        SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
 
-def test_completer_falls_back_to_docstring_when_c_source_initialization_fails(
+def test_completer_raises_when_c_source_resolution_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -139,73 +126,15 @@ def test_completer_falls_back_to_docstring_when_c_source_initialization_fails(
     )
     _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
 
-    summary = SignatureCompleter(
-        StubGenerationOptions(
-            compilation_database=tmp_path / "compile_commands.json",
-        )
-    ).run(module)
-
-    parsed = module.functions[0]
-    assert parsed.signatures[0].args[0].name == "value"
-    assert parsed.signatures[0].return_type is not None
-    assert parsed.signatures[0].return_type.render() == "bool"
-    assert summary.docstring_completed == 1
+    with pytest.raises(RuntimeError, match="boom"):
+        SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
 
-def test_completer_skips_source_comment_when_option_disabled(
+def test_completer_uses_docstring_when_available_for_python_module(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / "foo_impl.c"
-    snippet = "\n".join(
-        [
-            "static PyObject* foo_impl(PyObject* self, PyObject* args) {",
-            "    return (PyObject*)0;",
-            "}",
-        ]
-    )
-    source.write_text(snippet, encoding="utf-8", newline="\n")
-    func_cursor = cast(
-        clang.cindex.Cursor,
-        _FakeNode(
-            kind=clang.cindex.CursorKind.FUNCTION_DECL,
-            spelling="foo_impl",
-            extent=_extent_for_source_snippet(source, snippet),
-        ),
-    )
-    _patch_c_signature_extractor(
-        monkeypatch,
-        functions={
-            "foo": ResolvedFunctionFixture(
-                function_cursor=func_cursor,
-                signatures=[
-                    _signature(
-                        args=[_arg("value", "int")],
-                        return_type=RawType("bool"),
-                    )
-                ],
-            )
-        },
-    )
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        functions=[_unknown_function("foo")],
-    )
-
-    SignatureCompleter(
-        StubGenerationOptions(
-            compilation_database=tmp_path / "compile_commands.json",
-            include_c_inferred_source_comment=False,
-        )
-    ).run(module)
-
-    parsed = module.functions[0]
-    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
-    assert parsed.c_inferred_source_comment is None
-
-
-def test_completer_uses_docstring_when_available_for_python_module() -> None:
+    _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -216,8 +145,7 @@ def test_completer_uses_docstring_when_available_for_python_module() -> None:
             )
         ],
     )
-
-    summary = SignatureCompleter(StubGenerationOptions()).run(module)
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
     parsed = module.functions[0]
     assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
@@ -229,7 +157,11 @@ def test_completer_uses_docstring_when_available_for_python_module() -> None:
     assert summary.uncompleted == 0
 
 
-def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
+def test_completer_keeps_known_signatures_and_counts_unresolved(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,
@@ -243,8 +175,7 @@ def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
             _unknown_function("fallback"),
         ],
     )
-
-    summary = SignatureCompleter(StubGenerationOptions()).run(module)
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
     assert summary.total_functions == 3
     assert summary.uncompleted == 3
@@ -253,8 +184,12 @@ def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
     assert module.functions[2].signatures == []
 
 
-def test_completer_run_recreates_summary_for_each_invocation() -> None:
-    completer = SignatureCompleter(StubGenerationOptions())
+def test_completer_run_recreates_summary_for_each_invocation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    completer = SignatureCompleter(tmp_path / "compile_commands.json")
 
     first_module = IRModule(
         full_name=QualifiedName.from_str("pkg.first"),

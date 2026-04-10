@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 import re
 
 from loguru import logger
 
+from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule, IRModuleType
 from .c_extension import CExtensionSource
 from .docstring_source import resolve_docstring_signatures
-from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule, IRModuleType
-from ..stub_generation_options import StubGenerationOptions
 
 
 @dataclass
@@ -29,11 +29,8 @@ class SignatureCompletionResult:
 
 
 class SignatureCompleter:
-    def __init__(self, options: StubGenerationOptions) -> None:
-        self._options = options
-        self._c_source = CExtensionSource(
-            compilation_database=options.compilation_database,
-        )
+    def __init__(self, compilation_database: Path) -> None:
+        self._c_source = CExtensionSource(compilation_database=compilation_database)
         self._result = SignatureCompletionResult()
 
     def run(self, module: IRModule) -> SignatureCompletionResult:
@@ -80,20 +77,14 @@ class SignatureCompleter:
         is_method: bool,
     ) -> None:
         self._result.total_functions += 1
-        c_reason = "未启用C扩展补全。"
 
-        try:
-            c_result = self._c_source.resolve_function(
+        if module.module_type is IRModuleType.EXTENSION:
+            signatures, c_inferred_source_comment = self._c_source.resolve_function(
                 module,
                 func,
             )
-        except RuntimeError as ex:
-            c_reason = str(ex)
-        else:
-            signatures, c_inferred_source_comment = c_result
             func.signatures = signatures
-            if self._options.include_c_inferred_source_comment:
-                func.c_inferred_source_comment = c_inferred_source_comment
+            func.c_inferred_source_comment = c_inferred_source_comment
             self._result.c_completed += 1
             logger.info(
                 "通过C源码补全成功, module: {}, func: {}, is_method: {}",
@@ -117,10 +108,9 @@ class SignatureCompleter:
 
         self._result.uncompleted += 1
         logger.warning(
-            "补全失败, module: {}, func: {}, c_reason: {}, docstring_reason: {}",
+            "补全失败, module: {}, func: {}, docstring_reason: {}",
             module.full_name,
             func.name,
-            c_reason,
             docstring_reason,
         )
 

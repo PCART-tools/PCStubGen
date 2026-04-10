@@ -158,10 +158,7 @@ def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
         c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
     )
 
-    lines = StubRenderer(
-        include_docstrings=False,
-        include_c_inferred_source_comment=True,
-    ).print_function(func)
+    lines = StubRenderer(include_docstrings=False).print_function(func)
 
     assert lines[:2] == [
         "def foo(value: int):",
@@ -191,10 +188,7 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
         c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
     )
 
-    lines = StubRenderer(
-        include_docstrings=False,
-        include_c_inferred_source_comment=True,
-    ).print_function(func)
+    lines = StubRenderer(include_docstrings=False).print_function(func)
 
     assert lines.count("@typing.overload") == 2
     assert lines.count("#   C inferred source for foo:") == 1
@@ -206,7 +200,7 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
     ]
 
 
-def test_renderer_skips_c_inferred_source_comment_when_disabled() -> None:
+def test_renderer_always_prints_c_inferred_source_comment_when_present() -> None:
     func = _function(
         name="foo",
         signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
@@ -218,6 +212,8 @@ def test_renderer_skips_c_inferred_source_comment_when_disabled() -> None:
     assert lines == [
         "def foo(value: int):",
         "    ...",
+        "#   C inferred source for foo:",
+        "#   static int foo_impl(int value) { return value; }",
     ]
 
 

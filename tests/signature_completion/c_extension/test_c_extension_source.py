@@ -7,7 +7,7 @@ import pytest
 
 from pcstubgen.ir_modules import IRArgumentKind, IRFunction, IRModule, IRModuleType, IRSignature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import SymbolizedAddressLocation
-from pcstubgen.signature_completion.c_extension.modules.method_flags import (
+from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
     METH_NOARGS,
@@ -18,6 +18,18 @@ from pcstubgen.signature_completion.c_extension.runtime import RuntimePyMethodDe
 from pcstubgen.signature_completion.c_extension.source import CExtensionSource
 from pcstubgen.types import AnyType, RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
+
+
+def _make_source(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> CExtensionSource:
+    compilation_database = tmp_path / "compile_commands.json"
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
+        lambda path: object(),
+    )
+    return CExtensionSource(compilation_database=compilation_database)
 
 
 def _symbolized_location(
@@ -78,7 +90,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         ],
     )
 
-    source = CExtensionSource(compilation_database=tmp_path / "compile_commands.json")
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -121,11 +133,23 @@ def test_c_extension_source_passes_resolved_scope_to_cursor_resolver(
     ):
         _ = self
         captured["location"] = location
-        return None
+        return _FakeNode(
+            kind=clang.cindex.CursorKind.FUNCTION_DECL,
+            spelling="foo_impl",
+        )
 
     monkeypatch.setattr(CExtensionSource, "_resolve_function_cursor", fake_resolve_function_cursor)
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
+        lambda function_cursor, *, ml_flags=0: [
+            IRSignature(
+                args=[],
+                return_type=AnyType(),
+            )
+        ],
+    )
 
-    source = CExtensionSource()
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
@@ -141,7 +165,7 @@ def test_c_extension_source_passes_resolved_scope_to_cursor_resolver(
     )
 
 
-def test_c_extension_source_uses_minimal_inference_without_ast(
+def test_c_extension_source_raises_when_function_cursor_is_missing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -159,25 +183,21 @@ def test_c_extension_source_uses_minimal_inference_without_ast(
     monkeypatch.setattr(
         CExtensionSource,
         "_resolve_function_cursor",
-        lambda self, **kwargs: None,
+        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
     )
 
-    source = CExtensionSource()
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
-    signatures, _ = source.resolve_function(module, module.functions[0])
-
-    assert signatures[0].args[0].name == "arg"
-    assert signatures[0].args[0].kind is IRArgumentKind.POSITIONAL_ONLY
-    assert signatures[0].args[0].type == RawType("object")
-    assert signatures[0].return_type == AnyType()
+    with pytest.raises(RuntimeError, match="cursor missing"):
+        source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_uses_minimal_varargs_keywords_shape_without_ast(
+def test_c_extension_source_raises_when_function_cursor_lookup_fails_for_varargs(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -195,25 +215,24 @@ def test_c_extension_source_uses_minimal_varargs_keywords_shape_without_ast(
             function_name="foo_impl",
         ),
     )
+    monkeypatch.setattr(
+        CExtensionSource,
+        "_resolve_function_cursor",
+        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
+    )
 
-    source = CExtensionSource()
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
-    signatures, _ = source.resolve_function(module, module.functions[0])
-
-    assert [arg.name for arg in signatures[0].args] == ["args", "kwargs"]
-    assert signatures[0].args[0].kind is IRArgumentKind.VAR_POSITIONAL
-    assert signatures[0].args[1].kind is IRArgumentKind.VAR_KEYWORD
-    assert signatures[0].args[0].type == RawType("object")
-    assert signatures[0].args[1].type == RawType("object")
-    assert signatures[0].return_type == AnyType()
+    with pytest.raises(RuntimeError, match="cursor missing"):
+        source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_supports_method_descriptors(
+def test_c_extension_source_raises_when_method_descriptor_cursor_lookup_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -225,21 +244,24 @@ def test_c_extension_source_supports_method_descriptors(
         ),
     )
 
-    source = CExtensionSource()
+    monkeypatch.setattr(
+        CExtensionSource,
+        "_resolve_function_cursor",
+        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
+    )
+
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="append", runtime_handle=list.__dict__["append"])],
     )
 
-    signatures, _ = source.resolve_function(module, module.functions[0])
-
-    assert signatures[0].args[0].name == "arg"
-    assert signatures[0].args[0].kind is IRArgumentKind.POSITIONAL_ONLY
-    assert signatures[0].args[0].type == RawType("object")
+    with pytest.raises(RuntimeError, match="cursor missing"):
+        source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_uses_fastcall_minimal_shape_without_ast(
+def test_c_extension_source_raises_when_fastcall_cursor_lookup_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -258,21 +280,24 @@ def test_c_extension_source_uses_fastcall_minimal_shape_without_ast(
         ),
     )
 
-    source = CExtensionSource()
+    monkeypatch.setattr(
+        CExtensionSource,
+        "_resolve_function_cursor",
+        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
+    )
+
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
-    signatures, _ = source.resolve_function(module, module.functions[0])
-
-    assert [arg.name for arg in signatures[0].args] == ["args", "kwargs"]
-    assert signatures[0].args[0].kind is IRArgumentKind.VAR_POSITIONAL
-    assert signatures[0].args[1].kind is IRArgumentKind.VAR_KEYWORD
+    with pytest.raises(RuntimeError, match="cursor missing"):
+        source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_falls_back_to_minimal_signatures_when_ast_inference_raises(
+def test_c_extension_source_raises_when_ast_inference_fails(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -312,23 +337,22 @@ def test_c_extension_source_falls_back_to_minimal_signatures_when_ast_inference_
         lambda function_cursor, *, ml_flags=0: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    source = CExtensionSource(compilation_database=tmp_path / "compile_commands.json")
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.EXTENSION,
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
-    signatures, source_comment = source.resolve_function(module, module.functions[0])
-
-    assert signatures[0].args[0].name == "arg"
-    assert signatures[0].args[0].type == RawType("object")
-    assert signatures[0].return_type == AnyType()
-    assert source_comment == snippet
+    with pytest.raises(RuntimeError, match="boom"):
+        source.resolve_function(module, module.functions[0])
 
 
-def test_c_extension_source_rejects_non_extension_modules() -> None:
-    source = CExtensionSource()
+def test_c_extension_source_rejects_non_extension_modules(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    source = _make_source(monkeypatch, tmp_path)
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         module_type=IRModuleType.PYTHON,

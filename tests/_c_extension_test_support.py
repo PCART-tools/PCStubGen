@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +9,7 @@ import clang.cindex
 from clang.cindex import LinkageKind
 import pytest
 
-from pcstubgen.signature_completion.c_extension.modules.method_flags import (
+from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_KEYWORDS,
     METH_VARARGS,
 )
@@ -18,7 +17,6 @@ from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
 from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
-from pcstubgen.signature_completion.c_extension.clang import parser as translation_unit_module
 from pcstubgen.types import RawType, Type
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
@@ -29,10 +27,6 @@ from pcstubgen.ir_modules import (
     IRFunction,
     IRModule,
     IRSignature,
-)
-from pcstubgen.signature_completion.c_extension.clang.source_suffixes import (
-    CPP_SOURCE_SUFFIXES,
-    NATIVE_SOURCE_SUFFIXES,
 )
 
 
@@ -83,45 +77,6 @@ def _unknown_function(
 class ResolvedFunctionFixture:
     signatures: list[IRSignature]
     function_cursor: clang.cindex.Cursor | None = None
-
-
-def _write_compilation_database(
-    source_root: Path,
-    *,
-    files: list[Path] | None = None,
-) -> Path:
-    source_root.mkdir(parents=True, exist_ok=True)
-    if files is None:
-        files = sorted(
-            path
-            for path in source_root.rglob("*")
-            if path.is_file() and path.suffix.lower() in NATIVE_SOURCE_SUFFIXES
-        )
-
-    entries: list[dict[str, object]] = []
-    for file_path in files:
-        compiler = "c++" if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES else "cc"
-        std_value = "c++17" if file_path.suffix.lower() in CPP_SOURCE_SUFFIXES else "c11"
-        relative_path = file_path.relative_to(source_root).as_posix()
-        entries.append(
-            {
-                "directory": str(source_root),
-                "arguments": [
-                    compiler,
-                    f"-std={std_value}",
-                    "-c",
-                    relative_path,
-                ],
-                "file": relative_path,
-            }
-        )
-
-    compilation_database = source_root / "compile_commands.json"
-    compilation_database.write_text(
-        json.dumps(entries),
-        encoding="utf-8",
-    )
-    return compilation_database
 
 
 class _FakeExtractor:

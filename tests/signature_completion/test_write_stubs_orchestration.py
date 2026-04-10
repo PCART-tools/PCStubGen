@@ -5,10 +5,13 @@ from types import ModuleType
 import pytest
 
 from pcstubgen.ir_modules import IRModule, IRModuleType, QualifiedName
-from pcstubgen.stub_generation_options import StubGenerationOptions
+from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
-    _patch_raising_c_signature_extractor,
+    _arg,
+    _patch_c_signature_extractor,
+    _signature,
     _unknown_function,
+    ResolvedFunctionFixture,
 )
 
 
@@ -31,14 +34,28 @@ def test_write_stubs_writes_rendered_stub_file(
         lambda module_name: ModuleType(module_name),
     )
     monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
-    _patch_raising_c_signature_extractor(monkeypatch, RuntimeError("boom"))
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
+        lambda path: object(),
+    )
+    _patch_c_signature_extractor(
+        monkeypatch,
+        functions={
+            "foo": ResolvedFunctionFixture(
+                signatures=[
+                    _signature(
+                        args=[_arg("value", "str")],
+                        return_type=RawType("bool"),
+                    )
+                ]
+            )
+        },
+    )
 
     stubgen_module.write_stubs(
         "math",
         tmp_path,
-        options=StubGenerationOptions(
-            compilation_database=tmp_path / "compile_commands.json",
-        ),
+        tmp_path / "compile_commands.json",
     )
 
     stub_path = tmp_path / "math.pyi"

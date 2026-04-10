@@ -5,12 +5,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from pcstubgen.signature_completion.c_extension.clang import compilation_database as compilation_database_module
+from pcstubgen.signature_completion.c_extension.clang import translation_unit as translation_unit_module
 from tests._c_extension_test_support import (
     Path,
     _FakeDiagnostic,
     _FakeDiagnosticType,
     _FakeTranslationUnit,
-    translation_unit_module,
 )
 
 
@@ -31,8 +32,13 @@ class _FakeCompilationDatabase:
     def __init__(self, commands: list[_FakeCompileCommand]) -> None:
         self._commands = commands
 
-    def getAllCompileCommands(self) -> list[_FakeCompileCommand]:
-        return list(self._commands)
+    def getCompileCommands(self, filename: str) -> list[_FakeCompileCommand]:
+        return [
+            command
+            for command in self._commands
+            if compilation_database_module.resolve_compile_command_file_path(command)
+            == Path(filename).resolve()
+        ]
 
 
 class _RecordingIndex:
@@ -50,7 +56,7 @@ def test_validate_compilation_database_path_requires_compile_commands_json(tmp_p
     wrong_file.write_text("[]", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="文件名必须为 compile_commands.json"):
-        translation_unit_module.validate_compilation_database_path(wrong_file)
+        compilation_database_module.validate_compilation_database_path(wrong_file)
 
 
 def test_sanitize_compile_command_arguments_removes_driver_output_and_source_operands(
@@ -77,7 +83,7 @@ def test_sanitize_compile_command_arguments_removes_driver_output_and_source_ope
         ],
     )
 
-    parse_args = translation_unit_module.sanitize_compile_command_arguments(command)
+    parse_args = compilation_database_module.sanitize_compile_command_arguments(command)
 
     assert parse_args == [
         "-Iinclude",
@@ -85,7 +91,7 @@ def test_sanitize_compile_command_arguments_removes_driver_output_and_source_ope
     ]
 
 
-def test_list_compilation_commands_keeps_first_command_per_source_file(
+def test_resolve_compilation_command_keeps_first_command_per_source_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -114,21 +120,43 @@ def test_list_compilation_commands_keeps_first_command_per_source_file(
     ]
 
     monkeypatch.setattr(
-        translation_unit_module,
+        compilation_database_module,
         "load_compilation_database",
         lambda compilation_database: _FakeCompilationDatabase(commands),
     )
 
-    result = translation_unit_module.list_compilation_commands(
-        tmp_path / "compile_commands.json"
+    result = compilation_database_module.resolve_compilation_command(
+        compilation_database_module.load_compilation_database(
+            tmp_path / "compile_commands.json"
+        ),
+        shared_source,
     )
 
-    assert len(result) == 2
-    assert result[0].file_path == shared_source.resolve()
-    assert result[0].parse_args == ["-DFIRST"]
-    assert result[1].file_path == header.resolve()
-    assert result[1].parse_args == []
+    assert result.file_path == shared_source.resolve()
+    assert result.parse_args == ["-DFIRST"]
 
+
+def test_resolve_compilation_command_raises_when_source_is_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "src" / "module.c"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        compilation_database_module,
+        "load_compilation_database",
+        lambda compilation_database: _FakeCompilationDatabase([]),
+    )
+
+    with pytest.raises(RuntimeError, match="未在编译数据库中定位到编译单元"):
+        compilation_database_module.resolve_compilation_command(
+            compilation_database_module.load_compilation_database(
+                tmp_path / "compile_commands.json"
+            ),
+            source,
+        )
 
 def test_parse_uses_compile_command_working_directory_and_preserves_translation_unit(
     tmp_path: Path,
@@ -164,7 +192,7 @@ def test_parse_uses_compile_command_working_directory_and_preserves_translation_
         ]
     )
     index = _RecordingIndex(translation_unit)
-    command = translation_unit_module.CompilationCommand(
+    command = compilation_database_module.CompilationCommand(
         file_path=source.resolve(),
         working_directory=working_directory.resolve(),
         parse_args=["-I../include", "-DMODE=1"],
@@ -199,7 +227,7 @@ def test_parse_appends_detected_clang_resource_dir(
     source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
     translation_unit = _FakeTranslationUnit(diagnostics=[])
     index = _RecordingIndex(translation_unit)
-    command = translation_unit_module.CompilationCommand(
+    command = compilation_database_module.CompilationCommand(
         file_path=source.resolve(),
         working_directory=working_directory.resolve(),
         parse_args=["-I../include", "-DMODE=1"],
@@ -226,7 +254,7 @@ def test_build_effective_parse_args_appends_detected_clang_resource_dir(
         "detect_clang_resource_dir",
         lambda: "/opt/clang/resource",
     )
-    command = translation_unit_module.CompilationCommand(
+    command = compilation_database_module.CompilationCommand(
         file_path=tmp_path / "module.c",
         working_directory=tmp_path,
         parse_args=["-I../include", "-DMODE=1"],

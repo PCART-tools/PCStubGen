@@ -17,13 +17,8 @@ from ..ir_modules import (
 class StubRenderer:
     """将 IR 渲染为 stub 文本。"""
 
-    def __init__(
-        self,
-        include_docstrings: bool = False,
-        include_c_inferred_source_comment: bool = False,
-    ):
+    def __init__(self, include_docstrings: bool = False):
         self.include_docstrings = include_docstrings
-        self.include_c_inferred_source_comment = include_c_inferred_source_comment
 
     @staticmethod
     def indent_lines(lines: list[str], by: int = 4) -> list[str]:
@@ -141,7 +136,7 @@ class StubRenderer:
                 )
             )
 
-        if self.include_c_inferred_source_comment and func.c_inferred_source_comment is not None:
+        if func.c_inferred_source_comment is not None:
             result.extend(
                 self.print_c_inferred_source_comment(
                     func_name=func.name,

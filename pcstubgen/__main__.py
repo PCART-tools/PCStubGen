@@ -7,9 +7,8 @@ from pathlib import Path
 import typer
 from loguru import logger
 
-from .api import write_stubs
 from ._build import BUILD_COMMAND_HELP, build_command
-from .stub_generation_options import StubGenerationOptions
+from .api import write_stubs
 
 MY_LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -46,21 +45,18 @@ def _log_cli_arguments(
     *,
     module_name: str,
     output: Path,
-    compilation_database: Path | None,
+    compilation_database: Path,
     include_docstrings: bool,
-    include_c_inferred_source_comment: bool,
 ) -> None:
     """
     记录本次 CLI 解析后的参数。
     """
     logger.info(
-        "CLI参数: module_name={}, output={}, compilation_database={}, "
-        "include_docstrings={}, include_c_inferred_source_comment={}",
+        "CLI参数: module_name={}, output={}, compilation_database={}, include_docstrings={}",
         module_name,
         _format_path_for_log(output),
         _format_path_for_log(compilation_database),
         include_docstrings,
-        include_c_inferred_source_comment,
     )
 
 
@@ -72,20 +68,15 @@ def gen(
         "--output",
         help="输出 stub 的根目录",
     ),
-    compilation_database: Path | None = typer.Option(
-        None,
+    compilation_database: Path = typer.Option(
+        ...,
         "--compilation-database",
-        help="C源码补全使用的 compile_commands.json 文件路径",
+        help="必填的 compile_commands.json 文件路径",
     ),
     include_docstrings: bool = typer.Option(
         False,
         "--include-docstrings",
         help="生成 stub 时包含 docstring",
-    ),
-    include_c_inferred_source_comment: bool = typer.Option(
-        False,
-        "--include-c-inferred-source-comment",
-        help="在函数 stub 后包含 C AST 推断签名对应的源码注释",
     ),
 ) -> None:
     """
@@ -110,16 +101,12 @@ def gen(
             output=output,
             compilation_database=compilation_database,
             include_docstrings=include_docstrings,
-            include_c_inferred_source_comment=include_c_inferred_source_comment,
         )
         write_stubs(
             module_name=module_name,
             output=output,
-            options=StubGenerationOptions(
-                compilation_database=compilation_database,
-                include_docstrings=include_docstrings,
-                include_c_inferred_source_comment=include_c_inferred_source_comment,
-            ),
+            compilation_database=compilation_database,
+            include_docstrings=include_docstrings,
         )
     finally:
         logger.remove(console_sink_id)

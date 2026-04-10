@@ -6,7 +6,7 @@ import clang.cindex
 import pytest
 
 from pcstubgen.ir_modules import IRArgumentKind, IRSignature
-from pcstubgen.signature_completion.c_extension.modules.method_flags import (
+from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
     METH_NOARGS,
