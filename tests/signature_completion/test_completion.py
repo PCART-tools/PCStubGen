@@ -235,6 +235,71 @@ def test_completer_marks_uncompleted_when_pybind11_docstring_is_invalid(
     assert summary.uncompleted == 1
 
 
+def test_completer_marks_uncompleted_when_pybind11_docstring_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            IRFunction(
+                name="fallback",
+                runtime_handle=_make_pybind11_builtin_handle(),
+                doc=None,
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 1
+
+
+def test_completer_continues_after_pybind11_docstring_base_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            IRFunction(
+                name="broken",
+                runtime_handle=_make_pybind11_builtin_handle(),
+                doc="broken(value: str) -> bool",
+            ),
+            IRFunction(
+                name="working",
+                runtime_handle=_make_pybind11_builtin_handle(),
+                doc="working(value: str) -> bool",
+            ),
+        ],
+    )
+
+    def _resolve_or_raise(_: IRModule, func: IRFunction):
+        if func.name == "broken":
+            raise BaseException("boom")
+        return [_signature(args=[_arg("value", "str")], return_type=RawType("bool"))]
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.resolve_docstring_signatures",
+        _resolve_or_raise,
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    assert module.functions[0].signatures == []
+    assert [arg.name for arg in module.functions[1].signatures[0].args] == ["value"]
+    assert module.functions[1].signatures[0].return_type is not None
+    assert module.functions[1].signatures[0].return_type.render() == "bool"
+    assert summary.docstring_completed == 1
+    assert summary.uncompleted == 1
+
+
 def test_completer_keeps_known_signatures_and_counts_unresolved(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import re
 
 from loguru import logger
 
@@ -79,17 +78,16 @@ class SignatureCompleter:
     ) -> None:
         """按函数来源分支执行签名补全。"""
         self._result.total_functions += 1
+        branch = "unsupported"
+        reason = "函数不属于受支持的签名补全来源。"
 
-        if supports_builtin_function_inference(func.runtime_handle):
-            branch = "c_builtin"
-            try:
+        try:
+            if supports_builtin_function_inference(func.runtime_handle):
+                branch = "c_builtin"
                 signatures, c_inferred_source_comment = self._c_source.infer_function_signatures(
                     module,
                     func,
                 )
-            except BaseException as ex:
-                reason = f"{type(ex).__name__}: {ex}"
-            else:
                 func.signatures = signatures
                 func.c_inferred_source_comment = c_inferred_source_comment
                 self._result.c_completed += 1
@@ -100,27 +98,20 @@ class SignatureCompleter:
                     is_method,
                 )
                 return
-        elif self._is_pybind11_builtin(func.runtime_handle):
-            branch = "pybind11_builtin"
-            try:
-                docstring_result = resolve_docstring_signatures(module, func)
-            except BaseException as ex:
-                reason = f"{type(ex).__name__}: {ex}"
-            else:
-                if docstring_result is not None:
-                    func.signatures = docstring_result
-                    self._result.docstring_completed += 1
-                    logger.info(
-                        "通过docstring补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",
-                        module.full_name,
-                        func.name,
-                        is_method,
-                    )
-                    return
-                reason = self._describe_docstring_failure(func)
-        else:
-            branch = "unsupported"
-            reason = "函数不属于受支持的签名补全来源。"
+
+            if self._is_pybind11_builtin(func.runtime_handle):
+                branch = "pybind11_builtin"
+                func.signatures = resolve_docstring_signatures(module, func)
+                self._result.docstring_completed += 1
+                logger.info(
+                    "通过docstring补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",
+                    module.full_name,
+                    func.name,
+                    is_method,
+                )
+                return
+        except BaseException as ex:
+            reason = f"{type(ex).__name__}: {ex}"
 
         self._result.uncompleted += 1
         logger.warning(
@@ -147,22 +138,3 @@ class SignatureCompleter:
             return False
 
         return type(self_obj).__module__.startswith("pybind11_builtins")
-
-    @staticmethod
-    def _describe_docstring_failure(func: IRFunction) -> str:
-        """描述 docstring 分支未能产出签名的原因。"""
-        doc = func.doc
-        if not doc:
-            return "docstring为空或缺失，无法解析签名。"
-
-        doc_lines = doc.splitlines()
-        if len(doc_lines) == 0:
-            return "docstring为空或缺失，无法解析签名。"
-
-        top_signature_regex = re.compile(
-            rf"^{re.escape(func.name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
-        )
-        if top_signature_regex.match(doc_lines[0]) is None:
-            return "docstring首行不是可解析的签名声明。"
-
-        return "docstring未解析出可用签名。"

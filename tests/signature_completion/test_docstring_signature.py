@@ -79,11 +79,7 @@ def test_docstring_parser_preserves_overload_docs() -> None:
             "foo(*args, **kwargs)\n"
             "Overloaded function.\n"
             "1. foo(value: int) -> str\n"
-            "\n"
-            "first overload\n"
             "2. foo(value: str) -> int\n"
-            "\n"
-            "second overload"
         ),
     )
 
@@ -92,19 +88,46 @@ def test_docstring_parser_preserves_overload_docs() -> None:
     assert [_render_type(sig.return_type) for sig in parsed] == ["str", "int"]
 
 
-def test_docstring_parser_returns_none_without_doc() -> None:
-    assert _resolve("foo", None) is None
+def test_docstring_parser_raises_without_doc() -> None:
+    with pytest.raises(RuntimeError, match="docstring为空或缺失"):
+        _resolve("foo", None)
 
 
-def test_docstring_parser_returns_none_for_non_signature_first_line() -> None:
-    parsed = _resolve("foo", "This is not a signature.\nstill docs")
-
-    assert parsed is None
+def test_docstring_parser_raises_for_non_signature_first_line() -> None:
+    with pytest.raises(RuntimeError, match="docstring首行不是目标函数签名声明"):
+        _resolve("foo", "This is not a signature.\nstill docs")
 
 
 def test_docstring_parser_raises_on_invalid_signature_like_doc() -> None:
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError, match="docstring签名参数解析失败"):
         _resolve("foo", "foo(a: int,, b: int) -> int\n\nbroken")
+
+
+def test_docstring_parser_raises_for_overload_with_invalid_non_empty_line() -> None:
+    with pytest.raises(RuntimeError, match="重载签名第2项格式非法"):
+        _resolve(
+            "foo",
+            (
+                "foo(*args, **kwargs)\n"
+                "Overloaded function.\n"
+                "1. foo(value: int) -> str\n"
+                "not an overload line\n"
+                "2. foo(value: str) -> int\n"
+            ),
+        )
+
+
+def test_docstring_parser_raises_for_overload_with_non_consecutive_numbers() -> None:
+    with pytest.raises(RuntimeError, match="重载签名序号不连续"):
+        _resolve(
+            "foo",
+            (
+                "foo(*args, **kwargs)\n"
+                "Overloaded function.\n"
+                "1. foo(value: int) -> str\n"
+                "3. foo(value: str) -> int\n"
+            ),
+        )
 
 
 def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() -> None:

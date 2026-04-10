@@ -15,28 +15,28 @@ class _ArgsParseState(Enum):
 
 
 def resolve_docstring_signatures(
-    irmodule: IRModule,
+    _irmodule: IRModule,
     irfunction: IRFunction,
-) -> list[IRSignature] | None:
-    _ = irmodule
+) -> list[IRSignature]:
+    """从函数 docstring 中解析签名，失败时抛出 RuntimeError。"""
     func_name = irfunction.name
     doc = irfunction.doc
     if not doc:
-        return None
+        raise RuntimeError("docstring为空或缺失，无法解析签名。")
 
     doc_lines = doc.splitlines()
-    if len(doc_lines) == 0:
-        return None
-
     top_signature_regex = re.compile(
         rf"^{re.escape(func_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
     )
     match = top_signature_regex.match(doc_lines[0])
     if match is None:
-        return None
+        raise RuntimeError("docstring首行不是目标函数签名声明。")
 
     if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
-        args = parse_args_str(match.group("args"))
+        try:
+            args = parse_args_str(match.group("args"))
+        except ValueError as ex:
+            raise RuntimeError(f"docstring签名参数解析失败: {ex}") from ex
         returns = parse_annotation_str((match.group("returns") or "").strip('"'))
         return [
             IRSignature(
@@ -51,25 +51,40 @@ def resolve_docstring_signatures(
     )
 
     overloads: list[IRSignature] = []
+    expected_overload_number = 1
 
-    for index in range(2, len(doc_lines)):
-        match = overload_signature_regex.match(doc_lines[index])
+    for line in doc_lines[2:]:
+        if not line.strip():
+            continue
+
+        match = overload_signature_regex.match(line)
         if match is None:
-            continue
+            raise RuntimeError(
+                f"重载签名第{expected_overload_number}项格式非法: {line}"
+            )
 
-        if match.group("overload_number") != f"{len(overloads) + 1}":
-            continue
+        overload_number = int(match.group("overload_number"))
+        if overload_number != expected_overload_number:
+            raise RuntimeError(
+                f"重载签名序号不连续，期望 {expected_overload_number}，实际 {overload_number}。"
+            )
 
-        args = parse_args_str(match.group("args"))
+        try:
+            args = parse_args_str(match.group("args"))
+        except ValueError as ex:
+            raise RuntimeError(
+                f"重载签名第{expected_overload_number}项参数解析失败: {ex}"
+            ) from ex
         overloads.append(
             IRSignature(
                 args=args,
                 return_type=parse_annotation_str(match.group("returns")),
             )
         )
+        expected_overload_number += 1
 
     if not overloads:
-        raise ValueError("Overloaded function. 之后未找到有效重载签名。")
+        raise RuntimeError("Overloaded function. 之后未找到有效重载签名。")
 
     return overloads
 
