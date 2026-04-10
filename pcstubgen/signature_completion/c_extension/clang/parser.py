@@ -25,7 +25,6 @@ _ARG_FLAGS_WITHOUT_VALUE = {
     "-MG",
     "-MP",
 }
-_IGNORED_SOURCE_DIRECTORY_NAMES = frozenset({"subprojects", "third_party"})
 
 
 @dataclasses.dataclass(frozen=True)
@@ -151,11 +150,6 @@ def sanitize_compile_command_arguments(command: object) -> list[str]:
     return parse_args
 
 
-def _is_ignored_source(file_path: Path) -> bool:
-    """判断源码是否位于应忽略的第三方目录树下。"""
-    return any(part in _IGNORED_SOURCE_DIRECTORY_NAMES for part in file_path.parts)
-
-
 def list_compilation_commands(compilation_database: Path) -> list[CompilationCommand]:
     """按编译数据库顺序列出首条唯一源码编译命令。"""
     database = load_compilation_database(compilation_database)
@@ -166,10 +160,6 @@ def list_compilation_commands(compilation_database: Path) -> list[CompilationCom
         return result
     for command in all_compile_commands:
         file_path = resolve_compile_command_file_path(command)
-        if file_path.suffix.lower() not in NATIVE_SOURCE_SUFFIXES:
-            continue
-        if _is_ignored_source(file_path):
-            continue
         if file_path in seen_file_paths:
             continue
         seen_file_paths.add(file_path)

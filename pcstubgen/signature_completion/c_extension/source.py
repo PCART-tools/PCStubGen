@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TypeAlias
 
@@ -16,7 +16,6 @@ from .signatures import inference
 
 ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
 
-_SPACE_RE = re.compile(r"\s+")
 _FUNCTION_DECL_CONTEXT_KINDS = {
     CursorKind.TRANSLATION_UNIT,
     CursorKind.NAMESPACE,
@@ -184,25 +183,16 @@ class CExtensionSource:
         symbol_name: str,
         linkage_name: str | None = None,
     ) -> Cursor | None:
-        candidates = list(_iter_function_definition_candidates(translation_unit.cursor))
+        for cursor in _iter_function_definition_candidates(translation_unit.cursor):
+            if linkage_name is not None:
+                if cursor.mangled_name == linkage_name:
+                    return cursor
+                continue
 
-        if linkage_name is not None:
-            linkage_matches = [
-                cursor
-                for cursor in candidates
-                if _cursor_matches_linkage_name(cursor, linkage_name)
-            ]
-            if len(linkage_matches) == 1:
-                return linkage_matches[0]
-            if len(linkage_matches) > 1:
-                return None
+            if cursor.spelling == symbol_name:
+                return cursor
 
-        symbol_matches = [
-            cursor for cursor in candidates if _cursor_matches_symbol(cursor, symbol_name)
-        ]
-        if len(symbol_matches) != 1:
-            return None
-        return symbol_matches[0]
+        return None
 
     @staticmethod
     def _get_source_comment(function_cursor: Cursor | None) -> str | None:
@@ -214,81 +204,12 @@ class CExtensionSource:
         return source_text
 
 
-def _iter_function_definition_candidates(node: Cursor) -> list[Cursor]:
+def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
     """仅在声明上下文中递归收集函数定义节点。"""
-    candidates: list[Cursor] = []
     for child in node.get_children():
         if child.kind == CursorKind.FUNCTION_DECL:
             if child.is_definition():
-                candidates.append(child)
+                yield child
             continue
         if child.kind in _FUNCTION_DECL_CONTEXT_KINDS:
-            candidates.extend(_iter_function_definition_candidates(child))
-    return candidates
-
-
-def _cursor_matches_symbol(cursor: Cursor, symbol_name: str) -> bool:
-    normalized_symbol = _normalize_symbol_name(symbol_name)
-    if normalized_symbol is None:
-        return False
-
-    return any(
-        _symbol_candidates_match(normalized_symbol, candidate)
-        for candidate in _cursor_symbol_candidates(cursor)
-    )
-
-
-def _cursor_matches_linkage_name(cursor: Cursor, linkage_name: str) -> bool:
-    cursor_mangled_name = getattr(cursor, "mangled_name", None)
-    if not cursor_mangled_name:
-        return False
-    return str(cursor_mangled_name) == linkage_name
-
-
-def _cursor_symbol_candidates(cursor: Cursor) -> list[str]:
-    candidates: list[str] = []
-    for value in (
-        _build_qualified_cursor_name(cursor, include_displayname=False),
-        _build_qualified_cursor_name(cursor, include_displayname=True),
-        getattr(cursor, "spelling", None),
-        getattr(cursor, "displayname", None),
-    ):
-        if not value:
-            continue
-        candidates.append(value)
-    return candidates
-
-
-def _build_qualified_cursor_name(cursor: Cursor, *, include_displayname: bool) -> str | None:
-    leaf_name = getattr(cursor, "displayname" if include_displayname else "spelling", None)
-    if not leaf_name:
-        return None
-
-    parent_names: list[str] = []
-    current = getattr(cursor, "semantic_parent", None)
-    while current is not None:
-        current_name = getattr(current, "spelling", "")
-        if current_name:
-            parent_names.append(str(current_name))
-        current = getattr(current, "semantic_parent", None)
-
-    if not parent_names:
-        return str(leaf_name)
-    return "::".join([*reversed(parent_names), str(leaf_name)])
-
-
-def _symbol_candidates_match(normalized_symbol: str, candidate: str) -> bool:
-    normalized_candidate = _normalize_symbol_name(candidate)
-    if normalized_candidate is None:
-        return False
-
-    if normalized_symbol == normalized_candidate:
-        return True
-    return normalized_symbol.endswith(f"::{normalized_candidate}")
-
-
-def _normalize_symbol_name(name: str) -> str | None:
-    stripped = name.strip()
-    if not stripped:
-        return None
-    return _SPACE_RE.sub("", stripped)
+            yield from _iter_function_definition_candidates(child)

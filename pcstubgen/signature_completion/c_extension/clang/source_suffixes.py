@@ -13,11 +13,3 @@ CPP_SOURCE_SUFFIXES: set[str] = {
 }
 
 NATIVE_SOURCE_SUFFIXES: set[str] = C_SOURCE_SUFFIXES | CPP_SOURCE_SUFFIXES
-
-HEADER_SOURCE_SUFFIXES: set[str] = {
-    ".h",
-    ".hpp",
-    ".hh",
-    ".hxx",
-    ".h++",
-}
