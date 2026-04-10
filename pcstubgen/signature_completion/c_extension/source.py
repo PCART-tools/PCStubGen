@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
-from typing import TypeAlias
 
 from clang.cindex import Cursor, CursorKind, Index, TranslationUnit, TranslationUnitLoadError
 from loguru import logger
@@ -12,10 +11,8 @@ from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_addr
 from .clang import compilation_database as compilation_database_loader
 from .clang import translation_unit as translation_unit_loader
 from .clang.cursor_utils import source_range_get_text
-from .runtime import resolve_runtime_pymethoddef
+from .runtime import read_builtin_function_runtime_info
 from .signatures import inference
-
-ResolvedCExtensionFunction: TypeAlias = tuple[list[IRSignature], str | None]
 
 _FUNCTION_DECL_CONTEXT_KINDS = {
     CursorKind.TRANSLATION_UNIT,
@@ -36,19 +33,19 @@ class CExtensionSource:
         self._translation_units: dict[Path, TranslationUnit] = {}
         self._index: Index | None = None
 
-    def resolve_function(
+    def infer_function_signatures(
         self,
         irmodule: IRModule,
         irfunction: IRFunction,
-    ) -> ResolvedCExtensionFunction:
-        """按函数懒解析 C 扩展签名。"""
-        runtime_method = resolve_runtime_pymethoddef(irfunction.runtime_handle)
-        location = resolve_symbolized_address(runtime_method.method_address)
+    ) -> tuple[list[IRSignature], str | None]:
+        """按函数懒解析 builtin function 的 C 扩展签名。"""
+        runtime_info = read_builtin_function_runtime_info(irfunction.runtime_handle)
+        location = resolve_symbolized_address(runtime_info.address)
         function_cursor = self._resolve_function_cursor(location=location)
         source_comment = self._get_source_comment(function_cursor)
         signatures = inference.infer_signature(
             function_cursor,
-            ml_flags=runtime_method.flags,
+            ml_flags=runtime_info.flags,
         )
 
         if not signatures:

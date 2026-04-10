@@ -98,7 +98,7 @@ def _patch_c_signature_extractor(
 ) -> _FakeExtractor:
     extractor = _FakeExtractor(functions=functions)
 
-    def _patched_resolve_function(
+    def _patched_infer_function_signatures(
         self: CExtensionSource,
         irmodule: IRModule,
         irfunction: IRFunction,
@@ -117,14 +117,19 @@ def _patch_c_signature_extractor(
 
         return extracted.signatures, source_comment
 
-    monkeypatch.setattr(c_extension_source_module.CExtensionSource, "resolve_function", _patched_resolve_function)
+    monkeypatch.setattr(
+        c_extension_source_module.CExtensionSource,
+        "infer_function_signatures",
+        _patched_infer_function_signatures,
+    )
     return extractor
+
 
 def _patch_raising_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
     error: Exception,
 ) -> None:
-    def _patched_resolve_function(
+    def _patched_infer_function_signatures(
         self: CExtensionSource,
         irmodule: IRModule,
         irfunction: IRFunction,
@@ -132,7 +137,11 @@ def _patch_raising_c_signature_extractor(
         _ = (self, irmodule, irfunction)
         raise error
 
-    monkeypatch.setattr(c_extension_source_module.CExtensionSource, "resolve_function", _patched_resolve_function)
+    monkeypatch.setattr(
+        c_extension_source_module.CExtensionSource,
+        "infer_function_signatures",
+        _patched_infer_function_signatures,
+    )
 
 
 def _get_packaged_libclang_path() -> str | None:

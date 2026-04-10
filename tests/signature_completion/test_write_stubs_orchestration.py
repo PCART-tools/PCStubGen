@@ -35,8 +35,8 @@ def test_write_stubs_writes_rendered_stub_file(
         lambda path: object(),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.resolve_runtime_pymethoddef",
-        lambda handle: object(),
+        "pcstubgen.signature_completion.completion.supports_builtin_function_inference",
+        lambda handle: True,
     )
     _patch_c_signature_extractor(
         monkeypatch,

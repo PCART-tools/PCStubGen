@@ -13,7 +13,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_O,
     METH_VARARGS,
 )
-from pcstubgen.signature_completion.c_extension.runtime import RuntimePyMethodDef
+from pcstubgen.signature_completion.c_extension.runtime import BuiltinFunctionRuntimeInfo
 from pcstubgen.signature_completion.c_extension.source import CExtensionSource
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
@@ -64,8 +64,8 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=METH_VARARGS),
+        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
@@ -95,7 +95,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         functions=[IRFunction(name="foo", runtime_handle=object())],
     )
 
-    signatures, source_comment = source.resolve_function(module, module.functions[0])
+    signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
 
     assert signatures[0].args[0].name == "value"
     assert signatures[0].args[0].type is not None
@@ -119,8 +119,8 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
     flags: int,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=flags),
+        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=flags),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
@@ -142,34 +142,7 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
     )
 
     with pytest.raises(RuntimeError, match="cursor missing"):
-        source.resolve_function(module, module.functions[0])
-
-
-def test_c_extension_source_propagates_cursor_lookup_failures_for_method_descriptors(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
-        lambda address: _symbolized_location(
-            compilation_unit_path=tmp_path / "append.c",
-            function_name="append",
-        ),
-    )
-    monkeypatch.setattr(
-        CExtensionSource,
-        "_resolve_function_cursor",
-        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
-    )
-
-    source = _make_source(monkeypatch, tmp_path)
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[IRFunction(name="append", runtime_handle=list.__dict__["append"])],
-    )
-
-    with pytest.raises(RuntimeError, match="cursor missing"):
-        source.resolve_function(module, module.functions[0])
+        source.infer_function_signatures(module, module.functions[0])
 
 
 def test_c_extension_source_raises_when_ast_inference_fails(
@@ -192,8 +165,8 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_runtime_pymethoddef",
-        lambda handle: RuntimePyMethodDef(method_address=0x1234, flags=METH_O),
+        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_O),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
@@ -219,7 +192,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
 
     with pytest.raises(RuntimeError, match="boom"):
-        source.resolve_function(module, module.functions[0])
+        source.infer_function_signatures(module, module.functions[0])
 
 
 def test_find_function_cursor_matches_linkage_name_before_symbol_name(

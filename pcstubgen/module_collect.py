@@ -111,7 +111,7 @@ def collect_class(
         if _is_member_alias(member_path, member):
             continue
 
-        if _is_c_method_member(member):
+        if inspect.isbuiltin(member):
             irclass.methods.append(
                 collect_method(
                     member_path,
@@ -196,7 +196,3 @@ def _is_member_alias(path: QualifiedName, member: Any) -> bool:
     ):
         return path.name != member.__name__
     return False
-
-
-def _is_c_method_member(member: Any) -> bool:
-    return inspect.isbuiltin(member) or inspect.ismethoddescriptor(member)

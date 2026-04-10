@@ -58,7 +58,7 @@ def test_module_collect_keeps_only_tree_functions_and_methods() -> None:
     assert root_cls.classes == []
 
 
-def test_module_collect_collects_extension_method_descriptors() -> None:
+def test_module_collect_skips_extension_method_descriptors() -> None:
     ir_class = module_collect_module.collect_class(
         QualifiedName.from_str("builtins.list"),
         list,
@@ -66,10 +66,7 @@ def test_module_collect_collects_extension_method_descriptors() -> None:
 
     method_names = [method.function.name for method in ir_class.methods]
 
-    assert "append" in method_names
-    append_method = next(method for method in ir_class.methods if method.function.name == "append")
-    assert append_method.function.runtime_handle is list.__dict__["append"]
-    assert append_method.runtime_owner is list
+    assert "append" not in method_names
 
 
 def test_module_collect_discovers_direct_submodules_from_package_path(

@@ -30,8 +30,8 @@ def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _patch_c_runtime_support(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.resolve_runtime_pymethoddef",
-        lambda handle: object(),
+        "pcstubgen.signature_completion.completion.supports_builtin_function_inference",
+        lambda handle: True,
     )
 
 

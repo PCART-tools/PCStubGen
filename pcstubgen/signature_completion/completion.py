@@ -8,7 +8,7 @@ from loguru import logger
 
 from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule
 from .c_extension import CExtensionSource
-from .c_extension.runtime import resolve_runtime_pymethoddef
+from .c_extension.runtime import supports_builtin_function_inference
 from .docstring_source import resolve_docstring_signatures
 
 
@@ -79,8 +79,8 @@ class SignatureCompleter:
     ) -> None:
         self._result.total_functions += 1
 
-        if self._supports_c_inference(func):
-            signatures, c_inferred_source_comment = self._c_source.resolve_function(
+        if supports_builtin_function_inference(func.runtime_handle):
+            signatures, c_inferred_source_comment = self._c_source.infer_function_signatures(
                 module,
                 func,
             )
@@ -114,15 +114,6 @@ class SignatureCompleter:
             func.name,
             docstring_reason,
         )
-
-    @staticmethod
-    def _supports_c_inference(func: IRFunction) -> bool:
-        """判断运行时对象是否具备 C 源码签名推断能力。"""
-        try:
-            resolve_runtime_pymethoddef(func.runtime_handle)
-        except RuntimeError:
-            return False
-        return True
 
     @staticmethod
     def _describe_docstring_failure(func: IRFunction) -> str:
