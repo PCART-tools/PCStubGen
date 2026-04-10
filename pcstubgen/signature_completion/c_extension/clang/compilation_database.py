@@ -1,31 +1,26 @@
 from __future__ import annotations
 
-import dataclasses
 from pathlib import Path
 
-from clang.cindex import CompilationDatabase
-
-_ARG_FLAGS_WITH_VALUE = {
-    "-o",
-    "-MF",
-    "-MT",
-    "-MQ",
-    "-MJ",
-}
-_ARG_FLAGS_WITHOUT_VALUE = {
-    "-c",
-    "-MD",
-    "-MMD",
-    "-MG",
-    "-MP",
-}
+from clang.cindex import CompilationDatabase, CompileCommand
 
 
-@dataclasses.dataclass(frozen=True)
-class CompilationCommand:
-    file_path: Path
-    working_directory: Path
-    parse_args: list[str]
+class MyCompileCommand:
+    """对 libclang CompileCommand 的项目内封装。"""
+
+    filename: Path
+    directory: Path
+    arguments: list[str]
+
+    def __init__(self, compile_command: CompileCommand) -> None:
+        """从 libclang CompileCommand 构造项目内命令对象。"""
+        file_path = Path(str(compile_command.filename))
+        if not file_path.is_absolute():
+            file_path = Path(str(compile_command.directory)) / file_path
+
+        self.filename = file_path.resolve()
+        self.directory = Path(str(compile_command.directory)).resolve()
+        self.arguments = [str(argument) for argument in compile_command.arguments]
 
 
 def validate_compilation_database_path(compilation_database: Path) -> Path:
@@ -49,62 +44,10 @@ def load_compilation_database(compilation_database: Path) -> CompilationDatabase
     except Exception as ex:
         raise RuntimeError(f"编译数据库加载失败: {validated_path}") from ex
 
-
-def resolve_compile_command_file_path(command: object) -> Path:
-    """将 compile command 的 file 字段解析为绝对路径。"""
-    file_path = Path(str(command.filename))
-    if file_path.is_absolute():
-        return file_path.resolve()
-    return (Path(str(command.directory)) / file_path).resolve()
-
-
-def _is_source_file_operand(
-    arg: str,
-    *,
-    file_path: Path,
-    working_directory: Path,
-) -> bool:
-    if not arg or arg.startswith("-"):
-        return False
-    candidate = Path(arg)
-    if not candidate.is_absolute():
-        candidate = working_directory / candidate
-    return candidate.resolve() == file_path
-
-
-def sanitize_compile_command_arguments(command: object) -> list[str]:
-    """清理 compile command 中不应传递给 libclang parse 的参数。"""
-    arguments = [str(arg) for arg in command.arguments]
-    if not arguments:
-        return []
-
-    working_directory = Path(str(command.directory)).resolve()
-    file_path = resolve_compile_command_file_path(command)
-    parse_args: list[str] = []
-    skip_next = False
-    for arg in arguments[1:]:
-        if skip_next:
-            skip_next = False
-            continue
-        if arg in _ARG_FLAGS_WITH_VALUE:
-            skip_next = True
-            continue
-        if arg in _ARG_FLAGS_WITHOUT_VALUE:
-            continue
-        if _is_source_file_operand(
-            arg,
-            file_path=file_path,
-            working_directory=working_directory,
-        ):
-            continue
-        parse_args.append(arg)
-    return parse_args
-
-
-def resolve_compilation_command(
+def resolve_compile_command(
     database: CompilationDatabase,
     source_path: Path,
-) -> CompilationCommand:
+) -> MyCompileCommand:
     """按源码绝对路径查询首条编译命令。"""
     resolved_source_path = source_path.resolve()
     compile_commands = database.getCompileCommands(str(resolved_source_path))
@@ -115,9 +58,4 @@ def resolve_compilation_command(
     if not commands:
         raise RuntimeError(f"未在编译数据库中定位到编译单元: {resolved_source_path}")
 
-    command = commands[0]
-    return CompilationCommand(
-        file_path=resolve_compile_command_file_path(command),
-        working_directory=Path(str(command.directory)).resolve(),
-        parse_args=sanitize_compile_command_arguments(command),
-    )
+    return MyCompileCommand(commands[0])

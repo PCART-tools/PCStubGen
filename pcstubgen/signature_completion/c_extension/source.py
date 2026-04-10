@@ -65,12 +65,12 @@ class CExtensionSource:
         location: SymbolizedAddressLocation,
     ) -> Cursor:
         """按需 parse 已定位到的源码文件，并找到对应的函数 cursor。"""
-        compilation_command = compilation_database_loader.resolve_compilation_command(
+        compile_command = compilation_database_loader.resolve_compile_command(
             self._compilation_database,
             location.compilation_unit_path,
         )
 
-        translation_unit = self._load_translation_unit(compilation_command)
+        translation_unit = self._load_translation_unit(compile_command)
 
         matched = self._find_function_cursor(
             translation_unit=translation_unit,
@@ -82,16 +82,17 @@ class CExtensionSource:
 
         raise RuntimeError(
             "未在 translation unit 中定位到函数定义, "
-            f"source_path: {compilation_command.file_path}, "
+            f"source_path: {compile_command.filename}, "
             f"symbol_name: {location.function_name}, "
             f"linkage_name: {location.linkage_name}"
         )
 
     def _load_translation_unit(
         self,
-        compilation_command: compilation_database_loader.CompilationCommand,
+        compile_command: compilation_database_loader.MyCompileCommand,
     ) -> TranslationUnit:
-        cached = self._translation_units.get(compilation_command.file_path)
+        file_path = compile_command.filename
+        cached = self._translation_units.get(file_path)
         if cached is not None:
             return cached
 
@@ -101,35 +102,31 @@ class CExtensionSource:
         if index is None:
             raise RuntimeError("libclang Index 初始化失败。")
 
-        effective_parse_args = translation_unit_loader.build_effective_parse_args(
-            compilation_command
-        )
         try:
             translation_unit = translation_unit_loader.parse(
                 index,
-                compilation_command,
-                effective_parse_args=effective_parse_args,
+                compile_command,
             )
         except TranslationUnitLoadError as ex:
             raise RuntimeError(
                 "按需Parse失败, "
-                f"文件路径: {compilation_command.file_path}, "
-                f"工作目录: {compilation_command.working_directory}, "
-                f"解析参数: {' '.join(effective_parse_args)}"
+                f"文件路径: {file_path}, "
+                f"工作目录: {compile_command.directory}, "
+                f"解析参数: {' '.join(compile_command.arguments)}"
             ) from ex
 
         diagnostics = translation_unit.diagnostics
         if translation_unit_loader.has_error_diagnostics(diagnostics):
             logger.warning(
                 "按需Parse诊断, 文件路径: {}, 诊断: {}",
-                compilation_command.file_path,
+                file_path,
                 "\n".join(
                     translation_unit_loader.diagnostic_to_str(diagnostic)
                     for diagnostic in diagnostics
                 ),
             )
 
-        self._translation_units[compilation_command.file_path] = translation_unit
+        self._translation_units[file_path] = translation_unit
         return translation_unit
 
     @staticmethod
