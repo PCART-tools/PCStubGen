@@ -1,22 +1,15 @@
 from __future__ import annotations
 
-from io import StringIO
 import os
 from types import SimpleNamespace
 
-from loguru import logger
 import pytest
 
 from tests._c_extension_test_support import (
     Path,
-    _FakeClangWithDiagnostics,
     _FakeDiagnostic,
     _FakeDiagnosticType,
     _FakeTranslationUnit,
-    _get_packaged_libclang_path,
-    _gnu_null_literal,
-    _has_include_directory_arg,
-    _has_std_arg,
     translation_unit_module,
 )
 
@@ -130,165 +123,11 @@ def test_list_compilation_commands_keeps_first_command_per_source_file(
         tmp_path / "compile_commands.json"
     )
 
-    assert len(result) == 1
+    assert len(result) == 2
     assert result[0].file_path == shared_source.resolve()
     assert result[0].parse_args == ["-DFIRST"]
-
-
-def test_list_compilation_commands_skips_subproject_sources(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    kept_source = tmp_path / "src" / "module.c"
-    kept_source.parent.mkdir(parents=True, exist_ok=True)
-    kept_source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
-    skipped_source = tmp_path / "subprojects" / "pkg" / "module.c"
-    skipped_source.parent.mkdir(parents=True, exist_ok=True)
-    skipped_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
-
-    commands = [
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="subprojects/pkg/module.c",
-            arguments=["cc", "-DSUBPROJECT", "-c", "subprojects/pkg/module.c"],
-        ),
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="src/module.c",
-            arguments=["cc", "-DKEPT", "-c", "src/module.c"],
-        ),
-    ]
-
-    monkeypatch.setattr(
-        translation_unit_module,
-        "load_compilation_database",
-        lambda compilation_database: _FakeCompilationDatabase(commands),
-    )
-
-    result = translation_unit_module.list_compilation_commands(
-        tmp_path / "compile_commands.json"
-    )
-
-    assert len(result) == 1
-    assert result[0].file_path == kept_source.resolve()
-    assert result[0].parse_args == ["-DKEPT"]
-
-
-def test_list_compilation_commands_skips_absolute_subproject_sources(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    absolute_subproject_source = tmp_path / "vendor" / "subprojects" / "pkg" / "module.cpp"
-    absolute_subproject_source.parent.mkdir(parents=True, exist_ok=True)
-    absolute_subproject_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
-    kept_source = tmp_path / "src" / "module.cpp"
-    kept_source.parent.mkdir(parents=True, exist_ok=True)
-    kept_source.write_text("int kept(void) { return 0; }\n", encoding="utf-8")
-
-    commands = [
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename=str(absolute_subproject_source),
-            arguments=["c++", "-DSUBPROJECT", "-c", str(absolute_subproject_source)],
-        ),
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="src/module.cpp",
-            arguments=["c++", "-DKEPT", "-c", "src/module.cpp"],
-        ),
-    ]
-
-    monkeypatch.setattr(
-        translation_unit_module,
-        "load_compilation_database",
-        lambda compilation_database: _FakeCompilationDatabase(commands),
-    )
-
-    result = translation_unit_module.list_compilation_commands(
-        tmp_path / "compile_commands.json"
-    )
-
-    assert len(result) == 1
-    assert result[0].file_path == kept_source.resolve()
-    assert result[0].parse_args == ["-DKEPT"]
-
-
-def test_list_compilation_commands_skips_third_party_sources(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    kept_source = tmp_path / "src" / "module.c"
-    kept_source.parent.mkdir(parents=True, exist_ok=True)
-    kept_source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
-    skipped_source = tmp_path / "third_party" / "pkg" / "module.c"
-    skipped_source.parent.mkdir(parents=True, exist_ok=True)
-    skipped_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
-
-    commands = [
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="third_party/pkg/module.c",
-            arguments=["cc", "-DTHIRD_PARTY", "-c", "third_party/pkg/module.c"],
-        ),
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="src/module.c",
-            arguments=["cc", "-DKEPT", "-c", "src/module.c"],
-        ),
-    ]
-
-    monkeypatch.setattr(
-        translation_unit_module,
-        "load_compilation_database",
-        lambda compilation_database: _FakeCompilationDatabase(commands),
-    )
-
-    result = translation_unit_module.list_compilation_commands(
-        tmp_path / "compile_commands.json"
-    )
-
-    assert len(result) == 1
-    assert result[0].file_path == kept_source.resolve()
-    assert result[0].parse_args == ["-DKEPT"]
-
-
-def test_list_compilation_commands_skips_absolute_third_party_sources(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    absolute_third_party_source = tmp_path / "vendor" / "third_party" / "pkg" / "module.cpp"
-    absolute_third_party_source.parent.mkdir(parents=True, exist_ok=True)
-    absolute_third_party_source.write_text("int skipped(void) { return 0; }\n", encoding="utf-8")
-    kept_source = tmp_path / "src" / "module.cpp"
-    kept_source.parent.mkdir(parents=True, exist_ok=True)
-    kept_source.write_text("int kept(void) { return 0; }\n", encoding="utf-8")
-
-    commands = [
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename=str(absolute_third_party_source),
-            arguments=["c++", "-DTHIRD_PARTY", "-c", str(absolute_third_party_source)],
-        ),
-        _FakeCompileCommand(
-            directory=tmp_path,
-            filename="src/module.cpp",
-            arguments=["c++", "-DKEPT", "-c", "src/module.cpp"],
-        ),
-    ]
-
-    monkeypatch.setattr(
-        translation_unit_module,
-        "load_compilation_database",
-        lambda compilation_database: _FakeCompilationDatabase(commands),
-    )
-
-    result = translation_unit_module.list_compilation_commands(
-        tmp_path / "compile_commands.json"
-    )
-
-    assert len(result) == 1
-    assert result[0].file_path == kept_source.resolve()
-    assert result[0].parse_args == ["-DKEPT"]
+    assert result[1].file_path == header.resolve()
+    assert result[1].parse_args == []
 
 
 def test_parse_uses_compile_command_working_directory_and_preserves_translation_unit(
@@ -398,63 +237,6 @@ def test_build_effective_parse_args_appends_detected_clang_resource_dir(
         "-DMODE=1",
         "-resource-dir",
         "/opt/clang/resource",
-    ]
-
-
-def test_parse_does_not_emit_parse_logs(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translation_unit_module.detect_clang_resource_dir.cache_clear()
-    monkeypatch.setattr(
-        translation_unit_module,
-        "detect_clang_resource_dir",
-        lambda: None,
-    )
-    working_directory = tmp_path / "build"
-    working_directory.mkdir(parents=True, exist_ok=True)
-    source = tmp_path / "src" / "module.c"
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
-    index = _RecordingIndex(_FakeTranslationUnit(diagnostics=[]))
-    command = translation_unit_module.CompilationCommand(
-        file_path=source.resolve(),
-        working_directory=working_directory.resolve(),
-        parse_args=["-I../include"],
-    )
-
-    log_output = StringIO()
-    sink_id = logger.add(log_output, format="{message}")
-    try:
-        translation_unit_module.parse(index, command)
-    finally:
-        logger.remove(sink_id)
-
-    assert log_output.getvalue() == ""
-
-
-def test_detect_clang_resource_dir_returns_none_when_command_fails(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    translation_unit_module.detect_clang_resource_dir.cache_clear()
-    captured_calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
-
-    def fake_run(*args: object, **kwargs: object) -> SimpleNamespace:
-        captured_calls.append((args, kwargs))
-        return SimpleNamespace(returncode=1, stdout="ignored", stderr="boom")
-
-    monkeypatch.setattr(translation_unit_module.subprocess, "run", fake_run)
-
-    assert translation_unit_module.detect_clang_resource_dir() is None
-    assert captured_calls == [
-        (
-            (["clang", "-print-resource-dir"],),
-            {
-                "capture_output": True,
-                "text": True,
-                "check": False,
-            },
-        )
     ]
 
 

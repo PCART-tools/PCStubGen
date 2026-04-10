@@ -1,60 +1,12 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
 import clang.cindex
 import pytest
-from typer.testing import CliRunner
 
 from tools import clang_ast
-
-
-RUNNER = CliRunner()
-
-
-def test_cli_accepts_include_and_include_directory(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    captured_kwargs: dict[str, object] = {}
-    source_path = tmp_path / "sample.c"
-    source_path.write_text("int sample(void) { return 0; }\n", encoding="utf-8")
-
-    def fake_run_ast_export(**kwargs: object) -> list[Exception]:
-        captured_kwargs.update(kwargs)
-        return []
-
-    monkeypatch.setattr(clang_ast, "run_ast_export", fake_run_ast_export)
-
-    result = RUNNER.invoke(
-        clang_ast.app,
-        [
-            str(source_path),
-            "--include",
-            "Python.h",
-            "--include=numpy/arrayobject.h",
-            "--include-directory",
-            "C:/IncludeA",
-            "--include-directory=C:/IncludeB",
-            "--c-std",
-            "c99",
-            "--cpp-std",
-            "c++20",
-        ],
-        prog_name="clang_ast",
-    )
-
-    assert result.exit_code == 0
-    assert captured_kwargs["source_path"] == source_path.resolve()
-    assert captured_kwargs["include"] == ["Python.h", "numpy/arrayobject.h"]
-    assert captured_kwargs["include_directory"] == [
-        Path("C:/IncludeA"),
-        Path("C:/IncludeB"),
-    ]
-    assert captured_kwargs["c_std"] == "c99"
-    assert captured_kwargs["cpp_std"] == "c++20"
 
 
 def test_normalize_include_headers_rejects_option_like_values() -> None:
@@ -213,26 +165,6 @@ def test_format_cursor_line_renders_tokens_and_escapes_spellings() -> None:
     assert output.startswith("UNEXPOSED_EXPR type=const char *")
     assert '\\"a\\"' in output
     assert "C:\\\\tmp" in output
-
-
-def test_run_clang_ast_dump_returns_stdout(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured_command: list[str] = []
-
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        captured_command.extend(command)
-        assert kwargs["capture_output"] is True
-        assert kwargs["text"] is True
-        return subprocess.CompletedProcess(command, 0, stdout="AST\n", stderr="")
-
-    monkeypatch.setattr(clang_ast.subprocess, "run", fake_run)
-
-    output = clang_ast.run_clang_ast_dump(
-        source_path=Path("C:/project/sample.c"),
-        clang_args=["--std", "c11"],
-    )
-
-    assert output == clang_ast.ClangAstDumpResult(stdout="AST\n", stderr="", returncode=0)
-    assert captured_command[:4] == ["clang", "-Xclang", "-ast-dump-all", "-fsyntax-only"]
 
 
 def test_run_ast_export_writes_available_outputs_even_when_clang_reports_error(

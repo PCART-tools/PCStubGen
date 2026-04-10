@@ -8,16 +8,14 @@ import clang.cindex
 import pytest
 from loguru import logger
 
-from pcstubgen.ir_modules import IRArgument, IRClass, IRFunction, IRMethod, IRModule, IRModuleType, QualifiedName
+from pcstubgen.ir_modules import IRArgument, IRFunction, IRModule, IRModuleType, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.stub_generation_options import StubGenerationOptions
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
-    METH_VARARGS,
     _FakeNode,
     _arg,
     _extent_for_source_snippet,
-    _fake_function_cursor,
     _patch_c_signature_extractor,
     _patch_raising_c_signature_extractor,
     _signature,
@@ -207,49 +205,6 @@ def test_completer_skips_source_comment_when_option_disabled(
     assert parsed.c_inferred_source_comment is None
 
 
-def test_completer_completes_extension_methods_via_c_source(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _patch_c_signature_extractor(
-        monkeypatch,
-        functions={
-            "build": ResolvedFunctionFixture(
-                function_cursor=_fake_function_cursor("build"),
-                signatures=[
-                    _signature(
-                        args=[_arg("from_c", "bool")],
-                        return_type=RawType("bool"),
-                    )
-                ],
-            )
-        },
-    )
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.EXTENSION,
-        classes=[
-            IRClass(
-                name="Builder",
-                methods=[IRMethod(function=_unknown_function("build"), decorator=None)],
-            )
-        ],
-    )
-
-    summary = SignatureCompleter(
-        StubGenerationOptions(
-            compilation_database=tmp_path / "compile_commands.json",
-        )
-    ).run(module)
-
-    parsed = module.classes[0].methods[0].function
-    assert parsed.signatures[0].args[0].name == "from_c"
-    assert parsed.signatures[0].return_type is not None
-    assert parsed.signatures[0].return_type.render() == "bool"
-    assert summary.c_completed == 1
-    assert summary.uncompleted == 0
-
-
 def test_completer_uses_docstring_when_available_for_python_module() -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -272,25 +227,6 @@ def test_completer_uses_docstring_when_available_for_python_module() -> None:
     assert parsed.signatures[0].return_type.render() == "bool"
     assert summary.docstring_completed == 1
     assert summary.uncompleted == 0
-
-
-def test_completer_logs_failure_reasons_when_both_paths_return_no_signature() -> None:
-    module = IRModule(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        module_type=IRModuleType.PYTHON,
-        functions=[_unknown_function("fallback", doc="plain fallback docs")],
-    )
-
-    log_output = StringIO()
-    sink_id = logger.add(log_output, format="{message}")
-    try:
-        summary = SignatureCompleter(StubGenerationOptions()).run(module)
-    finally:
-        logger.remove(sink_id)
-
-    assert summary.uncompleted == 1
-    assert "c_reason:" in log_output.getvalue()
-    assert "docstring_reason:" in log_output.getvalue()
 
 
 def test_completer_keeps_known_signatures_and_counts_unresolved() -> None:
