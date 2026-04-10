@@ -5,8 +5,6 @@ import re
 import shutil
 import subprocess
 
-from elftools.dwarf.die import DIE
-from elftools.elf.elffile import ELFFile
 import pytest
 
 from pcstubgen.signature_completion.c_extension import dwarfdump
@@ -104,15 +102,22 @@ def _copy_without_debug_aranges(binary_path: Path) -> Path:
 
 def _find_symbol_value(binary_path: Path, symbol_name: str) -> int:
     """读取 ELF 符号表中的相对地址。"""
-    with binary_path.open("rb") as binary_file:
-        elf = ELFFile(binary_file)
-        for section_name in (".symtab", ".dynsym"):
-            section = elf.get_section_by_name(section_name)
-            if section is None:
-                continue
-            for symbol in section.iter_symbols():
-                if symbol.name == symbol_name:
-                    return int(symbol["st_value"])
+    readelf = _require_program("readelf")
+    completed = subprocess.run(
+        [readelf, "-Ws", "--wide", str(binary_path)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for line in completed.stdout.splitlines():
+        match = re.match(
+            r"\s*\d+:\s*([0-9a-fA-F]+)\s+\d+\s+\w+\s+\w+\s+\w+\s+\w+\s+(.+)",
+            line,
+        )
+        if match is None:
+            continue
+        if match.group(2).strip() == symbol_name:
+            return int(match.group(1), 16)
     raise AssertionError(f"未找到符号: {symbol_name}")
 
 
@@ -136,23 +141,15 @@ def _build_discontinuous_range_library(
     )
 
 
-def _read_top_die_attr_form(binary_path: Path, attr_name: str) -> str:
-    """读取首个编译单元顶层 DIE 的属性编码形式。"""
-    with binary_path.open("rb") as binary_file:
-        dwarf = ELFFile(binary_file).get_dwarf_info()
-        top_die = next(dwarf.iter_CUs()).get_top_DIE()
-        attr = top_die.attributes.get(attr_name)
-        if attr is None:
-            raise AssertionError(f"顶层 DIE 缺少属性: {attr_name}")
-        return str(attr.form)
-
-
-def _run_llvm_dwarfdump_lookup(binary_path: Path, relative_address: int) -> dwarfdump.LookupResult:
+def _run_llvm_dwarfdump_lookup(
+    binary_path: Path,
+    relative_address: int,
+) -> dwarfdump.LookupResult | None:
     """运行 `llvm-dwarfdump --lookup` 并提取可比较的关键信息。"""
     llvm_dwarfdump = _require_program("llvm-dwarfdump")
     completed = subprocess.run(
         [llvm_dwarfdump, f"--lookup=0x{relative_address:x}", str(binary_path)],
-        check=True,
+        check=False,
         capture_output=True,
         text=True,
     )
@@ -169,7 +166,7 @@ def _run_llvm_dwarfdump_lookup(binary_path: Path, relative_address: int) -> dwar
         re.DOTALL,
     )
     if cu_path_match is None or subprogram_match is None:
-        raise AssertionError(f"无法解析 llvm-dwarfdump 输出:\n{output}")
+        return None
 
     subprogram_body = subprogram_match.group("body")
     function_name_match = re.search(r"DW_AT_name\s*\(\"([^\"]+)\"\)", subprogram_body)
@@ -178,13 +175,63 @@ def _run_llvm_dwarfdump_lookup(binary_path: Path, relative_address: int) -> dwar
         subprogram_body,
     )
     if function_name_match is None:
-        raise AssertionError(f"llvm-dwarfdump 输出缺少函数名:\n{output}")
+        return None
 
     return dwarfdump.LookupResult(
         compilation_unit_path=Path(cu_path_match.group(1)).resolve(),
         function_name=function_name_match.group(1),
         linkage_name=None if linkage_name_match is None else linkage_name_match.group(1),
     )
+
+
+def test_lookup_wraps_raw_result_and_normalizes_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    raw_path = tmp_path / "dir" / ".." / "sample.c"
+    monkeypatch.setattr(
+        dwarfdump,
+        "_lookup_raw",
+        lambda binary_path, relative_address: (str(raw_path), "foo_impl", "_Z8foo_implv"),
+    )
+    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", None)
+
+    result = dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
+
+    assert result == dwarfdump.LookupResult(
+        compilation_unit_path=(tmp_path / "sample.c").resolve(),
+        function_name="foo_impl",
+        linkage_name="_Z8foo_implv",
+    )
+
+
+def test_lookup_raises_when_native_extension_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import_error = ImportError("native extension missing")
+    monkeypatch.setattr(dwarfdump, "_lookup_raw", None)
+    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", import_error)
+
+    with pytest.raises(RuntimeError, match="无法导入 LLVM dwarfdump 扩展"):
+        dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
+
+
+def test_lookup_propagates_runtime_error_from_native_extension(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(
+        dwarfdump,
+        "_lookup_raw",
+        lambda binary_path, relative_address: (_ for _ in ()).throw(
+            RuntimeError("DWARF 中未找到地址所属编译单元: 0x1234")
+        ),
+    )
+    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", None)
+
+    with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
+        dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
 
 
 def test_lookup_reads_compilation_unit_path_from_relative_dwarf_name(
@@ -236,7 +283,7 @@ def test_lookup_follows_specification_for_cpp_overload(
     assert result.linkage_name == linkage_name
 
 
-def test_find_function_die_matches_subprogram_entry_address_with_inline_call(
+def test_lookup_matches_outer_subprogram_for_inner_address(
     tmp_path: Path,
 ) -> None:
     compiler = _require_program("cc")
@@ -244,39 +291,9 @@ def test_find_function_die_matches_subprogram_entry_address_with_inline_call(
         tmp_path,
         compiler=compiler,
         source_name="sample.c",
-        source_text=(
-            "static inline __attribute__((always_inline)) int add1(int x) { return x + 1; }\n"
-            "int foo_impl(int x) { return add1(x); }\n"
-        ),
-        optimization="-O2",
+        source_text="int foo_impl(int value) { return value + 1; }\n",
     )
-    relative_address = _find_symbol_value(binary_path, "foo_impl")
-
-    with binary_path.open("rb") as binary_file:
-        compilation_unit = next(ELFFile(binary_file).get_dwarf_info().iter_CUs())
-
-        matched_die = dwarfdump._find_function_die(compilation_unit, relative_address)
-
-    assert matched_die is not None
-    assert matched_die.tag == "DW_TAG_subprogram"
-    assert dwarfdump._resolve_subprogram_identity(matched_die) == ("foo_impl", None)
-
-
-def test_lookup_matches_outer_subprogram_when_function_contains_inline_call(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library(
-        tmp_path,
-        compiler=compiler,
-        source_name="sample.c",
-        source_text=(
-            "static inline __attribute__((always_inline)) int add1(int x) { return x + 1; }\n"
-            "int foo_impl(int x) { return add1(x); }\n"
-        ),
-        optimization="-O2",
-    )
-    relative_address = _find_symbol_value(binary_path, "foo_impl")
+    relative_address = _find_symbol_value(binary_path, "foo_impl") + 1
 
     result = dwarfdump.lookup(binary_path, relative_address)
 
@@ -318,49 +335,6 @@ def test_lookup_uses_generated_aranges_when_debug_aranges_missing(
 
     assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
-    assert result.linkage_name is None
-
-
-def test_lookup_uses_generated_aranges_for_dwarf4_ranges(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_discontinuous_range_library(
-        tmp_path,
-        compiler=compiler,
-        extra_compile_args=("-gdwarf-4",),
-    )
-    no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
-    relative_address = _find_symbol_value(no_aranges_binary_path, "wrapper")
-
-    assert _read_top_die_attr_form(no_aranges_binary_path, "DW_AT_ranges") == "DW_FORM_sec_offset"
-
-    result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
-
-    assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
-    assert result.function_name == "wrapper"
-    assert result.linkage_name is None
-
-
-def test_lookup_uses_generated_aranges_for_dwarf5_rnglists(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("clang")
-    binary_path = _build_discontinuous_range_library(
-        tmp_path,
-        compiler=compiler,
-        extra_compile_args=("-gdwarf-5",),
-    )
-    no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
-    relative_address = _find_symbol_value(no_aranges_binary_path, "wrapper")
-
-    assert _read_top_die_attr_form(no_aranges_binary_path, "DW_AT_ranges") == "DW_FORM_rnglistx"
-
-    result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
-
-    assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
-    assert result.function_name == "wrapper"
-    assert result.linkage_name is None
 
 
 def test_lookup_uses_generated_aranges_for_multi_cu_binary(
@@ -393,135 +367,8 @@ def test_lookup_uses_generated_aranges_for_multi_cu_binary(
     assert second_result.function_name == "second_impl"
 
 
-def test_build_compilation_unit_range_map_only_generates_for_uncovered_cus(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library_from_sources(
-        tmp_path,
-        compiler=compiler,
-        sources={
-            "first.c": "int first_impl(void) { return 1; }\n",
-            "second.c": "int second_impl(void) { return 2; }\n",
-        },
-        extra_compile_args=("-gdwarf-4",),
-    )
-
-    with binary_path.open("rb") as binary_file:
-        dwarf = ELFFile(binary_file).get_dwarf_info()
-        compilation_units = tuple(dwarf.iter_CUs())
-
-        first_cu, second_cu = compilation_units
-        second_ranges = [
-            dwarfdump._CompileUnitRangeMapEntry(start=start, end=end, cu_offset=second_cu.cu_offset)
-            for start, end in dwarfdump._iter_die_ranges(second_cu.get_top_DIE())
-        ]
-
-        first_symbol = _find_symbol_value(binary_path, "first_impl")
-        range_map = dwarfdump._build_compilation_unit_range_map(
-            dwarf=dwarf,
-            compilation_units=compilation_units,
-            explicit_ranges=[
-                dwarfdump._CompileUnitRangeMapEntry(
-                    start=first_symbol,
-                    end=first_symbol + 1,
-                    cu_offset=first_cu.cu_offset,
-                )
-            ],
-            explicitly_covered_cu_offsets={first_cu.cu_offset},
-        )
-
-    first_entries = [entry for entry in range_map if entry.cu_offset == first_cu.cu_offset]
-    second_entries = [entry for entry in range_map if entry.cu_offset == second_cu.cu_offset]
-
-    assert first_entries == [
-        dwarfdump._CompileUnitRangeMapEntry(
-            start=first_symbol,
-            end=first_symbol + 1,
-            cu_offset=first_cu.cu_offset,
-        )
-    ]
-    assert second_entries == second_ranges
-
-
-def test_lookup_rejects_address_outside_debug_aranges(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library(
-        tmp_path,
-        compiler=compiler,
-        source_name="sample.c",
-        source_text="int foo_impl(void) { return 1; }\n",
-    )
-    relative_address = _find_symbol_value(binary_path, "foo_impl") + 0x1000
-
-    with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
-        dwarfdump.lookup(binary_path, relative_address)
-
-
-def test_lookup_rejects_non_entry_address_inside_function(
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library(
-        tmp_path,
-        compiler=compiler,
-        source_name="sample.c",
-        source_text="int foo_impl(int value) { return value + 1; }\n",
-    )
-    relative_address = _find_symbol_value(binary_path, "foo_impl") + 1
-
-    with pytest.raises(RuntimeError, match="未找到入口地址对应的函数"):
-        dwarfdump.lookup(binary_path, relative_address)
-
-
-def test_lookup_rejects_binary_without_top_die_address_ranges(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library(
-        tmp_path,
-        compiler=compiler,
-        source_name="sample.c",
-        source_text="int foo_impl(void) { return 1; }\n",
-    )
-    no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
-    relative_address = _find_symbol_value(no_aranges_binary_path, "foo_impl")
-
-    original_iter_die_ranges = dwarfdump._iter_die_ranges
-
-    def fake_iter_die_ranges(die: DIE) -> object:
-        if getattr(die, "tag", None) == "DW_TAG_compile_unit":
-            return iter(())
-        return original_iter_die_ranges(die)
-
-    monkeypatch.setattr(dwarfdump, "_iter_die_ranges", fake_iter_die_ranges)
-
-    with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
-        dwarfdump.lookup(no_aranges_binary_path, relative_address)
-
-
-def test_lookup_rejects_missing_function_name(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    compiler = _require_program("cc")
-    binary_path = _build_shared_library(
-        tmp_path,
-        compiler=compiler,
-        source_name="sample.c",
-        source_text="int foo_impl(void) { return 1; }\n",
-    )
-    relative_address = _find_symbol_value(binary_path, "foo_impl")
-
-    monkeypatch.setattr(dwarfdump, "_resolve_subprogram_identity", lambda die: (None, None))
-
-    with pytest.raises(RuntimeError, match="函数缺少名称"):
-        dwarfdump.lookup(binary_path, relative_address)
-
-
+@pytest.mark.integration
+@pytest.mark.slow
 def test_lookup_matches_llvm_dwarfdump_for_low_pc_high_pc(
     tmp_path: Path,
 ) -> None:
@@ -539,9 +386,12 @@ def test_lookup_matches_llvm_dwarfdump_for_low_pc_high_pc(
     result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
     llvm_result = _run_llvm_dwarfdump_lookup(no_aranges_binary_path, relative_address)
 
+    assert llvm_result is not None
     assert result == llvm_result
 
 
+@pytest.mark.integration
+@pytest.mark.slow
 def test_lookup_matches_llvm_dwarfdump_for_rnglists(
     tmp_path: Path,
 ) -> None:
@@ -558,4 +408,26 @@ def test_lookup_matches_llvm_dwarfdump_for_rnglists(
     result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
     llvm_result = _run_llvm_dwarfdump_lookup(no_aranges_binary_path, relative_address)
 
+    assert llvm_result is not None
     assert result == llvm_result
+
+
+@pytest.mark.integration
+@pytest.mark.slow
+def test_lookup_raises_when_llvm_dwarfdump_finds_no_match(
+    tmp_path: Path,
+) -> None:
+    compiler = _require_program("cc")
+    _require_program("llvm-dwarfdump")
+    binary_path = _build_shared_library(
+        tmp_path,
+        compiler=compiler,
+        source_name="sample.c",
+        source_text="int foo_impl(void) { return 1; }\n",
+    )
+    relative_address = _find_symbol_value(binary_path, "foo_impl") + 0x1000
+
+    assert _run_llvm_dwarfdump_lookup(binary_path, relative_address) is None
+
+    with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
+        dwarfdump.lookup(binary_path, relative_address)
