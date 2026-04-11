@@ -80,8 +80,6 @@ class SignatureCompleter:
     ) -> None:
         """按函数来源分支执行签名补全。"""
         self._result.total_functions += 1
-        if func.signatures:
-            return
 
         branch = "unsupported"
         reason = "函数不属于受支持的签名补全来源。"

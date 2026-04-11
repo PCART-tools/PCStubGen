@@ -86,6 +86,50 @@ def test_module_collector_ignores_module_attributes_not_on_package_path(
     assert ir_module.sub_modules == []
 
 
+def test_module_collector_ignores_plain_members_without_module_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_package_file(
+        tmp_path / "plainattrpkg" / "__init__.py",
+        "VALUE = {'answer': 42}\n",
+    )
+
+    _prepare_module_import("plainattrpkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("plainattrpkg")
+
+    assert ir_module.functions == []
+    assert ir_module.classes == []
+    assert ir_module.sub_modules == []
+
+
+def test_module_collector_handles_staticmethod_member_without_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_package_file(
+        tmp_path / "staticmethodpkg" / "__init__.py",
+        "class NamelessStaticMethod(staticmethod):\n"
+        "    def __getattribute__(self, name: str):\n"
+        "        if name == '__name__':\n"
+        "            raise AttributeError('__name__')\n"
+        "        return super().__getattribute__(name)\n"
+        "\n"
+        "class Demo:\n"
+        "    pass\n"
+        "\n"
+        "def _wrapped() -> int:\n"
+        "    return 1\n"
+        "\n"
+        "Demo.__new__ = NamelessStaticMethod(_wrapped)\n",
+    )
+
+    _prepare_module_import("staticmethodpkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("staticmethodpkg")
+
+    assert [class_.name for class_ in ir_module.classes] == ["Demo", "NamelessStaticMethod"]
+
+
 def test_module_collector_treats_single_file_module_as_non_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

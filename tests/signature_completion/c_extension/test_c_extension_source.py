@@ -306,6 +306,46 @@ def test_get_func_cursor_matches_nested_definition_with_linkage_name(
     assert matched is function_cursor
 
 
+def test_get_func_cursor_matches_spelling_when_linkage_name_is_missing(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.c"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.mangled_name = "foo_impl"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[function_cursor],
+            )
+        },
+    )()
+
+    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", None)
+
+    assert matched is function_cursor
+
+
 def test_get_func_cursor_raises_when_linkage_name_does_not_match(
     tmp_path: Path,
 ) -> None:

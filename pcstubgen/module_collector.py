@@ -43,8 +43,6 @@ class ModuleCollector:
 
             if self._is_imported_member(member_path, member, module):
                 continue
-            if self._is_member_alias(member_path, member):
-                continue
 
             if inspect.isbuiltin(member):
                 irmodule.functions.append(self._collect_function(member_path, member))
@@ -79,9 +77,6 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
-
-            if self._is_member_alias(member_path, member):
-                continue
 
             if inspect.isbuiltin(member):
                 irclass.methods.append(
@@ -174,14 +169,6 @@ class ModuleCollector:
             return QualifiedName.from_str(qualname)
         return QualifiedName.from_str(f"{module}.{qualname}")
 
-    def _get_value_parent_module_name(self, obj: Any) -> str | None:
-        """获取成员值所属的上级模块名。"""
-        if inspect.ismodule(obj):
-            return obj.__name__.rsplit(".", 1)[0]
-        if inspect.isclass(obj) or inspect.isroutine(obj):
-            return self._get_module_name(obj)
-        return None
-
     @staticmethod
     def _get_module_name(obj: Any) -> str | None:
         """读取对象的 `__module__`。"""
@@ -197,15 +184,30 @@ class ModuleCollector:
         module: types.ModuleType,
     ) -> bool:
         """判断成员是否来自外部模块导入。"""
-        member_module = self._get_value_parent_module_name(member)
-        return (
-            (member_module is not None and member_module != module.__name__)
-            or path.name == "annotations"
-        )
+        if path.name == "annotations":
+            return True
+        if inspect.isclass(member) or inspect.isroutine(member):
+            return self._get_module_name(member) != module.__name__
+        return False
+
+    @staticmethod
+    def _get_member_name(member: Any) -> str | None:
+        """读取成员自身声明的名称。"""
+        member_name = getattr(member, "__name__", None)
+        if isinstance(member_name, str):
+            return member_name
+        if isinstance(member, staticmethod | classmethod):
+            wrapped_name = getattr(member.__func__, "__name__", None)
+            if isinstance(wrapped_name, str):
+                return wrapped_name
+        return None
 
     @staticmethod
     def _is_member_alias(path: QualifiedName, member: Any) -> bool:
         """判断成员名是否只是原对象名称的别名。"""
         if inspect.isroutine(member) or inspect.isclass(member):
-            return path.name != member.__name__
+            member_name = ModuleCollector._get_member_name(member)
+            if member_name is None:
+                return False
+            return path.name != member_name
         return False

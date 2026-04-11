@@ -4,7 +4,7 @@ from pathlib import Path
 
 from .module_collector import ModuleCollector
 from .signature_completion import SignatureCompleter
-from .stub_output import StubRenderer, StubWriter
+from .stub_output import JsonWriter, StubRenderer, StubWriter
 
 __all__ = ["gen_stubs"]
 
@@ -15,7 +15,7 @@ def gen_stubs(
     compilation_database: Path,
     *,
     include_docstrings: bool = False,
-    writer: StubWriter | None = None,
+    writer: StubWriter | JsonWriter | None = None,
 ) -> None:
     """
     为模块生成 stub 并写入输出目录。

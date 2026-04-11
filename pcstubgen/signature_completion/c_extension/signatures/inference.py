@@ -280,13 +280,7 @@ def _infer_call_expr_type(cursor: Cursor) -> Type | None:
     assert cursor.kind == CursorKind.CALL_EXPR
     children = list(cursor.get_children())
     func_cursor = children[0]
-    call_name = None
-    if getattr(func_cursor, "extent", None) is not None:
-        call_name = source_range_get_text(func_cursor.extent)
-    if call_name is None:
-        call_name = _get_cursor_name(func_cursor)
-    if call_name is None:
-        return None
+    call_name = source_range_get_text(func_cursor.extent)
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)

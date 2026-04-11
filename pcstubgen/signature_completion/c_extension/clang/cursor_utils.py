@@ -128,7 +128,11 @@ def get_func_cursor(
 ) -> Cursor:
     """按函数名和 linkage name 定位函数定义节点。"""
     for cursor in _iter_function_definition_candidates(translation_unit.cursor):
-        if cursor.spelling == function_name and cursor.mangled_name == linkage_name:
+        if linkage_name is not None:
+            if cursor.mangled_name == linkage_name:
+                return cursor
+            continue
+        if cursor.spelling == function_name:
             return cursor
 
     raise RuntimeError(

@@ -155,6 +155,15 @@ class StubRenderer:
                 result.append("#")
         return result
 
+    def render_function_signature(self, *, func_name: str, signature: IRSignature) -> str:
+        """将单条函数签名渲染为单行字符串。"""
+        args = ", ".join(self._format_arguments(signature.args))
+        rendered = [f"def {func_name}(", args, ")"]
+        if signature.return_type is not None:
+            rendered.append(f" -> {signature.return_type.render()}")
+        rendered.append(":")
+        return "".join(rendered)
+
     def _print_function_block(
         self,
         *,
