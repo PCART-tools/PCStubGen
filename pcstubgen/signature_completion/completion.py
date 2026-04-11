@@ -36,6 +36,8 @@ class SignatureCompleter:
     def run(self, module: IRModule) -> SignatureCompletionResult:
         self._result = SignatureCompletionResult()
         self._complete_module(module)
+
+        logger.info("{}", self._result)
         return self._result
 
     def _complete_module(

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import ModuleType
-
 from pcstubgen.ir_modules import IRModule, QualifiedName
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
@@ -25,11 +23,10 @@ def test_gen_stubs_writes_rendered_stub_file(
     )
 
     monkeypatch.setattr(
-        stubgen_module.importlib,
-        "import_module",
-        lambda module_name: ModuleType(module_name),
+        stubgen_module.ModuleCollector,
+        "run",
+        lambda self, module_name: ir_module,
     )
-    monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.ClangParser",
         lambda compilation_database: object(),

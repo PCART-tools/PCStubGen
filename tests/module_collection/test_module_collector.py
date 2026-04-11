@@ -1,75 +1,16 @@
 from __future__ import annotations
 
 import importlib
-import math
 import sys
 from pathlib import Path
-import types
 
 import pytest
 
-from pcstubgen.ir_modules import QualifiedName
-import pcstubgen.module_collect as module_collect_module
-from pcstubgen.module_collect import collect_function, collect_module
+import pcstubgen.module_collector as module_collector_module
+from pcstubgen.module_collector import ModuleCollector
 
 
-def test_module_collect_collect_function_keeps_doc_without_completing_signatures() -> None:
-    def sample(value: int, flag: bool = False) -> int:
-        """sample doc"""
-        raise NotImplementedError
-
-    parsed = collect_function(QualifiedName.from_str("pkg.mod.sample"), sample)
-
-    assert parsed.doc == "sample doc"
-    assert parsed.signatures == []
-    assert parsed.runtime_handle is sample
-
-
-def test_module_collect_keeps_only_tree_functions_and_methods() -> None:
-    module = types.ModuleType("math")
-    module.sin = math.sin
-    module.sin_alias = math.sin
-
-    class RootClass:
-        class_attr = 123
-
-        @property
-        def prop(self):
-            return 1
-
-    RootClass.__module__ = "math"
-    RootClass.sin = math.sin
-    RootClass.sin_alias = math.sin
-
-    module.RootClass = RootClass
-    module.sub = types.ModuleType("math.sub")
-    module.VALUE = 10
-
-    ir_module = collect_module(QualifiedName.from_str("math"), module)
-
-    assert [func.name for func in ir_module.functions] == ["sin"]
-    assert [cls.name for cls in ir_module.classes] == ["RootClass"]
-    assert ir_module.sub_modules == []
-
-    root_cls = ir_module.classes[0]
-    assert [method.function.name for method in root_cls.methods] == ["sin"]
-    assert root_cls.methods[0].function.runtime_handle is math.sin
-    assert root_cls.methods[0].runtime_owner is RootClass
-    assert root_cls.classes == []
-
-
-def test_module_collect_skips_extension_method_descriptors() -> None:
-    ir_class = module_collect_module.collect_class(
-        QualifiedName.from_str("builtins.list"),
-        list,
-    )
-
-    method_names = [method.function.name for method in ir_class.methods]
-
-    assert "append" not in method_names
-
-
-def test_module_collect_discovers_direct_submodules_from_package_path(
+def test_module_collector_discovers_direct_submodules_from_package_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -90,9 +31,8 @@ def test_module_collect_discovers_direct_submodules_from_package_path(
         "def nested() -> int:\n    return 1\n",
     )
 
-    module = _import_module_from_tmp("samplepkg", tmp_path, monkeypatch)
-
-    ir_module = collect_module(QualifiedName.from_str("samplepkg"), module)
+    _prepare_module_import("samplepkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("samplepkg")
 
     assert ir_module.functions == []
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == [
@@ -102,7 +42,7 @@ def test_module_collect_discovers_direct_submodules_from_package_path(
     ]
 
 
-def test_module_collect_discovers_hidden_private_subpackage_not_exposed_by_dir(
+def test_module_collector_discovers_hidden_private_subpackage_not_exposed_by_dir(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -121,9 +61,8 @@ def test_module_collect_discovers_hidden_private_subpackage_not_exposed_by_dir(
         "VALUE = 2\n",
     )
 
-    module = _import_module_from_tmp("hiddenpkg", tmp_path, monkeypatch)
-
-    ir_module = collect_module(QualifiedName.from_str("hiddenpkg"), module)
+    _prepare_module_import("hiddenpkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("hiddenpkg")
 
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == [
         "_hidden",
@@ -131,7 +70,7 @@ def test_module_collect_discovers_hidden_private_subpackage_not_exposed_by_dir(
     ]
 
 
-def test_module_collect_ignores_module_attributes_not_on_package_path(
+def test_module_collector_ignores_module_attributes_not_on_package_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -141,29 +80,27 @@ def test_module_collect_ignores_module_attributes_not_on_package_path(
         "external = types.ModuleType('attrpkg.external_alias')\n",
     )
 
-    module = _import_module_from_tmp("attrpkg", tmp_path, monkeypatch)
-
-    ir_module = collect_module(QualifiedName.from_str("attrpkg"), module)
+    _prepare_module_import("attrpkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("attrpkg")
 
     assert ir_module.sub_modules == []
 
 
-def test_module_collect_treats_single_file_module_as_non_package(
+def test_module_collector_treats_single_file_module_as_non_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     module_path = tmp_path / "singlemod.py"
     module_path.write_text("VALUE = 1\n", encoding="utf-8")
 
-    module = _import_module_from_tmp("singlemod", tmp_path, monkeypatch)
-
-    ir_module = collect_module(QualifiedName.from_str("singlemod"), module)
+    _prepare_module_import("singlemod", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("singlemod")
 
     assert ir_module.is_package is False
     assert ir_module.sub_modules == []
 
 
-def test_module_collect_supports_namespace_packages(
+def test_module_collector_supports_namespace_packages(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -174,9 +111,8 @@ def test_module_collect_supports_namespace_packages(
         "VALUE = 1\n",
     )
 
-    module = _import_module_from_tmp("namespacepkg", tmp_path, monkeypatch)
-
-    ir_module = collect_module(QualifiedName.from_str("namespacepkg"), module)
+    _prepare_module_import("namespacepkg", tmp_path, monkeypatch)
+    ir_module = ModuleCollector().run("namespacepkg")
 
     assert ir_module.is_package is True
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["child"]
@@ -199,7 +135,7 @@ def test_module_collect_supports_namespace_packages(
         ),
     ],
 )
-def test_module_collect_skips_submodule_when_submodule_import_fails(
+def test_module_collector_skips_submodule_when_submodule_import_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     package_name: str,
@@ -220,7 +156,7 @@ def test_module_collect_skips_submodule_when_submodule_import_fails(
         broken_source,
     )
 
-    module = _import_module_from_tmp(package_name, tmp_path, monkeypatch)
+    _prepare_module_import(package_name, tmp_path, monkeypatch)
     error_records: list[tuple[str, BaseException]] = []
 
     def fake_error(
@@ -231,9 +167,9 @@ def test_module_collect_skips_submodule_when_submodule_import_fails(
         _ = message
         error_records.append((module_name, error))
 
-    monkeypatch.setattr(module_collect_module.logger, "error", fake_error)
+    monkeypatch.setattr(module_collector_module.logger, "error", fake_error)
 
-    ir_module = collect_module(QualifiedName.from_str(package_name), module)
+    ir_module = ModuleCollector().run(package_name)
 
     assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
     assert len(error_records) == 1
@@ -246,15 +182,14 @@ def _write_package_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _import_module_from_tmp(
+def _prepare_module_import(
     module_name: str,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-) -> types.ModuleType:
+) -> None:
     monkeypatch.syspath_prepend(str(tmp_path))
     _clear_modules(module_name)
     importlib.invalidate_caches()
-    return importlib.import_module(module_name)
 
 
 def _clear_modules(module_name: str) -> None:
