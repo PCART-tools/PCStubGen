@@ -5,7 +5,7 @@ import pytest
 from pcstubgen.ir_modules import IRFunction, IRModule, QualifiedName
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
-    resolve_docstring_signatures,
+    parse_docstring_signatures,
 )
 from pcstubgen.ir_modules import IRArgumentKind
 
@@ -16,7 +16,7 @@ def _render_type(type_: object | None) -> str | None:
     return type_.render()
 
 
-def _resolve(
+def _parse_docstring(
     function_name: str,
     doc: str | None,
 ):
@@ -24,11 +24,11 @@ def _resolve(
         full_name=QualifiedName.from_str("pkg.mod"),
     )
     irfunction = IRFunction(name=function_name, runtime_handle=object(), doc=doc)
-    return resolve_docstring_signatures(irmodule, irfunction)
+    return parse_docstring_signatures(irmodule, irfunction)
 
 
 def test_docstring_parser_parses_generic_function_signature() -> None:
-    parsed = _resolve("foo", "foo(x: int, y: str) -> str\n\nparsed from docstring")
+    parsed = _parse_docstring("foo", "foo(x: int, y: str) -> str\n\nparsed from docstring")
 
     signature = parsed[0]
     assert [arg.name for arg in signature.args] == ["x", "y"]
@@ -36,7 +36,7 @@ def test_docstring_parser_parses_generic_function_signature() -> None:
 
 
 def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> None:
-    parsed = _resolve(
+    parsed = _parse_docstring(
         "cdist_minkowski",
         (
             "cdist_minkowski(x: object, y: object, w: object = None, "
@@ -71,7 +71,7 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
 
 
 def test_docstring_parser_parses_overload_signatures() -> None:
-    parsed = _resolve(
+    parsed = _parse_docstring(
         "foo",
         (
             "foo(*args, **kwargs)\n"
@@ -87,22 +87,22 @@ def test_docstring_parser_parses_overload_signatures() -> None:
 
 def test_docstring_parser_raises_without_doc() -> None:
     with pytest.raises(RuntimeError, match="docstring为空或缺失"):
-        _resolve("foo", None)
+        _parse_docstring("foo", None)
 
 
 def test_docstring_parser_raises_for_non_signature_first_line() -> None:
     with pytest.raises(RuntimeError, match="docstring首行不是目标函数签名声明"):
-        _resolve("foo", "This is not a signature.\nstill docs")
+        _parse_docstring("foo", "This is not a signature.\nstill docs")
 
 
 def test_docstring_parser_raises_on_invalid_signature_like_doc() -> None:
     with pytest.raises(RuntimeError, match="docstring签名参数解析失败"):
-        _resolve("foo", "foo(a: int,, b: int) -> int\n\nbroken")
+        _parse_docstring("foo", "foo(a: int,, b: int) -> int\n\nbroken")
 
 
 def test_docstring_parser_raises_for_overload_with_invalid_non_empty_line() -> None:
     with pytest.raises(RuntimeError, match="重载签名第2项格式非法"):
-        _resolve(
+        _parse_docstring(
             "foo",
             (
                 "foo(*args, **kwargs)\n"
@@ -116,7 +116,7 @@ def test_docstring_parser_raises_for_overload_with_invalid_non_empty_line() -> N
 
 def test_docstring_parser_raises_for_overload_with_non_consecutive_numbers() -> None:
     with pytest.raises(RuntimeError, match="重载签名序号不连续"):
-        _resolve(
+        _parse_docstring(
             "foo",
             (
                 "foo(*args, **kwargs)\n"

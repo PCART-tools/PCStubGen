@@ -8,7 +8,7 @@ from pcstubgen.signature_completion.c_extension import address_resolver as resol
 from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
 
 
-def test_resolve_symbolized_address_delegates_to_dwarfdump_lookup(
+def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -36,7 +36,7 @@ def test_resolve_symbolized_address_delegates_to_dwarfdump_lookup(
         ),
     )
 
-    result = resolver_module.resolve_symbolized_address(0x1234)
+    result = resolver_module.get_symbolized_address_location(0x1234)
 
     assert captured == {
         "binary_path": binary_path,

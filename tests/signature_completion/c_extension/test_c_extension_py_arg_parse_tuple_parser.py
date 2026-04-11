@@ -20,10 +20,10 @@ from tests.signature_completion.c_extension._py_arg_parse_test_support import (
 )
 
 
-def _default_resolve_name(c_args: list[Cursor]) -> str:
+def _default_infer_name(c_args: list[Cursor]) -> str:
     """用首个游标名构造稳定测试参数名。"""
     if not c_args:
-        raise AssertionError("resolve_name_func should not be called with empty c_args.")
+        raise AssertionError("infer_name_func should not be called with empty c_args.")
     return cast(_FakeCursor, c_args[0]).name
 
 
@@ -31,16 +31,16 @@ def _parse(
     format_string: str,
     args: list[Cursor],
     *,
-    resolve_name_func=None,
-    resolve_object_type_func=None,
-    resolve_default_value_func=None,
+    infer_name_func=None,
+    infer_object_type_func=None,
+    infer_default_value_func=None,
 ) -> list[IRArgument]:
     return PyArgParseTupleTypeParser(
         format_string,
         args,
-        resolve_name_func=resolve_name_func or _default_resolve_name,
-        resolve_object_type_func=resolve_object_type_func,
-        resolve_default_value_func=resolve_default_value_func,
+        infer_name_func=infer_name_func or _default_infer_name,
+        infer_object_type_func=infer_object_type_func,
+        infer_default_value_func=infer_default_value_func,
     ).parse()
 
 
@@ -75,7 +75,7 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
     raw_len_cursor = _cursor("raw_len")
     maybe_buffer_cursor = _cursor("maybe_buffer")
 
-    def resolve_name(c_args: list[Cursor]) -> str:
+    def infer_name(c_args: list[Cursor]) -> str:
         names = [cast(_FakeCursor, cursor).name for cursor in c_args]
         return {
             ("count",): "count",
@@ -86,13 +86,13 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
             ("maybe_buffer",): "maybe",
         }[tuple(names)]
 
-    def resolve_object_type(cursor: Cursor) -> str:
+    def infer_object_type(cursor: Cursor) -> str:
         return {
             type_cursor: "Point",
             converter_cursor: "ConvertedValue",
         }[cursor]
 
-    def resolve_default_value(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor) -> str:
         return {
             text_buffer_cursor: '"utf8"',
             typed_result_cursor: "None",
@@ -116,9 +116,9 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
             raw_len_cursor,
             maybe_buffer_cursor,
         ],
-        resolve_name_func=resolve_name,
-        resolve_object_type_func=resolve_object_type,
-        resolve_default_value_func=resolve_default_value,
+        infer_name_func=infer_name,
+        infer_object_type_func=infer_object_type,
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -137,7 +137,7 @@ def test_parse_falls_back_to_object_for_unresolved_object_units() -> None:
     converter_cursor = _cursor("converter")
     converted_result_cursor = _cursor("converted_result")
 
-    def resolve_name(c_args: list[Cursor]) -> str:
+    def infer_name(c_args: list[Cursor]) -> str:
         first_name = cast(_FakeCursor, c_args[0]).name
         return {
             "typed_result": "typed",
@@ -147,8 +147,8 @@ def test_parse_falls_back_to_object_for_unresolved_object_units() -> None:
     parsed = _parse(
         "O!O&",
         [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        resolve_name_func=resolve_name,
-        resolve_object_type_func=lambda cursor: None,
+        infer_name_func=infer_name,
+        infer_object_type_func=lambda cursor: None,
     )
 
     assert parsed == [
@@ -165,7 +165,7 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
     value_cursor = _cursor("value")
     buffer_cursor = _cursor("buffer")
 
-    def resolve_name(c_args: list[Cursor]) -> str:
+    def infer_name(c_args: list[Cursor]) -> str:
         names = [cast(_FakeCursor, cursor).name for cursor in c_args]
         return {
             ("one",): "single",
@@ -175,8 +175,8 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
     parsed = _parse(
         "(i), (s#, (O!y))",
         [one_cursor, text_cursor, text_len_cursor, type_cursor, value_cursor, buffer_cursor],
-        resolve_name_func=resolve_name,
-        resolve_object_type_func=lambda cursor: {type_cursor: "Point"}[cursor],
+        infer_name_func=infer_name,
+        infer_object_type_func=lambda cursor: {type_cursor: "Point"}[cursor],
     )
 
     assert parsed == [
@@ -194,7 +194,7 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
     label_cursor = _cursor("label")
     label_len_cursor = _cursor("label_len")
 
-    def resolve_default_value(cursor: Cursor) -> str | None:
+    def infer_default_value(cursor: Cursor) -> str | None:
         return {
             count_cursor: "1",
             label_cursor: "'abc'",
@@ -203,8 +203,8 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
     parsed = _parse(
         "|(i, (s#))",
         [count_cursor, label_cursor, label_len_cursor],
-        resolve_name_func=lambda c_args: "payload",
-        resolve_default_value_func=resolve_default_value,
+        infer_name_func=lambda c_args: "payload",
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -222,7 +222,7 @@ def test_parse_keeps_optional_tuple_argument_when_any_leaf_default_is_unknown() 
     count_cursor = _cursor("count")
     label_cursor = _cursor("label")
 
-    def resolve_default_value(cursor: Cursor) -> str | None:
+    def infer_default_value(cursor: Cursor) -> str | None:
         return {
             count_cursor: "1",
             label_cursor: None,
@@ -231,8 +231,8 @@ def test_parse_keeps_optional_tuple_argument_when_any_leaf_default_is_unknown() 
     parsed = _parse(
         "|(is)",
         [count_cursor, label_cursor],
-        resolve_name_func=lambda c_args: "pair",
-        resolve_default_value_func=resolve_default_value,
+        infer_name_func=lambda c_args: "pair",
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -244,13 +244,13 @@ def test_parse_marks_optional_scalar_without_default_text_when_resolution_fails(
     first_cursor = _cursor("first")
     second_cursor = _cursor("second")
 
-    def resolve_default_value(cursor: Cursor) -> str | None:
+    def infer_default_value(cursor: Cursor) -> str | None:
         return None
 
     parsed = _parse(
         "i|i",
         [first_cursor, second_cursor],
-        resolve_default_value_func=resolve_default_value,
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -305,14 +305,14 @@ def test_parse_raises_for_c_argument_count_mismatch(
 
 def test_parse_raises_when_resolved_name_is_none() -> None:
     with pytest.raises(PyArgParseTupleTypeParserError, match="无法解析 argument name。"):
-        _parse("i", [_cursor("value")], resolve_name_func=lambda c_args: None)
+        _parse("i", [_cursor("value")], infer_name_func=lambda c_args: None)
 
 
 def test_parse_accepts_empty_invalid_and_duplicate_resolved_names() -> None:
     parsed = _parse(
         "iiii",
         [_cursor("first"), _cursor("second"), _cursor("third"), _cursor("fourth")],
-        resolve_name_func=lambda c_args: {
+        infer_name_func=lambda c_args: {
             "first": "",
             "second": "123bad",
             "third": "same",

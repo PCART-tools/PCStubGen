@@ -45,7 +45,7 @@ def test_validate_compilation_database_path_requires_compile_commands_json(tmp_p
         compilation_database_module.validate_compilation_database_path(wrong_file)
 
 
-def test_resolve_compile_command_preserves_full_arguments(tmp_path: Path) -> None:
+def test_get_compile_command_preserves_full_arguments(tmp_path: Path) -> None:
     shared_source = tmp_path / "src" / "module.c"
     shared_source.parent.mkdir(parents=True, exist_ok=True)
     shared_source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
@@ -72,20 +72,20 @@ def test_resolve_compile_command_preserves_full_arguments(tmp_path: Path) -> Non
         ]
     )
 
-    result = compilation_database_module.resolve_compile_command(database, shared_source)
+    result = compilation_database_module.get_compile_command(database, shared_source)
 
     assert result.filename == shared_source.resolve()
     assert result.directory == tmp_path.resolve()
     assert result.arguments == ["cc", "-DFIRST", "-c", "src/module.c"]
 
 
-def test_resolve_compile_command_raises_when_source_is_missing(tmp_path: Path) -> None:
+def test_get_compile_command_raises_when_source_is_missing(tmp_path: Path) -> None:
     source = tmp_path / "src" / "module.c"
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="未在编译数据库中定位到编译单元"):
-        compilation_database_module.resolve_compile_command(
+        compilation_database_module.get_compile_command(
             _FakeCompilationDatabase([]),
             source,
         )

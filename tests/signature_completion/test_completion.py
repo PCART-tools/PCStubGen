@@ -280,14 +280,14 @@ def test_completer_continues_after_pybind11_docstring_base_exception(
         ],
     )
 
-    def _resolve_or_raise(_: IRModule, func: IRFunction):
+    def _parse_or_raise(_: IRModule, func: IRFunction):
         if func.name == "broken":
             raise BaseException("boom")
         return [_signature(args=[_arg("value", "str")], return_type=RawType("bool"))]
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.resolve_docstring_signatures",
-        _resolve_or_raise,
+        "pcstubgen.signature_completion.completion.parse_docstring_signatures",
+        _parse_or_raise,
     )
 
     summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)

@@ -122,7 +122,7 @@ def build_clang_args(
     return clang_args
 
 
-def _resolve_std_value_for_source(
+def _infer_std_value_for_source(
     *,
     source_path: Path,
     c_std: str | None,
@@ -144,7 +144,7 @@ def _build_parse_args(
     cpp_std: str | None,
 ) -> list[str]:
     parse_args = list(clang_args)
-    std_value = _resolve_std_value_for_source(
+    std_value = _infer_std_value_for_source(
         source_path=source_path,
         c_std=c_std,
         cpp_std=cpp_std,
@@ -157,7 +157,7 @@ def _build_parse_args(
     return parse_args
 
 
-def resolve_output_paths(source_path: Path) -> tuple[Path, Path]:
+def build_output_paths(source_path: Path) -> tuple[Path, Path]:
     return (
         DEFAULT_OUTPUT_DIR / f"{source_path.stem}{LIBCLANG_OUTPUT_EXTENSION}",
         DEFAULT_OUTPUT_DIR / f"{source_path.stem}{CLANG_OUTPUT_EXTENSION}",
@@ -410,7 +410,7 @@ def run_ast_export(
     """
     source_path = source_path.resolve()
 
-    libclang_output_path, clang_output_path = resolve_output_paths(source_path)
+    libclang_output_path, clang_output_path = build_output_paths(source_path)
     library_path = _safe_str(clang_library_path)
     normalized_include = _normalize_include_headers([str(header) for header in include])
     normalized_include_directory = _normalize_include_paths(

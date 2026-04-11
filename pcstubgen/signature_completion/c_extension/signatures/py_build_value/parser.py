@@ -29,12 +29,12 @@ class PyBuildValueTypeParser:
         self,
         fmt: str,
         args: list[Cursor],
-        resolve_object_type_func: Callable[[Cursor], Type | None] | None = None,
+        infer_object_type_func: Callable[[Cursor], Type | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
         self._args = args
-        self._resolve_object_type_func = resolve_object_type_func
+        self._infer_object_type_func = infer_object_type_func
         self._char_index = 0
         self._arg_index = 0
 
@@ -123,7 +123,7 @@ class PyBuildValueTypeParser:
         spec = self._advance_format_unit_required()
         c_args = self._advance_args_required(spec.c_arg_count)
         if spec.object_type_arg_offset is not None:
-            return self._resolve_object_type(c_args[spec.object_type_arg_offset])
+            return self._infer_object_type(c_args[spec.object_type_arg_offset])
         return spec.value_type
 
     def _advance_format_unit_required(self) -> _FormatUnitSpec:
@@ -198,10 +198,10 @@ class PyBuildValueTypeParser:
         """连续消费指定数量的实参游标。"""
         return [self._advance_arg_required() for _ in range(count)]
 
-    def _resolve_object_type(self, cursor: Cursor) -> Type:
+    def _infer_object_type(self, cursor: Cursor) -> Type:
         """解析对象槽位的类型，未知时保留为显式 `Any` 节点。"""
-        if self._resolve_object_type_func is not None:
-            resolved_type = self._resolve_object_type_func(cursor)
-            if resolved_type is not None:
-                return resolved_type
+        if self._infer_object_type_func is not None:
+            inferred_type = self._infer_object_type_func(cursor)
+            if inferred_type is not None:
+                return inferred_type
         return AnyType()

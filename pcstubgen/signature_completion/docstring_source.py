@@ -14,7 +14,7 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-def resolve_docstring_signatures(
+def parse_docstring_signatures(
     _irmodule: IRModule,
     irfunction: IRFunction,
 ) -> list[IRSignature]:

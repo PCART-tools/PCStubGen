@@ -290,7 +290,7 @@ def test_parse_uses_object_slot_cursor_for_object_like_units(format_string: str)
     object_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> Type:
+    def infer_object_type(cursor: Cursor) -> Type:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
         return NamedType("Resolved")
@@ -298,7 +298,7 @@ def test_parse_uses_object_slot_cursor_for_object_like_units(format_string: str)
     parser = PyBuildValueTypeParser(
         format_string,
         [object_cursor],
-        resolve_object_type_func=resolve_object_type,
+        infer_object_type_func=infer_object_type,
     )
 
     assert parser.parse() == NamedType("Resolved")
@@ -311,7 +311,7 @@ def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> Type:
+    def infer_object_type(cursor: Cursor) -> Type:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
         return NamedType("Converted")
@@ -319,7 +319,7 @@ def test_parse_uses_converter_cursor_for_o_ampersand_resolver() -> None:
     parser = PyBuildValueTypeParser(
         "O&",
         [converter_cursor, data_cursor],
-        resolve_object_type_func=resolve_object_type,
+        infer_object_type_func=infer_object_type,
     )
 
     assert parser.parse() == NamedType("Converted")
@@ -332,7 +332,7 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
     data_cursor = cast(Cursor, object())
     seen: list[Cursor] = []
 
-    def resolve_object_type(cursor: Cursor) -> Type:
+    def infer_object_type(cursor: Cursor) -> Type:
         """记录解析器看到的游标并返回固定类型。"""
         seen.append(cursor)
         return NamedType("Converted")
@@ -340,7 +340,7 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
     parser = PyBuildValueTypeParser(
         "([O&])",
         [converter_cursor, data_cursor],
-        resolve_object_type_func=resolve_object_type,
+        infer_object_type_func=infer_object_type,
     )
 
     assert parser.parse() == TupleType(

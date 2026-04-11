@@ -193,7 +193,7 @@ def _run_ast_export_case(
         cpp_std=None,
         clang_library_path=None,
     )
-    libclang_path, clang_path = clang_ast.resolve_output_paths(source_path.resolve())
+    libclang_path, clang_path = clang_ast.build_output_paths(source_path.resolve())
     return errors, libclang_path, clang_path
 
 

@@ -23,15 +23,15 @@ def _parse(
     kwlist: list[str],
     args: list[Cursor],
     *,
-    resolve_object_type_func=None,
-    resolve_default_value_func=None,
+    infer_object_type_func=None,
+    infer_default_value_func=None,
 ) -> list[IRArgument]:
     return PyArgParseTupleAndKeywordsTypeParser(
         format_string,
         kwlist,
         args,
-        resolve_object_type_func=resolve_object_type_func,
-        resolve_default_value_func=resolve_default_value_func,
+        infer_object_type_func=infer_object_type_func,
+        infer_default_value_func=infer_default_value_func,
     ).parse()
 
 
@@ -71,7 +71,7 @@ def test_parse_ignores_trailer_and_separators(trailer: str) -> None:
     ]
 
 
-def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
+def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
     count_cursor = _cursor("count")
     encoding_cursor = _cursor("encoding")
     text_buffer_cursor = _cursor("text_buffer")
@@ -96,10 +96,10 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
         maybe_buffer_cursor: "None",
     }
 
-    def resolve_object_type(cursor: Cursor) -> str:
+    def infer_object_type(cursor: Cursor) -> str:
         return resolved_types[cursor]
 
-    def resolve_default(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor) -> str:
         return resolved_defaults[cursor]
 
     parsed = _parse(
@@ -118,8 +118,8 @@ def test_parse_uses_object_and_default_resolvers_for_multi_slot_units() -> None:
             raw_len_cursor,
             maybe_buffer_cursor,
         ],
-        resolve_object_type_func=resolve_object_type,
-        resolve_default_value_func=resolve_default,
+        infer_object_type_func=infer_object_type,
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -196,14 +196,14 @@ def test_parse_marks_optional_arguments_when_default_text_resolution_fails() -> 
     first_cursor = _cursor("first")
     second_cursor = _cursor("second")
 
-    def resolve_default(cursor: Cursor) -> str | None:
+    def infer_default_value(cursor: Cursor) -> str | None:
         return None
 
     parsed = _parse(
         "i|i",
         ["first", "second"],
         [first_cursor, second_cursor],
-        resolve_default_value_func=resolve_default,
+        infer_default_value_func=infer_default_value,
     )
 
     assert parsed == [
@@ -223,14 +223,14 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
 
 
 @pytest.mark.parametrize(
-    "resolve_object_type_func",
+    "infer_object_type_func",
     [
         None,
         lambda cursor: None,
     ],
 )
 def test_parse_falls_back_to_object_for_unresolved_object_units(
-    resolve_object_type_func,
+    infer_object_type_func,
 ) -> None:
     type_cursor = _cursor("type")
     typed_result_cursor = _cursor("typed_result")
@@ -241,7 +241,7 @@ def test_parse_falls_back_to_object_for_unresolved_object_units(
         "O!O&",
         ["typed", "converted"],
         [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        resolve_object_type_func=resolve_object_type_func,
+        infer_object_type_func=infer_object_type_func,
     )
 
     assert parsed == [

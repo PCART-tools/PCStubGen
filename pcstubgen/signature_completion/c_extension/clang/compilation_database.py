@@ -44,18 +44,19 @@ def load_compilation_database(compilation_database: Path) -> CompilationDatabase
     except Exception as ex:
         raise RuntimeError(f"编译数据库加载失败: {validated_path}") from ex
 
-def resolve_compile_command(
+
+def get_compile_command(
     database: CompilationDatabase,
     source_path: Path,
 ) -> MyCompileCommand:
     """按源码绝对路径查询首条编译命令。"""
-    resolved_source_path = source_path.resolve()
-    compile_commands = database.getCompileCommands(str(resolved_source_path))
+    absolute_source_path = source_path.resolve()
+    compile_commands = database.getCompileCommands(str(absolute_source_path))
     if compile_commands is None:
-        raise RuntimeError(f"未在编译数据库中定位到编译单元: {resolved_source_path}")
+        raise RuntimeError(f"未在编译数据库中定位到编译单元: {absolute_source_path}")
 
     commands = list(compile_commands)
     if not commands:
-        raise RuntimeError(f"未在编译数据库中定位到编译单元: {resolved_source_path}")
+        raise RuntimeError(f"未在编译数据库中定位到编译单元: {absolute_source_path}")
 
     return MyCompileCommand(commands[0])

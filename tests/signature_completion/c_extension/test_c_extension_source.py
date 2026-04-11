@@ -68,7 +68,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
+        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
         lambda address: _symbolized_location(
             compilation_unit_path=source_path,
             function_name="foo_impl",
@@ -76,7 +76,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     )
     monkeypatch.setattr(
         CExtensionSource,
-        "_resolve_function_cursor",
+        "get_function_cursor",
         lambda self, **kwargs: function_cursor,
     )
     monkeypatch.setattr(
@@ -123,7 +123,7 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=flags),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
+        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
         lambda address: _symbolized_location(
             compilation_unit_path=tmp_path / "foo_impl.c",
             function_name="foo_impl",
@@ -131,7 +131,7 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
     )
     monkeypatch.setattr(
         CExtensionSource,
-        "_resolve_function_cursor",
+        "get_function_cursor",
         lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
     )
 
@@ -169,7 +169,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_O),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.resolve_symbolized_address",
+        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
         lambda address: _symbolized_location(
             compilation_unit_path=source_path,
             function_name="foo_impl",
@@ -177,7 +177,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
     monkeypatch.setattr(
         CExtensionSource,
-        "_resolve_function_cursor",
+        "get_function_cursor",
         lambda self, **kwargs: function_cursor,
     )
     monkeypatch.setattr(
@@ -239,7 +239,7 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo",
         linkage_name="_Z3fooi",
@@ -282,7 +282,7 @@ def test_find_function_cursor_matches_spelling_without_linkage_name(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )
@@ -324,7 +324,7 @@ def test_find_function_cursor_matches_symbol_across_different_location_file(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )
@@ -373,7 +373,7 @@ def test_find_function_cursor_returns_first_name_match_without_linkage_name(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )
@@ -423,7 +423,7 @@ def test_find_function_cursor_prefers_definition_over_matching_declaration(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )
@@ -479,7 +479,7 @@ def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )
@@ -523,7 +523,7 @@ def test_find_function_cursor_matches_definition_from_header_candidate(
         },
     )()
 
-    matched = CExtensionSource._find_function_cursor(
+    matched = CExtensionSource.find_function_cursor(
         translation_unit=translation_unit,
         symbol_name="foo_impl",
     )

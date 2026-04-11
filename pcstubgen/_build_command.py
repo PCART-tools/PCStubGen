@@ -31,7 +31,7 @@ class BuildContext:
     config_settings: ConfigSettings
 
 
-def resolve_compile_commands_path(srcdir: Path) -> Path | None:
+def find_compile_commands_path(srcdir: Path) -> Path | None:
     """按优先级探测可用的 compile_commands.json 路径。"""
     for path in (
         srcdir / "build" / "compile_commands.json",
@@ -256,4 +256,4 @@ def _build_command(
     print(f"- build-backend: {build_context.build_backend}")
     print(f"- 持久构建环境: {env_dir}")
     print(f"- wheel 文件: {wheel_path}")
-    print(f"- compile_commands.json: {resolve_compile_commands_path(srcdir)}")
+    print(f"- compile_commands.json: {find_compile_commands_path(srcdir)}")

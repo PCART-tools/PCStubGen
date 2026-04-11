@@ -40,6 +40,8 @@ def _signature(
         args=list(args or ()),
         return_type=return_type,
     )
+
+
 def _arg(
     name: str,
     type_text: str | Type | None = None,
@@ -87,7 +89,7 @@ class _FakeExtractor:
         self.functions = functions or {}
         self.called = 0
 
-    def resolve_functions(self) -> dict[str, ResolvedFunctionFixture]:
+    def infer_functions(self) -> dict[str, ResolvedFunctionFixture]:
         self.called += 1
         return self.functions
 
@@ -104,7 +106,7 @@ def _patch_c_signature_extractor(
         irfunction: IRFunction,
     ) -> tuple[list[IRSignature], str | None]:
         _ = self
-        extractor.resolve_functions()
+        extractor.infer_functions()
         extracted = extractor.functions.get(irfunction.name)
         if extracted is None:
             raise RuntimeError(f"未找到函数 {irmodule.full_name}.{irfunction.name}")

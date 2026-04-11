@@ -28,7 +28,7 @@ _dladdr.argtypes = [ctypes.c_void_p, ctypes.POINTER(_DlInfo)]
 _dladdr.restype = ctypes.c_int
 
 
-def resolve_symbolized_address(address: int) -> SymbolizedAddressLocation:
+def get_symbolized_address_location(address: int) -> SymbolizedAddressLocation:
     """将运行时函数入口地址解析为编译单元路径、函数名和可选 linkage name。"""
     binary_path, relative_address = _get_binary_and_ra(address)
     result = dwarfdump.lookup(binary_path, relative_address)

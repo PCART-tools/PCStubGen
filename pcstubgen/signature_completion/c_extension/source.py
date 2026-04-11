@@ -7,7 +7,10 @@ from clang.cindex import Cursor, CursorKind, Index, TranslationUnit, Translation
 from loguru import logger
 
 from ...ir_modules import IRFunction, IRModule, IRSignature
-from .address_resolver import SymbolizedAddressLocation, resolve_symbolized_address
+from .address_resolver import (
+    SymbolizedAddressLocation,
+    get_symbolized_address_location,
+)
 from .clang import compilation_database as compilation_database_loader
 from .clang import translation_unit as translation_unit_loader
 from .clang.cursor_utils import source_range_get_text
@@ -40,8 +43,8 @@ class CExtensionSource:
     ) -> tuple[list[IRSignature], str | None]:
         """按函数懒解析 builtin function 的 C 扩展签名。"""
         runtime_info = read_builtin_function_runtime_info(irfunction.runtime_handle)
-        location = resolve_symbolized_address(runtime_info.address)
-        function_cursor = self._resolve_function_cursor(location=location)
+        location = get_symbolized_address_location(runtime_info.address)
+        function_cursor = self.get_function_cursor(location=location)
         source_comment = self._get_source_comment(function_cursor)
         signatures = inference.infer_signature(
             function_cursor,
@@ -53,20 +56,20 @@ class CExtensionSource:
 
         return signatures, source_comment
 
-    def _resolve_function_cursor(
+    def get_function_cursor(
         self,
         *,
         location: SymbolizedAddressLocation,
     ) -> Cursor:
         """按需 parse 已定位到的源码文件，并找到对应的函数 cursor。"""
-        compile_command = compilation_database_loader.resolve_compile_command(
+        compile_command = compilation_database_loader.get_compile_command(
             self._compilation_database,
             location.compilation_unit_path,
         )
 
         translation_unit = self._load_translation_unit(compile_command)
 
-        matched = self._find_function_cursor(
+        matched = self.find_function_cursor(
             translation_unit=translation_unit,
             symbol_name=location.function_name,
             linkage_name=location.linkage_name,
@@ -124,7 +127,7 @@ class CExtensionSource:
         return translation_unit
 
     @staticmethod
-    def _find_function_cursor(
+    def find_function_cursor(
         *,
         translation_unit: TranslationUnit,
         symbol_name: str,

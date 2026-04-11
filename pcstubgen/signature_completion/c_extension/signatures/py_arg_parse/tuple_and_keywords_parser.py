@@ -30,15 +30,15 @@ class PyArgParseTupleAndKeywordsTypeParser:
         fmt: str,
         kwlist: list[str],
         args: list[Cursor],
-        resolve_object_type_func: Callable[[Cursor], Type | str | None] | None = None,
-        resolve_default_value_func: Callable[[Cursor], str | None] | None = None,
+        infer_object_type_func: Callable[[Cursor], Type | str | None] | None = None,
+        infer_default_value_func: Callable[[Cursor], str | None] | None = None,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
         self._kwlist = kwlist
         self._args = args
-        self._resolve_object_type_func = resolve_object_type_func
-        self._resolve_default_value_func = resolve_default_value_func
+        self._infer_object_type_func = infer_object_type_func
+        self._infer_default_value_func = infer_default_value_func
         self._char_index = 0
         self._arg_index = 0
         self._python_arg_index = 0
@@ -98,13 +98,13 @@ class PyArgParseTupleAndKeywordsTypeParser:
 
         arg_type = spec.type
         if spec.object_type_arg_offset is not None:
-            arg_type = self._resolve_object_type(c_args[spec.object_type_arg_offset])
+            arg_type = self._infer_object_type(c_args[spec.object_type_arg_offset])
 
         has_default = section is not _ArgumentSection.REQUIRED
 
         default_value: str | None = None
         if has_default:
-            default_value = self._resolve_default_value(c_args[spec.decl_ref_offset])
+            default_value = self._infer_default_value(c_args[spec.decl_ref_offset])
 
         kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
         if section is _ArgumentSection.KEYWORD_ONLY:
@@ -198,18 +198,18 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._arg_index = end_index
         return values
 
-    def _resolve_object_type(self, cursor: Cursor) -> Type:
+    def _infer_object_type(self, cursor: Cursor) -> Type:
         """解析对象单元的 Python 类型，未知时回退为 `object`。"""
-        if self._resolve_object_type_func is not None:
-            resolved_type = self._resolve_object_type_func(cursor)
-            if resolved_type is not None:
-                if isinstance(resolved_type, str):
-                    return RawType(resolved_type)
-                return resolved_type
+        if self._infer_object_type_func is not None:
+            inferred_type = self._infer_object_type_func(cursor)
+            if inferred_type is not None:
+                if isinstance(inferred_type, str):
+                    return RawType(inferred_type)
+                return inferred_type
         return RawType("object")
 
-    def _resolve_default_value(self, cursor: Cursor) -> str | None:
+    def _infer_default_value(self, cursor: Cursor) -> str | None:
         """解析可选参数的默认值文本，无法解析时保留为未知。"""
-        if self._resolve_default_value_func is None:
+        if self._infer_default_value_func is None:
             return None
-        return self._resolve_default_value_func(cursor)
+        return self._infer_default_value_func(cursor)

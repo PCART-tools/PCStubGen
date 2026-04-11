@@ -8,7 +8,7 @@ from loguru import logger
 from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule
 from .c_extension import CExtensionSource
 from .c_extension.runtime import supports_builtin_function_inference
-from .docstring_source import resolve_docstring_signatures
+from .docstring_source import parse_docstring_signatures
 
 
 @dataclass
@@ -104,7 +104,7 @@ class SignatureCompleter:
 
             if self._is_pybind11_builtin(func.runtime_handle):
                 branch = "pybind11_builtin"
-                func.signatures = resolve_docstring_signatures(module, func)
+                func.signatures = parse_docstring_signatures(module, func)
                 self._result.docstring_completed += 1
                 logger.info(
                     "通过docstring补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",

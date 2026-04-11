@@ -191,9 +191,9 @@ def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[IRArgument]:
         return PyArgParseTupleTypeParser(
             format_string,
             args[2:],
-            resolve_name_func=_resolve_argument_name,
-            resolve_object_type_func=_resolve_object_type_for_pyarg,
-            resolve_default_value_func=_resolve_default_value_for_pyarg,
+            infer_name_func=_infer_argument_name,
+            infer_object_type_func=_infer_object_type_for_pyarg,
+            infer_default_value_func=_infer_default_value_for_pyarg,
         ).parse()
     except PyArgParseTupleTypeParserError as ex:
         raise RuntimeError("解析 PyArg_ParseTuple 参数失败。") from ex
@@ -215,8 +215,8 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(
             format_string,
             kwlist,
             args[4:],
-            resolve_object_type_func=_resolve_object_type_for_pyarg,
-            resolve_default_value_func=_resolve_default_value_for_pyarg,
+            infer_object_type_func=_infer_object_type_for_pyarg,
+            infer_default_value_func=_infer_default_value_for_pyarg,
         ).parse()
     except PyArgParseTupleAndKeywordsTypeParserError as ex:
         raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
@@ -320,18 +320,18 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type | None:
         parsed_type = PyBuildValueTypeParser(
             format_string,
             args[1:],
-            resolve_object_type_func=infer_expr_type,
+            infer_object_type_func=infer_expr_type,
         ).parse()
         return parsed_type.canonicalize()
     except PyBuildValueTypeParserError as ex:
         raise RuntimeError("解析 Py_BuildValue 返回类型失败。") from ex
 
 
-def _resolve_argument_name(c_args: list[Cursor]) -> str:
+def _infer_argument_name(c_args: list[Cursor]) -> str:
     """将 parser 提供的 decl-ref 槽位变量名按顺序拼接为参数名。"""
     names: list[str] = []
     for c_arg in c_args:
-        candidate = _resolve_decl_candidate(c_arg)
+        candidate = _find_decl_candidate(c_arg)
         check(candidate is not None, "无法将 C 参数槽位解析为声明节点。")
         names.append(candidate.spelling)
 
@@ -339,7 +339,7 @@ def _resolve_argument_name(c_args: list[Cursor]) -> str:
     return "_".join(names)
 
 
-def _resolve_object_type_for_pyarg(cursor: Cursor) -> Type | None:
+def _infer_object_type_for_pyarg(cursor: Cursor) -> Type | None:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
     source_extent = getattr(cursor, "extent", None)
     if source_extent is None:
@@ -355,9 +355,9 @@ def _resolve_object_type_for_pyarg(cursor: Cursor) -> Type | None:
     return PY_TYPE_OBJECT_NAME_TO_TYPE.get(match.group(0))
 
 
-def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
+def _infer_default_value_for_pyarg(cursor: Cursor) -> str | None:
     """从参数接收变量的声明初始化式中解析默认值文本。"""
-    target_decl = _resolve_decl_candidate(cursor)
+    target_decl = _find_decl_candidate(cursor)
     if target_decl is None:
         return None
 
@@ -367,7 +367,7 @@ def _resolve_default_value_for_pyarg(cursor: Cursor) -> str | None:
     return _render_default_expr(initializer)
 
 
-def _resolve_decl_candidate(cursor: Cursor) -> Cursor | None:
+def _find_decl_candidate(cursor: Cursor) -> Cursor | None:
     """将实参槽位解析为被写入的目标声明节点。"""
     target = _unwrap_pointer_target(cursor)
     if target.kind in DECL_CURSOR_KINDS:
@@ -393,7 +393,7 @@ def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
 
 def _extract_kwlist(node: Cursor) -> list[str]:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
-    kwlist_decl = _resolve_decl_candidate(node)
+    kwlist_decl = _find_decl_candidate(node)
     check(
         kwlist_decl is not None and kwlist_decl.kind == CursorKind.VAR_DECL,
         "kwlist 必须引用 VAR_DECL。",

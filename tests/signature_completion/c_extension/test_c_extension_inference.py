@@ -435,7 +435,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     ]
 
 
-def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
+def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
     source = tmp_path / "object_type_from_extent.c"
     source.write_text(
         "\n".join(
@@ -451,7 +451,7 @@ def test_resolve_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_pa
         extent=_extent_for_source_snippet(source, "(&PyUnicode_Type)"),
     )
 
-    inferred = signature_rules_module._resolve_object_type_for_pyarg(cursor)
+    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
 
     assert inferred is not None
     assert inferred.render() == "str"
