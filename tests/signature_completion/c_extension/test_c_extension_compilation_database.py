@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pcstubgen.signature_completion.c_extension.clang import compilation_database as compilation_database_module
+from pcstubgen.signature_completion.c_extension.clang import parser as parser_module
 
 
 class _FakeCompileCommand:
@@ -44,12 +44,20 @@ def _compile_command_filename(command: _FakeCompileCommand) -> Path:
     return file_path.resolve()
 
 
+def _make_parser(database: _FakeCompilationDatabase) -> parser_module.ClangParser:
+    parser = object.__new__(parser_module.ClangParser)
+    parser._compilation_database = database
+    parser._translation_units = {}
+    parser._index = object()
+    return parser
+
+
 def test_validate_compilation_database_path_requires_compile_commands_json(tmp_path: Path) -> None:
     wrong_file = tmp_path / "commands.json"
     wrong_file.write_text("[]", encoding="utf-8")
 
     with pytest.raises(RuntimeError, match="文件名必须为 compile_commands.json"):
-        compilation_database_module.validate_compilation_database_path(wrong_file)
+        parser_module.validate_compilation_database_path(wrong_file)
 
 
 def test_get_compile_command_preserves_full_arguments(tmp_path: Path) -> None:
@@ -79,9 +87,10 @@ def test_get_compile_command_preserves_full_arguments(tmp_path: Path) -> None:
         ]
     )
 
-    result = compilation_database_module.get_compile_command(database, shared_source)
+    parser = _make_parser(database)
+    result = parser._get_compile_command(shared_source.resolve())
 
-    assert Path(str(result.filename)).resolve() == shared_source.resolve()
+    assert _compile_command_filename(result) == shared_source.resolve()
     assert Path(str(result.directory)).resolve() == tmp_path.resolve()
     assert list(result.arguments) == ["cc", "-DFIRST", "-c", "src/module.c"]
 
@@ -91,8 +100,7 @@ def test_get_compile_command_raises_when_source_is_missing(tmp_path: Path) -> No
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
 
+    parser = _make_parser(_FakeCompilationDatabase([]))
+
     with pytest.raises(RuntimeError, match="未在编译数据库中定位到编译单元"):
-        compilation_database_module.get_compile_command(
-            _FakeCompilationDatabase([]),
-            source,
-        )
+        parser._get_compile_command(source.resolve())

@@ -23,8 +23,8 @@ from tests._c_extension_test_support import (
 
 def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
-        lambda path: object(),
+        "pcstubgen.signature_completion.c_extension.source.ClangParser",
+        lambda compilation_database: object(),
     )
 
 

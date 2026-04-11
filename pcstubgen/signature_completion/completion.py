@@ -30,7 +30,7 @@ class SignatureCompletionResult:
 
 class SignatureCompleter:
     def __init__(self, compilation_database: Path) -> None:
-        self._c_source = CExtensionSource(compilation_database=compilation_database)
+        self._c_source = CExtensionSource(compilation_database)
         self._result = SignatureCompletionResult()
 
     def run(self, module: IRModule) -> SignatureCompletionResult:

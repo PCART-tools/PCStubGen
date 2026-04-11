@@ -31,8 +31,8 @@ def test_gen_stubs_writes_rendered_stub_file(
     )
     monkeypatch.setattr(stubgen_module, "collect_module", lambda path, module: ir_module)
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
-        lambda path: object(),
+        "pcstubgen.signature_completion.c_extension.source.ClangParser",
+        lambda compilation_database: object(),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.completion.supports_builtin_function_inference",

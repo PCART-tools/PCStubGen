@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from clang.cindex import Cursor, CursorKind, SourceRange
+from clang.cindex import Cursor, CursorKind, SourceRange, TranslationUnit
 
 from . import constant_eval
 
@@ -33,6 +33,12 @@ DECL_CURSOR_KINDS = {
     CursorKind.VAR_DECL,
     CursorKind.PARM_DECL,
     CursorKind.FIELD_DECL,
+}
+
+_FUNCTION_DECL_CONTEXT_KINDS = {
+    CursorKind.TRANSLATION_UNIT,
+    CursorKind.NAMESPACE,
+    CursorKind.LINKAGE_SPEC,
 }
 
 
@@ -113,3 +119,32 @@ def extract_string_literal(node: Cursor) -> str | None:
     if node.kind == CursorKind.STRING_LITERAL:
         return node.spelling.strip('"')
     return None
+
+
+def get_func_cursor(
+    translation_unit: TranslationUnit,
+    function_name: str,
+    linkage_name: str | None,
+) -> Cursor:
+    """按函数名和 linkage name 定位函数定义节点。"""
+    for cursor in _iter_function_definition_candidates(translation_unit.cursor):
+        if cursor.spelling == function_name and cursor.mangled_name == linkage_name:
+            return cursor
+
+    raise RuntimeError(
+        "未在 translation unit 中定位到函数定义, "
+        f"translation_unit: {translation_unit.cursor.location}, "
+        f"function_name: {function_name}, "
+        f"linkage_name: {linkage_name}"
+    )
+
+
+def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
+    """仅在声明上下文中递归收集函数定义节点。"""
+    for child in node.get_children():
+        if child.kind == CursorKind.FUNCTION_DECL:
+            if child.is_definition():
+                yield child
+            continue
+        if child.kind in _FUNCTION_DECL_CONTEXT_KINDS:
+            yield from _iter_function_definition_candidates(child)

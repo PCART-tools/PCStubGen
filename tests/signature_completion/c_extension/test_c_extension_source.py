@@ -7,6 +7,7 @@ import pytest
 
 from pcstubgen.ir_modules import IRFunction, IRModule, IRSignature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
+from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -22,13 +23,23 @@ from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_
 def _make_source(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    *,
+    translation_unit: object | None = None,
 ) -> CExtensionSource:
     compilation_database = tmp_path / "compile_commands.json"
+    fake_translation_unit = translation_unit if translation_unit is not None else object()
+    fake_parser = type(
+        "FakeClangParser",
+        (),
+        {
+            "get_translation_unit": lambda self, path: fake_translation_unit,
+        },
+    )()
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.compilation_database_loader.load_compilation_database",
-        lambda path: object(),
+        "pcstubgen.signature_completion.c_extension.source.ClangParser",
+        lambda compilation_database: fake_parser,
     )
-    return CExtensionSource(compilation_database=compilation_database)
+    return CExtensionSource(compilation_database)
 
 
 def _symbolized_location(
@@ -68,16 +79,15 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
+        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
         lambda address: _symbolized_location(
             compilation_unit_path=source_path,
             function_name="foo_impl",
         ),
     )
     monkeypatch.setattr(
-        CExtensionSource,
-        "get_function_cursor",
-        lambda self, **kwargs: function_cursor,
+        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
+        lambda *args: function_cursor,
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
@@ -89,7 +99,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         ],
     )
 
-    source = _make_source(monkeypatch, tmp_path)
+    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[IRFunction(name="foo", runtime_handle=object())],
@@ -123,19 +133,18 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=flags),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
+        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
         lambda address: _symbolized_location(
             compilation_unit_path=tmp_path / "foo_impl.c",
             function_name="foo_impl",
         ),
     )
     monkeypatch.setattr(
-        CExtensionSource,
-        "get_function_cursor",
-        lambda self, **kwargs: (_ for _ in ()).throw(RuntimeError("cursor missing")),
+        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
+        lambda *args: (_ for _ in ()).throw(RuntimeError("cursor missing")),
     )
 
-    source = _make_source(monkeypatch, tmp_path)
+    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[IRFunction(name="foo", runtime_handle=object())],
@@ -169,23 +178,22 @@ def test_c_extension_source_raises_when_ast_inference_fails(
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_O),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_symbolized_address_location",
+        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
         lambda address: _symbolized_location(
             compilation_unit_path=source_path,
             function_name="foo_impl",
         ),
     )
     monkeypatch.setattr(
-        CExtensionSource,
-        "get_function_cursor",
-        lambda self, **kwargs: function_cursor,
+        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
+        lambda *args: function_cursor,
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
         lambda function_cursor, *, ml_flags=0: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    source = _make_source(monkeypatch, tmp_path)
+    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[IRFunction(name="foo", runtime_handle=object())],
@@ -195,7 +203,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
         source.infer_function_signatures(module, module.functions[0])
 
 
-def test_find_function_cursor_matches_linkage_name_before_symbol_name(
+def test_get_func_cursor_matches_linkage_name(
     tmp_path: Path,
 ) -> None:
     source_path = tmp_path / "foo_impl.cpp"
@@ -239,199 +247,12 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
         },
     )()
 
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo",
-        linkage_name="_Z3fooi",
-    )
+    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo", "_Z3fooi")
 
     assert matched is first_cursor
 
 
-def test_find_function_cursor_matches_spelling_without_linkage_name(
-    tmp_path: Path,
-) -> None:
-    source_path = tmp_path / "foo_impl.cpp"
-    source_path.write_text(
-        "\n".join(
-            [
-                "int ignored() { return 0; }",
-                "int foo_impl(int value) {",
-                "    return value;",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
-    function_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
-        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
-    )
-    translation_unit = type(
-        "FakeTranslationUnit",
-        (),
-        {
-            "cursor": _FakeNode(
-                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
-                children=[function_cursor],
-            )
-        },
-    )()
-
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
-
-    assert matched is function_cursor
-
-
-def test_find_function_cursor_matches_symbol_across_different_location_file(
-    tmp_path: Path,
-) -> None:
-    source_path = tmp_path / "foo_impl.cpp"
-    other_path = tmp_path / "other.cpp"
-    source_path.write_text(
-        "\n".join(
-            [
-                "int foo_impl(int value) {",
-                "    return value;",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
-    function_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(other_path)})()})(),
-        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
-    )
-    translation_unit = type(
-        "FakeTranslationUnit",
-        (),
-        {
-            "cursor": _FakeNode(
-                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
-                children=[function_cursor],
-            )
-        },
-    )()
-
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
-
-    assert matched is function_cursor
-
-
-def test_find_function_cursor_returns_first_name_match_without_linkage_name(
-    tmp_path: Path,
-) -> None:
-    source_path = tmp_path / "foo_impl.c"
-    source_path.write_text(
-        "\n".join(
-            [
-                "int foo_impl(void) {",
-                "    return 1;",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
-    shared_extent = _extent_for_source_snippet(source_path, "int foo_impl(void) {\n    return 1;\n}")
-    first_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
-        extent=shared_extent,
-    )
-    second_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
-        extent=shared_extent,
-    )
-    translation_unit = type(
-        "FakeTranslationUnit",
-        (),
-        {
-            "cursor": _FakeNode(
-                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
-                children=[first_cursor, second_cursor],
-            )
-        },
-    )()
-
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
-
-    assert matched is first_cursor
-
-
-def test_find_function_cursor_prefers_definition_over_matching_declaration(
-    tmp_path: Path,
-) -> None:
-    source_path = tmp_path / "foo_impl.c"
-    source_path.write_text(
-        "\n".join(
-            [
-                "int foo_impl(int value);",
-                "int foo_impl(int value) {",
-                "    return value;",
-                "}",
-            ]
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
-    declaration_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=False,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
-    )
-
-    definition_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
-        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
-    )
-
-    translation_unit = type(
-        "FakeTranslationUnit",
-        (),
-        {
-            "cursor": _FakeNode(
-                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
-                children=[declaration_cursor, definition_cursor],
-            )
-        },
-    )()
-
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
-
-    assert matched is definition_cursor
-
-
-def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
+def test_get_func_cursor_matches_nested_definition_with_linkage_name(
     tmp_path: Path,
 ) -> None:
     source_path = tmp_path / "foo_impl.cpp"
@@ -457,6 +278,7 @@ def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
         location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
         extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
     )
+    function_cursor.mangled_name = "_Z8foo_impli"
 
     translation_unit = type(
         "FakeTranslationUnit",
@@ -479,21 +301,16 @@ def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
         },
     )()
 
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
+    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impli")
 
     assert matched is function_cursor
 
 
-def test_find_function_cursor_matches_definition_from_header_candidate(
+def test_get_func_cursor_raises_when_linkage_name_does_not_match(
     tmp_path: Path,
 ) -> None:
-    source_path = tmp_path / "foo_impl.c"
-    header_path = tmp_path / "foo_impl.h"
-    source_path.write_text('#include "foo_impl.h"\n', encoding="utf-8", newline="\n")
-    header_path.write_text(
+    source_path = tmp_path / "foo_impl.cpp"
+    source_path.write_text(
         "\n".join(
             [
                 "int foo_impl(int value) {",
@@ -508,9 +325,10 @@ def test_find_function_cursor_matches_definition_from_header_candidate(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
         is_definition=True,
-        location=type("Loc", (), {"file": type("File", (), {"name": str(header_path)})()})(),
-        extent=_extent_for_source_snippet(header_path, "int foo_impl(int value) {\n    return value;\n}"),
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
     )
+    function_cursor.mangled_name = "_Z8foo_impli"
 
     translation_unit = type(
         "FakeTranslationUnit",
@@ -523,9 +341,5 @@ def test_find_function_cursor_matches_definition_from_header_candidate(
         },
     )()
 
-    matched = CExtensionSource.get_function_cursor(
-        translation_unit=translation_unit,
-        function_name="foo_impl",
-    )
-
-    assert matched is function_cursor
+    with pytest.raises(RuntimeError, match="未在 translation unit 中定位到函数定义"):
+        cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impld")
