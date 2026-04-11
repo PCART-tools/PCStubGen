@@ -8,8 +8,7 @@ from loguru import logger
 
 from ...ir_modules import IRFunction, IRModule, IRSignature
 from .address_resolver import (
-    SymbolizedAddressLocation,
-    get_symbolized_address_location,
+    get_func_file_location,
 )
 from .clang import compilation_database as compilation_database_loader
 from .clang import translation_unit as translation_unit_loader
@@ -34,7 +33,7 @@ class CExtensionSource:
             compilation_database
         )
         self._translation_units: dict[Path, TranslationUnit] = {}
-        self._index: Index | None = None
+        self._index = Index.create()
 
     def infer_function_signatures(
         self,
@@ -43,11 +42,16 @@ class CExtensionSource:
     ) -> tuple[list[IRSignature], str | None]:
         """按函数懒解析 builtin function 的 C 扩展签名。"""
         runtime_info = read_builtin_function_runtime_info(irfunction.runtime_handle)
-        location = get_symbolized_address_location(runtime_info.address)
-        function_cursor = self.get_function_cursor(location=location)
-        source_comment = self._get_source_comment(function_cursor)
+        location = get_func_file_location(runtime_info.address)
+        tu = self.get_translation_unit(location.compilation_unit_path)
+        func_cursor = get_function_cursor(
+            translation_unit=tu,
+            function_name=location.function_name,
+            linkage_name=location.linkage_name,
+        )
+        source_comment = source_range_get_text(func_cursor.extent)
         signatures = inference.infer_signature(
-            function_cursor,
+            func_cursor,
             ml_flags=runtime_info.flags,
         )
 
@@ -56,103 +60,60 @@ class CExtensionSource:
 
         return signatures, source_comment
 
-    def get_function_cursor(
-        self,
-        *,
-        location: SymbolizedAddressLocation,
-    ) -> Cursor:
-        """按需 parse 已定位到的源码文件，并找到对应的函数 cursor。"""
-        compile_command = compilation_database_loader.get_compile_command(
-            self._compilation_database,
-            location.compilation_unit_path,
-        )
-
-        translation_unit = self._load_translation_unit(compile_command)
-
-        matched = self.find_function_cursor(
-            translation_unit=translation_unit,
-            symbol_name=location.function_name,
-            linkage_name=location.linkage_name,
-        )
-        if matched is not None:
-            return matched
-
-        raise RuntimeError(
-            "未在 translation unit 中定位到函数定义, "
-            f"source_path: {compile_command.filename}, "
-            f"symbol_name: {location.function_name}, "
-            f"linkage_name: {location.linkage_name}"
-        )
-
-    def _load_translation_unit(
-        self,
-        compile_command: compilation_database_loader.MyCompileCommand,
-    ) -> TranslationUnit:
-        file_path = compile_command.filename
-        cached = self._translation_units.get(file_path)
+    def get_translation_unit(self, path: Path) -> TranslationUnit:
+        cached = self._translation_units.get(path)
         if cached is not None:
             return cached
 
-        if self._index is None:
-            self._index = Index.create()
-        index = self._index
-        if index is None:
-            raise RuntimeError("libclang Index 初始化失败。")
+        compile_command = compilation_database_loader.get_compile_command(
+            self._compilation_database,
+            path,
+        )
+        compile_arguments = list(compile_command.arguments)
 
         try:
             translation_unit = translation_unit_loader.parse(
-                index,
+                self._index,
                 compile_command,
             )
         except TranslationUnitLoadError as ex:
             raise RuntimeError(
-                "按需Parse失败, "
-                f"文件路径: {file_path}, "
-                f"工作目录: {compile_command.directory}, "
-                f"解析参数: {' '.join(compile_command.arguments)}"
+                "Parse失败, "
+                f"文件路径: {path}, "
+                f"解析参数: {' '.join(str(argument) for argument in compile_arguments)}"
             ) from ex
 
         diagnostics = translation_unit.diagnostics
         if translation_unit_loader.has_error_diagnostics(diagnostics):
             logger.warning(
-                "按需Parse诊断, 文件路径: {}, 诊断: {}",
-                file_path,
+                "Parse诊断, 文件路径: {}, 诊断: {}",
+                path,
                 "\n".join(
                     translation_unit_loader.diagnostic_to_str(diagnostic)
                     for diagnostic in diagnostics
                 ),
             )
 
-        self._translation_units[file_path] = translation_unit
+        self._translation_units[path] = translation_unit
         return translation_unit
 
-    @staticmethod
-    def find_function_cursor(
+
+def get_function_cursor(
         *,
         translation_unit: TranslationUnit,
-        symbol_name: str,
+        function_name: str,
         linkage_name: str | None = None,
-    ) -> Cursor | None:
-        for cursor in _iter_function_definition_candidates(translation_unit.cursor):
-            if linkage_name is not None:
-                if cursor.mangled_name == linkage_name:
-                    return cursor
-                continue
+) -> Cursor:
+    for cursor in _iter_function_definition_candidates(translation_unit.cursor):
+        if cursor.spelling == function_name and cursor.mangled_name == function_name:
+            return cursor
 
-            if cursor.spelling == symbol_name:
-                return cursor
-
-        return None
-
-    @staticmethod
-    def _get_source_comment(function_cursor: Cursor | None) -> str | None:
-        if function_cursor is None or function_cursor.extent is None:
-            return None
-        source_text = source_range_get_text(function_cursor.extent)
-        if not source_text:
-            return None
-        return source_text
-
+    raise RuntimeError(
+        "未在 translation unit 中定位到函数定义, "
+        f"translation_unit: {translation_unit.cursor.location}, "
+        f"function_name: {function_name}, "
+        f"linkage_name: {linkage_name}"
+    )
 
 def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
     """仅在声明上下文中递归收集函数定义节点。"""

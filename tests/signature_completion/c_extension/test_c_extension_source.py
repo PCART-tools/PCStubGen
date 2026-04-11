@@ -6,7 +6,7 @@ import clang.cindex
 import pytest
 
 from pcstubgen.ir_modules import IRFunction, IRModule, IRSignature, QualifiedName
-from pcstubgen.signature_completion.c_extension.address_resolver import SymbolizedAddressLocation
+from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -36,8 +36,8 @@ def _symbolized_location(
     compilation_unit_path: Path,
     function_name: str = "foo_impl",
     linkage_name: str | None = None,
-) -> SymbolizedAddressLocation:
-    return SymbolizedAddressLocation(
+) -> FuncFileLocation:
+    return FuncFileLocation(
         compilation_unit_path=compilation_unit_path,
         function_name=function_name,
         linkage_name=linkage_name,
@@ -239,9 +239,9 @@ def test_find_function_cursor_matches_linkage_name_before_symbol_name(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo",
+        function_name="foo",
         linkage_name="_Z3fooi",
     )
 
@@ -282,9 +282,9 @@ def test_find_function_cursor_matches_spelling_without_linkage_name(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is function_cursor
@@ -324,9 +324,9 @@ def test_find_function_cursor_matches_symbol_across_different_location_file(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is function_cursor
@@ -373,9 +373,9 @@ def test_find_function_cursor_returns_first_name_match_without_linkage_name(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is first_cursor
@@ -423,9 +423,9 @@ def test_find_function_cursor_prefers_definition_over_matching_declaration(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is definition_cursor
@@ -479,9 +479,9 @@ def test_find_function_cursor_matches_definition_in_nested_decl_contexts(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is function_cursor
@@ -523,9 +523,9 @@ def test_find_function_cursor_matches_definition_from_header_candidate(
         },
     )()
 
-    matched = CExtensionSource.find_function_cursor(
+    matched = CExtensionSource.get_function_cursor(
         translation_unit=translation_unit,
-        symbol_name="foo_impl",
+        function_name="foo_impl",
     )
 
     assert matched is function_cursor

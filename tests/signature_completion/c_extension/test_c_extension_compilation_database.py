@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
 
 import pytest
-from clang.cindex import CompileCommand
 
 from pcstubgen.signature_completion.c_extension.clang import compilation_database as compilation_database_module
 
@@ -19,7 +17,11 @@ class _FakeCompileCommand:
     ) -> None:
         self.directory = str(directory)
         self.filename = filename
-        self.arguments = list(arguments)
+        self._arguments = list(arguments)
+
+    @property
+    def arguments(self) -> list[str]:
+        return list(self._arguments)
 
 
 class _FakeCompilationDatabase:
@@ -27,14 +29,19 @@ class _FakeCompilationDatabase:
         self._commands = commands
 
     def getCompileCommands(self, filename: str) -> list[_FakeCompileCommand]:
+        source_path = Path(filename).resolve()
         return [
             command
             for command in self._commands
-            if compilation_database_module.MyCompileCommand(
-                cast(CompileCommand, cast(object, command))
-            ).filename
-            == Path(filename).resolve()
+            if _compile_command_filename(command) == source_path
         ]
+
+
+def _compile_command_filename(command: _FakeCompileCommand) -> Path:
+    file_path = Path(command.filename)
+    if not file_path.is_absolute():
+        file_path = Path(command.directory) / file_path
+    return file_path.resolve()
 
 
 def test_validate_compilation_database_path_requires_compile_commands_json(tmp_path: Path) -> None:
@@ -74,9 +81,9 @@ def test_get_compile_command_preserves_full_arguments(tmp_path: Path) -> None:
 
     result = compilation_database_module.get_compile_command(database, shared_source)
 
-    assert result.filename == shared_source.resolve()
-    assert result.directory == tmp_path.resolve()
-    assert result.arguments == ["cc", "-DFIRST", "-c", "src/module.c"]
+    assert Path(str(result.filename)).resolve() == shared_source.resolve()
+    assert Path(str(result.directory)).resolve() == tmp_path.resolve()
+    assert list(result.arguments) == ["cc", "-DFIRST", "-c", "src/module.c"]
 
 
 def test_get_compile_command_raises_when_source_is_missing(tmp_path: Path) -> None:

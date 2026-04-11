@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from clang.cindex import Index
 
-from pcstubgen.signature_completion.c_extension.clang import libclang_parse as libclang_parse_module
+from pcstubgen.signature_completion.c_extension.clang import libclang_parse_wrap as libclang_parse_module
 
 
 class _PointerHolder:
@@ -48,8 +48,8 @@ def test_parse_translation_unit_full_argv_passes_full_argv_to_libclang(
 
     monkeypatch.setattr(
         libclang_parse_module,
-        "_get_parse_translation_unit2_full_argv",
-        lambda: _fake_parse_translation_unit2_full_argv,
+        "_parse_translation_unit2_full_argv",
+        _fake_parse_translation_unit2_full_argv,
     )
     monkeypatch.setattr(
         libclang_parse_module.clang.cindex,
@@ -109,8 +109,8 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
 
     monkeypatch.setattr(
         libclang_parse_module,
-        "_get_parse_translation_unit2_full_argv",
-        lambda: _fake_parse_translation_unit2_full_argv,
+        "_parse_translation_unit2_full_argv",
+        _fake_parse_translation_unit2_full_argv,
     )
     monkeypatch.setattr(
         libclang_parse_module.clang.cindex,

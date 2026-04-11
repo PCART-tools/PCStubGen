@@ -6,10 +6,9 @@ from pathlib import Path
 import subprocess
 
 import clang
-from clang.cindex import Diagnostic, Index, TranslationUnit
+from clang.cindex import CompileCommand, Diagnostic, Index, TranslationUnit
 
-from .compilation_database import MyCompileCommand
-from .libclang_parse import parse_translation_unit_full_argv
+from .libclang_parse_wrap import parse_translation_unit_full_argv
 
 
 def diagnostic_severity_to_str(severity: int) -> str:
@@ -47,7 +46,7 @@ def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
 
 def parse(
     index: Index,
-    compile_command: MyCompileCommand,
+    compile_command: CompileCommand,
 ) -> TranslationUnit:
     """解析单个编译数据库条目为 clang translation unit。"""
     arguments = list(compile_command.arguments)
@@ -55,7 +54,7 @@ def parse(
     if resource_dir is not None:
         arguments.extend(["-resource-dir", str(resource_dir)])
 
-    with contextlib.chdir(compile_command.directory):
+    with contextlib.chdir(Path(str(compile_command.directory)).resolve()):
         translation_unit = parse_translation_unit_full_argv(
             index,
             arguments,

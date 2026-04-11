@@ -36,7 +36,7 @@ def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
         ),
     )
 
-    result = resolver_module.get_symbolized_address_location(0x1234)
+    result = resolver_module.get_func_file_location(0x1234)
 
     assert captured == {
         "binary_path": binary_path,

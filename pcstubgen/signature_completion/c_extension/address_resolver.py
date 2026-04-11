@@ -8,7 +8,7 @@ from . import dwarfdump
 
 
 @dataclass(frozen=True)
-class SymbolizedAddressLocation:
+class FuncFileLocation:
     compilation_unit_path: Path
     function_name: str
     linkage_name: str | None = None
@@ -28,11 +28,11 @@ _dladdr.argtypes = [ctypes.c_void_p, ctypes.POINTER(_DlInfo)]
 _dladdr.restype = ctypes.c_int
 
 
-def get_symbolized_address_location(address: int) -> SymbolizedAddressLocation:
+def get_func_file_location(address: int) -> FuncFileLocation:
     """将运行时函数入口地址解析为编译单元路径、函数名和可选 linkage name。"""
     binary_path, relative_address = _get_binary_and_ra(address)
     result = dwarfdump.lookup(binary_path, relative_address)
-    return SymbolizedAddressLocation(
+    return FuncFileLocation(
         compilation_unit_path=result.compilation_unit_path,
         function_name=result.function_name,
         linkage_name=result.linkage_name,

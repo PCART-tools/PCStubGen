@@ -5,24 +5,6 @@ from pathlib import Path
 from clang.cindex import CompilationDatabase, CompileCommand
 
 
-class MyCompileCommand:
-    """对 libclang CompileCommand 的项目内封装。"""
-
-    filename: Path
-    directory: Path
-    arguments: list[str]
-
-    def __init__(self, compile_command: CompileCommand) -> None:
-        """从 libclang CompileCommand 构造项目内命令对象。"""
-        file_path = Path(str(compile_command.filename))
-        if not file_path.is_absolute():
-            file_path = Path(str(compile_command.directory)) / file_path
-
-        self.filename = file_path.resolve()
-        self.directory = Path(str(compile_command.directory)).resolve()
-        self.arguments = [str(argument) for argument in compile_command.arguments]
-
-
 def validate_compilation_database_path(compilation_database: Path) -> Path:
     """校验 compile_commands.json 路径。"""
     if not compilation_database.exists():
@@ -48,7 +30,7 @@ def load_compilation_database(compilation_database: Path) -> CompilationDatabase
 def get_compile_command(
     database: CompilationDatabase,
     source_path: Path,
-) -> MyCompileCommand:
+) -> CompileCommand:
     """按源码绝对路径查询首条编译命令。"""
     absolute_source_path = source_path.resolve()
     compile_commands = database.getCompileCommands(str(absolute_source_path))
@@ -59,4 +41,4 @@ def get_compile_command(
     if not commands:
         raise RuntimeError(f"未在编译数据库中定位到编译单元: {absolute_source_path}")
 
-    return MyCompileCommand(commands[0])
+    return commands[0]

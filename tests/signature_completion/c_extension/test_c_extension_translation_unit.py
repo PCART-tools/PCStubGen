@@ -6,7 +6,6 @@ from typing import cast
 import pytest
 from clang.cindex import CompileCommand, Index
 
-from pcstubgen.signature_completion.c_extension.clang import compilation_database as compilation_database_module
 from pcstubgen.signature_completion.c_extension.clang import translation_unit as translation_unit_module
 
 
@@ -20,7 +19,11 @@ class _FakeCompileCommand:
     ) -> None:
         self.directory = str(directory)
         self.filename = filename
-        self.arguments = list(arguments)
+        self._arguments = list(arguments)
+
+    @property
+    def arguments(self) -> list[str]:
+        return list(self._arguments)
 
 
 def _make_compile_command(
@@ -28,19 +31,17 @@ def _make_compile_command(
     working_directory: Path,
     source: Path,
     arguments: list[str],
-) -> compilation_database_module.MyCompileCommand:
-    return compilation_database_module.MyCompileCommand(
+) -> CompileCommand:
+    return cast(
+        CompileCommand,
         cast(
-            CompileCommand,
-            cast(
-                object,
-                _FakeCompileCommand(
-                    directory=working_directory.resolve(),
-                    filename=str(source.resolve()),
-                    arguments=arguments,
-                ),
+            object,
+            _FakeCompileCommand(
+                directory=working_directory.resolve(),
+                filename=str(source.resolve()),
+                arguments=arguments,
             ),
-        )
+        ),
     )
 
 
