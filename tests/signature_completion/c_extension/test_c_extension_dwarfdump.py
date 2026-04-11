@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -191,10 +192,15 @@ def test_lookup_wraps_raw_result_and_normalizes_path(
     raw_path = tmp_path / "dir" / ".." / "sample.c"
     monkeypatch.setattr(
         dwarfdump,
-        "_lookup_raw",
-        lambda binary_path, relative_address: (str(raw_path), "foo_impl", "_Z8foo_implv"),
+        "_dwarfdump",
+        SimpleNamespace(
+            lookup=lambda binary_path, relative_address: (
+                str(raw_path),
+                "foo_impl",
+                "_Z8foo_implv",
+            )
+        ),
     )
-    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", None)
 
     result = dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
 
@@ -204,31 +210,19 @@ def test_lookup_wraps_raw_result_and_normalizes_path(
         linkage_name="_Z8foo_implv",
     )
 
-
-def test_lookup_raises_when_native_extension_is_unavailable(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    import_error = ImportError("native extension missing")
-    monkeypatch.setattr(dwarfdump, "_lookup_raw", None)
-    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", import_error)
-
-    with pytest.raises(RuntimeError, match="无法导入 LLVM dwarfdump 扩展"):
-        dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
-
-
 def test_lookup_propagates_runtime_error_from_native_extension(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(
         dwarfdump,
-        "_lookup_raw",
-        lambda binary_path, relative_address: (_ for _ in ()).throw(
-            RuntimeError("DWARF 中未找到地址所属编译单元: 0x1234")
+        "_dwarfdump",
+        SimpleNamespace(
+            lookup=lambda binary_path, relative_address: (_ for _ in ()).throw(
+                RuntimeError("DWARF 中未找到地址所属编译单元: 0x1234")
+            )
         ),
     )
-    monkeypatch.setattr(dwarfdump, "_LOOKUP_IMPORT_ERROR", None)
 
     with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
         dwarfdump.lookup(tmp_path / "sample.so", 0x1234)

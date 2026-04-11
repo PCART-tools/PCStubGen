@@ -15,8 +15,8 @@ llvm_dep = dependency(
 )
 
 py.extension_module(
-  '_dwarfdump_llvm',
-  ['native/dwarfdump_module.cpp'],
+  '_dwarfdump',
+  ['pcstubgen/native/dwarfdump_module.cpp'],
   dependencies : [llvm_dep],
   subdir : 'pcstubgen/signature_completion/c_extension',
   install : true,
