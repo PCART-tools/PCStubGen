@@ -36,6 +36,25 @@ from tests._c_extension_test_support import (
     _var_decl,
     _wrap,
 )
+
+
+@pytest.fixture(autouse=True)
+def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """让 fake call cursor 的 extent 表示调用名。"""
+    real_source_range_get_text = signature_rules_module.source_range_get_text
+
+    def fake_source_range_get_text(extent: object) -> str:
+        if isinstance(extent, str):
+            return extent
+        return real_source_range_get_text(extent)
+
+    monkeypatch.setattr(
+        signature_rules_module,
+        "source_range_get_text",
+        fake_source_range_get_text,
+    )
+
+
 @pytest.mark.parametrize(
     ("token_name", "expected"),
     [
@@ -220,6 +239,22 @@ def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() ->
 def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr("CustomFactory", _identifier_node("value"))
+    )
+
+    assert inferred is None
+
+
+def test_infer_expr_type_returns_none_when_call_name_source_text_cannot_be_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        signature_rules_module,
+        "source_range_get_text",
+        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr("PyLong_FromLong", _identifier_node("value"))
     )
 
     assert inferred is None
@@ -455,6 +490,24 @@ def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path
 
     assert inferred is not None
     assert inferred.render() == "str"
+
+
+def test_infer_object_type_for_pyarg_returns_none_when_extent_source_text_cannot_be_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent="boom",
+    )
+    monkeypatch.setattr(
+        signature_rules_module,
+        "source_range_get_text",
+        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
+
+    assert inferred is None
 
 
 def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(

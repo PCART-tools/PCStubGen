@@ -138,7 +138,8 @@ def try_get_clang_resource_dir() -> Path | None:
             ["clang", "-print-resource-dir"],
             text=True,
         ).strip()
-    except (OSError, subprocess.CalledProcessError):
+    except (OSError, subprocess.CalledProcessError) as ex:
+        logger.debug("clang resource dir 获取失败: {!r}", ex)
         return None
 
     if not resource_dir_text:

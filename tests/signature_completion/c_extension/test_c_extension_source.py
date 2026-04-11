@@ -115,6 +115,57 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     assert source_comment == snippet
 
 
+def test_c_extension_source_ignores_source_comment_read_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        extent=object(),
+    )
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
+        lambda address: _symbolized_location(
+            compilation_unit_path=tmp_path / "foo_impl.c",
+            function_name="foo_impl",
+        ),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
+        lambda *args: function_cursor,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.source_range_get_text",
+        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
+        lambda function_cursor, *, ml_flags=0: [
+            IRSignature(
+                args=[_arg("value", "int")],
+                return_type=RawType("bool"),
+            )
+        ],
+    )
+
+    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[IRFunction(name="foo", runtime_handle=object())],
+    )
+
+    signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
+
+    assert len(signatures) == 1
+    assert source_comment is None
+
+
 @pytest.mark.parametrize(
     "flags",
     [

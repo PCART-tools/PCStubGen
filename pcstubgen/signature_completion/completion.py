@@ -113,7 +113,7 @@ class SignatureCompleter:
                     is_method,
                 )
                 return
-        except BaseException as ex:
+        except Exception as ex:
             reason = f"{type(ex).__name__}: {ex}"
 
         self._result.uncompleted += 1

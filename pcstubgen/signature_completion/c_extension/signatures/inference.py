@@ -3,7 +3,6 @@ from __future__ import annotations
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
-from ....checks import check
 from ....ir_modules import IRArgument, IRArgumentKind, IRSignature
 from ....types import AnyType, RawType, Type, UnionType
 from ..clang.constant_eval import eval_int
@@ -184,8 +183,10 @@ def infer_return_type(func_cursor: Cursor) -> Type | None:
 
 def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[IRArgument]:
     """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
-    format_string = extract_string_literal(args[1])
-    check(format_string is not None, "PyArg_ParseTuple format string 必须是字符串字面量。")
+    try:
+        format_string = extract_string_literal(args[1])
+    except RuntimeError as ex:
+        raise RuntimeError("PyArg_ParseTuple format string 必须是字符串字面量。") from ex
 
     try:
         return PyArgParseTupleTypeParser(
@@ -203,11 +204,12 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(
     args: list[Cursor],
 ) -> list[IRArgument]:
     """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
-    format_string = extract_string_literal(args[2])
-    check(
-        format_string is not None,
-        "PyArg_ParseTupleAndKeywords format string 必须是字符串字面量。",
-    )
+    try:
+        format_string = extract_string_literal(args[2])
+    except RuntimeError as ex:
+        raise RuntimeError(
+            "PyArg_ParseTupleAndKeywords format string 必须是字符串字面量。"
+        ) from ex
     kwlist = _extract_kwlist(args[3])
 
     try:
@@ -280,7 +282,10 @@ def _infer_call_expr_type(cursor: Cursor) -> Type | None:
     assert cursor.kind == CursorKind.CALL_EXPR
     children = list(cursor.get_children())
     func_cursor = children[0]
-    call_name = source_range_get_text(func_cursor.extent)
+    try:
+        call_name = source_range_get_text(func_cursor.extent)
+    except RuntimeError:
+        return None
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)
@@ -307,8 +312,10 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type | None:
     if not args:
         return None
 
-    format_string = extract_string_literal(args[0])
-    check(format_string is not None, "Py_BuildValue format string 必须是字符串字面量。")
+    try:
+        format_string = extract_string_literal(args[0])
+    except RuntimeError as ex:
+        raise RuntimeError("Py_BuildValue format string 必须是字符串字面量。") from ex
 
     try:
         parsed_type = PyBuildValueTypeParser(
@@ -326,10 +333,10 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
     names: list[str] = []
     for c_arg in c_args:
         candidate = _find_decl_candidate(c_arg)
-        check(candidate is not None, "无法将 C 参数槽位解析为声明节点。")
+        if candidate is None:
+            raise RuntimeError("无法将 C 参数槽位解析为声明节点。")
         names.append(candidate.spelling)
 
-    check(bool(names), "参数槽位列表为空，无法生成参数名。")
     return "_".join(names)
 
 
@@ -339,8 +346,9 @@ def _infer_object_type_for_pyarg(cursor: Cursor) -> Type | None:
     if source_extent is None:
         return None
 
-    source_text = source_range_get_text(source_extent)
-    if source_text is None:
+    try:
+        source_text = source_range_get_text(source_extent)
+    except RuntimeError:
         return None
 
     match = IDENTIFIER_RE.search(source_text)
@@ -388,13 +396,13 @@ def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
 def _extract_kwlist(node: Cursor) -> list[str]:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
     kwlist_decl = _find_decl_candidate(node)
-    check(
-        kwlist_decl is not None and kwlist_decl.kind == CursorKind.VAR_DECL,
-        "kwlist 必须引用 VAR_DECL。",
-    )
+    if kwlist_decl is None or kwlist_decl.kind != CursorKind.VAR_DECL:
+        raise RuntimeError("kwlist 必须引用 VAR_DECL。")
 
-    init_list_expr = var_decl_to_init_list_expr(kwlist_decl)
-    check(init_list_expr is not None, "kwlist 必须使用初始化列表定义。")
+    try:
+        init_list_expr = var_decl_to_init_list_expr(kwlist_decl)
+    except RuntimeError as ex:
+        raise RuntimeError("kwlist 必须使用初始化列表定义。") from ex
 
     result: list[str] = []
     for child in init_list_expr.get_children():
@@ -402,8 +410,10 @@ def _extract_kwlist(node: Cursor) -> list[str]:
         if is_nullptr_or_zero(entry):
             break
 
-        keyword_name = extract_string_literal(entry)
-        check(keyword_name is not None, "kwlist 中的关键字名必须是字符串字面量。")
+        try:
+            keyword_name = extract_string_literal(entry)
+        except RuntimeError as ex:
+            raise RuntimeError("kwlist 中的关键字名必须是字符串字面量。") from ex
         result.append(keyword_name)
 
     return result

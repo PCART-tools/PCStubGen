@@ -471,6 +471,7 @@ def _call_expr(name: str, *args: _FakeNode) -> _FakeNode:
             _FakeNode(
                 kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
                 spelling=name,
+                extent=name,
                 children=[_token_identifier_node(name)],
             ),
             *args,

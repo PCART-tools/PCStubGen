@@ -259,7 +259,7 @@ def test_completer_marks_uncompleted_when_pybind11_docstring_is_missing(
     assert summary.uncompleted == 1
 
 
-def test_completer_continues_after_pybind11_docstring_base_exception(
+def test_completer_continues_after_pybind11_docstring_exception(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -282,7 +282,7 @@ def test_completer_continues_after_pybind11_docstring_base_exception(
 
     def _parse_or_raise(_: IRModule, func: IRFunction):
         if func.name == "broken":
-            raise BaseException("boom")
+            raise RuntimeError("boom")
         return [_signature(args=[_arg("value", "str")], return_type=RawType("bool"))]
 
     monkeypatch.setattr(
@@ -300,7 +300,35 @@ def test_completer_continues_after_pybind11_docstring_base_exception(
     assert summary.uncompleted == 1
 
 
-def test_completer_keeps_known_signatures_and_counts_only_unknown_functions_as_uncompleted(
+def test_completer_does_not_swallow_pybind11_docstring_base_exception(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = IRModule(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            IRFunction(
+                name="broken",
+                runtime_handle=_make_pybind11_builtin_handle(),
+                doc="broken(value: str) -> bool",
+            ),
+        ],
+    )
+
+    def _parse_or_raise(_: IRModule, __: IRFunction):
+        raise BaseException("boom")
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.parse_docstring_signatures",
+        _parse_or_raise,
+    )
+
+    with pytest.raises(BaseException, match="boom"):
+        SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+
+def test_completer_keeps_known_signatures_but_counts_unsupported_functions_as_uncompleted(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -320,7 +348,7 @@ def test_completer_keeps_known_signatures_and_counts_only_unknown_functions_as_u
     summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
     assert summary.total_functions == 3
-    assert summary.uncompleted == 2
+    assert summary.uncompleted == 3
     assert module.functions[0].signatures[0].args[0].name == "value"
     assert module.functions[1].signatures == []
     assert module.functions[2].signatures == []

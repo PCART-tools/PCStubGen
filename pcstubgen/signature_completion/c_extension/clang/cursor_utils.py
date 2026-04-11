@@ -5,6 +5,7 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from clang.cindex import Cursor, CursorKind, SourceRange, TranslationUnit
+from loguru import logger
 
 from . import constant_eval
 
@@ -79,46 +80,49 @@ def is_nullptr_or_zero(node: Cursor) -> bool:
     return is_integer_literal_zero(node)
 
 
-def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor | None:
+def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     """从变量声明直接找出其初始化列表节点。"""
-    assert cursor.kind == CursorKind.VAR_DECL
+    if cursor.kind != CursorKind.VAR_DECL:
+        raise RuntimeError("只能从 VAR_DECL 提取初始化列表。")
     for child in walk_cursor(cursor):
         if child.kind == CursorKind.INIT_LIST_EXPR:
             return child
-    return None
+    raise RuntimeError("变量声明未包含初始化列表。")
 
 
-def source_range_get_text(extent: SourceRange) -> str | None:
+def source_range_get_text(extent: SourceRange) -> str:
     """源文件中截取原始源码文本。"""
     start = extent.start
     end = extent.end
     if start.file is None or end.file is None:
-        return None
+        raise RuntimeError("源码范围缺少起止文件信息。")
 
     start_file = Path(start.file.name)
     end_file = Path(end.file.name)
     if start_file != end_file:
-        return None
+        raise RuntimeError("源码范围跨越多个文件，无法提取文本。")
 
     read_length = end.offset - start.offset
     try:
         with start_file.open("rb") as source_file:
             source_file.seek(start.offset)
             source_bytes = source_file.read(read_length)
-    except OSError:
-        return None
+    except OSError as ex:
+        raise RuntimeError(
+            f"源码范围读取失败: {start_file}, offset={start.offset}, length={read_length}"
+        ) from ex
     return source_bytes.decode("utf-8", errors="ignore")
 
 
 IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
 
 
-def extract_string_literal(node: Cursor) -> str | None:
+def extract_string_literal(node: Cursor) -> str:
     """从子树中提取首个字符串字面量的实际内容。"""
     node = unwrap_transparent(node)
     if node.kind == CursorKind.STRING_LITERAL:
         return node.spelling.strip('"')
-    return None
+    raise RuntimeError("节点不是字符串字面量。")
 
 
 def get_func_cursor(

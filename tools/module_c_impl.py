@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import csv
-from contextlib import suppress
 import importlib
 import importlib.machinery
 import importlib.util
@@ -76,10 +75,12 @@ def collect_module_names(module_name: str) -> list[str]:
             all_names.add(sub_name)
             if sub_name in visited_names:
                 continue
-            with suppress(Exception):
+            try:
                 member_module = importlib.import_module(sub_name)
                 if inspect.ismodule(member_module):
                     pending_modules.append(member_module)
+            except Exception as exc:
+                print(f"警告: 无法导入子模块 {sub_name!r}: {exc}")
 
     return sorted(all_names)
 

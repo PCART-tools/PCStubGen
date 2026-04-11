@@ -221,6 +221,29 @@ def test_module_collector_skips_submodule_when_submodule_import_fails(
     assert isinstance(error_records[0][1], expected_error_type)
 
 
+def test_module_collector_does_not_swallow_base_exception_from_submodule_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_package_file(
+        tmp_path / "interruptpkg" / "__init__.py",
+        "",
+    )
+    _write_package_file(
+        tmp_path / "interruptpkg" / "broken.py",
+        "raise KeyboardInterrupt('stop')\n",
+    )
+    _write_package_file(
+        tmp_path / "interruptpkg" / "healthy.py",
+        "VALUE = 1\n",
+    )
+
+    _prepare_module_import("interruptpkg", tmp_path, monkeypatch)
+
+    with pytest.raises(KeyboardInterrupt, match="stop"):
+        ModuleCollector().run("interruptpkg")
+
+
 def _write_package_file(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
