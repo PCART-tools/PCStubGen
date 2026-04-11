@@ -13,7 +13,7 @@ from tests._c_extension_test_support import (
 )
 
 
-def test_write_stubs_writes_rendered_stub_file(
+def test_gen_stubs_writes_rendered_stub_file(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -52,7 +52,7 @@ def test_write_stubs_writes_rendered_stub_file(
         },
     )
 
-    stubgen_module.write_stubs(
+    stubgen_module.gen_stubs(
         "math",
         tmp_path,
         tmp_path / "compile_commands.json",

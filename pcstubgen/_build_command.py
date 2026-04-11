@@ -192,7 +192,7 @@ def build_wheel(
     return wheel_path.resolve()
 
 
-def build_command(
+def _build_command(
     srcdir: Path = typer.Argument(
         ...,
         metavar="SRCDIR",

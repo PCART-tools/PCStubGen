@@ -10,10 +10,10 @@ from .module_collect import collect_module
 from .signature_completion import SignatureCompleter
 from .stub_output import StubRenderer, StubWriter
 
-__all__ = ["write_stubs"]
+__all__ = ["gen_stubs"]
 
 
-def write_stubs(
+def gen_stubs(
     module_name: str,
     output: Path,
     compilation_database: Path,
@@ -22,7 +22,7 @@ def write_stubs(
     writer: StubWriter | None = None,
 ) -> None:
     """
-    生成存根并写入文件。
+    为模块生成 stub 并写入输出目录。
     """
     effective_writer = writer if writer is not None else StubWriter()
 
