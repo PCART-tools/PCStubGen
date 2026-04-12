@@ -61,7 +61,7 @@ def _log_cli_arguments(
 
 
 def _gen_command(
-    module_name: str = typer.Argument(..., metavar="MODULE_NAME", help="模块名"),
+    module_name: str = typer.Argument(..., help="模块名"),
     output: Path = typer.Option(
         Path("./stubs"),
         "--output",
@@ -70,7 +70,7 @@ def _gen_command(
     compilation_database: Path = typer.Option(
         ...,
         "--compilation-database",
-        help="必填的 compile_commands.json 文件路径",
+        help="compile_commands.json 文件路径",
     ),
     include_docstrings: bool = typer.Option(
         False,
@@ -84,7 +84,7 @@ def _gen_command(
     ),
 ) -> None:
     """
-    使用 pcstubgen 为模块生成 Python stub。
+    为模块生成 Python stub
     """
     output.mkdir(parents=True, exist_ok=True)
 

@@ -1,0 +1,152 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+
+from typer.testing import CliRunner
+
+from pcstubgen.__main__ import app
+import pcstubgen._build_command as build_command_module
+
+
+def test_build_command_passes_through_original_command_after_separator(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_build_command(command: list[str], output_path: Path) -> int:
+        captured["command"] = command
+        captured["output_path"] = output_path
+        return 0
+
+    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
+    monkeypatch.setattr(build_command_module, "run_build_command", fake_run_build_command)
+
+    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+
+    assert result.exit_code == 0
+    assert captured == {
+        "command": ["python", "-m", "build"],
+        "output_path": Path("compile_commands.json"),
+    }
+    assert "compile_commands.json" in result.output
+
+
+def test_build_command_uses_explicit_output_path(
+    monkeypatch,
+) -> None:
+    captured: dict[str, object] = {}
+    output_path = Path("out/compile_commands.json")
+
+    def fake_run_build_command(command: list[str], resolved_output_path: Path) -> int:
+        captured["command"] = command
+        captured["output_path"] = resolved_output_path
+        return 0
+
+    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
+    monkeypatch.setattr(build_command_module, "run_build_command", fake_run_build_command)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "build",
+            "--output",
+            str(output_path),
+            "--",
+            "uv",
+            "build",
+            "--wheel",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "command": ["uv", "build", "--wheel"],
+        "output_path": output_path,
+    }
+
+
+def test_build_command_rejects_removed_short_output_flag() -> None:
+    result = CliRunner().invoke(
+        app,
+        ["build", "-o", "compile_commands.json", "--", "python", "-m", "build"],
+    )
+
+    assert result.exit_code != 0
+    assert "No such option: -o" in result.output
+
+
+def test_run_build_command_invokes_bear_with_clang_debug_environment(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    captured_command: list[str] | None = None
+    captured_env: dict[str, str] | None = None
+    captured_check: bool | None = None
+    output_path = tmp_path / "compile_commands.json"
+    monkeypatch.setenv("LIBRARY_PATH", "/existing/lib")
+
+    def fake_check_output(command: list[str], text: bool) -> str:
+        assert command == ["llvm-config", "--libdir"]
+        assert text is True
+        return "/llvm/lib\n"
+
+    def fake_run(command: list[str], env: dict[str, str], check: bool) -> subprocess.CompletedProcess[str]:
+        nonlocal captured_command, captured_env, captured_check
+        captured_command = command
+        captured_env = env
+        captured_check = check
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(build_command_module.subprocess, "check_output", fake_check_output)
+    monkeypatch.setattr(build_command_module.subprocess, "run", fake_run)
+
+    return_code = build_command_module.run_build_command(["python", "-m", "build"], output_path)
+
+    assert return_code == 0
+    assert captured_command == [
+        "bear",
+        "--output",
+        str(output_path),
+        "--",
+        "python",
+        "-m",
+        "build",
+    ]
+    assert captured_check is False
+    assert captured_env is not None
+    assert captured_env["CC"] == "clang"
+    assert captured_env["CXX"] == "clang++"
+    assert captured_env["DEBUG"] == "1"
+    assert captured_env["CMAKE_BUILD_TYPE"] == "Debug"
+    assert captured_env["CFLAGS"] == "-O0 -g -UNDEBUG"
+    assert captured_env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
+    assert captured_env["LIBRARY_PATH"] == os.pathsep.join(["/llvm/lib", "/existing/lib"])
+
+
+def test_build_command_propagates_wrapped_command_exit_code(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
+    monkeypatch.setattr(build_command_module, "run_build_command", lambda command, output_path: 7)
+
+    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+
+    assert result.exit_code == 7
+    assert "构建完成" not in result.output
+
+
+def test_build_command_reports_missing_external_programs(monkeypatch) -> None:
+    program_paths = {
+        "clang": "/usr/bin/clang",
+        "clang++": "/usr/bin/clang++",
+        "llvm-config": "/usr/bin/llvm-config",
+        "bear": None,
+    }
+    monkeypatch.setattr(build_command_module.shutil, "which", lambda program: program_paths[program])
+
+    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+
+    assert result.exit_code == 1
+    assert "build 命令缺少外部程序依赖: bear" in result.output
