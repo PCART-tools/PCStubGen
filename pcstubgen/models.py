@@ -65,7 +65,7 @@ class Function:
     runtime_handle: Any = field(repr=False, compare=False)
     signatures: list[Signature] = field(default_factory=list)
     doc: str | None = None
-    c_inferred_source_comment: str | None = None
+    comment: str | None = None
 
 
 @dataclass

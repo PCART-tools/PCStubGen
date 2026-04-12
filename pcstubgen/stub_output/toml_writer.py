@@ -4,7 +4,7 @@ from pathlib import Path
 
 import toml_rs
 
-from .renderer import StubRenderer
+from .stub_renderer import StubRenderer
 from ..models import Class, Function, Method, Module
 
 
@@ -139,7 +139,7 @@ class TomlWriter:
                     class_name=class_name,
                     function_name=func.name,
                     signature=None,
-                    source_comment=func.c_inferred_source_comment,
+                    comment=func.comment,
                 )
             ]
 
@@ -152,7 +152,7 @@ class TomlWriter:
                     func_name=func.name,
                     signature=signature,
                 ),
-                source_comment=func.c_inferred_source_comment,
+                comment=func.comment,
             )
             for signature in func.signatures
         ]
@@ -164,7 +164,7 @@ class TomlWriter:
         class_name: str | None,
         function_name: str,
         signature: str | None,
-        source_comment: str | None,
+        comment: str | None,
     ) -> dict[str, str]:
         """构造单条 TOML 记录。"""
         entry: dict[str, str] = {
@@ -175,6 +175,6 @@ class TomlWriter:
             entry["class_name"] = class_name
         if signature is not None:
             entry["signature"] = signature
-        if source_comment is not None:
-            entry["source_comment"] = source_comment
+        if comment is not None:
+            entry["comment"] = comment
         return entry

@@ -20,6 +20,14 @@ from tests._c_extension_test_support import (
 )
 
 
+def _location_text(text: str) -> object:
+    class _Location:
+        def __str__(self) -> str:
+            return text
+
+    return _Location()
+
+
 def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.ClangParser",
@@ -50,7 +58,7 @@ def _make_pybind11_builtin_handle() -> object:
     return builtin_function_like()
 
 
-def test_completer_prefers_c_branch_over_docstring_and_writes_source_comment(
+def test_completer_prefers_c_branch_over_docstring_and_writes_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -70,6 +78,7 @@ def test_completer_prefers_c_branch_over_docstring_and_writes_source_comment(
         _FakeNode(
             kind=clang.cindex.CursorKind.FUNCTION_DECL,
             spelling="foo_impl",
+            location=_location_text(f"{source}:1:1"),
             extent=_extent_for_source_snippet(source, snippet),
         ),
     )
@@ -111,7 +120,7 @@ def test_completer_prefers_c_branch_over_docstring_and_writes_source_comment(
     assert parsed.signatures[0].return_type is not None
     assert parsed.signatures[0].return_type.render() == "bool"
     assert parsed.doc == "foo(value: str) -> str\n\nparsed from docstring"
-    assert parsed.c_inferred_source_comment == snippet
+    assert parsed.comment == f"{source}:1:1\n{snippet}"
     assert summary.c_completed == 1
     assert summary.docstring_completed == 0
 

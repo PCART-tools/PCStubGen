@@ -24,14 +24,14 @@ def _function(
     *,
     signatures: list[Signature] | None = None,
     doc: str | None = None,
-    c_inferred_source_comment: str | None = None,
+    comment: str | None = None,
 ) -> Function:
     return Function(
         name=name,
         runtime_handle=object(),
         signatures=list(signatures or ()),
         doc=doc,
-        c_inferred_source_comment=c_inferred_source_comment,
+        comment=comment,
     )
 
 
@@ -51,7 +51,7 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
         ],
     )
 
-    lines = StubRenderer(include_docstrings=False).print_function(func)
+    lines = StubRenderer(include_docstrings=False).render_function(func)
 
     assert lines == [
         "def foo(value: typing.Optional[int]) -> typing.Optional[int]:",
@@ -62,7 +62,7 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
 def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
     func = _function(name="foo")
 
-    lines = StubRenderer(include_docstrings=False).print_function(func)
+    lines = StubRenderer(include_docstrings=False).render_function(func)
 
     assert lines == [
         "def foo(",
@@ -80,7 +80,7 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
         doc="original docs",
     )
 
-    lines = StubRenderer(include_docstrings=True).print_function(func)
+    lines = StubRenderer(include_docstrings=True).render_function(func)
 
     assert lines == [
         "def foo(value: int):",
@@ -110,7 +110,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
         doc=doc,
     )
 
-    lines = StubRenderer(include_docstrings=True).print_function(func)
+    lines = StubRenderer(include_docstrings=True).render_function(func)
 
     assert lines.count("@typing.overload") == 2
     assert "def foo(value: int) -> str:" in lines
@@ -128,35 +128,35 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
         doc="foo(value: str) -> str\n\nparsed from docstring",
     )
 
-    lines = StubRenderer(include_docstrings=True).print_function(func)
+    lines = StubRenderer(include_docstrings=True).render_function(func)
 
     assert lines[0] == "def foo(value: int) -> bool:"
     assert "    foo(value: str) -> str" in lines
     assert "    parsed from docstring" in lines
 
 
-def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
+def test_renderer_prints_comment_after_function() -> None:
     func = _function(
         name="foo",
         signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
-        c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
+        comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) {\n    return value;\n}",
     )
 
-    lines = StubRenderer(include_docstrings=False).print_function(func)
+    lines = StubRenderer(include_docstrings=False).render_function(func)
 
     assert lines[:2] == [
         "def foo(value: int):",
         "    ...",
     ]
-    assert lines[2] == "#   C inferred source for foo:"
-    assert lines[3:] == [
+    assert lines[2:] == [
+        "#   src/foo_impl.c:12:3",
         "#   static int foo_impl(int value) {",
         "#       return value;",
         "#   }",
     ]
 
 
-def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> None:
+def test_renderer_prints_comment_once_after_overloads() -> None:
     func = _function(
         name="foo",
         signatures=[
@@ -169,15 +169,14 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
                 return_type=RawType("str"),
             ),
         ],
-        c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
+        comment="src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args) {\n    return self;\n}",
     )
 
-    lines = StubRenderer(include_docstrings=False).print_function(func)
+    lines = StubRenderer(include_docstrings=False).render_function(func)
 
     assert lines.count("@typing.overload") == 2
-    assert lines.count("#   C inferred source for foo:") == 1
     assert lines[-4:] == [
-        "#   C inferred source for foo:",
+        "#   src/foo_impl.c:21:7",
         "#   static PyObject* foo_impl(PyObject* self, PyObject* args) {",
         "#       return self;",
         "#   }",
@@ -202,7 +201,7 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
         ],
     )
 
-    lines = StubRenderer(include_docstrings=False).print_module(module)
+    lines = StubRenderer(include_docstrings=False).render_module(module)
 
     assert lines == [
         "import typing",
@@ -228,7 +227,7 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
         decorator="classmethod",
     )
 
-    lines = StubRenderer(include_docstrings=False).print_method(method)
+    lines = StubRenderer(include_docstrings=False).render_method(method)
 
     assert lines == [
         "@classmethod",

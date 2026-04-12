@@ -25,45 +25,45 @@ class StubRenderer:
         """按指定空格数缩进多行文本。"""
         return [" " * by + line for line in lines]
 
-    def print_module(self, node: Module) -> list[str]:
+    def render_module(self, node: Module) -> list[str]:
         """渲染整个模块。"""
         result: list[str] = []
 
         if self.include_docstrings and node.doc is not None:
-            result.extend(self.print_docstring(node.doc))
+            result.extend(self.render_docstring(node.doc))
 
         for import_name in self._collect_module_imports(node):
             result.append(f"import {import_name}")
 
         for sub_module in node.sub_modules:
-            result.extend(self.print_submodule_import(sub_module.full_name.name))
+            result.extend(self.render_submodule_import(sub_module.full_name.name))
 
         for class_ in sorted(node.classes, key=lambda c: c.name):
-            result.extend(self.print_class(class_))
+            result.extend(self.render_class(class_))
 
         for func in sorted(node.functions, key=lambda f: f.name):
-            result.extend(self.print_function(func))
+            result.extend(self.render_function(func))
 
         return result
 
-    def print_class(self, class_node: Class) -> list[str]:
+    def render_class(self, class_node: Class) -> list[str]:
         """渲染类定义。"""
         signature = f"class {class_node.name}"
         if class_node.bases:
             signature += f"({', '.join(str(base) for base in class_node.bases)})"
         signature += ":"
 
-        body = self._print_class_body(class_node)
+        body = self._render_class_body(class_node)
         return [signature, *self.indent_lines(body)]
 
-    def _print_class_body(self, class_node: Class) -> list[str]:
+    def _render_class_body(self, class_node: Class) -> list[str]:
         """渲染类体。"""
         result: list[str] = []
         if self.include_docstrings and class_node.doc is not None:
-            result.extend(self.print_docstring(class_node.doc))
+            result.extend(self.render_docstring(class_node.doc))
 
         for sub_class in sorted(class_node.classes, key=lambda c: c.name):
-            result.extend(self.print_class(sub_class))
+            result.extend(self.render_class(sub_class))
 
         decorator_order: dict[MethodDecorator, int] = {
             "staticmethod": 0,
@@ -73,20 +73,20 @@ class StubRenderer:
         for method in sorted(
             class_node.methods, key=lambda m: (decorator_order.get(m.decorator, 2), m.function.name)
         ):
-            result.extend(self.print_method(method))
+            result.extend(self.render_method(method))
 
         if not result:
             result = ["pass"]
 
         return result
 
-    def print_method(self, node: Method) -> list[str]:
+    def render_method(self, node: Method) -> list[str]:
         """渲染类方法。"""
         result: list[str] = []
         overload = len(node.function.signatures) > 1
-        for signature in self._get_printable_signatures(node.function):
+        for signature in self._get_renderable_signatures(node.function):
             result.extend(
-                self._print_function_block(
+                self._render_function_block(
                     func_name=node.function.name,
                     signature=signature,
                     func_doc=node.function.doc,
@@ -96,7 +96,7 @@ class StubRenderer:
             )
         return result
 
-    def print_argument(self, arg: Argument) -> str:
+    def render_argument(self, arg: Argument) -> str:
         """渲染单个参数。"""
         parts = []
         if arg.kind is ArgumentKind.VAR_POSITIONAL:
@@ -113,7 +113,7 @@ class StubRenderer:
 
         return "".join(parts)
 
-    def print_docstring(self, doc: str) -> list[str]:
+    def render_docstring(self, doc: str) -> list[str]:
         """渲染文档字符串。"""
         return [
             '"""',
@@ -121,13 +121,13 @@ class StubRenderer:
             '"""',
         ]
 
-    def print_function(self, func: Function) -> list[str]:
+    def render_function(self, func: Function) -> list[str]:
         """渲染模块级函数。"""
         result: list[str] = []
         overload = len(func.signatures) > 1
-        for signature in self._get_printable_signatures(func):
+        for signature in self._get_renderable_signatures(func):
             result.extend(
-                self._print_function_block(
+                self._render_function_block(
                     func_name=func.name,
                     signature=signature,
                     func_doc=func.doc,
@@ -136,19 +136,18 @@ class StubRenderer:
                 )
             )
 
-        if func.c_inferred_source_comment is not None:
+        if func.comment is not None:
             result.extend(
-                self.print_c_inferred_source_comment(
-                    func_name=func.name,
-                    source_text=func.c_inferred_source_comment,
+                self.render_comment(
+                    comment_text=func.comment,
                 )
             )
         return result
 
-    def print_c_inferred_source_comment(self, *, func_name: str, source_text: str) -> list[str]:
+    def render_comment(self, *, comment_text: str) -> list[str]:
         """渲染由 C AST 推断签名来源的源码注释。"""
-        result = [f"#   C inferred source for {func_name}:"]
-        for line in source_text.splitlines():
+        result: list[str] = []
+        for line in comment_text.splitlines():
             if line:
                 result.append(f"#   {line}")
             else:
@@ -164,7 +163,7 @@ class StubRenderer:
         rendered.append(":")
         return "".join(rendered)
 
-    def _print_function_block(
+    def _render_function_block(
         self,
         *,
         func_name: str,
@@ -173,7 +172,7 @@ class StubRenderer:
         overload: bool,
         method_decorator: MethodDecorator,
     ) -> list[str]:
-        """渲染一条可打印的函数签名块。"""
+        """渲染一条可渲染的函数签名块。"""
         result: list[str] = []
         if method_decorator is not None:
             result.append(f"@{method_decorator}")
@@ -182,7 +181,7 @@ class StubRenderer:
         result.extend(self._build_function_signature(func_name=func_name, signature=signature))
 
         if self.include_docstrings and func_doc is not None:
-            body = self.print_docstring(func_doc)
+            body = self.render_docstring(func_doc)
         else:
             body = ["..."]
 
@@ -267,7 +266,7 @@ class StubRenderer:
                 has_var_positional = True
                 kw_only_marker_inserted = True
 
-            rendered_args.append(self.print_argument(arg))
+            rendered_args.append(self.render_argument(arg))
 
         if (
             pos_only_boundary is not None
@@ -279,8 +278,8 @@ class StubRenderer:
 
         return rendered_args
 
-    def _get_printable_signatures(self, func: Function) -> list[Signature]:
-        """返回可打印签名，缺失时合成占位签名。"""
+    def _get_renderable_signatures(self, func: Function) -> list[Signature]:
+        """返回可渲染签名，缺失时合成占位签名。"""
         if func.signatures:
             return func.signatures
         return [self._build_placeholder_signature(func)]
@@ -332,6 +331,6 @@ class StubRenderer:
                 imports.update(arg.type.collect_imports())
         return imports
 
-    def print_submodule_import(self, name: str) -> list[str]:
+    def render_submodule_import(self, name: str) -> list[str]:
         """渲染子模块导入。"""
         return [f"from . import {name}"]

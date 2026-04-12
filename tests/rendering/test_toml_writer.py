@@ -21,7 +21,7 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
                         return_type=RawType("bool"),
                     )
                 ],
-                c_inferred_source_comment="static int foo_impl(int value) { return value; }",
+                comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) { return value; }",
             )
         ],
     )
@@ -40,7 +40,7 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
                 "module_name": "pkg.mod",
                 "function_name": "foo",
                 "signature": "def foo(value: int) -> bool:",
-                "source_comment": "static int foo_impl(int value) { return value; }",
+                "comment": "src/foo_impl.c:12:3\nstatic int foo_impl(int value) { return value; }",
             }
         ]
     }
@@ -63,7 +63,7 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
                         return_type=RawType("str"),
                     ),
                 ],
-                c_inferred_source_comment="static PyObject* foo_impl(PyObject* self, PyObject* args);",
+                comment="src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
             )
         ],
     )
@@ -80,13 +80,13 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
                 "module_name": "pkg.mod",
                 "function_name": "foo",
                 "signature": "def foo(value: int) -> int:",
-                "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
+                "comment": "src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
             },
             {
                 "module_name": "pkg.mod",
                 "function_name": "foo",
                 "signature": "def foo(value: str) -> str:",
-                "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
+                "comment": "src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
             },
         ]
     }

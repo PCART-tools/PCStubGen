@@ -20,6 +20,14 @@ from pcstubgen.types import RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
 
 
+def _location_text(text: str) -> object:
+    class _Location:
+        def __str__(self) -> str:
+            return text
+
+    return _Location()
+
+
 def _make_source(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -55,7 +63,7 @@ def _symbolized_location(
     )
 
 
-def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
+def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -71,6 +79,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     function_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        location=_location_text(f"{source_path}:1:1"),
         extent=_extent_for_source_snippet(source_path, snippet),
     )
 
@@ -109,23 +118,24 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
         functions=[Function(name="foo", runtime_handle=object())],
     )
 
-    signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
+    signatures, comment = source.infer_function_signatures(module, module.functions[0])
 
     assert signatures[0].args[0].name == "value"
     assert signatures[0].args[0].type is not None
     assert signatures[0].args[0].type.render() == "int"
     assert signatures[0].return_type is not None
     assert signatures[0].return_type.render() == "bool"
-    assert source_comment == snippet
+    assert comment == f"{source_path}:1:1\n{snippet}"
 
 
-def test_c_extension_source_ignores_source_comment_read_failure(
+def test_c_extension_source_ignores_comment_read_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     function_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        location=_location_text(f"{tmp_path / 'foo_impl.c'}:1:1"),
         extent=object(),
     )
 
@@ -164,10 +174,10 @@ def test_c_extension_source_ignores_source_comment_read_failure(
         functions=[Function(name="foo", runtime_handle=object())],
     )
 
-    signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
+    signatures, comment = source.infer_function_signatures(module, module.functions[0])
 
     assert len(signatures) == 1
-    assert source_comment is None
+    assert comment is None
 
 
 @pytest.mark.parametrize(

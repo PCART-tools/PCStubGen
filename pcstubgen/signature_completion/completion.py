@@ -87,12 +87,12 @@ class SignatureCompleter:
         try:
             if supports_builtin_function_inference(func.runtime_handle):
                 branch = "c_builtin"
-                signatures, c_inferred_source_comment = self._c_source.infer_function_signatures(
+                signatures, comment = self._c_source.infer_function_signatures(
                     module,
                     func,
                 )
                 func.signatures = signatures
-                func.c_inferred_source_comment = c_inferred_source_comment
+                func.comment = comment
                 self._result.c_completed += 1
                 logger.info(
                     "通过C源码补全成功, branch: c_builtin, module: {}, func: {}, is_method: {}",

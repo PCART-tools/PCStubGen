@@ -36,9 +36,11 @@ class CExtensionSource:
             func_cursor,
             ml_flags=runtime_info.flags,
         )
-        source_comment = None
+        comment = None
         try:
-            source_comment = cursor_get_text(func_cursor)
+            location_text = str(func_cursor.location)
+            source_text = cursor_get_text(func_cursor)
+            comment = f"{location_text}\n{source_text}"
         except RuntimeError as ex:
             logger.warning(
                 "读取函数源码注释失败, module: {}, func: {}, reason: {}",
@@ -50,4 +52,4 @@ class CExtensionSource:
         if not signatures:
             raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
 
-        return signatures, source_comment
+        return signatures, comment

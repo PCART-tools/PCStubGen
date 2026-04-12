@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .renderer import StubRenderer
+from .stub_renderer import StubRenderer
 from ..models import Module
 
 
@@ -25,7 +25,7 @@ class StubWriter:
             module_file = to / f"{module.full_name.name}.pyi"
 
         with open(module_file, "w", encoding="utf-8") as f:
-            for line in renderer.print_module(module):
+            for line in renderer.render_module(module):
                 f.write(line + "\n")
 
         for sub_module in module.sub_modules:

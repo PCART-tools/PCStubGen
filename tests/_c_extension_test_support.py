@@ -95,11 +95,13 @@ def _patch_c_signature_extractor(
         if not extracted.signatures:
             raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
 
-        source_comment = None
+        comment = None
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
-            source_comment = ast_utils_module.cursor_get_text(extracted.function_cursor)
+            location_text = str(extracted.function_cursor.location)
+            source_text = ast_utils_module.cursor_get_text(extracted.function_cursor)
+            comment = f"{location_text}\n{source_text}"
 
-        return extracted.signatures, source_comment
+        return extracted.signatures, comment
 
     monkeypatch.setattr(
         c_extension_source_module.CExtensionSource,
