@@ -9,10 +9,6 @@ import clang.cindex
 from clang.cindex import LinkageKind
 import pytest
 
-from pcstubgen.signature_completion.c_extension.method_flags import (
-    METH_KEYWORDS,
-    METH_VARARGS,
-)
 from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
@@ -81,24 +77,11 @@ class ResolvedFunctionFixture:
     function_cursor: clang.cindex.Cursor | None = None
 
 
-class _FakeExtractor:
-    def __init__(
-        self,
-        functions: dict[str, ResolvedFunctionFixture] | None = None,
-    ) -> None:
-        self.functions = functions or {}
-        self.called = 0
-
-    def infer_functions(self) -> dict[str, ResolvedFunctionFixture]:
-        self.called += 1
-        return self.functions
-
-
 def _patch_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
     functions: dict[str, ResolvedFunctionFixture] | None = None,
-) -> _FakeExtractor:
-    extractor = _FakeExtractor(functions=functions)
+) -> None:
+    extracted_functions = functions or {}
 
     def _patched_infer_function_signatures(
         self: CExtensionSource,
@@ -106,8 +89,7 @@ def _patch_c_signature_extractor(
         irfunction: IRFunction,
     ) -> tuple[list[IRSignature], str | None]:
         _ = self
-        extractor.infer_functions()
-        extracted = extractor.functions.get(irfunction.name)
+        extracted = extracted_functions.get(irfunction.name)
         if extracted is None:
             raise RuntimeError(f"未找到函数 {irmodule.full_name}.{irfunction.name}")
         if not extracted.signatures:
@@ -124,137 +106,8 @@ def _patch_c_signature_extractor(
         "infer_function_signatures",
         _patched_infer_function_signatures,
     )
-    return extractor
 
 
-def _patch_raising_c_signature_extractor(
-    monkeypatch: pytest.MonkeyPatch,
-    error: Exception,
-) -> None:
-    def _patched_infer_function_signatures(
-        self: CExtensionSource,
-        irmodule: IRModule,
-        irfunction: IRFunction,
-    ) -> tuple[list[IRSignature], str | None]:
-        _ = (self, irmodule, irfunction)
-        raise error
-
-    monkeypatch.setattr(
-        c_extension_source_module.CExtensionSource,
-        "infer_function_signatures",
-        _patched_infer_function_signatures,
-    )
-
-
-def _get_packaged_libclang_path() -> str | None:
-    import clang
-
-    native_dir = Path(clang.__file__).resolve().parent / "native"
-    for filename in ("libclang.dll", "libclang.so", "libclang.dylib"):
-        candidate = native_dir / filename
-        if candidate.exists():
-            return str(candidate)
-    return None
-
-
-class _FakeDiagnosticType:
-    Ignored = 0
-    Note = 1
-    Warning = 2
-    Error = 3
-    Fatal = 4
-
-
-class _FakeClangWithDiagnostics:
-    Diagnostic = _FakeDiagnosticType
-
-
-class _FakeDiagnosticFile:
-    def __init__(self, name: str) -> None:
-        self.name = name
-
-
-class _FakeDiagnosticLocation:
-    def __init__(self, *, file_name: str | None, line: int, column: int) -> None:
-        self.file = _FakeDiagnosticFile(file_name) if file_name is not None else None
-        self.line = line
-        self.column = column
-
-
-class _FakeDiagnostic:
-    def __init__(
-        self,
-        *,
-        severity: int,
-        message: str,
-        file_name: str | None,
-        line: int,
-        column: int,
-    ) -> None:
-        self.severity = severity
-        self.spelling = message
-        self.location = _FakeDiagnosticLocation(file_name=file_name, line=line, column=column)
-
-
-class _FakeTranslationUnit:
-    def __init__(
-        self,
-        diagnostics: list[_FakeDiagnostic],
-        *,
-        cursor: object | None = None,
-    ) -> None:
-        self.diagnostics = diagnostics
-        self.cursor = cursor if cursor is not None else _FakeNode(
-            kind=clang.cindex.CursorKind.TRANSLATION_UNIT
-        )
-
-
-class _FakeIndex:
-    def __init__(self, translation_unit: _FakeTranslationUnit) -> None:
-        self.translation_unit = translation_unit
-
-    def parse(self, filename: str, args: list[str]) -> _FakeTranslationUnit:
-        return self.translation_unit
-
-
-class _SequentialIndex:
-    def __init__(self, translation_units: list[_FakeTranslationUnit]) -> None:
-        self._translation_units = translation_units
-        self._index = 0
-        self.calls: list[tuple[str, list[str]]] = []
-
-    def parse(self, filename: str, args: list[str]) -> _FakeTranslationUnit:
-        self.calls.append((filename, list(args)))
-        if not self._translation_units:
-            raise AssertionError("translation_units must not be empty")
-        if self._index < len(self._translation_units):
-            current = self._translation_units[self._index]
-            self._index += 1
-            return current
-        return self._translation_units[-1]
-
-
-def _has_include_directory_arg(args: list[str], include_dir: str | Path) -> bool:
-    include_dir_str = str(include_dir)
-    for index, token in enumerate(args):
-        if token != "--include-directory":
-            continue
-        if index + 1 >= len(args):
-            continue
-        if args[index + 1] == include_dir_str:
-            return True
-    return False
-
-
-def _has_std_arg(args: list[str], std_value: str) -> bool:
-    for index, token in enumerate(args):
-        if token != "--std":
-            continue
-        if index + 1 >= len(args):
-            continue
-        if args[index + 1] == std_value:
-            return True
-    return False
 class _FakeToken:
     def __init__(self, kind: object, spelling: str) -> None:
         self.kind = kind
@@ -337,17 +190,6 @@ class _FakeNode:
                 return self.referenced
         return None
 
-def _fake_function_cursor(name: str = "fake_function") -> clang.cindex.Cursor:
-    """构造可复用的假函数游标。"""
-    return cast(
-        clang.cindex.Cursor,
-        _FakeNode(
-            kind=clang.cindex.CursorKind.FUNCTION_DECL,
-            spelling=name,
-            is_definition=True,
-        ),
-    )
-
 
 def _int_literal(value: str = "0") -> _FakeNode:
     return _FakeNode(
@@ -358,10 +200,6 @@ def _int_literal(value: str = "0") -> _FakeNode:
 
 def _null_ptr_literal() -> _FakeNode:
     return _FakeNode(kind=clang.cindex.CursorKind.CXX_NULL_PTR_LITERAL_EXPR)
-
-
-def _gnu_null_literal() -> _FakeNode:
-    return _FakeNode(kind=clang.cindex.CursorKind.GNU_NULL_EXPR)
 
 
 def _identifier_node(name: str) -> _FakeNode:
@@ -378,21 +216,6 @@ def _wrap(kind: object, child: _FakeNode) -> _FakeNode:
 
 def _init_list(*children: _FakeNode) -> _FakeNode:
     return _FakeNode(kind=clang.cindex.CursorKind.INIT_LIST_EXPR, children=list(children))
-
-
-def _designated_initializer(field_name: str, value: _FakeNode) -> _FakeNode:
-    referenced = _FakeNode(kind=clang.cindex.CursorKind.FIELD_DECL, spelling=field_name)
-    return _FakeNode(
-        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        children=[
-            _token_identifier_node(
-                field_name,
-                kind=clang.cindex.CursorKind.MEMBER_REF,
-                referenced=referenced,
-            ),
-            value,
-        ],
-    )
 
 
 def _string_literal(value: str) -> _FakeNode:
@@ -455,14 +278,6 @@ def _extent_for_source_snippet(source_path: Path, snippet: str) -> _FakeSourceRa
     )
 
 
-def _signed_numeric_literal(sign: str, child: _FakeNode) -> _FakeNode:
-    return _FakeNode(
-        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-        tokens=[_FakeToken(clang.cindex.TokenKind.PUNCTUATION, sign)],
-        children=[child],
-    )
-
-
 def _call_expr(name: str, *args: _FakeNode) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.CALL_EXPR,
@@ -513,122 +328,6 @@ def _fake_function_cursor_with_children(
             children=list(children),
         ),
     )
-
-
-def _ml_name_field(name: str) -> _FakeNode:
-    return _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _wrap(clang.cindex.CursorKind.UNEXPOSED_EXPR, _string_literal(name)))
-
-
-def _ml_meth_field(
-    name: str,
-    *,
-    referenced_kind: object = clang.cindex.CursorKind.FUNCTION_DECL,
-) -> _FakeNode:
-    referenced = _FakeNode(
-        kind=referenced_kind,
-        spelling=name,
-        is_definition=(referenced_kind == clang.cindex.CursorKind.FUNCTION_DECL),
-        usr=f"usr::{name}",
-    )
-    return _FakeNode(
-        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        spelling=name,
-        children=[
-            _token_identifier_node(
-                name,
-                referenced=referenced,
-                usr=f"usr::{name}",
-                canonical=referenced,
-            )
-        ],
-    )
-
-
-def _ml_meth_cast_field(name: str) -> _FakeNode:
-    referenced = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling=name,
-        is_definition=True,
-        usr=f"usr::{name}",
-    )
-    return _wrap(
-        clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        _wrap(
-            clang.cindex.CursorKind.PAREN_EXPR,
-            _FakeNode(
-                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
-                children=[
-                    _token_identifier_node(
-                        name,
-                        referenced=referenced,
-                        usr=f"usr::{name}",
-                        canonical=referenced,
-                    )
-                ],
-            ),
-        ),
-    )
-
-
-def _ml_flags_identifier_field(*flags: str) -> _FakeNode:
-    return _FakeNode(
-        kind=clang.cindex.CursorKind.BINARY_OPERATOR,
-        children=[_token_identifier_node(flag) for flag in flags],
-    )
-
-
-def _kwlist_decl(name: str, *keywords: str) -> _FakeNode:
-    return _var_decl(
-        name,
-        _init_list(
-            *[_string_literal(keyword) for keyword in keywords],
-            _FakeNode(kind=clang.cindex.CursorKind.GNU_NULL_EXPR),
-        ),
-    )
-
-
-def _type_object_decl(name: str, tp_name: str) -> _FakeNode:
-    return _var_decl(
-        name,
-        _init_list(_designated_initializer("tp_name", _string_literal(tp_name))),
-    )
-
-
-def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_eval_int = ast_utils_module.constant_eval.eval_int
-    method_flag_values = {
-        "METH_VARARGS": METH_VARARGS,
-        "METH_KEYWORDS": METH_KEYWORDS,
-    }
-
-    def _eval_int(cursor: object) -> int | None:
-        if not isinstance(cursor, _FakeNode):
-            return original_eval_int(cursor)
-        if cursor.kind == clang.cindex.CursorKind.INTEGER_LITERAL:
-            for token in cursor.get_tokens():
-                if token.kind != clang.cindex.TokenKind.LITERAL:
-                    continue
-                text = str(token.spelling).strip()
-                if not text:
-                    continue
-                try:
-                    return int(text, 0)
-                except ValueError:
-                    continue
-            return None
-        if cursor.kind == clang.cindex.CursorKind.DECL_REF_EXPR:
-            return method_flag_values.get(cursor.spelling)
-        if cursor.kind == clang.cindex.CursorKind.BINARY_OPERATOR:
-            value = 0
-            for child in cursor.get_children():
-                child_value = _eval_int(child)
-                if child_value is None:
-                    return None
-                value |= child_value
-            return value
-        return None
-
-    monkeypatch.setattr(ast_utils_module.constant_eval, "eval_int", _eval_int)
 
 
 ExtractedArgument = IRArgument

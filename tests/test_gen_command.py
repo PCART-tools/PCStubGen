@@ -124,3 +124,4 @@ def test_gen_command_rejects_removed_json_flag(tmp_path) -> None:
     )
 
     assert result.exit_code != 0
+    assert "--json" in result.output

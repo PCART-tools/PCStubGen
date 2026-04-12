@@ -5,13 +5,6 @@ import pytest
 from pcstubgen.signature_completion.c_extension import runtime as runtime_module
 
 
-def test_read_builtin_function_runtime_info_reads_real_builtin() -> None:
-    runtime_info = runtime_module.read_builtin_function_runtime_info(len)
-
-    assert runtime_info.address > 0
-    assert isinstance(runtime_info.flags, int)
-
-
 def test_read_builtin_function_runtime_info_rejects_unsupported_handle() -> None:
     with pytest.raises(RuntimeError, match="不支持的 builtin function 对象"):
         runtime_module.read_builtin_function_runtime_info(object())

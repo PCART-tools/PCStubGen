@@ -11,7 +11,7 @@ from tests._c_extension_test_support import (
 )
 
 
-def test_gen_stubs_writes_rendered_stub_file(
+def test_gen_stubs_orchestrates_collection_completion_and_writing(
     monkeypatch,
     tmp_path,
 ) -> None:

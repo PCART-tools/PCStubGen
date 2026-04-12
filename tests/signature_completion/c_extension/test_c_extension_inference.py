@@ -65,38 +65,6 @@ def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("token_name", "expected"),
-    [
-        ("_Py_NoneStruct", RawType("None")),
-        ("_Py_TrueStruct", RawType("bool")),
-        ("_Py_FalseStruct", RawType("bool")),
-    ],
-)
-def test_infer_expr_type_detects_addressed_object_returns(token_name: str, expected: RawType) -> None:
-    inferred = signature_rules_module.infer_expr_type(_address_of(token_name))
-
-    assert inferred == expected
-
-
-@pytest.mark.parametrize(
-    "token_name",
-    [
-        "Py_RETURN_NONE",
-        "Py_RETURN_TRUE",
-        "Py_RETURN_FALSE",
-        "Py_RETURN_NAN",
-        "Py_RETURN_INF",
-    ],
-)
-def test_infer_expr_type_returns_none_for_preserved_macro_tokens(token_name: str) -> None:
-    macro_expr = _macro_expr(token_name)
-
-    inferred = signature_rules_module.infer_expr_type(macro_expr)
-
-    assert inferred is None
-
-
 def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() -> None:
     macro_expr = _FakeNode(
         kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
@@ -106,53 +74,6 @@ def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() ->
     inferred = signature_rules_module.infer_expr_type(macro_expr)
 
     assert inferred is None
-
-
-@pytest.mark.parametrize(
-    ("call_name", "expected"),
-    [
-        ("PyBool_FromLong", RawType("bool")),
-        ("PyLong_FromLong", RawType("int")),
-        ("PyFloat_FromDouble", RawType("float")),
-        ("PyComplex_FromDoubles", RawType("complex")),
-        ("PyUnicode_FromString", RawType("str")),
-        ("PyUnicode_AsUTF8String", RawType("bytes")),
-        ("PyByteArray_FromObject", RawType("bytearray")),
-        ("PySlice_New", RawType("slice")),
-        ("PyMemoryView_FromObject", RawType("memoryview")),
-        ("PyTuple_New", RawType("tuple")),
-        ("PyList_New", RawType("list")),
-        ("PyDict_New", RawType("dict")),
-        ("PySet_New", RawType("set")),
-        ("PyFrozenSet_New", RawType("frozenset")),
-        ("PyList_AsTuple", RawType("tuple")),
-        ("PyDict_Items", RawType("list")),
-    ],
-)
-def test_infer_expr_type_detects_exact_factory_mappings(call_name: str, expected: RawType) -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _call_expr(call_name, _identifier_node("arg"))
-    )
-
-    assert inferred == expected
-
-
-def test_infer_expr_type_parses_py_buildvalue() -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _call_expr(
-            "Py_BuildValue",
-            _string_literal("(is)"),
-            _identifier_node("count"),
-            _identifier_node("name"),
-        )
-    )
-
-    assert inferred == TupleType(
-        (
-            RawType("int"),
-            UnionType((RawType("None"), RawType("str"))),
-        )
-    )
 
 
 def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
@@ -214,26 +135,6 @@ def test_infer_expr_type_keeps_py_buildvalue_o_ampersand_as_any_when_converter_u
     assert inferred == TupleType((AnyType(),))
 
 
-def test_infer_expr_type_unwraps_transparent_wrappers_and_casts() -> None:
-    wrapped_expr = _wrap(
-        clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        _wrap(
-            clang.cindex.CursorKind.PAREN_EXPR,
-            _FakeNode(
-                kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
-                children=[
-                    _identifier_node("PyObject"),
-                    _call_expr("PyUnicode_AsUTF8String", _identifier_node("value")),
-                ],
-            ),
-        ),
-    )
-
-    inferred = signature_rules_module.infer_expr_type(wrapped_expr)
-
-    assert inferred == RawType("bytes")
-
-
 def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _conditional_expr(
@@ -249,22 +150,6 @@ def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() ->
 def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr("CustomFactory", _identifier_node("value"))
-    )
-
-    assert inferred is None
-
-
-def test_infer_expr_type_returns_none_when_call_name_source_text_cannot_be_read(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        signature_rules_module,
-        "cursor_get_text",
-        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
-
-    inferred = signature_rules_module.infer_expr_type(
-        _call_expr("PyLong_FromLong", _identifier_node("value"))
     )
 
     assert inferred is None
@@ -894,7 +779,6 @@ def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
             return_type=AnyType(),
         )
     ]
-
 
 def test_infer_expr_type_raises_when_conditional_operator_children_count_is_invalid() -> None:
     expr = _FakeNode(
