@@ -32,10 +32,10 @@ def test_module_collector_discovers_direct_submodules_from_package_path(
     )
 
     _prepare_module_import("samplepkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("samplepkg")
+    module_node = ModuleCollector().run("samplepkg")
 
-    assert ir_module.functions == []
-    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == [
+    assert module_node.functions == []
+    assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == [
         "_private_mod",
         "public_mod",
         "subpackage",
@@ -62,9 +62,9 @@ def test_module_collector_discovers_hidden_private_subpackage_not_exposed_by_dir
     )
 
     _prepare_module_import("hiddenpkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("hiddenpkg")
+    module_node = ModuleCollector().run("hiddenpkg")
 
-    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == [
+    assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == [
         "_hidden",
         "public_mod",
     ]
@@ -81,9 +81,9 @@ def test_module_collector_ignores_module_attributes_not_on_package_path(
     )
 
     _prepare_module_import("attrpkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("attrpkg")
+    module_node = ModuleCollector().run("attrpkg")
 
-    assert ir_module.sub_modules == []
+    assert module_node.sub_modules == []
 
 
 def test_module_collector_ignores_plain_members_without_module_metadata(
@@ -96,11 +96,11 @@ def test_module_collector_ignores_plain_members_without_module_metadata(
     )
 
     _prepare_module_import("plainattrpkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("plainattrpkg")
+    module_node = ModuleCollector().run("plainattrpkg")
 
-    assert ir_module.functions == []
-    assert ir_module.classes == []
-    assert ir_module.sub_modules == []
+    assert module_node.functions == []
+    assert module_node.classes == []
+    assert module_node.sub_modules == []
 
 
 def test_module_collector_handles_staticmethod_member_without_name(
@@ -125,9 +125,9 @@ def test_module_collector_handles_staticmethod_member_without_name(
     )
 
     _prepare_module_import("staticmethodpkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("staticmethodpkg")
+    module_node = ModuleCollector().run("staticmethodpkg")
 
-    assert [class_.name for class_ in ir_module.classes] == ["Demo", "NamelessStaticMethod"]
+    assert [class_.name for class_ in module_node.classes] == ["Demo", "NamelessStaticMethod"]
 
 
 def test_module_collector_treats_single_file_module_as_non_package(
@@ -138,10 +138,10 @@ def test_module_collector_treats_single_file_module_as_non_package(
     module_path.write_text("VALUE = 1\n", encoding="utf-8")
 
     _prepare_module_import("singlemod", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("singlemod")
+    module_node = ModuleCollector().run("singlemod")
 
-    assert ir_module.is_package is False
-    assert ir_module.sub_modules == []
+    assert module_node.is_package is False
+    assert module_node.sub_modules == []
 
 
 def test_module_collector_supports_namespace_packages(
@@ -156,10 +156,10 @@ def test_module_collector_supports_namespace_packages(
     )
 
     _prepare_module_import("namespacepkg", tmp_path, monkeypatch)
-    ir_module = ModuleCollector().run("namespacepkg")
+    module_node = ModuleCollector().run("namespacepkg")
 
-    assert ir_module.is_package is True
-    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["child"]
+    assert module_node.is_package is True
+    assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == ["child"]
 
 
 @pytest.mark.parametrize(
@@ -213,9 +213,9 @@ def test_module_collector_skips_submodule_when_submodule_import_fails(
 
     monkeypatch.setattr(module_collector_module.logger, "error", fake_error)
 
-    ir_module = ModuleCollector().run(package_name)
+    module_node = ModuleCollector().run(package_name)
 
-    assert [sub_mod.full_name.name for sub_mod in ir_module.sub_modules] == ["healthy"]
+    assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == ["healthy"]
     assert len(error_records) == 1
     assert error_records[0][0] == f"{package_name}.{broken_module_name}"
     assert isinstance(error_records[0][1], expected_error_type)

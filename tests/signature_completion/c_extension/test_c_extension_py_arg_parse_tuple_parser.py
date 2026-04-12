@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.ir_modules import IRArgument
+from pcstubgen.models import Argument
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
@@ -34,7 +34,7 @@ def _parse(
     infer_name_func=None,
     infer_object_type_func=None,
     infer_default_value_func=None,
-) -> list[IRArgument]:
+) -> list[Argument]:
     return PyArgParseTupleTypeParser(
         format_string,
         args,

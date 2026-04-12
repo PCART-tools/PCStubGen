@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from pcstubgen.ir_modules import IRFunction, IRModule, QualifiedName
+from pcstubgen.models import Function, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, StubWriter
 from tests._c_extension_test_support import _signature
 from pcstubgen.types import RawType
 
 
 def test_stub_writer_writes_regular_module_file(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="foo",
                 runtime_handle=object(),
                 signatures=[

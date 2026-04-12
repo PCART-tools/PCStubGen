@@ -3,13 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from .renderer import StubRenderer
-from ..ir_modules import IRModule
+from ..models import Module
 
 
 class StubWriter:
     def write(
         self,
-        module: IRModule,
+        module: Module,
         renderer: StubRenderer,
         to: Path,
     ) -> None:

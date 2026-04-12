@@ -6,7 +6,7 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRFunction, IRModule, QualifiedName
+from pcstubgen.models import Function, Module, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
@@ -74,7 +74,7 @@ def test_completer_prefers_c_branch_over_docstring_and_writes_source_comment(
         ),
     )
 
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
             _unknown_function(
@@ -121,10 +121,10 @@ def test_completer_uses_docstring_for_pybind11_builtin(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="fallback",
                 runtime_handle=_make_pybind11_builtin_handle(),
                 doc="fallback(value: str) -> bool\n\nparsed from docstring",
@@ -148,15 +148,15 @@ def test_completer_continues_after_pybind11_docstring_exception(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="broken",
                 runtime_handle=_make_pybind11_builtin_handle(),
                 doc="broken(value: str) -> bool",
             ),
-            IRFunction(
+            Function(
                 name="working",
                 runtime_handle=_make_pybind11_builtin_handle(),
                 doc="working(value: str) -> bool",
@@ -164,7 +164,7 @@ def test_completer_continues_after_pybind11_docstring_exception(
         ],
     )
 
-    def _parse_or_raise(_: IRModule, func: IRFunction):
+    def _parse_or_raise(_: Module, func: Function):
         if func.name == "broken":
             raise RuntimeError("boom")
         return [_signature(args=[_arg("value", "str")], return_type=RawType("bool"))]
@@ -189,10 +189,10 @@ def test_completer_does_not_swallow_pybind11_docstring_base_exception(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="broken",
                 runtime_handle=_make_pybind11_builtin_handle(),
                 doc="broken(value: str) -> bool",
@@ -200,7 +200,7 @@ def test_completer_does_not_swallow_pybind11_docstring_base_exception(
         ],
     )
 
-    def _parse_or_raise(_: IRModule, __: IRFunction):
+    def _parse_or_raise(_: Module, __: Function):
         raise BaseException("boom")
 
     monkeypatch.setattr(

@@ -8,11 +8,11 @@ from typing import Any
 
 from loguru import logger
 
-from .ir_modules import (
-    IRClass,
-    IRFunction,
-    IRMethod,
-    IRModule,
+from .models import (
+    Class,
+    Function,
+    Method,
+    Module,
     QualifiedName,
 )
 
@@ -20,10 +20,10 @@ __all__ = ["ModuleCollector"]
 
 
 class ModuleCollector:
-    """收集模块运行时对象并构建 IRModule 树。"""
+    """收集模块运行时对象并构建 Module 树。"""
 
-    def run(self, module_name: str) -> IRModule:
-        """导入目标模块并递归收集其 IR 结构。"""
+    def run(self, module_name: str) -> Module:
+        """导入目标模块并递归收集其模型结构。"""
         module = importlib.import_module(module_name)
         return self._collect_module(QualifiedName.from_str(module_name), module)
 
@@ -31,25 +31,25 @@ class ModuleCollector:
         self,
         path: QualifiedName,
         module: types.ModuleType,
-    ) -> IRModule:
+    ) -> Module:
         """收集单个模块及其直接子模块。"""
-        irmodule = IRModule(
+        module_node = Module(
             full_name=path,
             doc=self._get_doc(module),
             is_package=self._is_package(module),
         )
         for name, member in inspect.getmembers(module):
-            member_path = irmodule.full_name.concat(name)
+            member_path = module_node.full_name.concat(name)
 
             if self._is_imported_member(member_path, member, module):
                 continue
 
             if inspect.isbuiltin(member):
-                irmodule.functions.append(self._collect_function(member_path, member))
+                module_node.functions.append(self._collect_function(member_path, member))
             elif inspect.isclass(member):
-                irmodule.classes.append(self._collect_class(member_path, member))
+                module_node.classes.append(self._collect_class(member_path, member))
 
-        if irmodule.is_package:
+        if module_node.is_package:
             for submodule_name in self._iter_submodule_names(module):
                 try:
                     sub_module = importlib.import_module(submodule_name)
@@ -60,26 +60,26 @@ class ModuleCollector:
                         ex,
                     )
                     continue
-                irmodule.sub_modules.append(
+                module_node.sub_modules.append(
                     self._collect_module(QualifiedName.from_str(submodule_name), sub_module)
                 )
 
-        return irmodule
+        return module_node
 
     def _collect_class(
         self,
         path: QualifiedName,
         class_: type,
-    ) -> IRClass:
+    ) -> Class:
         """收集类、方法和嵌套类。"""
-        irclass = IRClass(name=path.name, doc=self._get_doc(class_))
-        irclass.bases = self._collect_bases(class_)
+        class_node = Class(name=path.name, doc=self._get_doc(class_))
+        class_node.bases = self._collect_bases(class_)
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
 
             if inspect.isbuiltin(member):
-                irclass.methods.append(
+                class_node.methods.append(
                     self._collect_method(
                         member_path,
                         member,
@@ -87,17 +87,17 @@ class ModuleCollector:
                     )
                 )
             elif inspect.isclass(member):
-                irclass.classes.append(self._collect_class(member_path, member))
+                class_node.classes.append(self._collect_class(member_path, member))
 
-        return irclass
+        return class_node
 
     def _collect_function(
         self,
         path: QualifiedName,
         func: Any,
-    ) -> IRFunction:
+    ) -> Function:
         """收集函数节点但不补全签名。"""
-        return IRFunction(
+        return Function(
             name=path.name,
             doc=self._get_doc(func),
             runtime_handle=func,
@@ -109,10 +109,10 @@ class ModuleCollector:
         method: Any,
         *,
         owner: type | None = None,
-    ) -> IRMethod:
+    ) -> Method:
         """收集方法节点并记录所属类型。"""
         func = self._collect_function(path, method)
-        return IRMethod(
+        return Method(
             function=func,
             decorator=None,
             runtime_owner=owner,

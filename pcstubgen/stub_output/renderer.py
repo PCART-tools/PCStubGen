@@ -2,20 +2,20 @@ from __future__ import annotations
 
 import sys
 
-from ..ir_modules import (
-    IRArgument,
-    IRArgumentKind,
-    IRClass,
-    IRFunction,
-    IRMethod,
-    IRMethodDecorator,
-    IRModule,
-    IRSignature,
+from ..models import (
+    Argument,
+    ArgumentKind,
+    Class,
+    Function,
+    Method,
+    MethodDecorator,
+    Module,
+    Signature,
 )
 
 
 class StubRenderer:
-    """将 IR 渲染为 stub 文本。"""
+    """将模型渲染为 stub 文本。"""
 
     def __init__(self, include_docstrings: bool = False):
         self.include_docstrings = include_docstrings
@@ -25,7 +25,7 @@ class StubRenderer:
         """按指定空格数缩进多行文本。"""
         return [" " * by + line for line in lines]
 
-    def print_module(self, node: IRModule) -> list[str]:
+    def print_module(self, node: Module) -> list[str]:
         """渲染整个模块。"""
         result: list[str] = []
 
@@ -46,32 +46,32 @@ class StubRenderer:
 
         return result
 
-    def print_class(self, irclass: IRClass) -> list[str]:
+    def print_class(self, class_node: Class) -> list[str]:
         """渲染类定义。"""
-        signature = f"class {irclass.name}"
-        if irclass.bases:
-            signature += f"({', '.join(str(base) for base in irclass.bases)})"
+        signature = f"class {class_node.name}"
+        if class_node.bases:
+            signature += f"({', '.join(str(base) for base in class_node.bases)})"
         signature += ":"
 
-        body = self._print_class_body(irclass)
+        body = self._print_class_body(class_node)
         return [signature, *self.indent_lines(body)]
 
-    def _print_class_body(self, irclass: IRClass) -> list[str]:
+    def _print_class_body(self, class_node: Class) -> list[str]:
         """渲染类体。"""
         result: list[str] = []
-        if self.include_docstrings and irclass.doc is not None:
-            result.extend(self.print_docstring(irclass.doc))
+        if self.include_docstrings and class_node.doc is not None:
+            result.extend(self.print_docstring(class_node.doc))
 
-        for sub_class in sorted(irclass.classes, key=lambda c: c.name):
+        for sub_class in sorted(class_node.classes, key=lambda c: c.name):
             result.extend(self.print_class(sub_class))
 
-        decorator_order: dict[IRMethodDecorator, int] = {
+        decorator_order: dict[MethodDecorator, int] = {
             "staticmethod": 0,
             "classmethod": 1,
             None: 2,
         }
         for method in sorted(
-            irclass.methods, key=lambda m: (decorator_order.get(m.decorator, 2), m.function.name)
+            class_node.methods, key=lambda m: (decorator_order.get(m.decorator, 2), m.function.name)
         ):
             result.extend(self.print_method(method))
 
@@ -80,7 +80,7 @@ class StubRenderer:
 
         return result
 
-    def print_method(self, node: IRMethod) -> list[str]:
+    def print_method(self, node: Method) -> list[str]:
         """渲染类方法。"""
         result: list[str] = []
         overload = len(node.function.signatures) > 1
@@ -96,12 +96,12 @@ class StubRenderer:
             )
         return result
 
-    def print_argument(self, arg: IRArgument) -> str:
+    def print_argument(self, arg: Argument) -> str:
         """渲染单个参数。"""
         parts = []
-        if arg.kind is IRArgumentKind.VAR_POSITIONAL:
+        if arg.kind is ArgumentKind.VAR_POSITIONAL:
             parts.append("*")
-        if arg.kind is IRArgumentKind.VAR_KEYWORD:
+        if arg.kind is ArgumentKind.VAR_KEYWORD:
             parts.append("**")
         parts.append(f"{arg.name}")
         if arg.type is not None:
@@ -121,7 +121,7 @@ class StubRenderer:
             '"""',
         ]
 
-    def print_function(self, func: IRFunction) -> list[str]:
+    def print_function(self, func: Function) -> list[str]:
         """渲染模块级函数。"""
         result: list[str] = []
         overload = len(func.signatures) > 1
@@ -155,7 +155,7 @@ class StubRenderer:
                 result.append("#")
         return result
 
-    def render_function_signature(self, *, func_name: str, signature: IRSignature) -> str:
+    def render_function_signature(self, *, func_name: str, signature: Signature) -> str:
         """将单条函数签名渲染为单行字符串。"""
         args = ", ".join(self._format_arguments(signature.args))
         rendered = [f"def {func_name}(", args, ")"]
@@ -168,10 +168,10 @@ class StubRenderer:
         self,
         *,
         func_name: str,
-        signature: IRSignature,
+        signature: Signature,
         func_doc: str | None,
         overload: bool,
-        method_decorator: IRMethodDecorator,
+        method_decorator: MethodDecorator,
     ) -> list[str]:
         """渲染一条可打印的函数签名块。"""
         result: list[str] = []
@@ -189,7 +189,7 @@ class StubRenderer:
         result.extend(self.indent_lines(body))
         return result
 
-    def _build_function_signature(self, *, func_name: str, signature: IRSignature) -> list[str]:
+    def _build_function_signature(self, *, func_name: str, signature: Signature) -> list[str]:
         """构建单条 def 头。"""
         args = self._format_arguments(signature.args)
         if len(signature.args) <= 1:
@@ -202,7 +202,7 @@ class StubRenderer:
         *,
         func_name: str,
         args: list[str],
-        signature: IRSignature,
+        signature: Signature,
     ) -> str:
         """构建单行 def 头。"""
         rendered = [f"def {func_name}(", ", ".join(args), ")"]
@@ -216,7 +216,7 @@ class StubRenderer:
         *,
         func_name: str,
         args: list[str],
-        signature: IRSignature,
+        signature: Signature,
     ) -> list[str]:
         """构建多行 def 头，每个参数独占一行。"""
         rendered = [f"def {func_name}("]
@@ -229,17 +229,17 @@ class StubRenderer:
         rendered.append(closing_line)
         return rendered
 
-    def _format_arguments(self, args: list[IRArgument]) -> list[str]:
+    def _format_arguments(self, args: list[Argument]) -> list[str]:
         """渲染函数参数列表。"""
         rendered_args: list[str] = []
-        has_pos_only = any(arg.kind is IRArgumentKind.POSITIONAL_ONLY for arg in args)
+        has_pos_only = any(arg.kind is ArgumentKind.POSITIONAL_ONLY for arg in args)
         pos_only_boundary: int | None = None
         if has_pos_only:
             pos_only_boundary = next(
                 (
                     index
                     for index, arg in enumerate(args)
-                    if arg.kind is not IRArgumentKind.POSITIONAL_ONLY
+                    if arg.kind is not ArgumentKind.POSITIONAL_ONLY
                 ),
                 len(args),
             )
@@ -256,14 +256,14 @@ class StubRenderer:
                 rendered_args.append("/")
 
             if (
-                arg.kind is IRArgumentKind.KEYWORD_ONLY
+                arg.kind is ArgumentKind.KEYWORD_ONLY
                 and not kw_only_marker_inserted
                 and not has_var_positional
             ):
                 rendered_args.append("*")
                 kw_only_marker_inserted = True
 
-            if arg.kind is IRArgumentKind.VAR_POSITIONAL:
+            if arg.kind is ArgumentKind.VAR_POSITIONAL:
                 has_var_positional = True
                 kw_only_marker_inserted = True
 
@@ -279,22 +279,22 @@ class StubRenderer:
 
         return rendered_args
 
-    def _get_printable_signatures(self, func: IRFunction) -> list[IRSignature]:
+    def _get_printable_signatures(self, func: Function) -> list[Signature]:
         """返回可打印签名，缺失时合成占位签名。"""
         if func.signatures:
             return func.signatures
         return [self._build_placeholder_signature(func)]
 
-    def _build_placeholder_signature(self, func: IRFunction) -> IRSignature:
+    def _build_placeholder_signature(self, func: Function) -> Signature:
         """为未知签名函数合成仅用于输出的占位签名。"""
-        return IRSignature(
+        return Signature(
             args=[
-                IRArgument(name="args", kind=IRArgumentKind.VAR_POSITIONAL),
-                IRArgument(name="kwargs", kind=IRArgumentKind.VAR_KEYWORD),
+                Argument(name="args", kind=ArgumentKind.VAR_POSITIONAL),
+                Argument(name="kwargs", kind=ArgumentKind.VAR_KEYWORD),
             ],
         )
 
-    def _collect_module_imports(self, node: IRModule) -> list[str]:
+    def _collect_module_imports(self, node: Module) -> list[str]:
         """收集模块内函数/方法签名依赖的 import。"""
         imports: set[str] = set()
         for class_ in node.classes:
@@ -303,16 +303,16 @@ class StubRenderer:
             imports.update(self._collect_function_imports(func))
         return sorted(imports)
 
-    def _collect_class_imports(self, irclass: IRClass) -> set[str]:
+    def _collect_class_imports(self, class_node: Class) -> set[str]:
         """递归收集类内函数/方法签名依赖的 import。"""
         imports: set[str] = set()
-        for sub_class in irclass.classes:
+        for sub_class in class_node.classes:
             imports.update(self._collect_class_imports(sub_class))
-        for method in irclass.methods:
+        for method in class_node.methods:
             imports.update(self._collect_function_imports(method.function))
         return imports
 
-    def _collect_function_imports(self, func: IRFunction) -> set[str]:
+    def _collect_function_imports(self, func: Function) -> set[str]:
         """收集函数签名依赖的 import。"""
         imports: set[str] = set()
         if len(func.signatures) > 1:
@@ -322,7 +322,7 @@ class StubRenderer:
         return imports
 
     @staticmethod
-    def _collect_signature_imports(signature: IRSignature) -> set[str]:
+    def _collect_signature_imports(signature: Signature) -> set[str]:
         """收集单条签名依赖的 import。"""
         imports: set[str] = set()
         if signature.return_type is not None:

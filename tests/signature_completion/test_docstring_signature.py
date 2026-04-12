@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.ir_modules import IRFunction, IRModule, QualifiedName
+from pcstubgen.models import Function, Module, QualifiedName
 from pcstubgen.signature_completion.docstring_source import (
     parse_args_str,
     parse_docstring_signatures,
 )
-from pcstubgen.ir_modules import IRArgumentKind
+from pcstubgen.models import ArgumentKind
 
 
 def _render_type(type_: object | None) -> str | None:
@@ -20,11 +20,11 @@ def _parse_docstring(
     function_name: str,
     doc: str | None,
 ):
-    irmodule = IRModule(
+    module_node = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
     )
-    irfunction = IRFunction(name=function_name, runtime_handle=object(), doc=doc)
-    return parse_docstring_signatures(irmodule, irfunction)
+    function_node = Function(name=function_name, runtime_handle=object(), doc=doc)
+    return parse_docstring_signatures(module_node, function_node)
 
 
 def test_docstring_parser_parses_generic_function_signature() -> None:
@@ -148,10 +148,10 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
     ]
     assert [arg.has_default for arg in parsed] == [False, True, True, True]
     assert [arg.kind for arg in parsed] == [
-        IRArgumentKind.POSITIONAL_ONLY,
-        IRArgumentKind.POSITIONAL_OR_KEYWORD,
-        IRArgumentKind.KEYWORD_ONLY,
-        IRArgumentKind.KEYWORD_ONLY,
+        ArgumentKind.POSITIONAL_ONLY,
+        ArgumentKind.POSITIONAL_OR_KEYWORD,
+        ArgumentKind.KEYWORD_ONLY,
+        ArgumentKind.KEYWORD_ONLY,
     ]
 
 
@@ -167,9 +167,9 @@ def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> N
         "object",
     ]
     assert [arg.kind for arg in parsed] == [
-        IRArgumentKind.POSITIONAL_OR_KEYWORD,
-        IRArgumentKind.VAR_POSITIONAL,
-        IRArgumentKind.VAR_KEYWORD,
+        ArgumentKind.POSITIONAL_OR_KEYWORD,
+        ArgumentKind.VAR_POSITIONAL,
+        ArgumentKind.VAR_KEYWORD,
     ]
 
 

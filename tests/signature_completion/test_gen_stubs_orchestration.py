@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pcstubgen.ir_modules import IRModule, QualifiedName
+from pcstubgen.models import Module, QualifiedName
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
     _arg,
@@ -17,7 +17,7 @@ def test_gen_stubs_orchestrates_collection_completion_and_writing(
 ) -> None:
     import pcstubgen.api as stubgen_module
 
-    ir_module = IRModule(
+    module_node = Module(
         full_name=QualifiedName.from_str("math"),
         functions=[_unknown_function("foo", doc="foo(value: str) -> bool")],
     )
@@ -25,7 +25,7 @@ def test_gen_stubs_orchestrates_collection_completion_and_writing(
     monkeypatch.setattr(
         stubgen_module.ModuleCollector,
         "run",
-        lambda self, module_name: ir_module,
+        lambda self, module_name: module_node,
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.ClangParser",

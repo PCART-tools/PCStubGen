@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind
+from pcstubgen.models import Argument, ArgumentKind
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
@@ -25,7 +25,7 @@ def _parse(
     *,
     infer_object_type_func=None,
     infer_default_value_func=None,
-) -> list[IRArgument]:
+) -> list[Argument]:
     return PyArgParseTupleAndKeywordsTypeParser(
         format_string,
         kwlist,
@@ -49,7 +49,7 @@ def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
     assert parsed == [
         _arg("count", "int"),
         _arg("label", _STR_OR_NONE_TYPE, has_default=True),
-        _arg("target", "object", has_default=True, kind=IRArgumentKind.KEYWORD_ONLY),
+        _arg("target", "object", has_default=True, kind=ArgumentKind.KEYWORD_ONLY),
     ]
 
 
@@ -133,7 +133,7 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
             _STR_OR_BUFFER_OR_NONE_TYPE,
             default_value="None",
             has_default=True,
-            kind=IRArgumentKind.KEYWORD_ONLY,
+            kind=ArgumentKind.KEYWORD_ONLY,
         ),
     ]
 
@@ -218,7 +218,7 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
     parsed = _parse("|$i", ["value"], [value_cursor])
 
     assert parsed == [
-        _arg("value", "int", has_default=True, kind=IRArgumentKind.KEYWORD_ONLY)
+        _arg("value", "int", has_default=True, kind=ArgumentKind.KEYWORD_ONLY)
     ]
 
 

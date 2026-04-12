@@ -5,15 +5,15 @@ from pathlib import Path
 import toml_rs
 
 from .renderer import StubRenderer
-from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule
+from ..models import Class, Function, Method, Module
 
 
 class TomlWriter:
-    """将 IRModule 树导出为单个 TOML 文件。"""
+    """将 Module 树导出为单个 TOML 文件。"""
 
     def write(
         self,
-        module: IRModule,
+        module: Module,
         renderer: StubRenderer,
         to: Path,
     ) -> None:
@@ -30,7 +30,7 @@ class TomlWriter:
 
     def _collect_module_entries(
         self,
-        module: IRModule,
+        module: Module,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """递归收集模块及其子模块的导出记录。"""
@@ -44,7 +44,7 @@ class TomlWriter:
 
     def _collect_current_module_entries(
         self,
-        module: IRModule,
+        module: Module,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """收集当前模块中的函数与类方法记录。"""
@@ -61,12 +61,12 @@ class TomlWriter:
                 )
             )
 
-        for irclass in sorted(module.classes, key=lambda current: current.name):
+        for class_node in sorted(module.classes, key=lambda current: current.name):
             entries.extend(
                 self._collect_class_entries(
                     module_name=module_name,
-                    class_path=(irclass.name,),
-                    irclass=irclass,
+                    class_path=(class_node.name,),
+                    class_node=class_node,
                     renderer=renderer,
                 )
             )
@@ -78,14 +78,14 @@ class TomlWriter:
         *,
         module_name: str,
         class_path: tuple[str, ...],
-        irclass: IRClass,
+        class_node: Class,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """递归收集类与嵌套类的方法记录。"""
         entries: list[dict[str, str]] = []
         class_name = ".".join(class_path)
 
-        for method in sorted(irclass.methods, key=lambda current: current.function.name):
+        for method in sorted(class_node.methods, key=lambda current: current.function.name):
             entries.extend(
                 self._build_method_entries(
                     module_name=module_name,
@@ -95,12 +95,12 @@ class TomlWriter:
                 )
             )
 
-        for nested_class in sorted(irclass.classes, key=lambda current: current.name):
+        for nested_class in sorted(class_node.classes, key=lambda current: current.name):
             entries.extend(
                 self._collect_class_entries(
                     module_name=module_name,
                     class_path=(*class_path, nested_class.name),
-                    irclass=nested_class,
+                    class_node=nested_class,
                     renderer=renderer,
                 )
             )
@@ -112,7 +112,7 @@ class TomlWriter:
         *,
         module_name: str,
         class_name: str,
-        method: IRMethod,
+        method: Method,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """将类方法转换为 TOML 记录。"""
@@ -128,7 +128,7 @@ class TomlWriter:
         *,
         module_name: str,
         class_name: str | None,
-        func: IRFunction,
+        func: Function,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """将函数展开为一条或多条 TOML 记录。"""

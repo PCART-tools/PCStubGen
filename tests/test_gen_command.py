@@ -5,7 +5,7 @@ import tomllib
 from typer.testing import CliRunner
 
 from pcstubgen.__main__ import app
-from pcstubgen.ir_modules import IRArgument, IRFunction, IRModule, QualifiedName
+from pcstubgen.models import Argument, Function, Module, QualifiedName
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import _signature
 
@@ -20,15 +20,15 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     )
     monkeypatch.setattr(
         "pcstubgen.api.ModuleCollector.run",
-        lambda self, module_name: IRModule(
+        lambda self, module_name: Module(
             full_name=QualifiedName.from_str("pkg.mod"),
             functions=[
-                IRFunction(
+                Function(
                     name="foo",
                     runtime_handle=object(),
                     signatures=[
                         _signature(
-                            args=[IRArgument(name="value", type=RawType("int"))],
+                            args=[Argument(name="value", type=RawType("int"))],
                             return_type=RawType("bool"),
                         )
                     ],
@@ -74,15 +74,15 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     )
     monkeypatch.setattr(
         "pcstubgen.api.ModuleCollector.run",
-        lambda self, module_name: IRModule(
+        lambda self, module_name: Module(
             full_name=QualifiedName.from_str("pkg.mod"),
             functions=[
-                IRFunction(
+                Function(
                     name="foo",
                     runtime_handle=object(),
                     signatures=[
                         _signature(
-                            args=[IRArgument(name="value", type=RawType("str"))],
+                            args=[Argument(name="value", type=RawType("str"))],
                             return_type=RawType("bool"),
                         )
                     ],

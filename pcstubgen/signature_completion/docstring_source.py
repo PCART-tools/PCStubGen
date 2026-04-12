@@ -4,7 +4,7 @@ import re
 from enum import Enum, auto
 
 from ..types import RawType, Type
-from ..ir_modules import IRArgument, IRArgumentKind, IRFunction, IRModule, IRSignature
+from ..models import Argument, ArgumentKind, Function, Module, Signature
 
 
 class _ArgsParseState(Enum):
@@ -15,12 +15,12 @@ class _ArgsParseState(Enum):
 
 
 def parse_docstring_signatures(
-    _irmodule: IRModule,
-    irfunction: IRFunction,
-) -> list[IRSignature]:
+    _irmodule: Module,
+    function_node: Function,
+) -> list[Signature]:
     """从函数 docstring 中解析签名，失败时抛出 RuntimeError。"""
-    func_name = irfunction.name
-    doc = irfunction.doc
+    func_name = function_node.name
+    doc = function_node.doc
     if not doc:
         raise RuntimeError("docstring为空或缺失，无法解析签名。")
 
@@ -39,7 +39,7 @@ def parse_docstring_signatures(
             raise RuntimeError(f"docstring签名参数解析失败: {ex}") from ex
         returns = parse_annotation_str((match.group("returns") or "").strip('"'))
         return [
-            IRSignature(
+            Signature(
                 args=args,
                 return_type=returns,
             )
@@ -50,7 +50,7 @@ def parse_docstring_signatures(
         rf"{re.escape(func_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
     )
 
-    overloads: list[IRSignature] = []
+    overloads: list[Signature] = []
     expected_overload_number = 1
 
     for line in doc_lines[2:]:
@@ -76,7 +76,7 @@ def parse_docstring_signatures(
                 f"重载签名第{expected_overload_number}项参数解析失败: {ex}"
             ) from ex
         overloads.append(
-            IRSignature(
+            Signature(
                 args=args,
                 return_type=parse_annotation_str(match.group("returns")),
             )
@@ -89,10 +89,10 @@ def parse_docstring_signatures(
     return overloads
 
 
-def parse_args_str(args_str: str) -> list[IRArgument]:
+def parse_args_str(args_str: str) -> list[Argument]:
     split_args = _split_args_str(args_str)
 
-    result: list[IRArgument] = []
+    result: list[Argument] = []
     state = _ArgsParseState.POSITIONAL
 
     for arg_decl, annotation, default_str in split_args:
@@ -108,13 +108,13 @@ def parse_args_str(args_str: str) -> list[IRArgument]:
                 raise ValueError("位置参数分隔符 '/' 位置非法。")
 
             if not any(
-                arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
+                arg.kind is ArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
             ):
                 raise ValueError("位置参数分隔符 '/' 前必须至少有一个普通参数。")
 
             for arg in result:
-                if arg.kind is IRArgumentKind.POSITIONAL_OR_KEYWORD:
-                    arg.kind = IRArgumentKind.POSITIONAL_ONLY
+                if arg.kind is ArgumentKind.POSITIONAL_OR_KEYWORD:
+                    arg.kind = ArgumentKind.POSITIONAL_ONLY
             state = _ArgsParseState.POSITIONAL_OR_KEYWORD
             continue
 
@@ -137,7 +137,7 @@ def parse_args_str(args_str: str) -> list[IRArgument]:
             if not name:
                 raise ValueError("可变关键字参数名不能为空。")
 
-            kind = IRArgumentKind.VAR_KEYWORD
+            kind = ArgumentKind.VAR_KEYWORD
             state = _ArgsParseState.FINISHED
         elif arg_decl.startswith("*"):
             if state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD):
@@ -149,7 +149,7 @@ def parse_args_str(args_str: str) -> list[IRArgument]:
             if not name:
                 raise ValueError("可变位置参数名不能为空。")
 
-            kind = IRArgumentKind.VAR_POSITIONAL
+            kind = ArgumentKind.VAR_POSITIONAL
             state = _ArgsParseState.KEYWORD_ONLY
         else:
             name = arg_decl.strip()
@@ -157,12 +157,12 @@ def parse_args_str(args_str: str) -> list[IRArgument]:
                 raise ValueError("参数名不能为空。")
 
             if state is _ArgsParseState.KEYWORD_ONLY:
-                kind = IRArgumentKind.KEYWORD_ONLY
+                kind = ArgumentKind.KEYWORD_ONLY
             else:
-                kind = IRArgumentKind.POSITIONAL_OR_KEYWORD
+                kind = ArgumentKind.POSITIONAL_OR_KEYWORD
 
         result.append(
-            IRArgument(
+            Argument(
                 name=name,
                 default_value=default_str,
                 has_default=default_str is not None,

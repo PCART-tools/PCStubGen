@@ -5,7 +5,7 @@ from typing import cast
 
 from clang.cindex import Cursor
 
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind
+from pcstubgen.models import Argument, ArgumentKind
 from pcstubgen.types import RawType, Type, UnionType
 
 
@@ -34,9 +34,9 @@ def _arg(
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
-    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
-) -> IRArgument:
-    return IRArgument(
+    kind: ArgumentKind = ArgumentKind.POSITIONAL_OR_KEYWORD,
+) -> Argument:
+    return Argument(
         name=name,
         type=type_text if isinstance(type_text, Type) else RawType(type_text, imports=imports),
         default_value=default_value,

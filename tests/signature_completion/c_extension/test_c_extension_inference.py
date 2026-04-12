@@ -6,7 +6,7 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRArgumentKind, IRSignature
+from pcstubgen.models import ArgumentKind, Signature
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -583,7 +583,7 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
     )
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[],
             return_type=RawType("int"),
         )
@@ -606,7 +606,7 @@ def test_infer_signature_returns_signature_with_inferred_arguments_when_return_i
         cursor
     )
 
-    assert inferred == [IRSignature(args=[_arg("value", "int")], return_type=AnyType())]
+    assert inferred == [Signature(args=[_arg("value", "int")], return_type=AnyType())]
 
 
 def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
@@ -648,7 +648,7 @@ def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
     )
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[_arg("value", "int")],
             return_type=RawType("int"),
         )
@@ -671,7 +671,7 @@ def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() ->
         cursor
     )
 
-    assert inferred == [IRSignature(args=[_arg("value", "int")], return_type=AnyType())]
+    assert inferred == [Signature(args=[_arg("value", "int")], return_type=AnyType())]
 
 
 def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
@@ -684,7 +684,7 @@ def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
         ml_flags=METH_NOARGS,
     )
 
-    assert inferred == [IRSignature(args=[], return_type=AnyType())]
+    assert inferred == [Signature(args=[], return_type=AnyType())]
 
 
 def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
@@ -698,7 +698,7 @@ def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
     )
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[],
             return_type=RawType("int"),
         )
@@ -716,12 +716,12 @@ def test_infer_signature_uses_meth_o_argument_shape_without_pyarg_parse() -> Non
     )
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[
                 _arg(
                     "arg",
                     "object",
-                    kind=IRArgumentKind.POSITIONAL_ONLY,
+                    kind=ArgumentKind.POSITIONAL_ONLY,
                 )
             ],
             return_type=AnyType(),
@@ -740,12 +740,12 @@ def test_infer_signature_keeps_return_type_for_meth_o() -> None:
     )
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[
                 _arg(
                     "arg",
                     "object",
-                    kind=IRArgumentKind.POSITIONAL_ONLY,
+                    kind=ArgumentKind.POSITIONAL_ONLY,
                 )
             ],
             return_type=RawType("int"),
@@ -757,10 +757,10 @@ def test_infer_minimal_signatures_supports_varargs_and_keywords() -> None:
     inferred = signature_rules_module.infer_minimal_signatures(METH_VARARGS | METH_KEYWORDS)
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[
-                _arg("args", "object", kind=IRArgumentKind.VAR_POSITIONAL),
-                _arg("kwargs", "object", kind=IRArgumentKind.VAR_KEYWORD),
+                _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
+                _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
             return_type=AnyType(),
         )
@@ -771,10 +771,10 @@ def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
     inferred = signature_rules_module.infer_minimal_signatures(METH_FASTCALL | METH_KEYWORDS)
 
     assert inferred == [
-        IRSignature(
+        Signature(
             args=[
-                _arg("args", "object", kind=IRArgumentKind.VAR_POSITIONAL),
-                _arg("kwargs", "object", kind=IRArgumentKind.VAR_KEYWORD),
+                _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
+                _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
             return_type=AnyType(),
         )

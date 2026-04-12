@@ -3,17 +3,17 @@ from __future__ import annotations
 import typing
 
 from pcstubgen.types import RawType, Type
-from pcstubgen.ir_modules import IRArgument, IRArgumentKind, IRClass, IRFunction, IRMethod, IRModule, IRSignature, QualifiedName
+from pcstubgen.models import Argument, ArgumentKind, Class, Function, Method, Module, Signature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 
 
 def _signature(
     *,
-    args: list[IRArgument] | None = None,
+    args: list[Argument] | None = None,
     return_type: Type | None = None,
-) -> IRSignature:
+) -> Signature:
     """构造测试用签名。"""
-    return IRSignature(
+    return Signature(
         args=list(args or ()),
         return_type=return_type,
     )
@@ -22,11 +22,11 @@ def _signature(
 def _function(
     name: str,
     *,
-    signatures: list[IRSignature] | None = None,
+    signatures: list[Signature] | None = None,
     doc: str | None = None,
     c_inferred_source_comment: str | None = None,
-) -> IRFunction:
-    return IRFunction(
+) -> Function:
+    return Function(
         name=name,
         runtime_handle=object(),
         signatures=list(signatures or ()),
@@ -35,7 +35,7 @@ def _function(
     )
 
 
-def _unknown_function(name: str, *, doc: str | None = None) -> IRFunction:
+def _unknown_function(name: str, *, doc: str | None = None) -> Function:
     """构造签名未知的测试函数。"""
     return _function(name=name, doc=doc)
 
@@ -45,7 +45,7 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
         name="foo",
         signatures=[
             _signature(
-                args=[IRArgument(name="value", type=RawType("typing.Optional[int]", imports=("typing",)))],
+                args=[Argument(name="value", type=RawType("typing.Optional[int]", imports=("typing",)))],
                 return_type=RawType("typing.Optional[int]", imports=("typing",)),
             )
         ],
@@ -76,7 +76,7 @@ def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
 def test_renderer_prints_function_doc_for_single_signature() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
         doc="original docs",
     )
 
@@ -104,8 +104,8 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
     func = _function(
         name="foo",
         signatures=[
-            _signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("str")),
-            _signature(args=[IRArgument(name="value", type=RawType("str"))], return_type=RawType("int")),
+            _signature(args=[Argument(name="value", type=RawType("int"))], return_type=RawType("str")),
+            _signature(args=[Argument(name="value", type=RawType("str"))], return_type=RawType("int")),
         ],
         doc=doc,
     )
@@ -124,7 +124,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
 def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))], return_type=RawType("bool"))],
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))], return_type=RawType("bool"))],
         doc="foo(value: str) -> str\n\nparsed from docstring",
     )
 
@@ -138,7 +138,7 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
 def test_renderer_prints_c_inferred_source_comment_after_function() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[IRArgument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
         c_inferred_source_comment="static int foo_impl(int value) {\n    return value;\n}",
     )
 
@@ -161,11 +161,11 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
         name="foo",
         signatures=[
             _signature(
-                args=[IRArgument(name="value", type=RawType("int")), IRArgument(name="flag", type=RawType("bool"))],
+                args=[Argument(name="value", type=RawType("int")), Argument(name="flag", type=RawType("bool"))],
                 return_type=RawType("int"),
             ),
             _signature(
-                args=[IRArgument(name="value", type=RawType("str")), IRArgument(name="flag", type=RawType("bool"))],
+                args=[Argument(name="value", type=RawType("str")), Argument(name="flag", type=RawType("bool"))],
                 return_type=RawType("str"),
             ),
         ],
@@ -185,16 +185,16 @@ def test_renderer_prints_c_inferred_source_comment_once_after_overloads() -> Non
 
 
 def test_renderer_adds_typing_import_for_overloads() -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="foo",
                 runtime_handle=object(),
                 signatures=[
-                    _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
+                    _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
                     _signature(
-                        args=[IRArgument(name="x", type=RawType("typing.Optional[int]", imports=("typing",)))],
+                        args=[Argument(name="x", type=RawType("typing.Optional[int]", imports=("typing",)))],
                         return_type=RawType("typing.Optional[int]", imports=("typing",)),
                     ),
                 ],
@@ -216,13 +216,13 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
 
 
 def test_renderer_repeats_method_decorator_for_each_overload() -> None:
-    method = IRMethod(
-        function=IRFunction(
+    method = Method(
+        function=Function(
             name="build",
             runtime_handle=object(),
             signatures=[
-                _signature(args=[IRArgument(name="x", type=RawType("int"))], return_type=RawType("int")),
-                _signature(args=[IRArgument(name="x", type=RawType("str"))], return_type=RawType("str")),
+                _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
+                _signature(args=[Argument(name="x", type=RawType("str"))], return_type=RawType("str")),
             ],
         ),
         decorator="classmethod",

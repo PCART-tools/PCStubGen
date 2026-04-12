@@ -4,7 +4,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ...ir_modules import IRFunction, IRModule, IRSignature
+from ...models import Function, Module, Signature
 from .address_resolver import (
     get_func_file_location,
 )
@@ -23,11 +23,11 @@ class CExtensionSource:
 
     def infer_function_signatures(
         self,
-        irmodule: IRModule,
-        irfunction: IRFunction,
-    ) -> tuple[list[IRSignature], str | None]:
+        module_node: Module,
+        function_node: Function,
+    ) -> tuple[list[Signature], str | None]:
         """按函数懒解析 builtin function 的 C 扩展签名。"""
-        runtime_info = read_builtin_function_runtime_info(irfunction.runtime_handle)
+        runtime_info = read_builtin_function_runtime_info(function_node.runtime_handle)
         location = get_func_file_location(runtime_info.address)
         tu = self._clang_parser.get_translation_unit(location.compilation_unit_path)
         func_cursor = get_func_cursor(tu, location.function_name, location.linkage_name)
@@ -42,12 +42,12 @@ class CExtensionSource:
         except RuntimeError as ex:
             logger.warning(
                 "读取函数源码注释失败, module: {}, func: {}, reason: {}",
-                irmodule.full_name,
-                irfunction.name,
+                module_node.full_name,
+                function_node.name,
                 ex,
             )
 
         if not signatures:
-            raise RuntimeError(f"C函数 {irmodule.full_name}.{irfunction.name} 没有可用签名")
+            raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
 
         return signatures, source_comment

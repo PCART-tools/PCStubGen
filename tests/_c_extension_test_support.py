@@ -17,22 +17,22 @@ from pcstubgen.types import RawType, Type
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
 )
-from pcstubgen.ir_modules import (
-    IRArgument,
-    IRArgumentKind,
-    IRFunction,
-    IRModule,
-    IRSignature,
+from pcstubgen.models import (
+    Argument,
+    ArgumentKind,
+    Function,
+    Module,
+    Signature,
 )
 
 
 def _signature(
     *,
-    args: list[IRArgument] | None = None,
+    args: list[Argument] | None = None,
     return_type: Type | None = None,
-) -> IRSignature:
-    """构造测试用 IR 签名。"""
-    return IRSignature(
+) -> Signature:
+    """构造测试用签名。"""
+    return Signature(
         args=list(args or ()),
         return_type=return_type,
     )
@@ -45,9 +45,9 @@ def _arg(
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
     has_default: bool = False,
-    kind: IRArgumentKind = IRArgumentKind.POSITIONAL_OR_KEYWORD,
-) -> IRArgument:
-    return IRArgument(
+    kind: ArgumentKind = ArgumentKind.POSITIONAL_OR_KEYWORD,
+) -> Argument:
+    return Argument(
         name=name,
         type=(
             None
@@ -66,14 +66,14 @@ def _unknown_function(
     name: str,
     *,
     doc: str | None = None,
-) -> IRFunction:
+) -> Function:
     """构造签名未知的测试函数。"""
-    return IRFunction(name=name, runtime_handle=object(), doc=doc)
+    return Function(name=name, runtime_handle=object(), doc=doc)
 
 
 @dataclass
 class ResolvedFunctionFixture:
-    signatures: list[IRSignature]
+    signatures: list[Signature]
     function_cursor: clang.cindex.Cursor | None = None
 
 
@@ -85,15 +85,15 @@ def _patch_c_signature_extractor(
 
     def _patched_infer_function_signatures(
         self: CExtensionSource,
-        irmodule: IRModule,
-        irfunction: IRFunction,
-    ) -> tuple[list[IRSignature], str | None]:
+        module_node: Module,
+        function_node: Function,
+    ) -> tuple[list[Signature], str | None]:
         _ = self
-        extracted = extracted_functions.get(irfunction.name)
+        extracted = extracted_functions.get(function_node.name)
         if extracted is None:
-            raise RuntimeError(f"未找到函数 {irmodule.full_name}.{irfunction.name}")
+            raise RuntimeError(f"未找到函数 {module_node.full_name}.{function_node.name}")
         if not extracted.signatures:
-            raise RuntimeError(f"C函数 {irmodule.full_name}.{irfunction.name} 没有可用签名")
+            raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
 
         source_comment = None
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
@@ -330,8 +330,8 @@ def _fake_function_cursor_with_children(
     )
 
 
-ExtractedArgument = IRArgument
-ExtractedSignature = IRSignature
+ExtractedArgument = Argument
+ExtractedSignature = Signature
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]

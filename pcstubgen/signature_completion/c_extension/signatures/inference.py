@@ -3,7 +3,7 @@ from __future__ import annotations
 from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
-from ....ir_modules import IRArgument, IRArgumentKind, IRSignature
+from ....models import Argument, ArgumentKind, Signature
 from ....types import AnyType, RawType, Type, UnionType
 from ..clang.constant_eval import eval_int
 from ..clang.ast_utils import (
@@ -51,14 +51,14 @@ def infer_signature(
     function_cursor: Cursor,
     *,
     ml_flags: int = 0,
-) -> list[IRSignature]:
-    """汇合参数推断与返回值推断结果，直接生成 IR 签名。"""
+) -> list[Signature]:
+    """汇合参数推断与返回值推断结果，直接生成签名。"""
     inferred_return_type = infer_return_type(function_cursor)
     inferred_argument_lists = infer_argument_lists(function_cursor)
 
     if inferred_argument_lists:
         return [
-            IRSignature(
+            Signature(
                 args=arguments,
                 return_type=_default_return_type(inferred_return_type),
             )
@@ -74,14 +74,14 @@ def infer_signature(
 
     if inferred_return_type is None:
         return []
-    return [IRSignature(return_type=inferred_return_type)]
+    return [Signature(return_type=inferred_return_type)]
 
 
 def infer_minimal_signatures(
     ml_flags: int,
     *,
     return_type: Type | None = None,
-) -> list[IRSignature]:
+) -> list[Signature]:
     """根据 `PyMethodDef.ml_flags` 推断最小签名。"""
     argument_lists = infer_argument_lists_from_flags(ml_flags)
     if argument_lists is None:
@@ -89,7 +89,7 @@ def infer_minimal_signatures(
 
     effective_return_type = _default_return_type(return_type)
     return [
-        IRSignature(
+        Signature(
             args=arguments,
             return_type=effective_return_type,
         )
@@ -99,34 +99,34 @@ def infer_minimal_signatures(
 
 def infer_argument_lists_from_flags(
     ml_flags: int,
-) -> list[list[IRArgument]] | None:
+) -> list[list[Argument]] | None:
     """根据 `PyMethodDef.ml_flags` 推断最小参数形状。"""
     if ml_flags & METH_NOARGS:
         return [[]]
 
     if ml_flags & METH_O:
         return [[
-            IRArgument(
+            Argument(
                 name="arg",
                 type=RawType("object"),
-                kind=IRArgumentKind.POSITIONAL_ONLY,
+                kind=ArgumentKind.POSITIONAL_ONLY,
             )
         ]]
 
     if ml_flags & (METH_VARARGS | METH_FASTCALL):
         arguments = [
-            IRArgument(
+            Argument(
                 name="args",
                 type=RawType("object"),
-                kind=IRArgumentKind.VAR_POSITIONAL,
+                kind=ArgumentKind.VAR_POSITIONAL,
             )
         ]
         if ml_flags & METH_KEYWORDS:
             arguments.append(
-                IRArgument(
+                Argument(
                     name="kwargs",
                     type=RawType("object"),
-                    kind=IRArgumentKind.VAR_KEYWORD,
+                    kind=ArgumentKind.VAR_KEYWORD,
                 )
             )
         return [arguments]
@@ -134,9 +134,9 @@ def infer_argument_lists_from_flags(
     return None
 
 
-def infer_argument_lists(func_cursor: Cursor) -> list[list[IRArgument]]:
+def infer_argument_lists(func_cursor: Cursor) -> list[list[Argument]]:
     """遍历函数体内支持的 `PyArg_*` 调用并收集参数列表。"""
-    inferred_argument_lists: list[list[IRArgument]] = []
+    inferred_argument_lists: list[list[Argument]] = []
 
     for call_expr in walk_cursor(func_cursor):
         if call_expr.kind != CursorKind.CALL_EXPR:
@@ -181,7 +181,7 @@ def infer_return_type(func_cursor: Cursor) -> Type | None:
     return merged_type
 
 
-def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[IRArgument]:
+def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[Argument]:
     """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
     try:
         format_string = extract_string_literal(args[1])
@@ -202,7 +202,7 @@ def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[IRArgument]:
 
 def _infer_pyarg_parsetuple_and_keywords_arguments(
     args: list[Cursor],
-) -> list[IRArgument]:
+) -> list[Argument]:
     """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
     try:
         format_string = extract_string_literal(args[2])

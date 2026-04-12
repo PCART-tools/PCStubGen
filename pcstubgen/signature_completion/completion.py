@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ..ir_modules import IRClass, IRFunction, IRMethod, IRModule
+from ..models import Class, Function, Method, Module
 from .c_extension import CExtensionSource
 from .c_extension.runtime import supports_builtin_function_inference
 from .docstring_source import parse_docstring_signatures
@@ -33,7 +33,7 @@ class SignatureCompleter:
         self._c_source = CExtensionSource(compilation_database)
         self._result = SignatureCompletionResult()
 
-    def run(self, module: IRModule) -> SignatureCompletionResult:
+    def run(self, module: Module) -> SignatureCompletionResult:
         self._result = SignatureCompletionResult()
         self._complete_module(module)
 
@@ -42,7 +42,7 @@ class SignatureCompleter:
 
     def _complete_module(
         self,
-        module: IRModule,
+        module: Module,
     ) -> None:
         for sub_module in module.sub_modules:
             self._complete_module(sub_module)
@@ -55,8 +55,8 @@ class SignatureCompleter:
 
     def _complete_class(
         self,
-        node: IRClass,
-        module: IRModule,
+        node: Class,
+        module: Module,
     ) -> None:
         for nested_cls in node.classes:
             self._complete_class(nested_cls, module)
@@ -66,15 +66,15 @@ class SignatureCompleter:
 
     def _complete_method(
         self,
-        method: IRMethod,
-        module: IRModule,
+        method: Method,
+        module: Module,
     ) -> None:
         self._complete_function(method.function, module, is_method=True)
 
     def _complete_function(
         self,
-        func: IRFunction,
-        module: IRModule,
+        func: Function,
+        module: Module,
         *,
         is_method: bool,
     ) -> None:

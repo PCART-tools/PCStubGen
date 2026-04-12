@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import tomllib
 
-from pcstubgen.ir_modules import IRArgument, IRClass, IRFunction, IRMethod, IRModule, QualifiedName
+from pcstubgen.models import Argument, Class, Function, Method, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, TomlWriter
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import _signature
 
 
 def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="foo",
                 runtime_handle=object(),
                 signatures=[
                     _signature(
-                        args=[IRArgument(name="value", type=RawType("int"))],
+                        args=[Argument(name="value", type=RawType("int"))],
                         return_type=RawType("bool"),
                     )
                 ],
@@ -47,19 +47,19 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
 
 
 def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="foo",
                 runtime_handle=object(),
                 signatures=[
                     _signature(
-                        args=[IRArgument(name="value", type=RawType("int"))],
+                        args=[Argument(name="value", type=RawType("int"))],
                         return_type=RawType("int"),
                     ),
                     _signature(
-                        args=[IRArgument(name="value", type=RawType("str"))],
+                        args=[Argument(name="value", type=RawType("str"))],
                         return_type=RawType("str"),
                     ),
                 ],
@@ -93,17 +93,17 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
 
 
 def test_toml_writer_renders_multi_argument_signature_on_single_line(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="foo",
                 runtime_handle=object(),
                 signatures=[
                     _signature(
                         args=[
-                            IRArgument(name="value", type=RawType("int")),
-                            IRArgument(name="flag", type=RawType("bool")),
+                            Argument(name="value", type=RawType("int")),
+                            Argument(name="flag", type=RawType("bool")),
                         ],
                         return_type=RawType("str"),
                     )
@@ -130,10 +130,10 @@ def test_toml_writer_renders_multi_argument_signature_on_single_line(tmp_path) -
 
 
 def test_toml_writer_keeps_unknown_function_record_without_signature(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
-            IRFunction(
+            Function(
                 name="missing",
                 runtime_handle=object(),
                 signatures=[],
@@ -158,19 +158,19 @@ def test_toml_writer_keeps_unknown_function_record_without_signature(tmp_path) -
 
 
 def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path) -> None:
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         classes=[
-            IRClass(
+            Class(
                 name="Outer",
                 methods=[
-                    IRMethod(
-                        function=IRFunction(
+                    Method(
+                        function=Function(
                             name="build",
                             runtime_handle=object(),
                             signatures=[
                                 _signature(
-                                    args=[IRArgument(name="value", type=RawType("int"))],
+                                    args=[Argument(name="value", type=RawType("int"))],
                                     return_type=RawType("int"),
                                 )
                             ],
@@ -179,11 +179,11 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                     )
                 ],
                 classes=[
-                    IRClass(
+                    Class(
                         name="Inner",
                         methods=[
-                            IRMethod(
-                                function=IRFunction(
+                            Method(
+                                function=Function(
                                     name="build_inner",
                                     runtime_handle=object(),
                                     signatures=[_signature(return_type=RawType("int"))],

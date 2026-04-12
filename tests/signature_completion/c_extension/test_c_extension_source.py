@@ -5,7 +5,7 @@ from pathlib import Path
 import clang.cindex
 import pytest
 
-from pcstubgen.ir_modules import IRFunction, IRModule, IRSignature, QualifiedName
+from pcstubgen.models import Function, Module, Signature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
 from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
@@ -92,7 +92,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
         lambda function_cursor, *, ml_flags=0: [
-            IRSignature(
+            Signature(
                 args=[_arg("value", "int")],
                 return_type=RawType("bool"),
             )
@@ -104,9 +104,9 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[IRFunction(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", runtime_handle=object())],
     )
 
     signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
@@ -151,7 +151,7 @@ def test_c_extension_source_ignores_source_comment_read_failure(
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
         lambda function_cursor, *, ml_flags=0: [
-            IRSignature(
+            Signature(
                 args=[_arg("value", "int")],
                 return_type=RawType("bool"),
             )
@@ -159,9 +159,9 @@ def test_c_extension_source_ignores_source_comment_read_failure(
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[IRFunction(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", runtime_handle=object())],
     )
 
     signatures, source_comment = source.infer_function_signatures(module, module.functions[0])
@@ -200,9 +200,9 @@ def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functi
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[IRFunction(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", runtime_handle=object())],
     )
 
     with pytest.raises(RuntimeError, match="cursor missing"):
@@ -249,9 +249,9 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = IRModule(
+    module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[IRFunction(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", runtime_handle=object())],
     )
 
     with pytest.raises(RuntimeError, match="boom"):

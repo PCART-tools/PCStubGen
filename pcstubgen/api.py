@@ -22,10 +22,10 @@ def gen_stubs(
     """
     _writer = writer if writer is not None else StubWriter()
 
-    ir_module = ModuleCollector().run(module_name)
+    module_node = ModuleCollector().run(module_name)
 
-    SignatureCompleter(compilation_database).run(ir_module)
+    SignatureCompleter(compilation_database).run(module_node)
 
     output.mkdir(parents=True, exist_ok=True)
     renderer = StubRenderer(include_docstrings=include_docstrings)
-    _writer.write(ir_module, renderer, to=output)
+    _writer.write(module_node, renderer, to=output)

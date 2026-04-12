@@ -7,7 +7,7 @@ from typing import Callable
 
 from clang.cindex import Cursor
 
-from .....ir_modules import IRArgument
+from .....models import Argument
 from .format_units import _FORMAT_UNIT_SPECS
 from .....types import RawType, Type
 
@@ -110,12 +110,12 @@ class PyArgParseTupleTypeParser:
         self._char_index = 0
         self._arg_index = 0
 
-    def parse(self) -> list[IRArgument]:
+    def parse(self) -> list[Argument]:
         """解析格式串并返回参数列表。"""
         self._char_index = 0
         self._arg_index = 0
 
-        arguments: list[IRArgument] = []
+        arguments: list[Argument] = []
         in_optional_section = False
 
         while True:
@@ -137,15 +137,15 @@ class PyArgParseTupleTypeParser:
         self._validate_counts()
         return arguments
 
-    def _parse_argument(self, *, has_default: bool) -> IRArgument:
-        """解析一个顶层参数单元并包装为 `IRArgument`。"""
+    def _parse_argument(self, *, has_default: bool) -> Argument:
+        """解析一个顶层参数单元并包装为 `Argument`。"""
         value = self._parse_value()
         name = self._infer_name(value.c_args)
         default_value: str | None = None
         if has_default:
             default_value = value.render_default_value(self._infer_default_value_func)
 
-        return IRArgument(
+        return Argument(
             name=name,
             type=value.build_type(),
             default_value=default_value,
