@@ -5,17 +5,10 @@ from __future__ import annotations
 from typing import Callable
 
 from clang.cindex import Cursor
+from loguru import logger
 
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
-from .....types import (
-    AnyType,
-    DictType,
-    ListType,
-    RawType,
-    TupleType,
-    Type,
-    UnionType,
-)
+from .....types import AnyType, DictType, ListType, RawType, TupleType, Type, UnionType
 
 
 class PyBuildValueTypeParserError(ValueError):
@@ -29,7 +22,7 @@ class PyBuildValueTypeParser:
         self,
         fmt: str,
         args: list[Cursor],
-        infer_object_type_func: Callable[[Cursor], Type | None] | None = None,
+        infer_object_type_func: Callable[[Cursor], Type],
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
@@ -199,9 +192,13 @@ class PyBuildValueTypeParser:
         return [self._advance_arg_required() for _ in range(count)]
 
     def _infer_object_type(self, cursor: Cursor) -> Type:
-        """解析对象槽位的类型，未知时保留为显式 `Any` 节点。"""
-        if self._infer_object_type_func is not None:
-            inferred_type = self._infer_object_type_func(cursor)
-            if inferred_type is not None:
-                return inferred_type
-        return AnyType()
+        """解析对象槽位的类型，失败时回退为 `Any`。"""
+        try:
+            return self._infer_object_type_func(cursor)
+        except Exception as ex:
+            logger.warning(
+                "Py_BuildValue 对象类型推断失败，回退为 Any, reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
+            return AnyType()

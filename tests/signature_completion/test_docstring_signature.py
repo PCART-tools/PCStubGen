@@ -60,13 +60,6 @@ def test_docstring_parser_parses_pybind11_style_signature_with_defaults() -> Non
         "None",
         "2.0",
     ]
-    assert [arg.has_default for arg in signature.args] == [
-        False,
-        False,
-        True,
-        True,
-        True,
-    ]
     assert _render_type(signature.return_type) == "numpy.ndarray"
 
 
@@ -146,13 +139,18 @@ def test_docstring_parser_parse_args_str_supports_nested_defaults_and_markers() 
         '{"a": 1, "b": 2}',
         '"x"',
     ]
-    assert [arg.has_default for arg in parsed] == [False, True, True, True]
     assert [arg.kind for arg in parsed] == [
         ArgumentKind.POSITIONAL_ONLY,
         ArgumentKind.POSITIONAL_OR_KEYWORD,
         ArgumentKind.KEYWORD_ONLY,
         ArgumentKind.KEYWORD_ONLY,
     ]
+
+
+def test_docstring_parser_parse_args_str_maps_explicit_ellipsis_default_to_unknown() -> None:
+    parsed = parse_args_str("value: object = ...")
+
+    assert [arg.default_value for arg in parsed] == ["..."]
 
 
 def test_docstring_parser_parse_args_str_supports_var_args_and_var_kwargs() -> None:

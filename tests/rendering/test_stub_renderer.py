@@ -90,6 +90,20 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
     ]
 
 
+def test_renderer_renders_unknown_default_value_as_ellipsis() -> None:
+    func = _function(
+        name="foo",
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"), default_value="...")])],
+    )
+
+    lines = StubRenderer(include_docstrings=False).render_function(func)
+
+    assert lines == [
+        "def foo(value: int = ...):",
+        "    ...",
+    ]
+
+
 def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
     doc = (
         "foo(*args, **kwargs)\n"

@@ -165,7 +165,6 @@ def parse_args_str(args_str: str) -> list[Argument]:
             Argument(
                 name=name,
                 default_value=default_str,
-                has_default=default_str is not None,
                 type=annotation,
                 kind=kind,
             )

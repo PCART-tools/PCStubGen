@@ -33,7 +33,7 @@ from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from .py_build_value.parser import PyBuildValueTypeParser, PyBuildValueTypeParserError
+from .py_build_value.parser import PyBuildValueTypeParser
 from .return_type_maps import FUNCTION_NAME_TO_TYPE
 
 _PYARG_PARSETUPLE_CALL_NAMES = {
@@ -60,7 +60,7 @@ def infer_signature(
         return [
             Signature(
                 args=arguments,
-                return_type=_default_return_type(inferred_return_type),
+                return_type=inferred_return_type,
             )
             for arguments in inferred_argument_lists
         ]
@@ -71,27 +71,22 @@ def infer_signature(
     )
     if minimal_signatures:
         return minimal_signatures
-
-    if inferred_return_type is None:
-        return []
     return [Signature(return_type=inferred_return_type)]
 
 
 def infer_minimal_signatures(
     flags: int,
     *,
-    return_type: Type | None = None,
+    return_type: Type,
 ) -> list[Signature]:
     """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小签名。"""
     argument_lists = infer_argument_lists_from_flags(flags)
-    if argument_lists is None:
+    if not argument_lists:
         return []
-
-    effective_return_type = _default_return_type(return_type)
     return [
         Signature(
             args=arguments,
-            return_type=effective_return_type,
+            return_type=return_type,
         )
         for arguments in argument_lists
     ]
@@ -99,7 +94,7 @@ def infer_minimal_signatures(
 
 def infer_argument_lists_from_flags(
     flags: int,
-) -> list[list[Argument]] | None:
+) -> list[list[Argument]]:
     """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小参数形状。"""
     if flags & METH_NOARGS:
         return [[]]
@@ -131,7 +126,7 @@ def infer_argument_lists_from_flags(
             )
         return [arguments]
 
-    return None
+    return []
 
 
 def infer_argument_lists(func_cursor: Cursor) -> list[list[Argument]]:
@@ -154,26 +149,27 @@ def infer_argument_lists(func_cursor: Cursor) -> list[list[Argument]]:
     return inferred_argument_lists
 
 
-def infer_return_type(func_cursor: Cursor) -> Type | None:
-    """遍历函数子树中的 return 语句并汇总可识别的返回类型。"""
+def infer_return_type(func_cursor: Cursor) -> Type:
+    """遍历函数子树中的 return 语句并汇总返回类型。"""
     inferred_types: list[Type] = []
 
     for cursor in walk_cursor(func_cursor):
         if cursor.kind != CursorKind.RETURN_STMT:
             continue
 
-        return_children = list(cursor.get_children())
-        if not return_children:
-            continue
-        return_expr = return_children[0]
-
-        inferred_type = infer_expr_type(return_expr)
-        if inferred_type is None:
-            continue
-        inferred_types.append(inferred_type)
+        try:
+            return_expr = list(cursor.get_children())[0]
+            inferred_types.append(infer_expr_type(return_expr))
+        except Exception as ex:
+            logger.warning(
+                "跳过无法推断的 return 表达式, func_name: {}, reason: {}: {}",
+                func_cursor.spelling,
+                type(ex).__name__,
+                ex,
+            )
 
     if len(inferred_types) == 0:
-        return None
+        return AnyType()
 
     merged_type = UnionType(tuple(inferred_types)).canonicalize()
     if isinstance(merged_type, UnionType) and len(merged_type.members) > 1:
@@ -224,7 +220,7 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(
         raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
 
 
-def infer_expr_type(expr: Cursor) -> Type | None:
+def infer_expr_type(expr: Cursor) -> Type:
     """对单个表达式做 Python 类型推断。"""
     expr = unwrap_transparent(expr)
 
@@ -234,36 +230,37 @@ def infer_expr_type(expr: Cursor) -> Type | None:
     if expr.kind == CursorKind.CALL_EXPR:
         return _infer_call_expr_type(expr)
 
+    if expr.kind == CursorKind.DECL_REF_EXPR:
+        return _infer_decl_ref_expr_type(expr)
+
     if expr.kind == CursorKind.UNARY_OPERATOR:
         child = next(expr.get_children())
         child = unwrap_transparent(child)
         if child.kind == CursorKind.DECL_REF_EXPR:
             return _infer_decl_ref_expr_type(child)
 
-    return None
+    raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}")
 
 
-def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type | None:
+def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type:
     """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
     assert expr_cursor.kind == CursorKind.CONDITIONAL_OPERATOR
     children = list(expr_cursor.get_children())
-    if len(children) != 3:
-        raise RuntimeError(
-            f"CONDITIONAL_OPERATOR 子节点数量非法: expected 3, got {len(children)}"
-        )
 
     branch_types: list[Type] = []
     for branch in children[1:]:
-        inferred = infer_expr_type(branch)
-        if inferred is None:
-            continue
-        branch_types.append(inferred)
-    if len(branch_types) == 0:
-        return None
+        try:
+            branch_types.append(infer_expr_type(branch))
+        except Exception as ex:
+            logger.warning(
+                "跳过无法推断的条件分支表达式, reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
     return UnionType(tuple(branch_types))
 
 
-def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
+def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
     """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
     assert expr_cursor.kind == CursorKind.DECL_REF_EXPR
 
@@ -271,10 +268,10 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type | None:
     mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
         return mapped
-    return None
+    raise RuntimeError(f"无法识别的对象返回标识符: {identifier_name}")
 
 
-def _infer_call_expr_type(cursor: Cursor) -> Type | None:
+def _infer_call_expr_type(cursor: Cursor) -> Type:
     """
     从调用表达式推断返回类型。
     不一定能从 spelling 获取，可能是宏展开后的函数指针调用，因此优先回读源码。
@@ -282,20 +279,17 @@ def _infer_call_expr_type(cursor: Cursor) -> Type | None:
     assert cursor.kind == CursorKind.CALL_EXPR
     children = list(cursor.get_children())
     func_cursor = children[0]
-    try:
-        call_name = cursor_get_text(func_cursor)
-    except RuntimeError:
-        return None
+    call_name = cursor_get_text(func_cursor)
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)
     mapped = FUNCTION_NAME_TO_TYPE.get(call_name)
     if mapped is None:
-        return None
+        raise RuntimeError(f"无法识别的返回值工厂调用: {call_name}")
     return mapped
 
 
-def _get_cursor_name(cursor: Cursor) -> str | None:
+def _get_cursor_name(cursor: Cursor) -> str:
     """从 AST 节点直接提取名称，优先使用 spelling，再回退到 referenced.spelling。"""
     if cursor.spelling:
         return str(cursor.spelling)
@@ -303,29 +297,18 @@ def _get_cursor_name(cursor: Cursor) -> str | None:
     referenced = cursor.referenced
     if referenced is not None and referenced.spelling:
         return str(referenced.spelling)
-    return None
+    raise RuntimeError("无法从 AST 节点提取名称。")
 
 
-def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type | None:
+def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
     args = list(call_cursor.get_children())[1:]
-    if not args:
-        return None
-
-    try:
-        format_string = extract_string_literal(args[0])
-    except RuntimeError as ex:
-        raise RuntimeError("Py_BuildValue format string 必须是字符串字面量。") from ex
-
-    try:
-        parsed_type = PyBuildValueTypeParser(
-            format_string,
-            args[1:],
-            infer_object_type_func=infer_expr_type,
-        ).parse()
-        return parsed_type.canonicalize()
-    except PyBuildValueTypeParserError as ex:
-        raise RuntimeError("解析 Py_BuildValue 返回类型失败。") from ex
+    format_string = extract_string_literal(args[0])
+    return PyBuildValueTypeParser(
+        format_string,
+        args[1:],
+        infer_object_type_func=infer_expr_type,
+    ).parse()
 
 
 def _infer_argument_name(c_args: list[Cursor]) -> str:
@@ -333,42 +316,38 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
     names: list[str] = []
     for c_arg in c_args:
         candidate = _find_decl_candidate(c_arg)
-        if candidate is None:
-            raise RuntimeError("无法将 C 参数槽位解析为声明节点。")
         names.append(candidate.spelling)
 
     return "_".join(names)
 
 
-def _infer_object_type_for_pyarg(cursor: Cursor) -> Type | None:
+def _infer_object_type_for_pyarg(cursor: Cursor) -> Type:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
-    if getattr(cursor, "extent", None) is None:
-        return None
-
-    try:
-        source_text = cursor_get_text(cursor)
-    except RuntimeError:
-        return None
+    source_text = cursor_get_text(cursor)
 
     match = IDENTIFIER_RE.search(source_text)
     if match is None:
-        return None
-    return PY_TYPE_OBJECT_NAME_TO_TYPE.get(match.group(0))
+        raise RuntimeError(
+            f"对象类型槽位源码中未找到标识符, source_text: {source_text!r}"
+        )
+    type_name = match.group(0)
+    mapped = PY_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
+    if mapped is None:
+        raise RuntimeError(
+            f"无法识别的对象类型标识符: {type_name}, source_text: {source_text!r}"
+        )
+    return mapped
 
 
-def _infer_default_value_for_pyarg(cursor: Cursor) -> str | None:
+def _infer_default_value_for_pyarg(cursor: Cursor) -> str:
     """从参数接收变量的声明初始化式中解析默认值文本。"""
     target_decl = _find_decl_candidate(cursor)
-    if target_decl is None:
-        return None
 
     initializer = _extract_decl_initializer(target_decl)
-    if initializer is None:
-        return None
     return _render_default_expr(initializer)
 
 
-def _find_decl_candidate(cursor: Cursor) -> Cursor | None:
+def _find_decl_candidate(cursor: Cursor) -> Cursor:
     """将实参槽位解析为被写入的目标声明节点。"""
     target = _unwrap_pointer_target(cursor)
     if target.kind in DECL_CURSOR_KINDS:
@@ -378,7 +357,7 @@ def _find_decl_candidate(cursor: Cursor) -> Cursor | None:
         referenced = target.referenced
         if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
             return referenced
-    return None
+    raise RuntimeError("无法将 C 参数槽位解析为声明节点。")
 
 
 def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
@@ -395,7 +374,7 @@ def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
 def _extract_kwlist(node: Cursor) -> list[str]:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
     kwlist_decl = _find_decl_candidate(node)
-    if kwlist_decl is None or kwlist_decl.kind != CursorKind.VAR_DECL:
+    if kwlist_decl.kind != CursorKind.VAR_DECL:
         raise RuntimeError("kwlist 必须引用 VAR_DECL。")
 
     try:
@@ -418,15 +397,15 @@ def _extract_kwlist(node: Cursor) -> list[str]:
     return result
 
 
-def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor | None:
+def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor:
     """提取声明节点的初始化表达式。"""
     children = list(decl_cursor.get_children())
     if not children:
-        return None
+        raise RuntimeError(f"声明节点缺少初始化表达式: {decl_cursor.spelling}")
     return unwrap_transparent(children[-1])
 
 
-def _render_default_expr(expr_cursor: Cursor) -> str | None:
+def _render_default_expr(expr_cursor: Cursor) -> str:
     """将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
     expr_cursor = unwrap_transparent(expr_cursor)
 
@@ -434,25 +413,24 @@ def _render_default_expr(expr_cursor: Cursor) -> str | None:
         return "None"
 
     if expr_cursor.kind == CursorKind.DECL_REF_EXPR:
-        return DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
+        mapped = DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
+        if mapped is None:
+            raise RuntimeError(f"无法识别的默认值标识符: {expr_cursor.spelling}")
+        return mapped
 
     if expr_cursor.kind == CursorKind.STRING_LITERAL:
-        decoded = extract_string_literal(expr_cursor)
-        if decoded is None:
-            return None
-        return repr(decoded)
+        return repr(extract_string_literal(expr_cursor))
 
-    numeric_literal = _render_numeric_literal(expr_cursor)
-    if numeric_literal is not None:
-        return numeric_literal
+    if expr_cursor.kind in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
+        return _render_numeric_literal(expr_cursor)
 
     if expr_cursor.kind == CursorKind.UNARY_OPERATOR:
         return _render_unary_numeric_literal(expr_cursor)
 
-    return None
+    raise RuntimeError(f"不支持的默认值表达式类型: {expr_cursor.kind.name}")
 
 
-def _render_numeric_literal(expr_cursor: Cursor) -> str | None:
+def _render_numeric_literal(expr_cursor: Cursor) -> str:
     """渲染整数字面量或浮点字面量。"""
     if expr_cursor.kind == CursorKind.INTEGER_LITERAL:
         value = eval_int(expr_cursor)
@@ -460,33 +438,27 @@ def _render_numeric_literal(expr_cursor: Cursor) -> str | None:
             return str(value)
 
     if expr_cursor.kind not in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
-        return None
+        raise RuntimeError(f"默认值表达式不是数字字面量: {expr_cursor.kind.name}")
 
     tokens = list(expr_cursor.get_tokens())
     if not tokens:
-        return None
+        raise RuntimeError("数字字面量缺少 token。")
     return str(tokens[0].spelling)
 
 
-def _render_unary_numeric_literal(expr_cursor: Cursor) -> str | None:
+def _render_unary_numeric_literal(expr_cursor: Cursor) -> str:
     """渲染一层正负号包裹的数字字面量。"""
     children = list(expr_cursor.get_children())
     if len(children) != 1:
-        return None
+        raise RuntimeError(
+            f"UNARY_OPERATOR 子节点数量非法: expected 1, got {len(children)}"
+        )
 
     value_text = _render_numeric_literal(unwrap_transparent(children[0]))
-    if value_text is None:
-        return None
 
     tokens = list(expr_cursor.get_tokens())
     for token in tokens:
         spelling = str(token.spelling)
         if spelling in {"+", "-"}:
             return f"{spelling}{value_text}"
-    return None
-
-
-def _default_return_type(return_type: Type | None) -> Type:
-    if return_type is None:
-        return AnyType()
-    return return_type
+    raise RuntimeError("UNARY_OPERATOR 缺少正负号 token。")

@@ -56,7 +56,7 @@ def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
                     "utf-8",
                     errors="ignore",
                 )
-        return real_cursor_get_text(cursor)
+        return real_cursor_get_text(cast(clang.cindex.Cursor, cursor))
 
     monkeypatch.setattr(
         signature_rules_module,
@@ -65,19 +65,18 @@ def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def test_infer_expr_type_returns_none_when_macro_name_is_not_exposed_by_ast() -> None:
+def test_infer_expr_type_raises_when_macro_name_is_not_exposed_by_ast() -> None:
     macro_expr = _FakeNode(
         kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
         children=[_FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR)],
     )
 
-    inferred = signature_rules_module.infer_expr_type(macro_expr)
+    with pytest.raises(RuntimeError, match="AST 节点提取名称|对象返回标识符"):
+        signature_rules_module.infer_expr_type(macro_expr)
 
-    assert inferred is None
 
-
-def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
-    """`Py_BuildValue` 推断结果应在渲染前先规范化容器内部的联合类型。"""
+def test_infer_expr_type_keeps_raw_py_buildvalue_container_union_shape() -> None:
+    """`Py_BuildValue` 直接推断时保留 parser 原始类型树，顶层再统一规范化。"""
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(
             "Py_BuildValue",
@@ -90,9 +89,13 @@ def test_infer_expr_type_canonicalizes_py_buildvalue_container_unions() -> None:
     assert inferred == ListType(
         UnionType(
             (
-                RawType("None"),
+                UnionType(
+                    (
+                        RawType("str"),
+                        RawType("None"),
+                    )
+                ),
                 RawType("int"),
-                RawType("str"),
             )
         )
     )
@@ -110,7 +113,7 @@ def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
     assert inferred == TupleType((RawType("int"),))
 
 
-def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() -> None:
+def test_infer_expr_type_falls_back_to_any_when_py_buildvalue_object_slots_are_unknown() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(
             "Py_BuildValue",
@@ -122,7 +125,7 @@ def test_infer_expr_type_keeps_py_buildvalue_object_slots_as_any_when_unknown() 
     assert inferred == TupleType((AnyType(),))
 
 
-def test_infer_expr_type_keeps_py_buildvalue_o_ampersand_as_any_when_converter_unknown() -> None:
+def test_infer_expr_type_falls_back_to_any_when_py_buildvalue_o_ampersand_converter_is_unknown() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(
             "Py_BuildValue",
@@ -135,7 +138,7 @@ def test_infer_expr_type_keeps_py_buildvalue_o_ampersand_as_any_when_converter_u
     assert inferred == TupleType((AnyType(),))
 
 
-def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() -> None:
+def test_infer_expr_type_skips_unknown_conditional_branches() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _conditional_expr(
             _macro_expr("Py_RETURN_NONE"),
@@ -144,15 +147,13 @@ def test_infer_expr_type_returns_none_when_conditional_branches_are_unknown() ->
         )
     )
 
-    assert inferred is None
+    assert inferred == UnionType(())
 
-
-def test_infer_expr_type_returns_none_for_unsupported_expr() -> None:
-    inferred = signature_rules_module.infer_expr_type(
-        _call_expr("CustomFactory", _identifier_node("value"))
-    )
-
-    assert inferred is None
+def test_infer_expr_type_raises_for_unsupported_expr() -> None:
+    with pytest.raises(RuntimeError, match="返回值工厂调用"):
+        signature_rules_module.infer_expr_type(
+            _call_expr("CustomFactory", _identifier_node("value"))
+        )
 
 
 @pytest.mark.parametrize(
@@ -182,13 +183,13 @@ def test_return_type_detects_addressed_object_returns(token_name: str, expected:
         "Py_RETURN_INF",
     ],
 )
-def test_return_type_returns_none_for_preserved_macro_tokens(token_name: str) -> None:
+def test_return_type_returns_any_for_preserved_macro_tokens(token_name: str) -> None:
     macro_expr = _macro_expr(token_name)
     cursor = _fake_function_cursor_with_children(_return_stmt(macro_expr))
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred is None
+    assert inferred == AnyType()
 
 
 @pytest.mark.parametrize(
@@ -318,7 +319,7 @@ def test_return_type_deduplicates_members_already_present_in_union_return() -> N
     assert inferred.render() == "float | int"
 
 
-def test_return_type_returns_none_for_unsupported_returns() -> None:
+def test_return_type_returns_any_for_unsupported_returns() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
         _return_stmt(),
@@ -326,15 +327,26 @@ def test_return_type_returns_none_for_unsupported_returns() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred is None
+    assert inferred == AnyType()
 
 
-def test_return_type_returns_none_when_function_has_no_return() -> None:
+def test_return_type_returns_any_when_function_has_no_return() -> None:
     cursor = _fake_function_cursor_with_children()
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred is None
+    assert inferred == AnyType()
+
+
+def test_return_type_skips_failed_return_expr_and_keeps_successful_returns() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("int")
 
 
 def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
@@ -359,7 +371,6 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
                 "label",
                 UnionType((RawType("str"), RawType("None"))),
                 default_value="None",
-                has_default=True,
             ),
         ]
     ]
@@ -387,7 +398,7 @@ def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path
     assert inferred.render() == "str"
 
 
-def test_infer_object_type_for_pyarg_returns_none_when_extent_source_text_cannot_be_read(
+def test_infer_object_type_for_pyarg_propagates_extent_source_text_read_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cursor = _FakeNode(
@@ -397,15 +408,14 @@ def test_infer_object_type_for_pyarg_returns_none_when_extent_source_text_cannot
     monkeypatch.setattr(
         signature_rules_module,
         "cursor_get_text",
-        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda node: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
+    with pytest.raises(RuntimeError, match="boom"):
+        signature_rules_module._infer_object_type_for_pyarg(cursor)
 
-    assert inferred is None
 
-
-def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(
+def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "unknown_object_type_from_extent.c"
@@ -435,6 +445,30 @@ def test_infer_argument_lists_keeps_object_fallback_for_unknown_o_bang_type(
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [[_arg("value", "object")]]
+
+
+def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_parse_fails() -> None:
+    label_decl = _var_decl("label", _identifier_node("UNSUPPORTED_DEFAULT"))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|z"),
+            _address_of("label", referenced=label_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [
+        [
+            _arg(
+                "label",
+                UnionType((RawType("str"), RawType("None"))),
+                default_value="...",
+            )
+        ]
+    ]
 
 
 def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None:
@@ -497,7 +531,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias()
 
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
-    assert inferred == [[_arg("x", "float", default_value="0.0", has_default=True)]]
+    assert inferred == [[_arg("x", "float", default_value="0.0")]]
 
 
 def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_kwlist() -> None:
@@ -578,9 +612,7 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
     )
 
-    inferred = signature_rules_module.infer_signature(
-        cursor
-    )
+    inferred = signature_rules_module.infer_signature(cursor)
 
     assert inferred == [
         Signature(
@@ -590,7 +622,7 @@ def test_infer_signature_returns_signature_with_inferred_return_type() -> None:
     ]
 
 
-def test_infer_signature_returns_signature_with_inferred_arguments_when_return_is_unknown() -> None:
+def test_infer_signature_returns_known_arguments_when_return_type_is_unknown() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -602,33 +634,27 @@ def test_infer_signature_returns_signature_with_inferred_arguments_when_return_i
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value"))),
     )
 
-    inferred = signature_rules_module.infer_signature(
-        cursor
-    )
+    inferred = signature_rules_module.infer_signature(cursor)
 
     assert inferred == [Signature(args=[_arg("value", "int")], return_type=AnyType())]
 
 
-def test_infer_signature_returns_empty_when_return_type_is_unknown() -> None:
+def test_infer_signature_returns_any_when_return_type_is_unknown() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("CustomFactory", _identifier_node("value")))
     )
 
-    inferred = signature_rules_module.infer_signature(
-        cursor
-    )
+    inferred = signature_rules_module.infer_signature(cursor)
 
-    assert inferred == []
+    assert inferred == [Signature(return_type=AnyType())]
 
 
-def test_infer_signature_returns_empty_when_return_type_is_macro_expr() -> None:
+def test_infer_signature_returns_any_when_return_type_is_macro_expr() -> None:
     cursor = _fake_function_cursor_with_children(_return_stmt(_macro_expr("Py_RETURN_NONE")))
 
-    inferred = signature_rules_module.infer_signature(
-        cursor
-    )
+    inferred = signature_rules_module.infer_signature(cursor)
 
-    assert inferred == []
+    assert inferred == [Signature(return_type=AnyType())]
 
 
 def test_infer_signature_merges_inferred_arguments_and_return_type() -> None:
@@ -667,9 +693,7 @@ def test_infer_signature_preserves_arguments_when_return_type_is_macro_expr() ->
         _return_stmt(_macro_expr("Py_RETURN_NONE")),
     )
 
-    inferred = signature_rules_module.infer_signature(
-        cursor
-    )
+    inferred = signature_rules_module.infer_signature(cursor)
 
     assert inferred == [Signature(args=[_arg("value", "int")], return_type=AnyType())]
 
@@ -754,7 +778,10 @@ def test_infer_signature_keeps_return_type_for_meth_o() -> None:
 
 
 def test_infer_minimal_signatures_supports_varargs_and_keywords() -> None:
-    inferred = signature_rules_module.infer_minimal_signatures(METH_VARARGS | METH_KEYWORDS)
+    inferred = signature_rules_module.infer_minimal_signatures(
+        METH_VARARGS | METH_KEYWORDS,
+        return_type=RawType("int"),
+    )
 
     assert inferred == [
         Signature(
@@ -762,13 +789,16 @@ def test_infer_minimal_signatures_supports_varargs_and_keywords() -> None:
                 _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
                 _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
-            return_type=AnyType(),
+            return_type=RawType("int"),
         )
     ]
 
 
 def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
-    inferred = signature_rules_module.infer_minimal_signatures(METH_FASTCALL | METH_KEYWORDS)
+    inferred = signature_rules_module.infer_minimal_signatures(
+        METH_FASTCALL | METH_KEYWORDS,
+        return_type=RawType("int"),
+    )
 
     assert inferred == [
         Signature(
@@ -776,15 +806,6 @@ def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
                 _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
                 _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
-            return_type=AnyType(),
+            return_type=RawType("int"),
         )
     ]
-
-def test_infer_expr_type_raises_when_conditional_operator_children_count_is_invalid() -> None:
-    expr = _FakeNode(
-        kind=clang.cindex.CursorKind.CONDITIONAL_OPERATOR,
-        children=[_identifier_node("cond"), _identifier_node("a")],
-    )
-
-    with pytest.raises(RuntimeError, match="CONDITIONAL_OPERATOR"):
-        signature_rules_module.infer_expr_type(cast(clang.cindex.Cursor, expr))

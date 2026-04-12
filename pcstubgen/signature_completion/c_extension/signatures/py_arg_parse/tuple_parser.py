@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from clang.cindex import Cursor
+from loguru import logger
 
 from .....models import Argument
 from .format_units import _FORMAT_UNIT_SPECS
@@ -27,8 +28,8 @@ class _ParsedValue:
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str | None] | None,
-    ) -> str | None:
+        infer_default_value_func: Callable[[Cursor], str],
+    ) -> str:
         raise NotImplementedError
 
 
@@ -45,11 +46,17 @@ class _ScalarParsedValue(_ParsedValue):
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str | None] | None,
-    ) -> str | None:
-        if infer_default_value_func is None:
-            return None
-        return infer_default_value_func(self.default_value_cursor)
+        infer_default_value_func: Callable[[Cursor], str],
+    ) -> str:
+        try:
+            return infer_default_value_func(self.default_value_cursor)
+        except Exception as ex:
+            logger.warning(
+                "PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
+            return "..."
 
 
 @dataclass(frozen=True)
@@ -73,17 +80,17 @@ class _TupleParsedValue(_ParsedValue):
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str | None] | None,
-    ) -> str | None:
+        infer_default_value_func: Callable[[Cursor], str],
+    ) -> str:
         if not self.items:
             raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
 
         rendered_items: list[str] = []
         for item in self.items:
-            default_value = item.render_default_value(infer_default_value_func)
-            if default_value is None:
-                return None
-            rendered_items.append(default_value)
+            rendered_item = item.render_default_value(infer_default_value_func)
+            if rendered_item == "...":
+                return "..."
+            rendered_items.append(rendered_item)
 
         if len(rendered_items) == 1:
             return f"({rendered_items[0]},)"
@@ -97,9 +104,9 @@ class PyArgParseTupleTypeParser:
         self,
         fmt: str,
         args: list[Cursor],
-        infer_name_func: Callable[[list[Cursor]], str | None],
-        infer_object_type_func: Callable[[Cursor], Type | str | None] | None = None,
-        infer_default_value_func: Callable[[Cursor], str | None] | None = None,
+        infer_name_func: Callable[[list[Cursor]], str],
+        infer_object_type_func: Callable[[Cursor], Type],
+        infer_default_value_func: Callable[[Cursor], str],
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
@@ -132,24 +139,23 @@ class PyArgParseTupleTypeParser:
                 in_optional_section = True
                 continue
 
-            arguments.append(self._parse_argument(has_default=in_optional_section))
+            arguments.append(self._parse_argument(is_optional_section=in_optional_section))
 
         self._validate_counts()
         return arguments
 
-    def _parse_argument(self, *, has_default: bool) -> Argument:
+    def _parse_argument(self, *, is_optional_section: bool) -> Argument:
         """解析一个顶层参数单元并包装为 `Argument`。"""
         value = self._parse_value()
         name = self._infer_name(value.c_args)
         default_value: str | None = None
-        if has_default:
+        if is_optional_section:
             default_value = value.render_default_value(self._infer_default_value_func)
 
         return Argument(
             name=name,
             type=value.build_type(),
             default_value=default_value,
-            has_default=has_default,
         )
 
     def _parse_value(self) -> _ParsedValue:
@@ -229,20 +235,20 @@ class PyArgParseTupleTypeParser:
 
     def _infer_name(self, c_args: tuple[Cursor, ...]) -> str:
         """解析顶层 Python 参数名。"""
-        name = self._infer_name_func(list(c_args))
-        if name is None:
-            raise PyArgParseTupleTypeParserError("无法解析 argument name。")
-        return name
+        # TODO: 后续统一决定 infer_name 失败是否也要和类型/默认值一样降级。
+        return self._infer_name_func(list(c_args))
 
     def _infer_object_type(self, cursor: Cursor) -> Type:
-        """解析对象单元的 Python 类型，未知时回退为 `object`。"""
-        if self._infer_object_type_func is not None:
-            inferred_type = self._infer_object_type_func(cursor)
-            if inferred_type is not None:
-                if isinstance(inferred_type, str):
-                    return RawType(inferred_type)
-                return inferred_type
-        return RawType("object")
+        """解析对象单元的 Python 类型，失败时回退为 `object`。"""
+        try:
+            return self._infer_object_type_func(cursor)
+        except Exception as ex:
+            logger.warning(
+                "PyArg_ParseTuple 对象类型推断失败，回退为 object, reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
+            return RawType("object")
 
     def _peek_char(self) -> str | None:
         """查看当前位置字符而不推进游标。"""

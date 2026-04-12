@@ -27,14 +27,32 @@ def _fake_args(count: int) -> list[Cursor]:
     return [cast(Cursor, object()) for _ in range(count)]
 
 
-def _parse(format_string: str, arg_count: int) -> Type:
+def _parse(
+    format_string: str,
+    arg_count: int,
+    *,
+    infer_object_type_func=None,
+) -> Type:
     """解析格式串并返回原始类型树。"""
-    return PyBuildValueTypeParser(format_string, _fake_args(arg_count)).parse()
+    return PyBuildValueTypeParser(
+        format_string,
+        _fake_args(arg_count),
+        infer_object_type_func=infer_object_type_func or (lambda cursor: NamedType("Resolved")),
+    ).parse()
 
 
-def _canonical_render(format_string: str, arg_count: int) -> str:
+def _canonical_render(
+    format_string: str,
+    arg_count: int,
+    *,
+    infer_object_type_func=None,
+) -> str:
     """执行 parse -> canonicalize -> render 全流程。"""
-    return _parse(format_string, arg_count).canonicalize().render()
+    return _parse(
+        format_string,
+        arg_count,
+        infer_object_type_func=infer_object_type_func,
+    ).canonicalize().render()
 
 
 def test_canonicalize_type_turns_empty_union_into_never() -> None:
@@ -181,27 +199,6 @@ def test_canonicalize_type_node_keeps_empty_union_when_all_members_are_never() -
                 )
             ),
         ),
-        (
-            "{Oi}",
-            2,
-            DictType(
-                UnionType((AnyType(),)),
-                UnionType((NamedType("int"),)),
-            ),
-        ),
-        (
-            "{Oiis}",
-            4,
-            DictType(
-                UnionType((AnyType(), NamedType("int"))),
-                UnionType(
-                    (
-                        NamedType("int"),
-                        UnionType((NamedType("str"), NamedType("None"))),
-                    )
-                ),
-            ),
-        ),
     ],
 )
 def test_parse_returns_expected_raw_type_tree(
@@ -211,6 +208,32 @@ def test_parse_returns_expected_raw_type_tree(
 ) -> None:
     """解析阶段应返回未经规范化的原始类型树。"""
     assert _parse(format_string, arg_count) == expected
+
+
+def test_parse_returns_expected_raw_type_tree_for_resolved_object_units() -> None:
+    resolved = lambda cursor: NamedType("Resolved")
+
+    assert _parse(
+        "{Oi}",
+        2,
+        infer_object_type_func=resolved,
+    ) == DictType(
+        UnionType((NamedType("Resolved"),)),
+        UnionType((NamedType("int"),)),
+    )
+    assert _parse(
+        "{Oiis}",
+        4,
+        infer_object_type_func=resolved,
+    ) == DictType(
+        UnionType((NamedType("Resolved"), NamedType("int"))),
+        UnionType(
+            (
+                NamedType("int"),
+                UnionType((NamedType("str"), NamedType("None"))),
+            )
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -223,10 +246,6 @@ def test_parse_returns_expected_raw_type_tree(
         ("{}", 0, "dict[typing.Any, typing.Any]"),
         ("(i)", 1, "tuple[int,]"),
         ("[szuU]", 4, "list[None | str]"),
-        ("[Oi]", 2, "list[typing.Any]"),
-        ("{Oi}", 2, "dict[typing.Any, int]"),
-        ("{iO}", 2, "dict[int, typing.Any]"),
-        ("{Oiis}", 4, "dict[typing.Any, None | int | str]"),
         ("{syUy}", 4, "dict[None | str, None | bytes]"),
         ("i", 1, "int"),
         ("b", 1, "int"),
@@ -254,15 +273,6 @@ def test_parse_returns_expected_raw_type_tree(
         ("y", 1, "None | bytes"),
         ("y#", 2, "None | bytes"),
         ("c", 1, "bytes"),
-        ("O", 1, "typing.Any"),
-        ("O&", 2, "typing.Any"),
-        ("S", 1, "typing.Any"),
-        ("N", 1, "typing.Any"),
-        (
-            "(i, [sz], {s:i, s:[f]}, y#, O&)",
-            11,
-            "tuple[int, list[None | str], dict[None | str, int | list[float]], None | bytes, typing.Any]",
-        ),
         (
             "([i{sz}](s#y#){isfs})",
             11,
@@ -277,6 +287,36 @@ def test_parse_canonicalize_render_returns_expected_type_string(
 ) -> None:
     """完整流程应保持既有对外字符串行为。"""
     assert _canonical_render(format_string, arg_count) == expected
+
+
+@pytest.mark.parametrize(
+    ("format_string", "arg_count", "expected"),
+    [
+        ("O", 1, "Resolved"),
+        ("O&", 2, "Resolved"),
+        ("S", 1, "Resolved"),
+        ("N", 1, "Resolved"),
+        ("[Oi]", 2, "list[Resolved | int]"),
+        ("{Oi}", 2, "dict[Resolved, int]"),
+        ("{iO}", 2, "dict[int, Resolved]"),
+        ("{Oiis}", 4, "dict[Resolved | int, None | int | str]"),
+        (
+            "(i, [sz], {s:i, s:[f]}, y#, O&)",
+            11,
+            "tuple[int, list[None | str], dict[None | str, int | list[float]], None | bytes, Resolved]",
+        ),
+    ],
+)
+def test_parse_canonicalize_render_returns_expected_type_string_for_resolved_object_units(
+    format_string: str,
+    arg_count: int,
+    expected: str,
+) -> None:
+    assert _canonical_render(
+        format_string,
+        arg_count,
+        infer_object_type_func=lambda cursor: NamedType("Resolved"),
+    ) == expected
 
 
 def test_parse_raises_with_chinese_message_for_unpaired_dictionary_format() -> None:
@@ -347,6 +387,19 @@ def test_parse_uses_resolved_converter_type_in_nested_o_ampersand_structure() ->
         (ListType(UnionType((NamedType("Converted"),))),)
     )
     assert seen == [converter_cursor]
+
+
+@pytest.mark.parametrize(("format_string", "arg_count"), [("O", 1), ("O&", 2), ("S", 1), ("N", 1)])
+def test_parse_falls_back_to_any_when_object_type_inference_raises(
+    format_string: str,
+    arg_count: int,
+) -> None:
+    assert _parse(
+        format_string,
+        arg_count,
+        infer_object_type_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+    ) == AnyType()
+
 
 @pytest.mark.parametrize(
     ("format_string", "arg_count"),

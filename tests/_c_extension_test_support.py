@@ -45,7 +45,6 @@ def _arg(
     *,
     imports: tuple[str, ...] = (),
     default_value: str | None = None,
-    has_default: bool = False,
     kind: ArgumentKind = ArgumentKind.POSITIONAL_OR_KEYWORD,
 ) -> Argument:
     return Argument(
@@ -58,7 +57,6 @@ def _arg(
             else RawType(type_text, imports=imports)
         ),
         default_value=default_value,
-        has_default=has_default,
         kind=kind,
     )
 

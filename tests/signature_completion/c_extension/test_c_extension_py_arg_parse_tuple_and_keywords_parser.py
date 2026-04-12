@@ -4,6 +4,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.models import Argument, ArgumentKind
+from pcstubgen.types import RawType
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
@@ -30,8 +31,8 @@ def _parse(
         format_string,
         kwlist,
         args,
-        infer_object_type_func=infer_object_type_func,
-        infer_default_value_func=infer_default_value_func,
+        infer_object_type_func=infer_object_type_func or (lambda cursor: RawType("Resolved")),
+        infer_default_value_func=infer_default_value_func or (lambda cursor: "None"),
     ).parse()
 
 
@@ -44,12 +45,21 @@ def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
         "i|z$O",
         ["count", "label", "target"],
         [count_cursor, label_cursor, target_cursor],
+        infer_default_value_func=lambda cursor: {
+            label_cursor: "None",
+            target_cursor: "None",
+        }[cursor],
     )
 
     assert parsed == [
         _arg("count", "int"),
-        _arg("label", _STR_OR_NONE_TYPE, has_default=True),
-        _arg("target", "object", has_default=True, kind=ArgumentKind.KEYWORD_ONLY),
+        _arg("label", _STR_OR_NONE_TYPE, default_value="None"),
+        _arg(
+            "target",
+            "object",
+            default_value="None",
+            kind=ArgumentKind.KEYWORD_ONLY,
+        ),
     ]
 
 
@@ -85,8 +95,8 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
     maybe_buffer_cursor = _cursor("maybe_buffer")
 
     resolved_types = {
-        type_cursor: "Point",
-        converter_cursor: "ConvertedValue",
+        type_cursor: RawType("Point"),
+        converter_cursor: RawType("ConvertedValue"),
     }
     resolved_defaults = {
         text_buffer_cursor: '"utf8"',
@@ -96,7 +106,7 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
         maybe_buffer_cursor: "None",
     }
 
-    def infer_object_type(cursor: Cursor) -> str:
+    def infer_object_type(cursor: Cursor) -> RawType:
         return resolved_types[cursor]
 
     def infer_default_value(cursor: Cursor) -> str:
@@ -124,15 +134,14 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
 
     assert parsed == [
         _arg("count", "int"),
-        _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"', has_default=True),
-        _arg("typed", "Point", default_value="None", has_default=True),
-        _arg("converted", "ConvertedValue", default_value="factory_default()", has_default=True),
-        _arg("raw", _STR_OR_BUFFER_TYPE, default_value="b''", has_default=True),
+        _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"'),
+        _arg("typed", "Point", default_value="None"),
+        _arg("converted", "ConvertedValue", default_value="factory_default()"),
+        _arg("raw", _STR_OR_BUFFER_TYPE, default_value="b''"),
         _arg(
             "maybe",
             _STR_OR_BUFFER_OR_NONE_TYPE,
             default_value="None",
-            has_default=True,
             kind=ArgumentKind.KEYWORD_ONLY,
         ),
     ]
@@ -192,46 +201,22 @@ def test_parse_raises_for_keyword_or_c_argument_count_mismatch(
         _parse(format_string, kwlist, args)
 
 
-def test_parse_marks_optional_arguments_when_default_text_resolution_fails() -> None:
-    first_cursor = _cursor("first")
-    second_cursor = _cursor("second")
-
-    def infer_default_value(cursor: Cursor) -> str | None:
-        return None
-
-    parsed = _parse(
-        "i|i",
-        ["first", "second"],
-        [first_cursor, second_cursor],
-        infer_default_value_func=infer_default_value,
-    )
-
-    assert parsed == [
-        _arg("first", "int"),
-        _arg("second", "int", has_default=True),
-    ]
-
-
 def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> None:
     value_cursor = _cursor("value")
 
-    parsed = _parse("|$i", ["value"], [value_cursor])
+    parsed = _parse(
+        "|$i",
+        ["value"],
+        [value_cursor],
+        infer_default_value_func=lambda cursor: {value_cursor: "0"}[cursor],
+    )
 
     assert parsed == [
-        _arg("value", "int", has_default=True, kind=ArgumentKind.KEYWORD_ONLY)
+        _arg("value", "int", default_value="0", kind=ArgumentKind.KEYWORD_ONLY)
     ]
 
 
-@pytest.mark.parametrize(
-    "infer_object_type_func",
-    [
-        None,
-        lambda cursor: None,
-    ],
-)
-def test_parse_falls_back_to_object_for_unresolved_object_units(
-    infer_object_type_func,
-) -> None:
+def test_parse_falls_back_to_object_when_object_type_inference_raises() -> None:
     type_cursor = _cursor("type")
     typed_result_cursor = _cursor("typed_result")
     converter_cursor = _cursor("converter")
@@ -241,12 +226,29 @@ def test_parse_falls_back_to_object_for_unresolved_object_units(
         "O!O&",
         ["typed", "converted"],
         [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        infer_object_type_func=infer_object_type_func,
+        infer_object_type_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     assert parsed == [
         _arg("typed", "object"),
         _arg("converted", "object"),
+    ]
+
+
+def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises() -> None:
+    first_cursor = _cursor("first")
+    second_cursor = _cursor("second")
+
+    parsed = _parse(
+        "i|i",
+        ["first", "second"],
+        [first_cursor, second_cursor],
+        infer_default_value_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    assert parsed == [
+        _arg("first", "int"),
+        _arg("second", "int", default_value="..."),
     ]
 
 

@@ -45,7 +45,6 @@ class Argument:
     name: str
     type: Type | None = None
     default_value: str | None = None
-    has_default: bool = False
     kind: ArgumentKind = ArgumentKind.POSITIONAL_OR_KEYWORD
 
 
