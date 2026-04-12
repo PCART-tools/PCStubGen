@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Iterator
-from pathlib import Path
 
-from clang.cindex import Cursor, CursorKind, SourceRange, TranslationUnit
-from loguru import logger
+from clang.cindex import Cursor, CursorKind, TranslationUnit
 
 from . import constant_eval
+from .libclang_wrap import get_file_contents, get_file_location
 
 _SINGLE_TRANSPARENT_CURSOR_KINDS = {
     # python libclang 未暴露的若干表达式会落到 UNEXPOSED_EXPR。
@@ -90,27 +89,22 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     raise RuntimeError("变量声明未包含初始化列表。")
 
 
-def source_range_get_text(extent: SourceRange) -> str:
-    """源文件中截取原始源码文本。"""
-    start = extent.start
-    end = extent.end
-    if start.file is None or end.file is None:
+def cursor_get_text(cursor: Cursor) -> str:
+    """从 cursor 对应的源码范围中提取原始文本。"""
+    extent = cursor.extent
+    start_file, _, _, start_offset = get_file_location(extent.start)
+    end_file, _, _, end_offset = get_file_location(extent.end)
+    if start_file is None or end_file is None:
         raise RuntimeError("源码范围缺少起止文件信息。")
 
-    start_file = Path(start.file.name)
-    end_file = Path(end.file.name)
-    if start_file != end_file:
+    if start_file.name != end_file.name:
         raise RuntimeError("源码范围跨越多个文件，无法提取文本。")
 
-    read_length = end.offset - start.offset
-    try:
-        with start_file.open("rb") as source_file:
-            source_file.seek(start.offset)
-            source_bytes = source_file.read(read_length)
-    except OSError as ex:
-        raise RuntimeError(
-            f"源码范围读取失败: {start_file}, offset={start.offset}, length={read_length}"
-        ) from ex
+    source_bytes = get_file_contents(cursor.translation_unit, start_file)
+    read_length = end_offset - start_offset
+    if read_length < 0:
+        raise RuntimeError("源码范围终点位于起点之前，无法提取文本。")
+    source_bytes = source_bytes[start_offset:end_offset]
     return source_bytes.decode("utf-8", errors="ignore")
 
 

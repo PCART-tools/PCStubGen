@@ -6,12 +6,12 @@ from loguru import logger
 from ....ir_modules import IRArgument, IRArgumentKind, IRSignature
 from ....types import AnyType, RawType, Type, UnionType
 from ..clang.constant_eval import eval_int
-from ..clang.cursor_utils import (
+from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
+    cursor_get_text,
     extract_string_literal,
     is_nullptr_or_zero,
-    source_range_get_text,
     unwrap_transparent,
     var_decl_to_init_list_expr,
     walk_cursor,
@@ -283,7 +283,7 @@ def _infer_call_expr_type(cursor: Cursor) -> Type | None:
     children = list(cursor.get_children())
     func_cursor = children[0]
     try:
-        call_name = source_range_get_text(func_cursor.extent)
+        call_name = cursor_get_text(func_cursor)
     except RuntimeError:
         return None
 
@@ -342,12 +342,11 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
 
 def _infer_object_type_for_pyarg(cursor: Cursor) -> Type | None:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
-    source_extent = getattr(cursor, "extent", None)
-    if source_extent is None:
+    if getattr(cursor, "extent", None) is None:
         return None
 
     try:
-        source_text = source_range_get_text(source_extent)
+        source_text = cursor_get_text(cursor)
     except RuntimeError:
         return None
 

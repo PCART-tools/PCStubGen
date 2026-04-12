@@ -9,7 +9,7 @@ import clang
 from clang.cindex import CompilationDatabase, CompileCommand, Diagnostic, Index, TranslationUnit
 from loguru import logger
 
-from .libclang_parse_wrap import parse_translation_unit_full_argv
+from .libclang_wrap import parse_translation_unit_full_argv
 
 
 class ClangParser:

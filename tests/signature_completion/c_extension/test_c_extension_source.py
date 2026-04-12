@@ -7,7 +7,7 @@ import pytest
 
 from pcstubgen.ir_modules import IRFunction, IRModule, IRSignature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
-from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
+from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -98,6 +98,10 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_source_comment(
             )
         ],
     )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
+        lambda cursor: snippet,
+    )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = IRModule(
@@ -141,8 +145,8 @@ def test_c_extension_source_ignores_source_comment_read_failure(
         lambda *args: function_cursor,
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.source_range_get_text",
-        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
+        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
@@ -298,7 +302,7 @@ def test_get_func_cursor_matches_linkage_name(
         },
     )()
 
-    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo", "_Z3fooi")
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo", "_Z3fooi")
 
     assert matched is first_cursor
 
@@ -352,7 +356,7 @@ def test_get_func_cursor_matches_nested_definition_with_linkage_name(
         },
     )()
 
-    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impli")
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impli")
 
     assert matched is function_cursor
 
@@ -392,7 +396,7 @@ def test_get_func_cursor_matches_spelling_when_linkage_name_is_missing(
         },
     )()
 
-    matched = cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", None)
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo_impl", None)
 
     assert matched is function_cursor
 
@@ -433,4 +437,4 @@ def test_get_func_cursor_raises_when_linkage_name_does_not_match(
     )()
 
     with pytest.raises(RuntimeError, match="未在 translation unit 中定位到函数定义"):
-        cursor_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impld")
+        ast_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impld")

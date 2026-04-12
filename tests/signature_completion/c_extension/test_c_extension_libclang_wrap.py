@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
+import clang.cindex
 import pytest
 from clang.cindex import Index
 
-from pcstubgen.signature_completion.c_extension.clang import libclang_parse_wrap as libclang_parse_module
+from pcstubgen.signature_completion.c_extension.clang import libclang_wrap as libclang_wrap_module
 
 
 class _PointerHolder:
@@ -47,23 +49,23 @@ def test_parse_translation_unit_full_argv_passes_full_argv_to_libclang(
         return 0
 
     monkeypatch.setattr(
-        libclang_parse_module,
+        libclang_wrap_module,
         "_parse_translation_unit2_full_argv",
         _fake_parse_translation_unit2_full_argv,
     )
     monkeypatch.setattr(
-        libclang_parse_module.clang.cindex,
+        libclang_wrap_module.clang.cindex,
         "c_object_p",
         _PointerHolder,
     )
-    monkeypatch.setattr(libclang_parse_module, "byref", lambda pointer: pointer)
+    monkeypatch.setattr(libclang_wrap_module, "byref", lambda pointer: pointer)
     monkeypatch.setattr(
-        libclang_parse_module,
+        libclang_wrap_module,
         "TranslationUnit",
         lambda pointer, **kwargs: (pointer.value, kwargs["index"]),
     )
 
-    result = libclang_parse_module.parse_translation_unit_full_argv(
+    result = libclang_wrap_module.parse_translation_unit_full_argv(
         index,
         ["clang", "-Iinclude", "-c", "src/module.c", "-o", "build/module.o"],
     )
@@ -108,22 +110,53 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
         return 4
 
     monkeypatch.setattr(
-        libclang_parse_module,
+        libclang_wrap_module,
         "_parse_translation_unit2_full_argv",
         _fake_parse_translation_unit2_full_argv,
     )
     monkeypatch.setattr(
-        libclang_parse_module.clang.cindex,
+        libclang_wrap_module.clang.cindex,
         "c_object_p",
         _PointerHolder,
     )
-    monkeypatch.setattr(libclang_parse_module, "byref", lambda pointer: pointer)
+    monkeypatch.setattr(libclang_wrap_module, "byref", lambda pointer: pointer)
 
     with pytest.raises(
-        libclang_parse_module.TranslationUnitLoadError,
+        libclang_wrap_module.TranslationUnitLoadError,
         match="libclang error code: 4",
     ):
-        libclang_parse_module.parse_translation_unit_full_argv(
+        libclang_wrap_module.parse_translation_unit_full_argv(
             index,
             ["clang", "src/module.c"],
         )
+
+
+def test_get_file_location_returns_file_and_offset(tmp_path: Path) -> None:
+    source = tmp_path / "file_location.c"
+    source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
+    index = clang.cindex.Index.create()
+    translation_unit = clang.cindex.TranslationUnit.from_source(str(source), index=index)
+    function_cursor = next(
+        cursor
+        for cursor in translation_unit.cursor.get_children()
+        if cursor.kind == clang.cindex.CursorKind.FUNCTION_DECL
+    )
+
+    file, line, column, offset = libclang_wrap_module.get_file_location(function_cursor.extent.start)
+
+    assert file is not None
+    assert Path(file.name) == source
+    assert (line, column, offset) == (1, 1, 0)
+
+
+def test_get_file_contents_returns_loaded_buffer(tmp_path: Path) -> None:
+    source = tmp_path / "file_contents.c"
+    content = "int demo(void) { return 0; }\n"
+    source.write_text(content, encoding="utf-8")
+    index = clang.cindex.Index.create()
+    translation_unit = clang.cindex.TranslationUnit.from_source(str(source), index=index)
+    file = clang.cindex.File.from_name(translation_unit, str(source))
+
+    buffer = libclang_wrap_module.get_file_contents(translation_unit, file)
+
+    assert buffer == content.encode("utf-8")

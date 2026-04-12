@@ -41,17 +41,27 @@ from tests._c_extension_test_support import (
 @pytest.fixture(autouse=True)
 def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
     """让 fake call cursor 的 extent 表示调用名。"""
-    real_source_range_get_text = signature_rules_module.source_range_get_text
+    real_cursor_get_text = signature_rules_module.cursor_get_text
 
-    def fake_source_range_get_text(extent: object) -> str:
+    def fake_cursor_get_text(cursor: object) -> str:
+        extent = getattr(cursor, "extent", None)
         if isinstance(extent, str):
             return extent
-        return real_source_range_get_text(extent)
+        if hasattr(extent, "start") and hasattr(extent, "end"):
+            start = extent.start
+            end = extent.end
+            if start.file is not None:
+                source_bytes = Path(start.file.name).read_bytes()
+                return source_bytes[start.offset:end.offset].decode(
+                    "utf-8",
+                    errors="ignore",
+                )
+        return real_cursor_get_text(cursor)
 
     monkeypatch.setattr(
         signature_rules_module,
-        "source_range_get_text",
-        fake_source_range_get_text,
+        "cursor_get_text",
+        fake_cursor_get_text,
     )
 
 
@@ -249,8 +259,8 @@ def test_infer_expr_type_returns_none_when_call_name_source_text_cannot_be_read(
 ) -> None:
     monkeypatch.setattr(
         signature_rules_module,
-        "source_range_get_text",
-        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+        "cursor_get_text",
+        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     inferred = signature_rules_module.infer_expr_type(
@@ -501,8 +511,8 @@ def test_infer_object_type_for_pyarg_returns_none_when_extent_source_text_cannot
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "source_range_get_text",
-        lambda extent: (_ for _ in ()).throw(RuntimeError("boom")),
+        "cursor_get_text",
+        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)

@@ -16,7 +16,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
 from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
-from pcstubgen.signature_completion.c_extension.clang import cursor_utils as cursor_utils_module
+from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
 from pcstubgen.types import RawType, Type
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
@@ -115,7 +115,7 @@ def _patch_c_signature_extractor(
 
         source_comment = None
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
-            source_comment = cursor_utils_module.source_range_get_text(extracted.function_cursor.extent)
+            source_comment = ast_utils_module.cursor_get_text(extracted.function_cursor)
 
         return extracted.signatures, source_comment
 
@@ -595,7 +595,7 @@ def _type_object_decl(name: str, tp_name: str) -> _FakeNode:
 
 
 def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
-    original_eval_int = cursor_utils_module.constant_eval.eval_int
+    original_eval_int = ast_utils_module.constant_eval.eval_int
     method_flag_values = {
         "METH_VARARGS": METH_VARARGS,
         "METH_KEYWORDS": METH_KEYWORDS,
@@ -628,7 +628,7 @@ def _patch_fake_eval_int(monkeypatch: pytest.MonkeyPatch) -> None:
             return value
         return None
 
-    monkeypatch.setattr(cursor_utils_module.constant_eval, "eval_int", _eval_int)
+    monkeypatch.setattr(ast_utils_module.constant_eval, "eval_int", _eval_int)
 
 
 ExtractedArgument = IRArgument
