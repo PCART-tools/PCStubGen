@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from .json_writer import JsonWriter
 from .renderer import StubRenderer
+from .toml_writer import TomlWriter
 from .writer import StubWriter
 
 __all__ = [
-    "JsonWriter",
     "StubRenderer",
     "StubWriter",
+    "TomlWriter",
 ]

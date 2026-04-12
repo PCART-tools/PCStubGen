@@ -10,6 +10,12 @@ uv run pcstubgen gen numpy --compilation-database ./build/compile_commands.json 
 uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_commands.json
 ```
 
+输出 TOML 格式的结构化函数记录:
+
+```bash
+uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_commands.json --output ./stubs --toml
+```
+
 构建 Python 项目，并为 stub 生成产出 `compile_commands.json`:
 
 ```bash

@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import json
+import tomllib
 
 from pcstubgen.ir_modules import IRArgument, IRClass, IRFunction, IRMethod, IRModule, QualifiedName
-from pcstubgen.stub_output import JsonWriter, StubRenderer
+from pcstubgen.stub_output import StubRenderer, TomlWriter
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import _signature
 
 
-def test_json_writer_writes_single_module_function_record(tmp_path) -> None:
+def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -26,26 +26,27 @@ def test_json_writer_writes_single_module_function_record(tmp_path) -> None:
         ],
     )
 
-    JsonWriter().write(
+    TomlWriter().write(
         module,
         StubRenderer(include_docstrings=False),
         to=tmp_path,
     )
 
-    output_path = tmp_path / "mod.json"
+    output_path = tmp_path / "mod.toml"
     assert output_path.exists()
-    assert json.loads(output_path.read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "foo",
-            "signature": "def foo(value: int) -> bool:",
-            "source_comment": "static int foo_impl(int value) { return value; }",
-        }
-    ]
+    assert tomllib.loads(output_path.read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: int) -> bool:",
+                "source_comment": "static int foo_impl(int value) { return value; }",
+            }
+        ]
+    }
 
 
-def test_json_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
+def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -67,31 +68,31 @@ def test_json_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
         ],
     )
 
-    JsonWriter().write(
+    TomlWriter().write(
         module,
         StubRenderer(include_docstrings=False),
         to=tmp_path,
     )
 
-    assert json.loads((tmp_path / "mod.json").read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "foo",
-            "signature": "def foo(value: int) -> int:",
-            "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
-        },
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "foo",
-            "signature": "def foo(value: str) -> str:",
-            "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
-        },
-    ]
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: int) -> int:",
+                "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
+            },
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: str) -> str:",
+                "source_comment": "static PyObject* foo_impl(PyObject* self, PyObject* args);",
+            },
+        ]
+    }
 
 
-def test_json_writer_renders_multi_argument_signature_on_single_line(tmp_path) -> None:
+def test_toml_writer_renders_multi_argument_signature_on_single_line(tmp_path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -111,24 +112,24 @@ def test_json_writer_renders_multi_argument_signature_on_single_line(tmp_path) -
         ],
     )
 
-    JsonWriter().write(
+    TomlWriter().write(
         module,
         StubRenderer(include_docstrings=False),
         to=tmp_path,
     )
 
-    assert json.loads((tmp_path / "mod.json").read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "foo",
-            "signature": "def foo(value: int, flag: bool) -> str:",
-            "source_comment": None,
-        }
-    ]
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: int, flag: bool) -> str:",
+            }
+        ]
+    }
 
 
-def test_json_writer_keeps_placeholder_record_for_unknown_function(tmp_path) -> None:
+def test_toml_writer_keeps_unknown_function_record_without_signature(tmp_path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -140,24 +141,23 @@ def test_json_writer_keeps_placeholder_record_for_unknown_function(tmp_path) -> 
         ],
     )
 
-    JsonWriter().write(
+    TomlWriter().write(
         module,
         StubRenderer(include_docstrings=False),
         to=tmp_path,
     )
 
-    assert json.loads((tmp_path / "mod.json").read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "missing",
-            "signature": None,
-            "source_comment": None,
-        }
-    ]
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "missing",
+            }
+        ]
+    }
 
 
-def test_json_writer_exports_direct_class_methods_only(tmp_path) -> None:
+def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path) -> None:
     module = IRModule(
         full_name=QualifiedName.from_str("pkg.mod"),
         classes=[
@@ -184,7 +184,7 @@ def test_json_writer_exports_direct_class_methods_only(tmp_path) -> None:
                         methods=[
                             IRMethod(
                                 function=IRFunction(
-                                    name="skip_me",
+                                    name="build_inner",
                                     runtime_handle=object(),
                                     signatures=[_signature(return_type=RawType("int"))],
                                 ),
@@ -197,18 +197,25 @@ def test_json_writer_exports_direct_class_methods_only(tmp_path) -> None:
         ],
     )
 
-    JsonWriter().write(
+    TomlWriter().write(
         module,
         StubRenderer(include_docstrings=False),
         to=tmp_path,
     )
 
-    assert json.loads((tmp_path / "mod.json").read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": "Outer",
-            "function_name": "build",
-            "signature": "def build(value: int) -> int:",
-            "source_comment": None,
-        }
-    ]
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "class_name": "Outer",
+                "function_name": "build",
+                "signature": "def build(value: int) -> int:",
+            },
+            {
+                "module_name": "pkg.mod",
+                "class_name": "Outer.Inner",
+                "function_name": "build_inner",
+                "signature": "def build_inner() -> int:",
+            },
+        ]
+    }

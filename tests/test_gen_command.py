@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import tomllib
 
 from typer.testing import CliRunner
 
@@ -10,7 +10,7 @@ from pcstubgen.types import RawType
 from tests._c_extension_test_support import _signature
 
 
-def test_gen_command_writes_json_instead_of_stub_when_json_flag_is_enabled(
+def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -46,25 +46,25 @@ def test_gen_command_writes_json_instead_of_stub_when_json_flag_is_enabled(
             str(tmp_path / "compile_commands.json"),
             "--output",
             str(tmp_path),
-            "--json",
+            "--toml",
         ],
     )
 
     assert result.exit_code == 0
-    assert (tmp_path / "mod.json").exists()
+    assert (tmp_path / "mod.toml").exists()
     assert not (tmp_path / "mod.pyi").exists()
-    assert json.loads((tmp_path / "mod.json").read_text(encoding="utf-8")) == [
-        {
-            "module_name": "pkg.mod",
-            "class_name": None,
-            "function_name": "foo",
-            "signature": "def foo(value: int) -> bool:",
-            "source_comment": None,
-        }
-    ]
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: int) -> bool:",
+            }
+        ]
+    }
 
 
-def test_gen_command_keeps_stub_output_when_json_flag_is_disabled(
+def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -105,5 +105,22 @@ def test_gen_command_keeps_stub_output_when_json_flag_is_disabled(
 
     assert result.exit_code == 0
     assert (tmp_path / "mod.pyi").exists()
-    assert not (tmp_path / "mod.json").exists()
+    assert not (tmp_path / "mod.toml").exists()
     assert (tmp_path / "mod.pyi").read_text(encoding="utf-8") == "def foo(value: str) -> bool:\n    ...\n"
+
+
+def test_gen_command_rejects_removed_json_flag(tmp_path) -> None:
+    result = CliRunner().invoke(
+        app,
+        [
+            "gen",
+            "pkg.mod",
+            "--compilation-database",
+            str(tmp_path / "compile_commands.json"),
+            "--output",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+
+    assert result.exit_code != 0

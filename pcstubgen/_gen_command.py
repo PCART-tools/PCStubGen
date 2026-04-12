@@ -8,7 +8,7 @@ import typer
 from loguru import logger
 
 from .api import gen_stubs
-from .stub_output import JsonWriter
+from .stub_output import TomlWriter
 
 MY_LOGURU_FORMAT = (
     "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -45,18 +45,18 @@ def _log_cli_arguments(
     output: Path,
     compilation_database: Path,
     include_docstrings: bool,
-    json: bool,
+    toml: bool,
 ) -> None:
     """
     记录本次 CLI 解析后的参数。
     """
     logger.info(
-        "CLI参数: module_name={}, output={}, compilation_database={}, include_docstrings={}, json={}",
+        "CLI参数: module_name={}, output={}, compilation_database={}, include_docstrings={}, toml={}",
         module_name,
         _format_path_for_log(output),
         _format_path_for_log(compilation_database),
         include_docstrings,
-        json,
+        toml,
     )
 
 
@@ -77,10 +77,10 @@ def _gen_command(
         "--include-docstrings",
         help="生成 stub 时包含 docstring",
     ),
-    json: bool = typer.Option(
+    toml: bool = typer.Option(
         False,
-        "--json",
-        help="输出 JSON 格式的函数记录而不是 .pyi 文件",
+        "--toml",
+        help="输出 TOML 格式的函数记录而不是 .pyi 文件",
     ),
 ) -> None:
     """
@@ -105,14 +105,14 @@ def _gen_command(
             output=output,
             compilation_database=compilation_database,
             include_docstrings=include_docstrings,
-            json=json,
+            toml=toml,
         )
         gen_stubs(
             module_name=module_name,
             output=output,
             compilation_database=compilation_database,
             include_docstrings=include_docstrings,
-            writer=JsonWriter() if json else None,
+            writer=TomlWriter() if toml else None,
         )
     finally:
         logger.remove(console_sink_id)
