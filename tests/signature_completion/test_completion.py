@@ -8,6 +8,7 @@ import pytest
 
 from pcstubgen.models import Function, Module, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
+from pcstubgen.signature_completion.c_extension.source import CInferenceResult
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import (
     _FakeNode,
@@ -123,6 +124,40 @@ def test_completer_prefers_c_branch_over_docstring_and_writes_comment(
     assert parsed.comment == f"{source}:1:1\n{snippet}"
     assert summary.c_completed == 1
     assert summary.docstring_completed == 0
+
+
+def test_completer_reads_signatures_and_comment_from_c_inference_result(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[_unknown_function("foo")],
+    )
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.CExtensionSource.infer_function_signatures",
+        lambda self, module_node, function_node: CInferenceResult(
+            signatures=[
+                _signature(
+                    args=[_arg("value", "int")],
+                    return_type=RawType("bool"),
+                )
+            ],
+            comment="mock:pkg.mod.foo\nmocked source",
+        ),
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
+    assert parsed.comment == "mock:pkg.mod.foo\nmocked source"
+    assert summary.c_completed == 1
 
 
 def test_completer_uses_docstring_for_pybind11_builtin(

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-
-from loguru import logger
 
 from ...models import Function, Module, Signature
 from .address_resolver import (
@@ -12,6 +11,14 @@ from .clang.ast_utils import cursor_get_text, get_func_cursor
 from .clang.parser import ClangParser
 from .runtime import read_builtin_function_runtime_info
 from .signatures import inference
+
+
+@dataclass(frozen=True)
+class CInferenceResult:
+    """C 扩展函数签名推断结果。"""
+
+    signatures: list[Signature]
+    comment: str
 
 
 class CExtensionSource:
@@ -25,7 +32,7 @@ class CExtensionSource:
         self,
         module_node: Module,
         function_node: Function,
-    ) -> tuple[list[Signature], str | None]:
+    ) -> CInferenceResult:
         """按函数懒解析 builtin function 的 C 扩展签名。"""
         runtime_info = read_builtin_function_runtime_info(function_node.runtime_handle)
         location = get_func_file_location(runtime_info.address)
@@ -34,22 +41,13 @@ class CExtensionSource:
 
         signatures = inference.infer_signature(
             func_cursor,
-            ml_flags=runtime_info.flags,
+            flags=runtime_info.flags,
         )
-        comment = None
-        try:
-            location_text = str(func_cursor.location)
-            source_text = cursor_get_text(func_cursor)
-            comment = f"{location_text}\n{source_text}"
-        except RuntimeError as ex:
-            logger.warning(
-                "读取函数源码注释失败, module: {}, func: {}, reason: {}",
-                module_node.full_name,
-                function_node.name,
-                ex,
-            )
+        location_text = str(func_cursor.location)
+        source_text = cursor_get_text(func_cursor)
+        comment = f"{location_text}\n{source_text}"
 
         if not signatures:
             raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
 
-        return signatures, comment
+        return CInferenceResult(signatures=signatures, comment=comment)

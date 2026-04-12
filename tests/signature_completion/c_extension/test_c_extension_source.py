@@ -15,7 +15,10 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension.runtime import BuiltinFunctionRuntimeInfo
-from pcstubgen.signature_completion.c_extension.source import CExtensionSource
+from pcstubgen.signature_completion.c_extension.source import (
+    CExtensionSource,
+    CInferenceResult,
+)
 from pcstubgen.types import RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
 
@@ -100,7 +103,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, ml_flags=0: [
+        lambda function_cursor, *, flags=0: [
             Signature(
                 args=[_arg("value", "int")],
                 return_type=RawType("bool"),
@@ -118,17 +121,18 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
         functions=[Function(name="foo", runtime_handle=object())],
     )
 
-    signatures, comment = source.infer_function_signatures(module, module.functions[0])
+    result = source.infer_function_signatures(module, module.functions[0])
 
-    assert signatures[0].args[0].name == "value"
-    assert signatures[0].args[0].type is not None
-    assert signatures[0].args[0].type.render() == "int"
-    assert signatures[0].return_type is not None
-    assert signatures[0].return_type.render() == "bool"
-    assert comment == f"{source_path}:1:1\n{snippet}"
+    assert isinstance(result, CInferenceResult)
+    assert result.signatures[0].args[0].name == "value"
+    assert result.signatures[0].args[0].type is not None
+    assert result.signatures[0].args[0].type.render() == "int"
+    assert result.signatures[0].return_type is not None
+    assert result.signatures[0].return_type.render() == "bool"
+    assert result.comment == f"{source_path}:1:1\n{snippet}"
 
 
-def test_c_extension_source_ignores_comment_read_failure(
+def test_c_extension_source_propagates_comment_read_failure(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -160,7 +164,7 @@ def test_c_extension_source_ignores_comment_read_failure(
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, ml_flags=0: [
+        lambda function_cursor, *, flags=0: [
             Signature(
                 args=[_arg("value", "int")],
                 return_type=RawType("bool"),
@@ -174,10 +178,8 @@ def test_c_extension_source_ignores_comment_read_failure(
         functions=[Function(name="foo", runtime_handle=object())],
     )
 
-    signatures, comment = source.infer_function_signatures(module, module.functions[0])
-
-    assert len(signatures) == 1
-    assert comment is None
+    with pytest.raises(RuntimeError, match="boom"):
+        source.infer_function_signatures(module, module.functions[0])
 
 
 @pytest.mark.parametrize(
@@ -255,7 +257,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, ml_flags=0: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda function_cursor, *, flags=0: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())

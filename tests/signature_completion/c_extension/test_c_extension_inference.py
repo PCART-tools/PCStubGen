@@ -681,7 +681,7 @@ def test_infer_signature_uses_meth_noargs_without_pyarg_parse() -> None:
 
     inferred = signature_rules_module.infer_signature(
         cursor,
-        ml_flags=METH_NOARGS,
+        flags=METH_NOARGS,
     )
 
     assert inferred == [Signature(args=[], return_type=AnyType())]
@@ -694,7 +694,7 @@ def test_infer_signature_keeps_return_type_for_meth_noargs() -> None:
 
     inferred = signature_rules_module.infer_signature(
         cursor,
-        ml_flags=METH_NOARGS,
+        flags=METH_NOARGS,
     )
 
     assert inferred == [
@@ -712,7 +712,7 @@ def test_infer_signature_uses_meth_o_argument_shape_without_pyarg_parse() -> Non
 
     inferred = signature_rules_module.infer_signature(
         cursor,
-        ml_flags=METH_O,
+        flags=METH_O,
     )
 
     assert inferred == [
@@ -736,7 +736,7 @@ def test_infer_signature_keeps_return_type_for_meth_o() -> None:
 
     inferred = signature_rules_module.infer_signature(
         cursor,
-        ml_flags=METH_O,
+        flags=METH_O,
     )
 
     assert inferred == [

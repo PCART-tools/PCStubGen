@@ -50,7 +50,7 @@ _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES = {
 def infer_signature(
     function_cursor: Cursor,
     *,
-    ml_flags: int = 0,
+    flags: int = 0,
 ) -> list[Signature]:
     """汇合参数推断与返回值推断结果，直接生成签名。"""
     inferred_return_type = infer_return_type(function_cursor)
@@ -66,7 +66,7 @@ def infer_signature(
         ]
 
     minimal_signatures = infer_minimal_signatures(
-        ml_flags,
+        flags,
         return_type=inferred_return_type,
     )
     if minimal_signatures:
@@ -78,12 +78,12 @@ def infer_signature(
 
 
 def infer_minimal_signatures(
-    ml_flags: int,
+    flags: int,
     *,
     return_type: Type | None = None,
 ) -> list[Signature]:
-    """根据 `PyMethodDef.ml_flags` 推断最小签名。"""
-    argument_lists = infer_argument_lists_from_flags(ml_flags)
+    """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小签名。"""
+    argument_lists = infer_argument_lists_from_flags(flags)
     if argument_lists is None:
         return []
 
@@ -98,13 +98,13 @@ def infer_minimal_signatures(
 
 
 def infer_argument_lists_from_flags(
-    ml_flags: int,
+    flags: int,
 ) -> list[list[Argument]] | None:
-    """根据 `PyMethodDef.ml_flags` 推断最小参数形状。"""
-    if ml_flags & METH_NOARGS:
+    """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小参数形状。"""
+    if flags & METH_NOARGS:
         return [[]]
 
-    if ml_flags & METH_O:
+    if flags & METH_O:
         return [[
             Argument(
                 name="arg",
@@ -113,7 +113,7 @@ def infer_argument_lists_from_flags(
             )
         ]]
 
-    if ml_flags & (METH_VARARGS | METH_FASTCALL):
+    if flags & (METH_VARARGS | METH_FASTCALL):
         arguments = [
             Argument(
                 name="args",
@@ -121,7 +121,7 @@ def infer_argument_lists_from_flags(
                 kind=ArgumentKind.VAR_POSITIONAL,
             )
         ]
-        if ml_flags & METH_KEYWORDS:
+        if flags & METH_KEYWORDS:
             arguments.append(
                 Argument(
                     name="kwargs",
