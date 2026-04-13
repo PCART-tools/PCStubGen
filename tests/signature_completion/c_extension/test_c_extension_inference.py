@@ -615,12 +615,13 @@ def test_infer_argument_lists_raises_when_parse_tuple_format_string_is_not_liter
 def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() -> None:
     expr_cursor = _call_expr("PyLong_FromLong", _identifier_node("value"))
     expr_cursor.location = _location_text("default_value.c:15:3")
+    target_decl = _var_decl("value")
 
     with pytest.raises(
         RuntimeError,
         match=rf"不支持的默认值表达式类型.*{re.escape('default_value.c:15:3')}",
     ):
-        signature_rules_module._render_default_expr(expr_cursor)
+        signature_rules_module._render_default_expr(expr_cursor, target_decl)
 
 
 def test_render_default_expr_uses_evaluated_float_result(
@@ -628,6 +629,7 @@ def test_render_default_expr_uses_evaluated_float_result(
 ) -> None:
     observed: list[_FakeNode] = []
     cursor = _float_literal("1e+06")
+    target_decl = _var_decl("value")
 
     monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: False)
     monkeypatch.setattr(
@@ -636,7 +638,7 @@ def test_render_default_expr_uses_evaluated_float_result(
         lambda received_cursor: observed.append(received_cursor) or 1000000.0,
     )
 
-    assert signature_rules_module._render_default_expr(cursor) == "1000000.0"
+    assert signature_rules_module._render_default_expr(cursor, target_decl) == "1000000.0"
     assert observed == [cursor]
 
 

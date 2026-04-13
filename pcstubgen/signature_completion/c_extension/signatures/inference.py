@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clang.cindex import Cursor, CursorKind
+from clang.cindex import Cursor, CursorKind, TypeKind
 from loguru import logger
 
 from ....models import Argument, ArgumentKind, Signature
@@ -331,7 +331,7 @@ def _infer_default_value_for_pyarg(cursor: Cursor) -> str:
     target_decl = _find_decl_candidate(cursor)
 
     initializer = _extract_decl_initializer(target_decl)
-    return _render_default_expr(initializer)
+    return _render_default_expr(initializer, target_decl)
 
 
 def _find_decl_candidate(cursor: Cursor) -> Cursor:
@@ -398,27 +398,27 @@ def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor:
     return unwrap_transparent(children[-1])
 
 
-def _render_default_expr(expr_cursor: Cursor) -> str:
-    """将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
-    expr_cursor = unwrap_transparent(expr_cursor)
+def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
+    """结合目标声明节点，将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
+    expr = unwrap_transparent(expr)
 
-    if is_nullptr_or_zero(expr_cursor):
-        return "None"
-
-    if expr_cursor.kind == CursorKind.DECL_REF_EXPR:
-        mapped = DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
+    if expr.kind == CursorKind.DECL_REF_EXPR:
+        mapped = DEFAULT_IDENTIFIER_TO_VALUE.get(expr.spelling)
         if mapped is None:
             raise RuntimeError(
-                f"无法识别的默认值标识符: {expr_cursor.spelling}, cursor: {expr_cursor.location}"
+                f"无法识别的默认值标识符: {expr.spelling}, cursor: {expr.location}"
             )
         return mapped
 
-    if expr_cursor.kind == CursorKind.STRING_LITERAL:
-        return get_string_literal(expr_cursor)
+    if expr.kind == CursorKind.STRING_LITERAL:
+        return get_string_literal(expr)
 
-    if expr_cursor.kind in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
-        return str(evaluate_cursor(expr_cursor))
+    if expr.kind == CursorKind.FLOATING_LITERAL:
+        return str(evaluate_cursor(expr))
+
+    if expr.kind == CursorKind.INTEGER_LITERAL and target_decl.type.get_canonical().kind != TypeKind.POINTER:
+        return str(evaluate_cursor(expr))
 
     raise RuntimeError(
-        f"不支持的默认值表达式类型: {expr_cursor.kind.name}, cursor: {expr_cursor.location}"
+        f"不支持的默认值表达式类型: {expr.kind.name}, cursor: {expr.location}"
     )
