@@ -7,7 +7,7 @@ from ...models import Function, Module, Signature
 from .address_resolver import (
     get_func_file_location,
 )
-from .clang.ast_utils import cursor_get_text, get_func_cursor
+from .clang.ast_utils import get_cursor_text, get_func_cursor
 from .clang.parser import ClangParser
 from .runtime import read_builtin_function_runtime_info
 from .signatures import inference
@@ -43,7 +43,7 @@ class CExtensionSource:
             func_cursor,
             flags=runtime_info.flags,
         )
-        source_text = cursor_get_text(func_cursor)
+        source_text = get_cursor_text(func_cursor)
         comment = f"{location_text}\n{source_text}"
 
         if not signatures:

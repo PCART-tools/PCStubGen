@@ -92,7 +92,7 @@ class UnionType(Type):
     def render(self) -> str:
         """按当前成员顺序渲染联合类型。"""
         if self.is_empty():
-            return "Never"
+            return "Any"
         if len(self.members) == 1:
             return self.members[0].render()
         return " | ".join(member.render() for member in self.members)

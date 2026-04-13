@@ -50,7 +50,7 @@ def _location_text(text: str) -> object:
 @pytest.fixture(autouse=True)
 def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
     """让 fake call cursor 的 extent 表示调用名。"""
-    real_cursor_get_text = signature_rules_module.cursor_get_text
+    real_cursor_get_text = signature_rules_module.get_cursor_text
 
     def fake_cursor_get_text(cursor: object) -> str:
         extent = getattr(cursor, "extent", None)

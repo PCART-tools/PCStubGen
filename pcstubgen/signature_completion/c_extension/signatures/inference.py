@@ -9,8 +9,8 @@ from ..clang.constant_eval import eval_int
 from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
-    cursor_get_text,
-    extract_string_literal,
+    get_cursor_text,
+    get_string_literal,
     is_nullptr_or_zero,
     unwrap_transparent,
     var_decl_to_init_list_expr,
@@ -48,13 +48,13 @@ _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES = {
 
 
 def infer_signature(
-    function_cursor: Cursor,
+    func_cursor: Cursor,
     *,
     flags: int = 0,
 ) -> list[Signature]:
     """汇合参数推断与返回值推断结果，直接生成签名。"""
-    inferred_return_type = infer_return_type(function_cursor)
-    inferred_argument_lists = infer_argument_lists(function_cursor)
+    inferred_argument_lists = infer_argument_lists(func_cursor)
+    inferred_return_type = infer_return_type(func_cursor)
 
     if inferred_argument_lists:
         return [
@@ -131,22 +131,19 @@ def infer_argument_lists_from_flags(
 
 def infer_argument_lists(func_cursor: Cursor) -> list[list[Argument]]:
     """遍历函数体内支持的 `PyArg_*` 调用并收集参数列表。"""
-    inferred_argument_lists: list[list[Argument]] = []
+    arguments_list: list[list[Argument]] = []
 
     for call_expr in walk_cursor(func_cursor):
         if call_expr.kind != CursorKind.CALL_EXPR:
             continue
 
         call_name = call_expr.spelling
-        args = list(call_expr.get_children())[1:]
         if call_name in _PYARG_PARSETUPLE_CALL_NAMES:
-            inferred_argument_lists.append(_infer_pyarg_parsetuple_arguments(args))
+            arguments_list.append(_infer_pyarg_parsetuple_arguments(call_expr))
         elif call_name in _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES:
-            inferred_argument_lists.append(
-                _infer_pyarg_parsetuple_and_keywords_arguments(args)
-            )
+            arguments_list.append(_infer_pyarg_parsetuple_and_keywords_arguments(call_expr))
 
-    return inferred_argument_lists
+    return arguments_list
 
 
 def infer_return_type(func_cursor: Cursor) -> Type:
@@ -168,18 +165,16 @@ def infer_return_type(func_cursor: Cursor) -> Type:
                 ex,
             )
 
-    if len(inferred_types) == 0:
-        return AnyType()
-
     merged_type = UnionType(tuple(inferred_types)).canonicalize()
     if isinstance(merged_type, UnionType) and len(merged_type.members) > 1:
         logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
     return merged_type
 
 
-def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[Argument]:
+def _infer_pyarg_parsetuple_arguments(call_expr: Cursor) -> list[Argument]:
     """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
-    format_string = extract_string_literal(args[1])
+    args = list(call_expr.get_children())[1:]
+    format_string = get_string_literal(args[1])
 
     return PyArgParseTupleTypeParser(
         format_string,
@@ -190,11 +185,10 @@ def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[Argument]:
     ).parse()
 
 
-def _infer_pyarg_parsetuple_and_keywords_arguments(
-    args: list[Cursor],
-) -> list[Argument]:
+def _infer_pyarg_parsetuple_and_keywords_arguments(call_expr: Cursor) -> list[Argument]:
     """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
-    format_string = extract_string_literal(args[2])
+    args = list(call_expr.get_children())[1:]
+    format_string = get_string_literal(args[2])
     kwlist = _extract_kwlist(args[3])
 
     return PyArgParseTupleAndKeywordsTypeParser(
@@ -224,6 +218,9 @@ def infer_expr_type(expr: Cursor) -> Type:
         child = unwrap_transparent(child)
         if child.kind == CursorKind.DECL_REF_EXPR:
             return _infer_decl_ref_expr_type(child)
+
+    if is_nullptr_or_zero(expr):
+        return UnionType(())
 
     raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}, cursor: {expr.location}")
 
@@ -267,7 +264,7 @@ def _infer_call_expr_type(cursor: Cursor) -> Type:
     assert cursor.kind == CursorKind.CALL_EXPR
     children = list(cursor.get_children())
     func_cursor = children[0]
-    call_name = cursor_get_text(func_cursor)
+    call_name = get_cursor_text(func_cursor)
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)
@@ -293,7 +290,7 @@ def _get_cursor_name(cursor: Cursor) -> str:
 def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
     args = list(call_cursor.get_children())[1:]
-    format_string = extract_string_literal(args[0])
+    format_string = get_string_literal(args[0])
 
     return PyBuildValueTypeParser(
         format_string,
@@ -314,7 +311,7 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
 
 def _infer_object_type_for_pyarg(cursor: Cursor) -> Type:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
-    source_text = cursor_get_text(cursor)
+    source_text = get_cursor_text(cursor)
     match = IDENTIFIER_RE.search(source_text)
     if match is None:
         raise RuntimeError(
@@ -381,7 +378,7 @@ def _extract_kwlist(node: Cursor) -> list[str]:
             break
 
         try:
-            keyword_name = extract_string_literal(entry)
+            keyword_name = get_string_literal(entry)
         except RuntimeError as ex:
             raise RuntimeError(
                 f"kwlist 中的关键字名必须是字符串字面量, cursor: {entry.location}"
@@ -417,7 +414,7 @@ def _render_default_expr(expr_cursor: Cursor) -> str:
         return mapped
 
     if expr_cursor.kind == CursorKind.STRING_LITERAL:
-        return repr(extract_string_literal(expr_cursor))
+        return repr(get_string_literal(expr_cursor))
 
     if expr_cursor.kind in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
         return _render_numeric_literal(expr_cursor)

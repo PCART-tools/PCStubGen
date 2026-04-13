@@ -53,7 +53,7 @@ def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_
 
     function_cursor = _parse_first_function_cursor(str(source))
 
-    extracted = ast_utils_module.cursor_get_text(function_cursor)
+    extracted = ast_utils_module.get_cursor_text(function_cursor)
 
     assert snippet in extracted
 
@@ -80,7 +80,7 @@ def test_extract_cursor_source_text_reads_relative_path_extent_from_translation_
 
     function_cursor = _parse_first_function_cursor("../src/relative_extent.c", cwd=build_dir)
 
-    extracted = ast_utils_module.cursor_get_text(function_cursor)
+    extracted = ast_utils_module.get_cursor_text(function_cursor)
 
     assert snippet in extracted
 
@@ -114,7 +114,7 @@ def test_cursor_get_text_raises_with_cursor_location_when_extent_lacks_file_info
         RuntimeError,
         match=rf"源码范围缺少起止文件信息.*{re.escape('ast_utils.c:8:2')}",
     ):
-        ast_utils_module.cursor_get_text(cursor)
+        ast_utils_module.get_cursor_text(cursor)
 
 
 def test_extract_string_literal_raises_with_cursor_location() -> None:
@@ -125,4 +125,4 @@ def test_extract_string_literal_raises_with_cursor_location() -> None:
         RuntimeError,
         match=rf"节点不是字符串字面量.*{re.escape('ast_utils.c:12:7')}",
     ):
-        ast_utils_module.extract_string_literal(cursor)
+        ast_utils_module.get_string_literal(cursor)

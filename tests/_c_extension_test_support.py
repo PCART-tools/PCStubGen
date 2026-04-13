@@ -97,7 +97,7 @@ def _patch_c_signature_extractor(
         comment = ""
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
             location_text = str(extracted.function_cursor.location)
-            source_text = ast_utils_module.cursor_get_text(extracted.function_cursor)
+            source_text = ast_utils_module.get_cursor_text(extracted.function_cursor)
             comment = f"{location_text}\n{source_text}"
 
         return CInferenceResult(signatures=extracted.signatures, comment=comment)

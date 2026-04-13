@@ -89,7 +89,7 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     raise RuntimeError(f"变量声明未包含初始化列表, cursor: {cursor.location}")
 
 
-def cursor_get_text(cursor: Cursor) -> str:
+def get_cursor_text(cursor: Cursor) -> str:
     """从 cursor 对应的源码范围中提取原始文本。"""
     extent = cursor.extent
     start_file, _, _, start_offset = get_file_location(extent.start)
@@ -111,7 +111,7 @@ def cursor_get_text(cursor: Cursor) -> str:
 IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")
 
 
-def extract_string_literal(node: Cursor) -> str:
+def get_string_literal(node: Cursor) -> str:
     """从子树中提取首个字符串字面量的实际内容。"""
     node = unwrap_transparent(node)
     if node.kind == CursorKind.STRING_LITERAL:
