@@ -528,7 +528,10 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_sizet_alias() -> None:
     assert inferred == [[_arg("value", "int")]]
 
 
-def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias() -> None:
+def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0.0)
     kwlist_decl = _var_decl("kwlist", _init_list(_string_literal("x"), _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
     cursor = _fake_function_cursor_with_children(
@@ -620,34 +623,21 @@ def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() 
         signature_rules_module._render_default_expr(expr_cursor)
 
 
-@pytest.mark.parametrize(
-    ("cursor", "value", "expected"),
-    [
-        (_int_literal("123"), 123, "123"),
-        (_int_literal("18446744073709551615ULL"), 18446744073709551615, "18446744073709551615"),
-    ],
-)
-def test_render_numeric_literal_uses_evaluated_integer_result(
-    monkeypatch: pytest.MonkeyPatch,
-    cursor: _FakeNode,
-    value: int,
-    expected: str,
-) -> None:
-    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: value)
-
-    assert signature_rules_module._render_numeric_literal(cursor) == expected
-
-
-def test_render_numeric_literal_keeps_float_token_spelling(
+def test_render_default_expr_uses_evaluated_float_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    observed: list[_FakeNode] = []
+    cursor = _float_literal("1e+06")
+
+    monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: False)
     monkeypatch.setattr(
         signature_rules_module,
         "evaluate_cursor",
-        lambda _: (_ for _ in ()).throw(AssertionError("FLOATING_LITERAL 不应触发 evaluate")),
+        lambda received_cursor: observed.append(received_cursor) or 1000000.0,
     )
 
-    assert signature_rules_module._render_numeric_literal(_float_literal("1e+06")) == "1e+06"
+    assert signature_rules_module._render_default_expr(cursor) == "1000000.0"
+    assert observed == [cursor]
 
 
 def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:

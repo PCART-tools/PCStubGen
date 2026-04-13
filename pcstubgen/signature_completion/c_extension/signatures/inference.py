@@ -414,48 +414,11 @@ def _render_default_expr(expr_cursor: Cursor) -> str:
         return mapped
 
     if expr_cursor.kind == CursorKind.STRING_LITERAL:
-        return repr(get_string_literal(expr_cursor))
+        return get_string_literal(expr_cursor)
 
     if expr_cursor.kind in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
-        return _render_numeric_literal(expr_cursor)
-
-    if expr_cursor.kind == CursorKind.UNARY_OPERATOR:
-        return _render_unary_numeric_literal(expr_cursor)
+        return str(evaluate_cursor(expr_cursor))
 
     raise RuntimeError(
         f"不支持的默认值表达式类型: {expr_cursor.kind.name}, cursor: {expr_cursor.location}"
     )
-
-
-def _render_numeric_literal(expr_cursor: Cursor) -> str:
-    """渲染整数字面量或浮点字面量。"""
-    if expr_cursor.kind == CursorKind.INTEGER_LITERAL:
-        return str(evaluate_cursor(expr_cursor))
-
-    if expr_cursor.kind not in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
-        raise RuntimeError(
-            f"默认值表达式不是数字字面量: {expr_cursor.kind.name}, cursor: {expr_cursor.location}"
-        )
-
-    tokens = list(expr_cursor.get_tokens())
-    if not tokens:
-        raise RuntimeError(f"数字字面量缺少 token, cursor: {expr_cursor.location}")
-    return str(tokens[0].spelling)
-
-
-def _render_unary_numeric_literal(expr_cursor: Cursor) -> str:
-    """渲染一层正负号包裹的数字字面量。"""
-    children = list(expr_cursor.get_children())
-    if len(children) != 1:
-        raise RuntimeError(
-            f"UNARY_OPERATOR 子节点数量非法: expected 1, got {len(children)}, cursor: {expr_cursor.location}"
-        )
-
-    value_text = _render_numeric_literal(unwrap_transparent(children[0]))
-
-    tokens = list(expr_cursor.get_tokens())
-    for token in tokens:
-        spelling = str(token.spelling)
-        if spelling in {"+", "-"}:
-            return f"{spelling}{value_text}"
-    raise RuntimeError(f"UNARY_OPERATOR 缺少正负号 token, cursor: {expr_cursor.location}")
