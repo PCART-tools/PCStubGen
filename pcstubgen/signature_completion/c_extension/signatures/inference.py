@@ -4,7 +4,7 @@ from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
 from ....models import Argument, ArgumentKind, Signature
-from ....types import RawType, Type, UnionType
+from ....types import AnyType, RawType, Type, UnionType
 from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
@@ -164,6 +164,8 @@ def infer_return_type(func_cursor: Cursor) -> Type:
             )
 
     merged_type = UnionType(tuple(inferred_types)).canonicalize()
+    if isinstance(merged_type, UnionType) and len(merged_type.members) == 0:
+        return AnyType()
     if isinstance(merged_type, UnionType) and len(merged_type.members) > 1:
         logger.warning("返回值Union多个, func_name: {}", func_cursor.spelling)
     return merged_type
