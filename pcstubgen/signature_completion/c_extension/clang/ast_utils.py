@@ -82,11 +82,11 @@ def is_nullptr_or_zero(node: Cursor) -> bool:
 def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     """从变量声明直接找出其初始化列表节点。"""
     if cursor.kind != CursorKind.VAR_DECL:
-        raise RuntimeError("只能从 VAR_DECL 提取初始化列表。")
+        raise RuntimeError(f"只能从 VAR_DECL 提取初始化列表, cursor: {cursor.location}")
     for child in walk_cursor(cursor):
         if child.kind == CursorKind.INIT_LIST_EXPR:
             return child
-    raise RuntimeError("变量声明未包含初始化列表。")
+    raise RuntimeError(f"变量声明未包含初始化列表, cursor: {cursor.location}")
 
 
 def cursor_get_text(cursor: Cursor) -> str:
@@ -95,15 +95,15 @@ def cursor_get_text(cursor: Cursor) -> str:
     start_file, _, _, start_offset = get_file_location(extent.start)
     end_file, _, _, end_offset = get_file_location(extent.end)
     if start_file is None or end_file is None:
-        raise RuntimeError("源码范围缺少起止文件信息。")
+        raise RuntimeError(f"源码范围缺少起止文件信息, cursor: {cursor.location}")
 
     if start_file.name != end_file.name:
-        raise RuntimeError("源码范围跨越多个文件，无法提取文本。")
+        raise RuntimeError(f"源码范围跨越多个文件，无法提取文本, cursor: {cursor.location}")
 
     source_bytes = get_file_contents(cursor.translation_unit, start_file)
     read_length = end_offset - start_offset
     if read_length < 0:
-        raise RuntimeError("源码范围终点位于起点之前，无法提取文本。")
+        raise RuntimeError(f"源码范围终点位于起点之前，无法提取文本, cursor: {cursor.location}")
     source_bytes = source_bytes[start_offset:end_offset]
     return source_bytes.decode("utf-8", errors="ignore")
 
@@ -116,7 +116,7 @@ def extract_string_literal(node: Cursor) -> str:
     node = unwrap_transparent(node)
     if node.kind == CursorKind.STRING_LITERAL:
         return node.spelling.strip('"')
-    raise RuntimeError("节点不是字符串字面量。")
+    raise RuntimeError(f"节点不是字符串字面量, cursor: {node.location}")
 
 
 def get_func_cursor(

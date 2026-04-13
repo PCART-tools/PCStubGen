@@ -84,6 +84,7 @@ class SignatureCompleter:
         branch = "unsupported"
         reason = "函数不属于受支持的签名补全来源。"
 
+        logger.info("开始补全, module: {}, func: {}, is_method: {}", module.full_name, func.name, is_method)
         try:
             if supports_builtin_function_inference(func.runtime_handle):
                 branch = "c_builtin"
@@ -95,7 +96,7 @@ class SignatureCompleter:
                 func.comment = inference_result.comment
                 self._result.c_completed += 1
                 logger.info(
-                    "通过C源码补全成功, branch: c_builtin, module: {}, func: {}, is_method: {}",
+                    "补全成功, branch: c_builtin, module: {}, func: {}, is_method: {}",
                     module.full_name,
                     func.name,
                     is_method,
@@ -107,7 +108,7 @@ class SignatureCompleter:
                 func.signatures = parse_docstring_signatures(module, func)
                 self._result.docstring_completed += 1
                 logger.info(
-                    "通过docstring补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",
+                    "补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",
                     module.full_name,
                     func.name,
                     is_method,

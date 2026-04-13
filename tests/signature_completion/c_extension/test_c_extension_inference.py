@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import cast
 
@@ -36,6 +37,14 @@ from tests._c_extension_test_support import (
     _var_decl,
     _wrap,
 )
+
+
+def _location_text(text: str) -> object:
+    class _Location:
+        def __str__(self) -> str:
+            return text
+
+    return _Location()
 
 
 @pytest.fixture(autouse=True)
@@ -150,10 +159,14 @@ def test_infer_expr_type_skips_unknown_conditional_branches() -> None:
     assert inferred == UnionType(())
 
 def test_infer_expr_type_raises_for_unsupported_expr() -> None:
-    with pytest.raises(RuntimeError, match="返回值工厂调用"):
-        signature_rules_module.infer_expr_type(
-            _call_expr("CustomFactory", _identifier_node("value"))
-        )
+    expr_cursor = _call_expr("CustomFactory", _identifier_node("value"))
+    expr_cursor.location = _location_text("factory.c:10:2")
+
+    with pytest.raises(
+        RuntimeError,
+        match=rf"返回值工厂调用.*{re.escape('factory.c:10:2')}",
+    ):
+        signature_rules_module.infer_expr_type(expr_cursor)
 
 
 @pytest.mark.parametrize(
@@ -535,7 +548,9 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias()
 
 
 def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_kwlist() -> None:
-    invalid_kwlist_decl = _var_decl("kwlist", _init_list(_identifier_node("bad"), _null_ptr_literal()))
+    invalid_entry = _identifier_node("bad")
+    invalid_entry.location = _location_text("kwlist.c:7:9")
+    invalid_kwlist_decl = _var_decl("kwlist", _init_list(invalid_entry, _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -548,37 +563,61 @@ def test_infer_argument_lists_raises_for_parse_tuple_and_keywords_without_valid_
         )
     )
 
-    with pytest.raises(RuntimeError, match="kwlist"):
+    with pytest.raises(
+        RuntimeError,
+        match=rf"kwlist.*{re.escape('kwlist.c:7:9')}",
+    ):
         signature_rules_module.infer_argument_lists(cursor)
 
 
 def test_infer_argument_lists_raises_when_argument_name_cannot_be_resolved() -> None:
+    invalid_slot = _int_literal("0")
+    invalid_slot.location = _location_text("parse_tuple.c:12:8")
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
             _identifier_node("args"),
             _string_literal("i"),
-            _int_literal("0"),
+            invalid_slot,
         )
     )
 
-    with pytest.raises(RuntimeError, match="C 参数槽位"):
+    with pytest.raises(
+        RuntimeError,
+        match=rf"C 参数槽位.*{re.escape('parse_tuple.c:12:8')}",
+    ):
         signature_rules_module.infer_argument_lists(cursor)
 
 
 def test_infer_argument_lists_raises_when_parse_tuple_format_string_is_not_literal() -> None:
     value_decl = _var_decl("value")
+    format_cursor = _identifier_node("fmt")
+    format_cursor.location = _location_text("parse_tuple.c:20:6")
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
             _identifier_node("args"),
-            _identifier_node("fmt"),
+            format_cursor,
             _address_of("value", referenced=value_decl),
         )
     )
 
-    with pytest.raises(RuntimeError, match="format string"):
+    with pytest.raises(
+        RuntimeError,
+        match=rf"字符串字面量.*{re.escape('parse_tuple.c:20:6')}",
+    ):
         signature_rules_module.infer_argument_lists(cursor)
+
+
+def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() -> None:
+    expr_cursor = _call_expr("PyLong_FromLong", _identifier_node("value"))
+    expr_cursor.location = _location_text("default_value.c:15:3")
+
+    with pytest.raises(
+        RuntimeError,
+        match=rf"不支持的默认值表达式类型.*{re.escape('default_value.c:15:3')}",
+    ):
+        signature_rules_module._render_default_expr(expr_cursor)
 
 
 def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:

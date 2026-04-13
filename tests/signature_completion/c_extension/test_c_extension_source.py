@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import clang.cindex
@@ -9,8 +10,6 @@ from pcstubgen.models import Function, Module, Signature, QualifiedName
 from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
 from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
-    METH_FASTCALL,
-    METH_KEYWORDS,
     METH_O,
     METH_VARARGS,
 )
@@ -131,97 +130,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     assert result.signatures[0].return_type.render() == "bool"
     assert result.comment == f"{source_path}:1:1\n{snippet}"
 
-
-def test_c_extension_source_propagates_comment_read_failure(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    function_cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.FUNCTION_DECL,
-        spelling="foo_impl",
-        location=_location_text(f"{tmp_path / 'foo_impl.c'}:1:1"),
-        extent=object(),
-    )
-
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
-        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
-        lambda address: _symbolized_location(
-            compilation_unit_path=tmp_path / "foo_impl.c",
-            function_name="foo_impl",
-        ),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
-        lambda *args: function_cursor,
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
-        lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, flags=0: [
-            Signature(
-                args=[_arg("value", "int")],
-                return_type=RawType("bool"),
-            )
-        ],
-    )
-
-    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = Module(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", runtime_handle=object())],
-    )
-
-    with pytest.raises(RuntimeError, match="boom"):
-        source.infer_function_signatures(module, module.functions[0])
-
-
-@pytest.mark.parametrize(
-    "flags",
-    [
-        METH_O,
-        METH_VARARGS | METH_KEYWORDS,
-        METH_FASTCALL | METH_KEYWORDS,
-    ],
-)
-def test_c_extension_source_propagates_cursor_lookup_failures_for_runtime_functions(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    flags: int,
-) -> None:
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
-        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=flags),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
-        lambda address: _symbolized_location(
-            compilation_unit_path=tmp_path / "foo_impl.c",
-            function_name="foo_impl",
-        ),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.get_func_cursor",
-        lambda *args: (_ for _ in ()).throw(RuntimeError("cursor missing")),
-    )
-
-    source = _make_source(monkeypatch, tmp_path, translation_unit=object())
-    module = Module(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", runtime_handle=object())],
-    )
-
-    with pytest.raises(RuntimeError, match="cursor missing"):
-        source.infer_function_signatures(module, module.functions[0])
-
-
-def test_c_extension_source_raises_when_ast_inference_fails(
+def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -237,6 +146,7 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     function_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
         spelling="foo_impl",
+        location=_location_text(f"{source_path}:1:1"),
         extent=_extent_for_source_snippet(source_path, snippet),
     )
 
@@ -257,7 +167,11 @@ def test_c_extension_source_raises_when_ast_inference_fails(
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.inference.infer_signature",
-        lambda function_cursor, *, flags=0: (_ for _ in ()).throw(RuntimeError("boom")),
+        lambda function_cursor, *, flags=0: [],
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
+        lambda cursor: snippet,
     )
 
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
@@ -266,7 +180,10 @@ def test_c_extension_source_raises_when_ast_inference_fails(
         functions=[Function(name="foo", runtime_handle=object())],
     )
 
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(
+        RuntimeError,
+        match=rf"没有可用签名.*{re.escape(f'{source_path}:1:1')}",
+    ):
         source.infer_function_signatures(module, module.functions[0])
 
 

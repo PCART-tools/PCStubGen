@@ -179,45 +179,31 @@ def infer_return_type(func_cursor: Cursor) -> Type:
 
 def _infer_pyarg_parsetuple_arguments(args: list[Cursor]) -> list[Argument]:
     """调用 `PyArg_ParseTuple` parser 解析参数列表。"""
-    try:
-        format_string = extract_string_literal(args[1])
-    except RuntimeError as ex:
-        raise RuntimeError("PyArg_ParseTuple format string 必须是字符串字面量。") from ex
+    format_string = extract_string_literal(args[1])
 
-    try:
-        return PyArgParseTupleTypeParser(
-            format_string,
-            args[2:],
-            infer_name_func=_infer_argument_name,
-            infer_object_type_func=_infer_object_type_for_pyarg,
-            infer_default_value_func=_infer_default_value_for_pyarg,
-        ).parse()
-    except PyArgParseTupleTypeParserError as ex:
-        raise RuntimeError("解析 PyArg_ParseTuple 参数失败。") from ex
+    return PyArgParseTupleTypeParser(
+        format_string,
+        args[2:],
+        infer_name_func=_infer_argument_name,
+        infer_object_type_func=_infer_object_type_for_pyarg,
+        infer_default_value_func=_infer_default_value_for_pyarg,
+    ).parse()
 
 
 def _infer_pyarg_parsetuple_and_keywords_arguments(
     args: list[Cursor],
 ) -> list[Argument]:
     """调用 `PyArg_ParseTupleAndKeywords` parser 解析参数列表。"""
-    try:
-        format_string = extract_string_literal(args[2])
-    except RuntimeError as ex:
-        raise RuntimeError(
-            "PyArg_ParseTupleAndKeywords format string 必须是字符串字面量。"
-        ) from ex
+    format_string = extract_string_literal(args[2])
     kwlist = _extract_kwlist(args[3])
 
-    try:
-        return PyArgParseTupleAndKeywordsTypeParser(
-            format_string,
-            kwlist,
-            args[4:],
-            infer_object_type_func=_infer_object_type_for_pyarg,
-            infer_default_value_func=_infer_default_value_for_pyarg,
-        ).parse()
-    except PyArgParseTupleAndKeywordsTypeParserError as ex:
-        raise RuntimeError("解析 PyArg_ParseTupleAndKeywords 参数失败。") from ex
+    return PyArgParseTupleAndKeywordsTypeParser(
+        format_string,
+        kwlist,
+        args[4:],
+        infer_object_type_func=_infer_object_type_for_pyarg,
+        infer_default_value_func=_infer_default_value_for_pyarg,
+    ).parse()
 
 
 def infer_expr_type(expr: Cursor) -> Type:
@@ -239,7 +225,7 @@ def infer_expr_type(expr: Cursor) -> Type:
         if child.kind == CursorKind.DECL_REF_EXPR:
             return _infer_decl_ref_expr_type(child)
 
-    raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}")
+    raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}, cursor: {expr.location}")
 
 
 def _infer_conditional_operator_type(expr_cursor: Cursor) -> Type:
@@ -268,7 +254,9 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
     mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
         return mapped
-    raise RuntimeError(f"无法识别的对象返回标识符: {identifier_name}")
+    raise RuntimeError(
+        f"无法识别的对象返回标识符: {identifier_name}, cursor: {expr_cursor.location}"
+    )
 
 
 def _infer_call_expr_type(cursor: Cursor) -> Type:
@@ -285,7 +273,9 @@ def _infer_call_expr_type(cursor: Cursor) -> Type:
         return _infer_py_buildvalue_type(cursor)
     mapped = FUNCTION_NAME_TO_TYPE.get(call_name)
     if mapped is None:
-        raise RuntimeError(f"无法识别的返回值工厂调用: {call_name}")
+        raise RuntimeError(
+            f"无法识别的返回值工厂调用: {call_name}, cursor: {cursor.location}"
+        )
     return mapped
 
 
@@ -297,13 +287,14 @@ def _get_cursor_name(cursor: Cursor) -> str:
     referenced = cursor.referenced
     if referenced is not None and referenced.spelling:
         return str(referenced.spelling)
-    raise RuntimeError("无法从 AST 节点提取名称。")
+    raise RuntimeError(f"无法从 AST 节点提取名称, cursor: {cursor.location}")
 
 
 def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type:
     """解析 `Py_BuildValue` 的格式串并返回 parser 推断结果。"""
     args = list(call_cursor.get_children())[1:]
     format_string = extract_string_literal(args[0])
+
     return PyBuildValueTypeParser(
         format_string,
         args[1:],
@@ -324,17 +315,16 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
 def _infer_object_type_for_pyarg(cursor: Cursor) -> Type:
     """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
     source_text = cursor_get_text(cursor)
-
     match = IDENTIFIER_RE.search(source_text)
     if match is None:
         raise RuntimeError(
-            f"对象类型槽位源码中未找到标识符, source_text: {source_text!r}"
+            f"对象类型槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
         )
     type_name = match.group(0)
     mapped = PY_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
     if mapped is None:
         raise RuntimeError(
-            f"无法识别的对象类型标识符: {type_name}, source_text: {source_text!r}"
+            f"无法识别的对象类型标识符: {type_name}, source_text: {source_text!r}, cursor: {cursor.location}"
         )
     return mapped
 
@@ -357,7 +347,7 @@ def _find_decl_candidate(cursor: Cursor) -> Cursor:
         referenced = target.referenced
         if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
             return referenced
-    raise RuntimeError("无法将 C 参数槽位解析为声明节点。")
+    raise RuntimeError(f"无法将 C 参数槽位解析为声明节点, cursor: {cursor.location}")
 
 
 def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
@@ -375,12 +365,14 @@ def _extract_kwlist(node: Cursor) -> list[str]:
     """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
     kwlist_decl = _find_decl_candidate(node)
     if kwlist_decl.kind != CursorKind.VAR_DECL:
-        raise RuntimeError("kwlist 必须引用 VAR_DECL。")
+        raise RuntimeError(f"kwlist 必须引用 VAR_DECL, cursor: {node.location}")
 
     try:
         init_list_expr = var_decl_to_init_list_expr(kwlist_decl)
     except RuntimeError as ex:
-        raise RuntimeError("kwlist 必须使用初始化列表定义。") from ex
+        raise RuntimeError(
+            f"kwlist 必须使用初始化列表定义, cursor: {kwlist_decl.location}"
+        ) from ex
 
     result: list[str] = []
     for child in init_list_expr.get_children():
@@ -391,7 +383,9 @@ def _extract_kwlist(node: Cursor) -> list[str]:
         try:
             keyword_name = extract_string_literal(entry)
         except RuntimeError as ex:
-            raise RuntimeError("kwlist 中的关键字名必须是字符串字面量。") from ex
+            raise RuntimeError(
+                f"kwlist 中的关键字名必须是字符串字面量, cursor: {entry.location}"
+            ) from ex
         result.append(keyword_name)
 
     return result
@@ -401,7 +395,9 @@ def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor:
     """提取声明节点的初始化表达式。"""
     children = list(decl_cursor.get_children())
     if not children:
-        raise RuntimeError(f"声明节点缺少初始化表达式: {decl_cursor.spelling}")
+        raise RuntimeError(
+            f"声明节点缺少初始化表达式: {decl_cursor.spelling}, cursor: {decl_cursor.location}"
+        )
     return unwrap_transparent(children[-1])
 
 
@@ -415,7 +411,9 @@ def _render_default_expr(expr_cursor: Cursor) -> str:
     if expr_cursor.kind == CursorKind.DECL_REF_EXPR:
         mapped = DEFAULT_IDENTIFIER_TO_VALUE.get(expr_cursor.spelling)
         if mapped is None:
-            raise RuntimeError(f"无法识别的默认值标识符: {expr_cursor.spelling}")
+            raise RuntimeError(
+                f"无法识别的默认值标识符: {expr_cursor.spelling}, cursor: {expr_cursor.location}"
+            )
         return mapped
 
     if expr_cursor.kind == CursorKind.STRING_LITERAL:
@@ -427,7 +425,9 @@ def _render_default_expr(expr_cursor: Cursor) -> str:
     if expr_cursor.kind == CursorKind.UNARY_OPERATOR:
         return _render_unary_numeric_literal(expr_cursor)
 
-    raise RuntimeError(f"不支持的默认值表达式类型: {expr_cursor.kind.name}")
+    raise RuntimeError(
+        f"不支持的默认值表达式类型: {expr_cursor.kind.name}, cursor: {expr_cursor.location}"
+    )
 
 
 def _render_numeric_literal(expr_cursor: Cursor) -> str:
@@ -438,11 +438,13 @@ def _render_numeric_literal(expr_cursor: Cursor) -> str:
             return str(value)
 
     if expr_cursor.kind not in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
-        raise RuntimeError(f"默认值表达式不是数字字面量: {expr_cursor.kind.name}")
+        raise RuntimeError(
+            f"默认值表达式不是数字字面量: {expr_cursor.kind.name}, cursor: {expr_cursor.location}"
+        )
 
     tokens = list(expr_cursor.get_tokens())
     if not tokens:
-        raise RuntimeError("数字字面量缺少 token。")
+        raise RuntimeError(f"数字字面量缺少 token, cursor: {expr_cursor.location}")
     return str(tokens[0].spelling)
 
 
@@ -451,7 +453,7 @@ def _render_unary_numeric_literal(expr_cursor: Cursor) -> str:
     children = list(expr_cursor.get_children())
     if len(children) != 1:
         raise RuntimeError(
-            f"UNARY_OPERATOR 子节点数量非法: expected 1, got {len(children)}"
+            f"UNARY_OPERATOR 子节点数量非法: expected 1, got {len(children)}, cursor: {expr_cursor.location}"
         )
 
     value_text = _render_numeric_literal(unwrap_transparent(children[0]))
@@ -461,4 +463,4 @@ def _render_unary_numeric_literal(expr_cursor: Cursor) -> str:
         spelling = str(token.spelling)
         if spelling in {"+", "-"}:
             return f"{spelling}{value_text}"
-    raise RuntimeError("UNARY_OPERATOR 缺少正负号 token。")
+    raise RuntimeError(f"UNARY_OPERATOR 缺少正负号 token, cursor: {expr_cursor.location}")
