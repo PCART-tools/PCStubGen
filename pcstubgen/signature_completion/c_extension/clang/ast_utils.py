@@ -5,8 +5,7 @@ from collections.abc import Iterable, Iterator
 
 from clang.cindex import Cursor, CursorKind, TranslationUnit
 
-from . import constant_eval
-from .libclang_wrap import get_file_contents, get_file_location
+from .libclang_wrap import evaluate_cursor, get_file_contents, get_file_location
 
 _SINGLE_TRANSPARENT_CURSOR_KINDS = {
     # python libclang 未暴露的若干表达式会落到 UNEXPOSED_EXPR。
@@ -66,10 +65,7 @@ def is_integer_literal_zero(cursor: Cursor) -> bool:
     """判断是否为值为 0 的整数字面量。"""
     if cursor.kind != CursorKind.INTEGER_LITERAL:
         return False
-    value = constant_eval.eval_int(cursor)
-    if value is None:
-        return False
-    return value == 0
+    return evaluate_cursor(cursor) == 0
 
 
 def is_nullptr_or_zero(node: Cursor) -> bool:

@@ -126,3 +126,21 @@ def test_extract_string_literal_raises_with_cursor_location() -> None:
         match=rf"节点不是字符串字面量.*{re.escape('ast_utils.c:12:7')}",
     ):
         ast_utils_module.get_string_literal(cursor)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (0, True),
+        (1, False),
+    ],
+)
+def test_is_integer_literal_zero_only_accepts_int_zero(
+    monkeypatch: pytest.MonkeyPatch,
+    value: int,
+    expected: bool,
+) -> None:
+    cursor = _FakeNode(kind=clang.cindex.CursorKind.INTEGER_LITERAL)
+    monkeypatch.setattr(ast_utils_module, "evaluate_cursor", lambda _: value)
+
+    assert ast_utils_module.is_integer_literal_zero(cursor) is expected

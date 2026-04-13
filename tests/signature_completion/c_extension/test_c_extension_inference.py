@@ -69,7 +69,7 @@ def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(
         signature_rules_module,
-        "cursor_get_text",
+        "get_cursor_text",
         fake_cursor_get_text,
     )
 
@@ -420,7 +420,7 @@ def test_infer_object_type_for_pyarg_propagates_extent_source_text_read_error(
     )
     monkeypatch.setattr(
         signature_rules_module,
-        "cursor_get_text",
+        "get_cursor_text",
         lambda node: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
@@ -618,6 +618,36 @@ def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() 
         match=rf"不支持的默认值表达式类型.*{re.escape('default_value.c:15:3')}",
     ):
         signature_rules_module._render_default_expr(expr_cursor)
+
+
+@pytest.mark.parametrize(
+    ("cursor", "value", "expected"),
+    [
+        (_int_literal("123"), 123, "123"),
+        (_int_literal("18446744073709551615ULL"), 18446744073709551615, "18446744073709551615"),
+    ],
+)
+def test_render_numeric_literal_uses_evaluated_integer_result(
+    monkeypatch: pytest.MonkeyPatch,
+    cursor: _FakeNode,
+    value: int,
+    expected: str,
+) -> None:
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: value)
+
+    assert signature_rules_module._render_numeric_literal(cursor) == expected
+
+
+def test_render_numeric_literal_keeps_float_token_spelling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda _: (_ for _ in ()).throw(AssertionError("FLOATING_LITERAL 不应触发 evaluate")),
+    )
+
+    assert signature_rules_module._render_numeric_literal(_float_literal("1e+06")) == "1e+06"
 
 
 def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:

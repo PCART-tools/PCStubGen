@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import clang.cindex
 import pytest
 from clang.cindex import Index
 
@@ -14,6 +15,29 @@ class _PointerHolder:
 
     def __bool__(self) -> bool:
         return self.value is not None
+
+
+def _parse_eval_translation_unit(source: str) -> clang.cindex.TranslationUnit:
+    """解析 evaluate 测试专用 translation unit。"""
+    index = Index.create()
+    return index.parse(
+        "eval_cursor_test.c",
+        args=["-x", "c", "-std=c11"],
+        unsaved_files=[("eval_cursor_test.c", source)],
+    )
+
+
+def _find_cursor(
+    translation_unit: clang.cindex.TranslationUnit,
+    kind: clang.cindex.CursorKind,
+    spelling: str,
+) -> clang.cindex.Cursor:
+    """按 kind 与 spelling 定位测试 cursor。"""
+    return next(
+        cursor
+        for cursor in translation_unit.cursor.walk_preorder()
+        if cursor.kind == kind and cursor.spelling == spelling
+    )
 
 
 def test_parse_translation_unit_full_argv_raises_on_libclang_error(
@@ -63,3 +87,73 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
             index,
             ["clang", "src/module.c"],
         )
+
+
+def test_evaluate_cursor_reads_signed_integer_result() -> None:
+    translation_unit = _parse_eval_translation_unit(
+        "\n".join(
+            [
+                "const int signed_value = -1;",
+                "void demo(void) {}",
+            ]
+        )
+    )
+
+    cursor = _find_cursor(
+        translation_unit,
+        clang.cindex.CursorKind.VAR_DECL,
+        "signed_value",
+    )
+
+    assert libclang_wrap_module.evaluate_cursor(cursor) == -1
+
+
+def test_evaluate_cursor_reads_unsigned_integer_result() -> None:
+    translation_unit = _parse_eval_translation_unit(
+        "const unsigned long long unsigned_value = 18446744073709551615ULL;"
+    )
+
+    cursor = _find_cursor(
+        translation_unit,
+        clang.cindex.CursorKind.VAR_DECL,
+        "unsigned_value",
+    )
+
+    assert libclang_wrap_module.evaluate_cursor(cursor) == 18446744073709551615
+
+
+def test_evaluate_cursor_reads_float_result() -> None:
+    translation_unit = _parse_eval_translation_unit("const double float_value = 1.25;")
+
+    cursor = _find_cursor(
+        translation_unit,
+        clang.cindex.CursorKind.VAR_DECL,
+        "float_value",
+    )
+
+    assert libclang_wrap_module.evaluate_cursor(cursor) == pytest.approx(1.25)
+
+
+def test_evaluate_cursor_reads_string_result() -> None:
+    translation_unit = _parse_eval_translation_unit('const char *string_value = "abc";')
+
+    cursor = _find_cursor(
+        translation_unit,
+        clang.cindex.CursorKind.VAR_DECL,
+        "string_value",
+    )
+
+    assert libclang_wrap_module.evaluate_cursor(cursor) == "abc"
+
+
+def test_evaluate_cursor_raises_for_non_evaluable_cursor() -> None:
+    translation_unit = _parse_eval_translation_unit("void demo(void) {}")
+
+    cursor = _find_cursor(
+        translation_unit,
+        clang.cindex.CursorKind.FUNCTION_DECL,
+        "demo",
+    )
+
+    with pytest.raises(RuntimeError, match="无法求值"):
+        libclang_wrap_module.evaluate_cursor(cursor)

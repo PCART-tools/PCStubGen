@@ -110,7 +110,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
         ],
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
+        "pcstubgen.signature_completion.c_extension.source.get_cursor_text",
         lambda cursor: snippet,
     )
 
@@ -170,7 +170,7 @@ def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
         lambda function_cursor, *, flags=0: [],
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.cursor_get_text",
+        "pcstubgen.signature_completion.c_extension.source.get_cursor_text",
         lambda cursor: snippet,
     )
 

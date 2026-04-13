@@ -4,8 +4,7 @@ from clang.cindex import Cursor, CursorKind
 from loguru import logger
 
 from ....models import Argument, ArgumentKind, Signature
-from ....types import AnyType, RawType, Type, UnionType
-from ..clang.constant_eval import eval_int
+from ....types import RawType, Type, UnionType
 from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
@@ -16,6 +15,7 @@ from ..clang.ast_utils import (
     var_decl_to_init_list_expr,
     walk_cursor,
 )
+from ..clang.libclang_wrap import evaluate_cursor
 from ..method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -27,11 +27,9 @@ from .object_type_maps import OBJECT_NAME_TO_TYPE
 from .py_arg_parse.parser_maps import DEFAULT_IDENTIFIER_TO_VALUE, PY_TYPE_OBJECT_NAME_TO_TYPE
 from .py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
-    PyArgParseTupleAndKeywordsTypeParserError,
 )
 from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
-    PyArgParseTupleTypeParserError,
 )
 from .py_build_value.parser import PyBuildValueTypeParser
 from .return_type_maps import FUNCTION_NAME_TO_TYPE
@@ -430,9 +428,7 @@ def _render_default_expr(expr_cursor: Cursor) -> str:
 def _render_numeric_literal(expr_cursor: Cursor) -> str:
     """渲染整数字面量或浮点字面量。"""
     if expr_cursor.kind == CursorKind.INTEGER_LITERAL:
-        value = eval_int(expr_cursor)
-        if value is not None:
-            return str(value)
+        return str(evaluate_cursor(expr_cursor))
 
     if expr_cursor.kind not in {CursorKind.INTEGER_LITERAL, CursorKind.FLOATING_LITERAL}:
         raise RuntimeError(

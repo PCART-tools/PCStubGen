@@ -108,7 +108,7 @@ def test_completer_prefers_c_branch_over_docstring_and_writes_comment(
         },
     )
     monkeypatch.setattr(
-        "tests._c_extension_test_support.ast_utils_module.cursor_get_text",
+        "tests._c_extension_test_support.ast_utils_module.get_cursor_text",
         lambda cursor: snippet,
     )
 
