@@ -49,8 +49,8 @@ def _location_text(text: str) -> object:
 
 
 @pytest.fixture(autouse=True)
-def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """让 fake call cursor 的 extent 表示调用名。"""
+def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """让 fake cursor 支持本组测试依赖的 clang helper。"""
     real_cursor_get_text = signature_rules_module.get_cursor_text
 
     def fake_cursor_get_text(cursor: object) -> str:
@@ -72,6 +72,17 @@ def _read_fake_call_name_from_extent(monkeypatch: pytest.MonkeyPatch) -> None:
         signature_rules_module,
         "get_cursor_text",
         fake_cursor_get_text,
+    )
+
+    def fake_cursor_binary_operator_kind(cursor: object) -> int:
+        operator_kind = cast(_FakeNode, cursor).binary_operator_kind
+        assert operator_kind is not None
+        return operator_kind
+
+    monkeypatch.setattr(
+        signature_rules_module,
+        "get_cursor_binary_operator_kind",
+        fake_cursor_binary_operator_kind,
     )
 
 
@@ -305,6 +316,25 @@ def test_py_buildvalue_traces_local_decl_ref_assigned_after_zero_initializer() -
 
     assert inferred is not None
     assert inferred.render() == "tuple[int, types.CapsuleType]"
+
+
+def test_return_type_traces_local_assignment_without_tokens() -> None:
+    value_decl = _var_decl("value", _null_ptr_literal())
+    assignment = _assignment(
+        "value",
+        _call_expr("PyLong_FromLong", _identifier_node("raw_value")),
+        referenced=value_decl,
+    )
+    assignment._tokens = []
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        assignment,
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("int")
 
 
 def test_return_type_accepts_multiple_local_assignments_when_types_converge() -> None:

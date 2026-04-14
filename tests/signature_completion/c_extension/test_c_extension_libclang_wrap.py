@@ -40,6 +40,19 @@ def _find_cursor(
     )
 
 
+def _find_binary_operator_cursor(
+    translation_unit: clang.cindex.TranslationUnit,
+    token_spellings: list[str],
+) -> clang.cindex.Cursor:
+    """按 token 文本定位测试用二元操作符 cursor。"""
+    return next(
+        cursor
+        for cursor in translation_unit.cursor.walk_preorder()
+        if cursor.kind == clang.cindex.CursorKind.BINARY_OPERATOR
+        and [token.spelling for token in cursor.get_tokens()] == token_spellings
+    )
+
+
 def test_parse_translation_unit_full_argv_raises_on_libclang_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -157,3 +170,33 @@ def test_evaluate_cursor_raises_for_non_evaluable_cursor() -> None:
 
     with pytest.raises(RuntimeError, match="无法求值"):
         libclang_wrap_module.evaluate_cursor(cursor)
+
+
+def test_get_cursor_binary_operator_kind_distinguishes_assignment_from_equality() -> None:
+    translation_unit = _parse_eval_translation_unit(
+        "\n".join(
+            [
+                "void demo(int a, int b) {",
+                "    a = b;",
+                "    if (a == b) {}",
+                "}",
+            ]
+        )
+    )
+    assignment_cursor = _find_binary_operator_cursor(
+        translation_unit,
+        ["a", "=", "b"],
+    )
+    equality_cursor = _find_binary_operator_cursor(
+        translation_unit,
+        ["a", "==", "b"],
+    )
+
+    assert (
+        libclang_wrap_module.get_cursor_binary_operator_kind(assignment_cursor)
+        == libclang_wrap_module.CX_BINARY_OPERATOR_ASSIGN
+    )
+    assert (
+        libclang_wrap_module.get_cursor_binary_operator_kind(equality_cursor)
+        != libclang_wrap_module.CX_BINARY_OPERATOR_ASSIGN
+    )

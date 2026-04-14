@@ -29,6 +29,8 @@ _CX_EVAL_STR_LITERAL = 4
 _CX_EVAL_CFSTR = 5
 _CX_EVAL_OTHER = 6
 
+CX_BINARY_OPERATOR_ASSIGN = 22
+
 _STRING_EVAL_RESULT_KINDS = {
     _CX_EVAL_OBJC_STR_LITERAL,
     _CX_EVAL_STR_LITERAL,
@@ -108,6 +110,10 @@ _eval_result_get_as_str.restype = c_char_p
 _eval_result_dispose = clang.cindex.conf.lib.clang_EvalResult_dispose
 _eval_result_dispose.argtypes = [c_void_p]
 _eval_result_dispose.restype = None
+
+_get_cursor_binary_operator_kind = clang.cindex.conf.lib.clang_getCursorBinaryOperatorKind
+_get_cursor_binary_operator_kind.argtypes = [Cursor]
+_get_cursor_binary_operator_kind.restype = c_uint
 
 
 def parse_translation_unit_full_argv(
@@ -213,6 +219,11 @@ def evaluate_cursor(cursor: Cursor) -> int | float | str:
         )
     finally:
         _eval_result_dispose(eval_result_pointer)
+
+
+def get_cursor_binary_operator_kind(cursor: Cursor) -> int:
+    """返回二元操作符 cursor 对应的 `CXBinaryOperatorKind`。"""
+    return int(_get_cursor_binary_operator_kind(cursor))
 
 
 def _eval_result_kind_name(kind: int) -> str:

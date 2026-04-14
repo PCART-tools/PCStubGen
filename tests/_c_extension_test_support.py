@@ -13,6 +13,9 @@ from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
 from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
+from pcstubgen.signature_completion.c_extension.clang.libclang_wrap import (
+    CX_BINARY_OPERATOR_ASSIGN,
+)
 from pcstubgen.type_models import RawType, Type
 from pcstubgen.signature_completion.c_extension.source import (
     CInferenceResult,
@@ -159,6 +162,7 @@ class _FakeNode:
         semantic_parent: object | None = None,
         lexical_parent: object | None = None,
         storage_class: object = StorageClass.NONE,
+        binary_operator_kind: int | None = None,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
@@ -175,6 +179,7 @@ class _FakeNode:
         self.semantic_parent = semantic_parent
         self.lexical_parent = lexical_parent
         self.storage_class = storage_class
+        self.binary_operator_kind = binary_operator_kind
         self.type = None
 
     def get_tokens(self) -> list[_FakeToken]:
@@ -273,7 +278,12 @@ def _var_decl(
     )
 
 
-def _assignment(name: str, value: _FakeNode, *, referenced: object | None = None) -> _FakeNode:
+def _assignment(
+    name: str,
+    value: _FakeNode,
+    *,
+    referenced: object | None = None,
+) -> _FakeNode:
     """构造 `name = value` 形式的赋值节点。"""
     return _FakeNode(
         kind=clang.cindex.CursorKind.BINARY_OPERATOR,
@@ -285,6 +295,7 @@ def _assignment(name: str, value: _FakeNode, *, referenced: object | None = None
             _token_identifier_node(name, referenced=referenced),
             value,
         ],
+        binary_operator_kind=CX_BINARY_OPERATOR_ASSIGN,
     )
 
 

@@ -15,7 +15,11 @@ from ..clang.ast_utils import (
     var_decl_to_init_list_expr,
     walk_cursor,
 )
-from ..clang.libclang_wrap import evaluate_cursor
+from ..clang.libclang_wrap import (
+    CX_BINARY_OPERATOR_ASSIGN,
+    evaluate_cursor,
+    get_cursor_binary_operator_kind,
+)
 from ..method_flags import (
     METH_FASTCALL,
     METH_KEYWORDS,
@@ -335,8 +339,7 @@ def _extract_optional_decl_initializer(decl_cursor: Cursor) -> Cursor | None:
 
 def _extract_direct_assignment_value(assignment_cursor: Cursor, target_decl: Cursor) -> Cursor | None:
     """在 `x = expr` 中提取目标局部变量对应的右值表达式。"""
-    token_spellings = [token.spelling for token in assignment_cursor.get_tokens()]
-    if token_spellings.count("=") != 1:
+    if get_cursor_binary_operator_kind(assignment_cursor) != CX_BINARY_OPERATOR_ASSIGN:
         return None
 
     children = list(assignment_cursor.get_children())
