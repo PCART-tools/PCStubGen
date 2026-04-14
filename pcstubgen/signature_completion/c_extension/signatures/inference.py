@@ -229,6 +229,7 @@ def infer_expr_type(expr: Cursor) -> Type:
             return _infer_decl_ref_expr_type(child)
 
     if is_nullptr_or_zero(expr):
+        '''return NULL异常返回分支 union后就不存在了'''
         return UnionType(())
 
     raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}, cursor: {expr.location}")

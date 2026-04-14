@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ....type_models import RawType, Type
+from ....type_models import RawType, Type, UnionType
 
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
@@ -27,7 +27,28 @@ OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "_Py_FalseStruct": RawType("bool"),
 }
 
+_ERROR_RETURN_TYPE = UnionType(())
+
+ERROR_RETURN_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+    "PyErr_Format": _ERROR_RETURN_TYPE,
+    "PyErr_FormatV": _ERROR_RETURN_TYPE,
+    "PyErr_NoMemory": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromErrno": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromErrnoWithFilenameObject": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromErrnoWithFilenameObjects": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromErrnoWithFilename": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromWindowsErr": _ERROR_RETURN_TYPE,
+    "PyErr_SetFromWindowsErrWithFilename": _ERROR_RETURN_TYPE,
+    "PyErr_SetExcFromWindowsErr": _ERROR_RETURN_TYPE,
+    "PyErr_SetExcFromWindowsErrWithFilenameObject": _ERROR_RETURN_TYPE,
+    "PyErr_SetExcFromWindowsErrWithFilenameObjects": _ERROR_RETURN_TYPE,
+    "PyErr_SetExcFromWindowsErrWithFilename": _ERROR_RETURN_TYPE,
+    "PyErr_SetImportError": _ERROR_RETURN_TYPE,
+    "PyErr_SetImportErrorSubclass": _ERROR_RETURN_TYPE,
+}
+
 FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+    **ERROR_RETURN_FUNCTION_NAME_TO_TYPE,
     "PyCapsule_New": RawType("types.CapsuleType", imports=("types",)),
     "PyBool_FromLong": RawType("bool"),
     "PyLong_FromLong": RawType("int"),

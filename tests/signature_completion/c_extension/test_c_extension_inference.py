@@ -170,6 +170,32 @@ def test_infer_expr_type_skips_unknown_conditional_branches() -> None:
 
     assert inferred == UnionType(())
 
+
+@pytest.mark.parametrize("call_name", ["PyErr_NoMemory", "PyErr_Format"])
+def test_infer_expr_type_detects_error_return_factories(call_name: str) -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            call_name,
+            _identifier_node("exception"),
+            _string_literal("message"),
+        )
+    )
+
+    assert inferred == UnionType(())
+
+
+def test_infer_expr_type_does_not_treat_pyerr_prefix_as_error_return() -> None:
+    with pytest.raises(RuntimeError, match="返回值工厂调用"):
+        signature_rules_module.infer_expr_type(
+            _call_expr(
+                "PyErr_NewException",
+                _string_literal("module.CustomError"),
+                _null_ptr_literal(),
+                _null_ptr_literal(),
+            )
+        )
+
+
 def test_infer_expr_type_raises_for_unsupported_expr() -> None:
     expr_cursor = _call_expr("CustomFactory", _identifier_node("value"))
     expr_cursor.location = _location_text("factory.c:10:2")
@@ -516,6 +542,33 @@ def test_return_type_deduplicates_members_already_present_in_union_return() -> N
 
     assert inferred is not None
     assert inferred.render() == "float | int"
+
+
+def test_return_type_drops_error_return_factory_branch() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("PyErr_NoMemory")),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("int")
+
+
+def test_return_type_drops_error_return_factory_conditional_branch() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _conditional_expr(
+                _identifier_node("cond"),
+                _call_expr("PyErr_NoMemory"),
+                _call_expr("PyLong_FromLong", _identifier_node("value")),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("int")
 
 
 def test_return_type_returns_any_for_unsupported_returns() -> None:
