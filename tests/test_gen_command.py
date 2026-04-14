@@ -6,7 +6,7 @@ from typer.testing import CliRunner
 
 from pcstubgen.__main__ import app
 from pcstubgen.models import Argument, Function, Module, QualifiedName
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import _signature
 
 

@@ -1,7 +1,29 @@
 from __future__ import annotations
 
-from ....types import RawType, Type, UnionType
+from ....type_models import RawType, Type
 
+
+PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
+    "PyList_Type": RawType("list"),
+    "PyTuple_Type": RawType("tuple"),
+    "PyDict_Type": RawType("dict"),
+    "PyUnicode_Type": RawType("str"),
+    "PyLong_Type": RawType("int"),
+    "PyFloat_Type": RawType("float"),
+    "PyBool_Type": RawType("bool"),
+    "PyBytes_Type": RawType("bytes"),
+    "PyByteArray_Type": RawType("bytearray"),
+    "PySet_Type": RawType("set"),
+    "PyFrozenSet_Type": RawType("frozenset"),
+    "PyType_Type": RawType("type"),
+    "PyBaseObject_Type": RawType("object"),
+}
+
+OBJECT_NAME_TO_TYPE: dict[str, Type] = {
+    "_Py_NoneStruct": RawType("None"),
+    "_Py_TrueStruct": RawType("bool"),
+    "_Py_FalseStruct": RawType("bool"),
+}
 
 FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyBool_FromLong": RawType("bool"),
@@ -100,10 +122,4 @@ FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyDict_Copy": RawType("dict"),
     "PySet_New": RawType("set"),
     "PyFrozenSet_New": RawType("frozenset"),
-    "PyArray_Return": UnionType(
-        (
-            RawType("numpy.ndarray", imports=("numpy",)),
-            RawType("numpy.generic", imports=("numpy",)),
-        )
-    ),
 }

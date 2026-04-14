@@ -13,7 +13,7 @@ from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
 from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
-from pcstubgen.types import RawType, Type
+from pcstubgen.type_models import RawType, Type
 from pcstubgen.signature_completion.c_extension.source import (
     CInferenceResult,
     CExtensionSource,

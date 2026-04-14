@@ -10,7 +10,7 @@ from loguru import logger
 
 from .....models import Argument
 from .format_units import _FORMAT_UNIT_SPECS
-from .....types import RawType, Type
+from .....type_models import RawType, Type
 
 
 class PyArgParseTupleTypeParserError(ValueError):

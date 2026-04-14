@@ -18,7 +18,7 @@ from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
     CInferenceResult,
 )
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import _FakeNode, _arg, _extent_for_source_snippet
 
 

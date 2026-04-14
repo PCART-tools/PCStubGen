@@ -4,7 +4,7 @@ from clang.cindex import Cursor, CursorKind, TypeKind
 from loguru import logger
 
 from ....models import Argument, ArgumentKind, Signature
-from ....types import AnyType, RawType, Type, UnionType
+from ....type_models import AnyType, RawType, Type, UnionType
 from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
@@ -23,8 +23,6 @@ from ..method_flags import (
     METH_O,
     METH_VARARGS,
 )
-from .object_type_maps import OBJECT_NAME_TO_TYPE
-from .py_arg_parse.parser_maps import DEFAULT_IDENTIFIER_TO_VALUE, PY_TYPE_OBJECT_NAME_TO_TYPE
 from .py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
 )
@@ -32,7 +30,7 @@ from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
 )
 from .py_build_value.parser import PyBuildValueTypeParser
-from .return_type_maps import FUNCTION_NAME_TO_TYPE
+from .rules import FUNCTION_NAME_TO_TYPE, OBJECT_NAME_TO_TYPE, PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE
 
 _PYARG_PARSETUPLE_CALL_NAMES = {
     "PyArg_ParseTuple",
@@ -318,7 +316,7 @@ def _infer_object_type_for_pyarg(cursor: Cursor) -> Type:
             f"对象类型槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
         )
     type_name = match.group(0)
-    mapped = PY_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
+    mapped = PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
     if mapped is None:
         raise RuntimeError(
             f"无法识别的对象类型标识符: {type_name}, source_text: {source_text!r}, cursor: {cursor.location}"
@@ -401,14 +399,6 @@ def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor:
 def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
     """结合目标声明节点，将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
     expr = unwrap_transparent(expr)
-
-    if expr.kind == CursorKind.DECL_REF_EXPR:
-        mapped = DEFAULT_IDENTIFIER_TO_VALUE.get(expr.spelling)
-        if mapped is None:
-            raise RuntimeError(
-                f"无法识别的默认值标识符: {expr.spelling}, cursor: {expr.location}"
-            )
-        return mapped
 
     if expr.kind == CursorKind.STRING_LITERAL:
         return get_string_literal(expr)

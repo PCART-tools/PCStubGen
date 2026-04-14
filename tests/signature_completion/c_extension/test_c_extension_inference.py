@@ -16,7 +16,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
-from pcstubgen.types import AnyType, ListType, RawType, TupleType, UnionType
+from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
     _FakeNode,
     _address_of,
@@ -383,7 +383,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
             _arg(
                 "label",
                 UnionType((RawType("str"), RawType("None"))),
-                default_value="None",
+                default_value="...",
             ),
         ]
     ]
@@ -409,6 +409,30 @@ def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path
 
     assert inferred is not None
     assert inferred.render() == "str"
+
+
+def test_infer_object_type_for_pyarg_reads_numpy_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "numpy_object_type_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", (&PyArray_Type), &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent=_extent_for_source_snippet(source, "(&PyArray_Type)"),
+    )
+
+    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray"
 
 
 def test_infer_object_type_for_pyarg_propagates_extent_source_text_read_error(

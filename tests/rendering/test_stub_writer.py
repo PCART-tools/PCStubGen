@@ -3,7 +3,7 @@ from __future__ import annotations
 from pcstubgen.models import Function, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, StubWriter
 from tests._c_extension_test_support import _signature
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 
 
 def test_stub_writer_writes_regular_module_file(tmp_path) -> None:

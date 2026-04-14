@@ -4,7 +4,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.models import Argument, ArgumentKind
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,

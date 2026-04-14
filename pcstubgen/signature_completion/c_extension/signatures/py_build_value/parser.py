@@ -8,7 +8,7 @@ from clang.cindex import Cursor
 from loguru import logger
 
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
-from .....types import AnyType, DictType, ListType, RawType, TupleType, Type, UnionType
+from .....type_models import AnyType, DictType, ListType, RawType, TupleType, Type, UnionType
 
 
 class PyBuildValueTypeParserError(ValueError):

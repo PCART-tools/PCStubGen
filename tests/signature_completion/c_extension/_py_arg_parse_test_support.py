@@ -6,7 +6,7 @@ from typing import cast
 from clang.cindex import Cursor
 
 from pcstubgen.models import Argument, ArgumentKind
-from pcstubgen.types import RawType, Type, UnionType
+from pcstubgen.type_models import RawType, Type, UnionType
 
 
 @dataclass(frozen=True)

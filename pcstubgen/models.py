@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Literal, Tuple, TypeAlias
 
-from .types import Type
+from .type_models import Type
 
 
 class QualifiedName(Tuple[str, ...]):

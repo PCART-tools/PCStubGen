@@ -4,7 +4,7 @@ import tomllib
 
 from pcstubgen.models import Argument, Class, Function, Method, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, TomlWriter
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import _signature
 
 

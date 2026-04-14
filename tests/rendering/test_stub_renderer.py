@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import typing
 
-from pcstubgen.types import RawType, Type
+from pcstubgen.type_models import RawType, Type
 from pcstubgen.models import Argument, ArgumentKind, Class, Function, Method, Module, Signature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 

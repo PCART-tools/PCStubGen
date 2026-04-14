@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from ..types import RawType, Type
+from ..type_models import RawType, Type
 from ..models import Argument, ArgumentKind, Function, Module, Signature
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pcstubgen.types import AnyType, DictType, RawType, UnionType
+from pcstubgen.type_models import AnyType, DictType, RawType, UnionType
 
 
 def test_collect_imports_returns_recursive_dependency_set() -> None:

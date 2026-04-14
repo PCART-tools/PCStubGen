@@ -5,7 +5,7 @@ import inspect
 import pkgutil
 import types
 from typing import Any
-import runtime
+from . import runtime
 
 from loguru import logger
 

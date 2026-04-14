@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .....types import RawType, Type, UnionType
+from .....type_models import RawType, Type, UnionType
 
 
 @dataclass(frozen=True)

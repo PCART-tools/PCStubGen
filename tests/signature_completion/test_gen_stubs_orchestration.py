@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pcstubgen.models import Module, QualifiedName
-from pcstubgen.types import RawType
+from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import (
     _arg,
     _patch_c_signature_extractor,
