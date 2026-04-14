@@ -73,6 +73,21 @@ def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
         "get_cursor_text",
         fake_cursor_get_text,
     )
+    real_get_call_expr_source_name = signature_rules_module.get_call_expr_source_name
+
+    def fake_get_call_expr_source_name(cursor: object) -> str:
+        if isinstance(cursor, _FakeNode):
+            tokens = list(cursor.get_tokens())
+            if not tokens:
+                raise RuntimeError(f"调用表达式起点缺少 token, cursor: {cursor.location}")
+            return tokens[0].spelling
+        return real_get_call_expr_source_name(cast(clang.cindex.Cursor, cursor))
+
+    monkeypatch.setattr(
+        signature_rules_module,
+        "get_call_expr_source_name",
+        fake_get_call_expr_source_name,
+    )
 
     def fake_cursor_binary_operator_kind(cursor: object) -> int:
         operator_kind = cast(_FakeNode, cursor).binary_operator_kind
@@ -275,6 +290,44 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
     assert inferred.render() == expected
 
 
+@pytest.mark.parametrize(
+    "call_name",
+    [
+        "PyArray_ContiguousFromObject",
+        "PyArray_Arange",
+        "PyArray_SimpleNew",
+        "PyArray_FROMANY",
+    ],
+)
+def test_infer_expr_type_detects_numpy_ndarray_factories(call_name: str) -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            call_name,
+            _identifier_node("arg"),
+            _identifier_node("dims"),
+            _identifier_node("typenum"),
+        )
+    )
+
+    assert inferred.render() == "numpy.ndarray"
+
+
+def test_infer_expr_type_uses_call_start_token_for_function_like_macro_call() -> None:
+    call_cursor = _call_expr(
+        "PyArray_ContiguousFromObject",
+        _identifier_node("source"),
+        _identifier_node("typenum"),
+        _int_literal("0"),
+        _int_literal("0"),
+    )
+    callee_cursor = next(call_cursor.get_children())
+    callee_cursor.extent = "PyArray_ContiguousFromObject(source, typenum, 0, 0)"
+
+    inferred = signature_rules_module.infer_expr_type(call_cursor)
+
+    assert inferred.render() == "numpy.ndarray"
+
+
 def test_return_type_detects_pycapsule_new_factory() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(
@@ -342,6 +395,98 @@ def test_py_buildvalue_traces_local_decl_ref_assigned_after_zero_initializer() -
 
     assert inferred is not None
     assert inferred.render() == "tuple[int, types.CapsuleType]"
+
+
+def test_py_buildvalue_skips_chained_null_assignment_before_factory_assignment() -> None:
+    arr_decl = _var_decl("arr")
+    other_decl = _var_decl("other")
+    cursor = _fake_function_cursor_with_children(
+        arr_decl,
+        other_decl,
+        _assignment(
+            "arr",
+            _assignment("other", _null_ptr_literal(), referenced=other_decl),
+            referenced=arr_decl,
+        ),
+        _assignment(
+            "arr",
+            _call_expr(
+                "PyArray_SimpleNew",
+                _identifier_node("ndim"),
+                _identifier_node("dims"),
+                _identifier_node("typenum"),
+            ),
+            referenced=arr_decl,
+        ),
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("N"),
+                _token_identifier_node("arr", referenced=arr_decl),
+            )
+        ),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray"
+
+
+def test_py_buildvalue_traces_numpy_factory_local_decl_ref_for_n_slot() -> None:
+    arr_decl = _var_decl(
+        "arr",
+        _call_expr(
+            "PyArray_SimpleNew",
+            _identifier_node("ndim"),
+            _identifier_node("dims"),
+            _identifier_node("typenum"),
+        ),
+    )
+    cursor = _fake_function_cursor_with_children(
+        arr_decl,
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("N"),
+                _token_identifier_node("arr", referenced=arr_decl),
+            )
+        ),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray"
+
+
+def test_py_buildvalue_traces_numpy_factory_local_decl_ref_for_o_slot() -> None:
+    arr_decl = _var_decl(
+        "arr",
+        _call_expr(
+            "PyArray_FROMANY",
+            _identifier_node("source"),
+            _identifier_node("typenum"),
+            _identifier_node("min_depth"),
+            _identifier_node("max_depth"),
+            _identifier_node("requirements"),
+        ),
+    )
+    cursor = _fake_function_cursor_with_children(
+        arr_decl,
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("O"),
+                _token_identifier_node("arr", referenced=arr_decl),
+            )
+        ),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray"
 
 
 def test_return_type_traces_local_assignment_without_tokens() -> None:

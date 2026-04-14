@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator
 
-from clang.cindex import Cursor, CursorKind, TranslationUnit
+from clang.cindex import Cursor, CursorKind, SourceLocation, SourceRange, TranslationUnit
 
 from .libclang_wrap import evaluate_cursor, get_file_contents, get_file_location
 
@@ -102,6 +102,25 @@ def get_cursor_text(cursor: Cursor) -> str:
         raise RuntimeError(f"源码范围终点位于起点之前，无法提取文本, cursor: {cursor.location}")
     source_bytes = source_bytes[start_offset:end_offset]
     return source_bytes.decode("utf-8", errors="ignore")
+
+
+def get_call_expr_source_name(cursor: Cursor) -> str:
+    """从调用表达式起点 token 提取源码调用名。"""
+    if cursor.kind != CursorKind.CALL_EXPR:
+        raise RuntimeError(f"只能从 CALL_EXPR 提取源码调用名, cursor: {cursor.location}")
+
+    start_file, _, _, start_offset = get_file_location(cursor.extent.start)
+    if start_file is None:
+        raise RuntimeError(f"调用表达式起点缺少文件信息, cursor: {cursor.location}")
+
+    token_range = SourceRange.from_locations(
+        SourceLocation.from_offset(cursor.translation_unit, start_file, start_offset),
+        SourceLocation.from_offset(cursor.translation_unit, start_file, start_offset + 1),
+    )
+    tokens = list(cursor.translation_unit.get_tokens(extent=token_range))
+    if not tokens:
+        raise RuntimeError(f"调用表达式起点缺少 token, cursor: {cursor.location}")
+    return tokens[0].spelling
 
 
 IDENTIFIER_RE = re.compile(r"\b[_A-Za-z]\w*\b")

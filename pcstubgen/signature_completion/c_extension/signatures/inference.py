@@ -8,6 +8,7 @@ from ....type_models import AnyType, RawType, Type, UnionType
 from ..clang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
+    get_call_expr_source_name,
     get_cursor_text,
     get_string_literal,
     is_nullptr_or_zero,
@@ -280,7 +281,7 @@ def _infer_local_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
     function_cursor = _find_local_decl_function_parent(target_decl)
     candidate_types: list[Type] = []
     for candidate_expr in _iter_local_decl_assignment_exprs(function_cursor, target_decl):
-        candidate_expr = unwrap_transparent(candidate_expr)
+        candidate_expr = _unwrap_assignment_chain_value(candidate_expr)
         if is_nullptr_or_zero(candidate_expr):
             continue
         candidate_types.append(infer_expr_type(candidate_expr).canonicalize())
@@ -296,6 +297,18 @@ def _infer_local_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
                 f"left: {inferred_type.render()}, right: {candidate_type.render()}"
             )
     return inferred_type
+
+
+def _unwrap_assignment_chain_value(expr_cursor: Cursor) -> Cursor:
+    """剥离链式赋值表达式，定位到最终右值。"""
+    value_expr = unwrap_transparent(expr_cursor)
+    while value_expr.kind == CursorKind.BINARY_OPERATOR:
+        if get_cursor_binary_operator_kind(value_expr) != CX_BINARY_OPERATOR_ASSIGN:
+            break
+        children = list(value_expr.get_children())
+        assert len(children) == 2
+        value_expr = unwrap_transparent(children[1])
+    return value_expr
 
 
 def _find_local_decl_function_parent(decl_cursor: Cursor) -> Cursor:
@@ -373,12 +386,11 @@ def _is_decl_ref_to_decl(expr_cursor: Cursor, target_decl: Cursor) -> bool:
 def _infer_call_expr_type(cursor: Cursor) -> Type:
     """
     从调用表达式推断返回类型。
-    不一定能从 spelling 获取，可能是宏展开后的函数指针调用，因此优先回读源码。
+    调用名按源码调用表达式起点 token 提取，避免函数式宏的 callee source range
+    扩成整段调用文本。
     """
     assert cursor.kind == CursorKind.CALL_EXPR
-    children = list(cursor.get_children())
-    func_cursor = children[0]
-    call_name = get_cursor_text(func_cursor)
+    call_name = get_call_expr_source_name(cursor)
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)

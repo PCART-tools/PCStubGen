@@ -36,6 +36,16 @@ def _parse_first_function_cursor(source_arg: str, *, cwd: Path | None = None) ->
     )
 
 
+def _parse_first_call_cursor(source_arg: str) -> clang.cindex.Cursor:
+    index = clang.cindex.Index.create()
+    translation_unit = clang.cindex.TranslationUnit.from_source(source_arg, index=index)
+    return next(
+        cursor
+        for cursor in translation_unit.cursor.walk_preorder()
+        if cursor.kind == clang.cindex.CursorKind.CALL_EXPR
+    )
+
+
 def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_path: Path) -> None:
     source = tmp_path / "extent_text.c"
     snippet = "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);"
@@ -56,6 +66,47 @@ def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_
     extracted = ast_utils_module.get_cursor_text(function_cursor)
 
     assert snippet in extracted
+
+
+def test_get_call_expr_source_name_reads_direct_call_start_token(tmp_path: Path) -> None:
+    source = tmp_path / "direct_call_name.c"
+    source.write_text(
+        "\n".join(
+            [
+                "int PyLong_FromLong(int value);",
+                "int demo(int value) {",
+                "    return PyLong_FromLong(value);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    call_cursor = _parse_first_call_cursor(str(source))
+
+    call_name = ast_utils_module.get_call_expr_source_name(call_cursor)
+
+    assert call_name == "PyLong_FromLong"
+
+
+def test_get_call_expr_source_name_reads_function_like_macro_start_token(tmp_path: Path) -> None:
+    source = tmp_path / "macro_call_name.c"
+    source.write_text(
+        "\n".join(
+            [
+                "int PyLong_FromLong(int value);",
+                "#define PyArray_ContiguousFromObject(op, type, min_depth, max_depth) PyLong_FromLong(op)",
+                "int demo(int value) {",
+                "    return PyArray_ContiguousFromObject(value, 0, 0, 0);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    call_cursor = _parse_first_call_cursor(str(source))
+
+    call_name = ast_utils_module.get_call_expr_source_name(call_cursor)
+
+    assert call_name == "PyArray_ContiguousFromObject"
 
 
 def test_extract_cursor_source_text_reads_relative_path_extent_from_translation_unit_buffer(

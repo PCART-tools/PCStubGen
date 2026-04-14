@@ -22,6 +22,10 @@ OBJECT_NAME_TO_TYPE: dict[str, Type] = {}
 
 
 FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+    "PyArray_ContiguousFromObject": _NDARRAY_TYPE,
+    "PyArray_Arange": _NDARRAY_TYPE,
+    "PyArray_SimpleNew": _NDARRAY_TYPE,
+    "PyArray_FROMANY": _NDARRAY_TYPE,
     "PyArray_Return": UnionType(
         (
             RawType("numpy.ndarray", imports=("numpy",)),

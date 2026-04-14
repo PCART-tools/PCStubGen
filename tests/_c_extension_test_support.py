@@ -320,6 +320,7 @@ def _extent_for_source_snippet(source_path: Path, snippet: str) -> _FakeSourceRa
 def _call_expr(name: str, *args: _FakeNode) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.CALL_EXPR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
         spelling=name,
         children=[
             _FakeNode(
