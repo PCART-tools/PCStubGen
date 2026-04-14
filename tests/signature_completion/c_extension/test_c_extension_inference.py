@@ -389,7 +389,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     ]
 
 
-def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
+def test_infer_type_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
     source = tmp_path / "object_type_from_extent.c"
     source.write_text(
         "\n".join(
@@ -405,13 +405,13 @@ def test_infer_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path
         extent=_extent_for_source_snippet(source, "(&PyUnicode_Type)"),
     )
 
-    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
+    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
     assert inferred is not None
     assert inferred.render() == "str"
 
 
-def test_infer_object_type_for_pyarg_reads_numpy_name_from_extent_source_text(
+def test_infer_type_object_type_for_pyarg_reads_numpy_name_from_extent_source_text(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "numpy_object_type_from_extent.c"
@@ -429,13 +429,13 @@ def test_infer_object_type_for_pyarg_reads_numpy_name_from_extent_source_text(
         extent=_extent_for_source_snippet(source, "(&PyArray_Type)"),
     )
 
-    inferred = signature_rules_module._infer_object_type_for_pyarg(cursor)
+    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
     assert inferred is not None
     assert inferred.render() == "numpy.ndarray"
 
 
-def test_infer_object_type_for_pyarg_propagates_extent_source_text_read_error(
+def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cursor = _FakeNode(
@@ -449,7 +449,73 @@ def test_infer_object_type_for_pyarg_propagates_extent_source_text_read_error(
     )
 
     with pytest.raises(RuntimeError, match="boom"):
-        signature_rules_module._infer_object_type_for_pyarg(cursor)
+        signature_rules_module._infer_type_object_type_for_pyarg(cursor)
+
+
+def test_infer_converter_type_for_pyarg_reads_numpy_converter_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "numpy_converter_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O&\", NI_ObjectToInputArray, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _identifier_node("converter")
+    cursor.extent = _extent_for_source_snippet(source, "NI_ObjectToInputArray")
+
+    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray"
+
+
+def test_infer_converter_type_for_pyarg_reads_optional_numpy_converter_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "optional_numpy_converter_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O&\", NI_ObjectToOptionalInputArray, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _identifier_node("converter")
+    cursor.extent = _extent_for_source_snippet(source, "NI_ObjectToOptionalInputArray")
+
+    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.ndarray | None"
+
+
+def test_infer_converter_type_for_pyarg_reads_tuple_converter_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "tuple_converter_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O&\", PyArray_IntpConverter, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _identifier_node("converter")
+    cursor.extent = _extent_for_source_snippet(source, "PyArray_IntpConverter")
+
+    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "tuple[int, ...]"
 
 
 def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
@@ -474,6 +540,38 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
             _FakeNode(
                 kind=clang.cindex.CursorKind.UNARY_OPERATOR,
                 extent=_extent_for_source_snippet(source, "(&UnknownRuntimeType)"),
+            ),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "object")]]
+
+
+def test_infer_argument_lists_falls_back_to_object_for_unknown_o_ampersand_converter(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "unknown_converter_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O&\", UnknownConverter, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O&"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+                extent=_extent_for_source_snippet(source, "UnknownConverter"),
             ),
             _address_of("value", referenced=value_decl),
         )

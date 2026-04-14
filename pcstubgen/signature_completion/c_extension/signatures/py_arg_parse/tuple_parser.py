@@ -105,14 +105,16 @@ class PyArgParseTupleTypeParser:
         fmt: str,
         args: list[Cursor],
         infer_name_func: Callable[[list[Cursor]], str],
-        infer_object_type_func: Callable[[Cursor], Type],
+        infer_type_object_func: Callable[[Cursor], Type],
+        infer_converter_type_func: Callable[[Cursor], Type],
         infer_default_value_func: Callable[[Cursor], str],
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
         self._args = args
         self._infer_name_func = infer_name_func
-        self._infer_object_type_func = infer_object_type_func
+        self._infer_type_object_func = infer_type_object_func
+        self._infer_converter_type_func = infer_converter_type_func
         self._infer_default_value_func = infer_default_value_func
         self._char_index = 0
         self._arg_index = 0
@@ -211,9 +213,13 @@ class PyArgParseTupleTypeParser:
                 self._char_index += len(spec.unit)
                 raw_c_args = self._advance_c_args_required(spec.c_arg_count)
                 value_type = spec.type
-                if spec.object_type_arg_offset is not None:
-                    value_type = self._infer_object_type(
-                        raw_c_args[spec.object_type_arg_offset]
+                if spec.type_object_arg_offset is not None:
+                    value_type = self._infer_type_object(
+                        raw_c_args[spec.type_object_arg_offset]
+                    )
+                if spec.converter_arg_offset is not None:
+                    value_type = self._infer_converter(
+                        raw_c_args[spec.converter_arg_offset]
                     )
                 decl_ref_cursor = raw_c_args[spec.decl_ref_offset]
                 return _ScalarParsedValue(
@@ -238,13 +244,25 @@ class PyArgParseTupleTypeParser:
         # TODO: 后续统一决定 infer_name 失败是否也要和类型/默认值一样降级。
         return self._infer_name_func(list(c_args))
 
-    def _infer_object_type(self, cursor: Cursor) -> Type:
-        """解析对象单元的 Python 类型，失败时回退为 `object`。"""
+    def _infer_type_object(self, cursor: Cursor) -> Type:
+        """解析 `O!` 类型对象单元的 Python 类型，失败时回退为 `object`。"""
         try:
-            return self._infer_object_type_func(cursor)
+            return self._infer_type_object_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTuple 对象类型推断失败，回退为 object, reason: {}: {}",
+                "PyArg_ParseTuple 类型对象推断失败，回退为 object, reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
+            return RawType("object")
+
+    def _infer_converter(self, cursor: Cursor) -> Type:
+        """解析 `O&` converter 单元的 Python 类型，失败时回退为 `object`。"""
+        try:
+            return self._infer_converter_type_func(cursor)
+        except Exception as ex:
+            logger.warning(
+                "PyArg_ParseTuple converter 类型推断失败，回退为 object, reason: {}: {}",
                 type(ex).__name__,
                 ex,
             )

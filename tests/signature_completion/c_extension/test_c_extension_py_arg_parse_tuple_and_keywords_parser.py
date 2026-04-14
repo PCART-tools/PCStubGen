@@ -24,14 +24,16 @@ def _parse(
     kwlist: list[str],
     args: list[Cursor],
     *,
-    infer_object_type_func=None,
+    infer_type_object_func=None,
+    infer_converter_type_func=None,
     infer_default_value_func=None,
 ) -> list[Argument]:
     return PyArgParseTupleAndKeywordsTypeParser(
         format_string,
         kwlist,
         args,
-        infer_object_type_func=infer_object_type_func or (lambda cursor: RawType("Resolved")),
+        infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
+        infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
         infer_default_value_func=infer_default_value_func or (lambda cursor: "None"),
     ).parse()
 
@@ -106,8 +108,11 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
         maybe_buffer_cursor: "None",
     }
 
-    def infer_object_type(cursor: Cursor) -> RawType:
-        return resolved_types[cursor]
+    def infer_type_object(cursor: Cursor) -> RawType:
+        return {type_cursor: resolved_types[type_cursor]}[cursor]
+
+    def infer_converter(cursor: Cursor) -> RawType:
+        return {converter_cursor: resolved_types[converter_cursor]}[cursor]
 
     def infer_default_value(cursor: Cursor) -> str:
         return resolved_defaults[cursor]
@@ -128,7 +133,8 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
             raw_len_cursor,
             maybe_buffer_cursor,
         ],
-        infer_object_type_func=infer_object_type,
+        infer_type_object_func=infer_type_object,
+        infer_converter_type_func=infer_converter,
         infer_default_value_func=infer_default_value,
     )
 
@@ -216,7 +222,7 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
     ]
 
 
-def test_parse_falls_back_to_object_when_object_type_inference_raises() -> None:
+def test_parse_falls_back_to_object_when_type_object_or_converter_inference_raises() -> None:
     type_cursor = _cursor("type")
     typed_result_cursor = _cursor("typed_result")
     converter_cursor = _cursor("converter")
@@ -226,13 +232,38 @@ def test_parse_falls_back_to_object_when_object_type_inference_raises() -> None:
         "O!O&",
         ["typed", "converted"],
         [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        infer_object_type_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+        infer_type_object_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("type object boom")),
+        infer_converter_type_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("converter boom")),
     )
 
     assert parsed == [
         _arg("typed", "object"),
         _arg("converted", "object"),
     ]
+
+
+def test_parse_routes_o_bang_and_o_ampersand_to_different_resolvers() -> None:
+    type_cursor = _cursor("type")
+    typed_result_cursor = _cursor("typed_result")
+    converter_cursor = _cursor("converter")
+    converted_result_cursor = _cursor("converted_result")
+    seen_type_objects: list[Cursor] = []
+    seen_converters: list[Cursor] = []
+
+    parsed = _parse(
+        "O!O&",
+        ["typed", "converted"],
+        [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
+        infer_type_object_func=lambda cursor: seen_type_objects.append(cursor) or RawType("Typed"),
+        infer_converter_type_func=lambda cursor: seen_converters.append(cursor) or RawType("Converted"),
+    )
+
+    assert parsed == [
+        _arg("typed", "Typed"),
+        _arg("converted", "Converted"),
+    ]
+    assert seen_type_objects == [type_cursor]
+    assert seen_converters == [converter_cursor]
 
 
 def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises() -> None:

@@ -19,6 +19,8 @@ PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyBaseObject_Type": RawType("object"),
 }
 
+PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {}
+
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "_Py_NoneStruct": RawType("None"),
     "_Py_TrueStruct": RawType("bool"),

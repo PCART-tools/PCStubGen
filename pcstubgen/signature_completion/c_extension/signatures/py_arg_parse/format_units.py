@@ -15,7 +15,8 @@ class _FormatUnitSpec:
     c_arg_count: int
     decl_ref_offset: int
     type: Type
-    object_type_arg_offset: int | None = None
+    type_object_arg_offset: int | None = None
+    converter_arg_offset: int | None = None
 
 
 _BUFFER_TYPE = RawType("collections.abc.Buffer", imports=("collections.abc",))
@@ -40,8 +41,8 @@ _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
     _FormatUnitSpec("es", 2, 1, RawType("str")),
     _FormatUnitSpec("et", 2, 1, _STR_OR_BYTES_OR_BYTEARRAY_TYPE),
     _FormatUnitSpec("w*", 1, 0, _BUFFER_TYPE),
-    _FormatUnitSpec("O!", 2, 1, RawType("object"), object_type_arg_offset=0),
-    _FormatUnitSpec("O&", 2, 1, RawType("object"), object_type_arg_offset=0),
+    _FormatUnitSpec("O!", 2, 1, RawType("object"), type_object_arg_offset=0),
+    _FormatUnitSpec("O&", 2, 1, RawType("object"), converter_arg_offset=0),
     _FormatUnitSpec("s", 1, 0, RawType("str")),
     _FormatUnitSpec("z", 1, 0, _STR_OR_NONE_TYPE),
     _FormatUnitSpec("y", 1, 0, _BUFFER_TYPE),

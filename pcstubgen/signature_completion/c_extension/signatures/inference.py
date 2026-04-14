@@ -30,7 +30,12 @@ from .py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
 )
 from .py_build_value.parser import PyBuildValueTypeParser
-from .rules import FUNCTION_NAME_TO_TYPE, OBJECT_NAME_TO_TYPE, PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE
+from .rules import (
+    FUNCTION_NAME_TO_TYPE,
+    OBJECT_NAME_TO_TYPE,
+    PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE,
+    PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE,
+)
 
 _PYARG_PARSETUPLE_CALL_NAMES = {
     "PyArg_ParseTuple",
@@ -178,7 +183,8 @@ def _infer_pyarg_parsetuple_arguments(call_expr: Cursor) -> list[Argument]:
         format_string,
         args[2:],
         infer_name_func=_infer_argument_name,
-        infer_object_type_func=_infer_object_type_for_pyarg,
+        infer_type_object_func=_infer_type_object_type_for_pyarg,
+        infer_converter_type_func=_infer_converter_type_for_pyarg,
         infer_default_value_func=_infer_default_value_for_pyarg,
     ).parse()
 
@@ -193,7 +199,8 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(call_expr: Cursor) -> list[Ar
         format_string,
         kwlist,
         args[4:],
-        infer_object_type_func=_infer_object_type_for_pyarg,
+        infer_type_object_func=_infer_type_object_type_for_pyarg,
+        infer_converter_type_func=_infer_converter_type_for_pyarg,
         infer_default_value_func=_infer_default_value_for_pyarg,
     ).parse()
 
@@ -307,19 +314,36 @@ def _infer_argument_name(c_args: list[Cursor]) -> str:
     return "_".join(names)
 
 
-def _infer_object_type_for_pyarg(cursor: Cursor) -> Type:
-    """解析 `PyArg_*` 中对象槽位对应的 Python 类型名。"""
+def _infer_type_object_type_for_pyarg(cursor: Cursor) -> Type:
+    """解析 `PyArg_*` 中 `O!` 类型对象槽位对应的 Python 类型名。"""
     source_text = get_cursor_text(cursor)
     match = IDENTIFIER_RE.search(source_text)
     if match is None:
         raise RuntimeError(
-            f"对象类型槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
+            f"类型对象槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
         )
     type_name = match.group(0)
     mapped = PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
     if mapped is None:
         raise RuntimeError(
-            f"无法识别的对象类型标识符: {type_name}, source_text: {source_text!r}, cursor: {cursor.location}"
+            f"无法识别的类型对象标识符: {type_name}, source_text: {source_text!r}, cursor: {cursor.location}"
+        )
+    return mapped
+
+
+def _infer_converter_type_for_pyarg(cursor: Cursor) -> Type:
+    """解析 `PyArg_*` 中 `O&` converter 槽位对应的 Python 类型名。"""
+    source_text = get_cursor_text(cursor)
+    match = IDENTIFIER_RE.search(source_text)
+    if match is None:
+        raise RuntimeError(
+            f"converter 槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
+        )
+    converter_name = match.group(0)
+    mapped = PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE.get(converter_name)
+    if mapped is None:
+        raise RuntimeError(
+            f"无法识别的 converter 标识符: {converter_name}, source_text: {source_text!r}, cursor: {cursor.location}"
         )
     return mapped
 

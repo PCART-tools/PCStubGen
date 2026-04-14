@@ -31,14 +31,16 @@ class PyArgParseTupleAndKeywordsTypeParser:
         fmt: str,
         kwlist: list[str],
         args: list[Cursor],
-        infer_object_type_func: Callable[[Cursor], Type],
+        infer_type_object_func: Callable[[Cursor], Type],
+        infer_converter_type_func: Callable[[Cursor], Type],
         infer_default_value_func: Callable[[Cursor], str],
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
         self._kwlist = kwlist
         self._args = args
-        self._infer_object_type_func = infer_object_type_func
+        self._infer_type_object_func = infer_type_object_func
+        self._infer_converter_type_func = infer_converter_type_func
         self._infer_default_value_func = infer_default_value_func
         self._char_index = 0
         self._arg_index = 0
@@ -98,8 +100,10 @@ class PyArgParseTupleAndKeywordsTypeParser:
         c_args = self._advance_c_args_required(spec.c_arg_count)
 
         arg_type = spec.type
-        if spec.object_type_arg_offset is not None:
-            arg_type = self._infer_object_type(c_args[spec.object_type_arg_offset])
+        if spec.type_object_arg_offset is not None:
+            arg_type = self._infer_type_object(c_args[spec.type_object_arg_offset])
+        if spec.converter_arg_offset is not None:
+            arg_type = self._infer_converter(c_args[spec.converter_arg_offset])
 
         default_value: str | None = None
         if section is not _ArgumentSection.REQUIRED:
@@ -196,13 +200,25 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._arg_index = end_index
         return values
 
-    def _infer_object_type(self, cursor: Cursor) -> Type:
-        """解析对象单元的 Python 类型，失败时回退为 `object`。"""
+    def _infer_type_object(self, cursor: Cursor) -> Type:
+        """解析 `O!` 类型对象单元的 Python 类型，失败时回退为 `object`。"""
         try:
-            return self._infer_object_type_func(cursor)
+            return self._infer_type_object_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTupleAndKeywords 对象类型推断失败，回退为 object, reason: {}: {}",
+                "PyArg_ParseTupleAndKeywords 类型对象推断失败，回退为 object, reason: {}: {}",
+                type(ex).__name__,
+                ex,
+            )
+            return RawType("object")
+
+    def _infer_converter(self, cursor: Cursor) -> Type:
+        """解析 `O&` converter 单元的 Python 类型，失败时回退为 `object`。"""
+        try:
+            return self._infer_converter_type_func(cursor)
+        except Exception as ex:
+            logger.warning(
+                "PyArg_ParseTupleAndKeywords converter 类型推断失败，回退为 object, reason: {}: {}",
                 type(ex).__name__,
                 ex,
             )
