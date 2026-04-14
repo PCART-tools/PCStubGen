@@ -7,7 +7,7 @@ from loguru import logger
 
 from ..models import Class, Function, Method, Module
 from .c_extension import CExtensionSource
-from .c_extension.runtime import supports_builtin_function_inference
+from ..runtime import is_cpython_builtin, is_pybind11_builtin
 from .docstring_source import parse_docstring_signatures
 
 
@@ -86,7 +86,7 @@ class SignatureCompleter:
 
         logger.info("开始补全, module: {}, func: {}, is_method: {}", module.full_name, func.name, is_method)
         try:
-            if supports_builtin_function_inference(func.runtime_handle):
+            if is_cpython_builtin(func.runtime_handle):
                 branch = "c_builtin"
                 inference_result = self._c_source.infer_function_signatures(
                     module,
@@ -103,7 +103,7 @@ class SignatureCompleter:
                 )
                 return
 
-            if self._is_pybind11_builtin(func.runtime_handle):
+            if is_pybind11_builtin(func.runtime_handle):
                 branch = "pybind11_builtin"
                 func.signatures = parse_docstring_signatures(module, func)
                 self._result.docstring_completed += 1
@@ -126,19 +126,3 @@ class SignatureCompleter:
             is_method,
             reason,
         )
-
-    @staticmethod
-    def _is_pybind11_builtin(handle: object) -> bool:
-        """判断运行时函数句柄是否为 pybind11 绑定函数。"""
-        handle_type = type(handle)
-        if (
-            handle_type.__module__ != "builtins"
-            or handle_type.__name__ != "builtin_function_or_method"
-        ):
-            return False
-
-        self_obj = getattr(handle, "__self__", None)
-        if self_obj is None:
-            return False
-
-        return type(self_obj).__module__.startswith("pybind11_builtins")

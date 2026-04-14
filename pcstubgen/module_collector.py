@@ -5,6 +5,7 @@ import inspect
 import pkgutil
 import types
 from typing import Any
+import runtime
 
 from loguru import logger
 
@@ -44,7 +45,7 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if inspect.isbuiltin(member):
+            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(member):
                 module_node.functions.append(self._collect_function(member_path, member))
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
@@ -78,7 +79,7 @@ class ModuleCollector:
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
 
-            if inspect.isbuiltin(member):
+            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(member):
                 class_node.methods.append(
                     self._collect_method(
                         member_path,

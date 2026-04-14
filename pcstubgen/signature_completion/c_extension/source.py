@@ -9,7 +9,7 @@ from .address_resolver import (
 )
 from .clang.ast_utils import get_cursor_text, get_func_cursor
 from .clang.parser import ClangParser
-from .runtime import read_builtin_function_runtime_info
+from pcstubgen.runtime import read_builtin_function_runtime_info
 from .signatures import inference
 
 

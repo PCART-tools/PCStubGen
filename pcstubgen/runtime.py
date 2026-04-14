@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import types
 from dataclasses import dataclass
 
 
@@ -19,19 +20,30 @@ _pycfunction_get_flags.argtypes = [ctypes.py_object]
 _pycfunction_get_flags.restype = ctypes.c_int
 
 
-def supports_builtin_function_inference(handle: object) -> bool:
+def is_cpython_builtin(handle: object) -> bool:
     """判断运行时对象是否支持 builtin function C 源码签名推导。"""
-    handle_type = type(handle)
-    return (
-        handle_type.__module__ == "builtins"
-        and handle_type.__name__ == "builtin_function_or_method"
-        and not _is_pybind11_bound_builtin(handle)
-    )
+    return isinstance(handle, types.BuiltinFunctionType) and is_module_bound(handle)
 
+def is_module_bound(handle: object) -> bool:
+    self_obj = getattr(handle, "__self__", None)
+    if self_obj is not None and isinstance(self_obj, types.ModuleType):
+        return True
+    return False
+
+def is_pybind11_builtin(handle: object) -> bool:
+    """判断运行时函数句柄是否为 pybind11 绑定函数。"""
+    return isinstance(handle, types.BuiltinFunctionType) and is_pybind11_bound(handle)
+
+
+def is_pybind11_bound(handle: object) -> bool:
+    self_obj = getattr(handle, "__self__", None)
+    if self_obj is not None and type(self_obj).__module__ == "pybind11_builtins":
+        return True
+    return False
 
 def read_builtin_function_runtime_info(handle: object) -> BuiltinFunctionRuntimeInfo:
     """读取 builtin function 的入口地址与调用约定。"""
-    if not supports_builtin_function_inference(handle):
+    if not is_cpython_builtin(handle):
         raise RuntimeError(f"不支持的 builtin function 对象: {type(handle).__name__}")
 
     try:
@@ -47,12 +59,3 @@ def read_builtin_function_runtime_info(handle: object) -> BuiltinFunctionRuntime
         address=method_address,
         flags=flags,
     )
-
-
-def _is_pybind11_bound_builtin(handle: object) -> bool:
-    self_obj = getattr(handle, "__self__", None)
-    if self_obj is None:
-        return False
-
-    self_type = type(self_obj)
-    return self_type.__module__.startswith("pybind11_builtins")

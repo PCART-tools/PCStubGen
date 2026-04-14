@@ -60,4 +60,4 @@ def test_supports_builtin_function_inference_rejects_pybind11_bound_builtin(
     class _FakeBuiltinHandle(_BuiltinFunctionLike):
         __self__ = _PybindBoundSelf()
 
-    assert runtime_module.supports_builtin_function_inference(_FakeBuiltinHandle()) is False
+    assert runtime_module.is_cpython_builtin(_FakeBuiltinHandle()) is False
