@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.signature_completion.c_extension import runtime as runtime_module
+from pcstubgen import runtime as runtime_module
 
 
 def test_read_builtin_function_runtime_info_rejects_unsupported_handle() -> None:

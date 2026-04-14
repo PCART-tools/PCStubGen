@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from clang.cindex import Cursor, CursorKind, TypeKind
+from clang.cindex import Cursor, CursorKind, StorageClass, TypeKind
 from loguru import logger
 
 from ....models import Argument, ArgumentKind, Signature
@@ -256,9 +256,114 @@ def _infer_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
     mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
     if mapped is not None:
         return mapped
+    try:
+        return _infer_local_decl_ref_expr_type(expr_cursor)
+    except RuntimeError as ex:
+        raise RuntimeError(
+            f"无法识别的对象返回标识符: {identifier_name}, cursor: {expr_cursor.location}"
+        ) from ex
+
+
+def _infer_local_decl_ref_expr_type(expr_cursor: Cursor) -> Type:
+    """从函数内局部变量的定值表达式中推断 `DECL_REF_EXPR` 类型。"""
+    target_decl = expr_cursor.referenced
+    if target_decl is None or target_decl.kind != CursorKind.VAR_DECL:
+        raise RuntimeError(f"引用节点未指向局部变量声明, cursor: {expr_cursor.location}")
+    if target_decl.storage_class == StorageClass.STATIC:
+        raise RuntimeError(f"不追溯 static 局部变量, cursor: {target_decl.location}")
+
+    function_cursor = _find_local_decl_function_parent(target_decl)
+    candidate_types: list[Type] = []
+    for candidate_expr in _iter_local_decl_assignment_exprs(function_cursor, target_decl):
+        candidate_expr = unwrap_transparent(candidate_expr)
+        if is_nullptr_or_zero(candidate_expr):
+            continue
+        candidate_types.append(infer_expr_type(candidate_expr).canonicalize())
+
+    if not candidate_types:
+        raise RuntimeError(f"局部变量没有可用定值表达式: {target_decl.spelling}")
+
+    inferred_type = candidate_types[0]
+    for candidate_type in candidate_types[1:]:
+        if candidate_type != inferred_type:
+            raise RuntimeError(
+                f"局部变量定值表达式类型不收敛: {target_decl.spelling}, "
+                f"left: {inferred_type.render()}, right: {candidate_type.render()}"
+            )
+    return inferred_type
+
+
+def _find_local_decl_function_parent(decl_cursor: Cursor) -> Cursor:
+    """从声明节点的语义父节点中定位所在函数。"""
+    parent = decl_cursor.semantic_parent
+    while parent is not None:
+        if parent.kind == CursorKind.FUNCTION_DECL:
+            return parent
+        parent = parent.semantic_parent
     raise RuntimeError(
-        f"无法识别的对象返回标识符: {identifier_name}, cursor: {expr_cursor.location}"
+        f"局部变量声明不在函数内: {decl_cursor.spelling}, cursor: {decl_cursor.location}"
     )
+
+
+def _iter_local_decl_assignment_exprs(function_cursor: Cursor, target_decl: Cursor) -> list[Cursor]:
+    """收集函数内目标局部变量的声明初始化和直接赋值右值表达式。"""
+    candidates: list[Cursor] = []
+    initializer = _extract_optional_decl_initializer(target_decl)
+    if initializer is not None:
+        candidates.append(initializer)
+
+    for cursor in walk_cursor(function_cursor):
+        if cursor.kind != CursorKind.BINARY_OPERATOR:
+            continue
+        assignment_value = _extract_direct_assignment_value(cursor, target_decl)
+        if assignment_value is not None:
+            candidates.append(assignment_value)
+    return candidates
+
+
+def _extract_optional_decl_initializer(decl_cursor: Cursor) -> Cursor | None:
+    """提取声明初始化表达式；无初始化式时返回 `None`。"""
+    children = list(decl_cursor.get_children())
+    if not children:
+        return None
+
+    initializer = unwrap_transparent(children[-1])
+    if initializer.kind == CursorKind.TYPE_REF:
+        return None
+    return initializer
+
+
+def _extract_direct_assignment_value(assignment_cursor: Cursor, target_decl: Cursor) -> Cursor | None:
+    """在 `x = expr` 中提取目标局部变量对应的右值表达式。"""
+    token_spellings = [token.spelling for token in assignment_cursor.get_tokens()]
+    if token_spellings.count("=") != 1:
+        return None
+
+    children = list(assignment_cursor.get_children())
+    if len(children) != 2:
+        return None
+
+    target_expr = unwrap_transparent(children[0])
+    if not _is_decl_ref_to_decl(target_expr, target_decl):
+        return None
+    return children[1]
+
+
+def _is_decl_ref_to_decl(expr_cursor: Cursor, target_decl: Cursor) -> bool:
+    """判断表达式是否直接引用目标声明节点。"""
+    expr_cursor = unwrap_transparent(expr_cursor)
+    if expr_cursor.kind != CursorKind.DECL_REF_EXPR:
+        return False
+
+    referenced = expr_cursor.referenced
+    if referenced is None:
+        return False
+    if referenced == target_decl:
+        return True
+
+    referenced_usr = referenced.get_usr()
+    target_usr = target_decl.get_usr()
+    return bool(referenced_usr and target_usr and referenced_usr == target_usr)
 
 
 def _infer_call_expr_type(cursor: Cursor) -> Type:

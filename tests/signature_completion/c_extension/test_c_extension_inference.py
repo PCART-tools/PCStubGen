@@ -21,6 +21,7 @@ from tests._c_extension_test_support import (
     _FakeNode,
     _address_of,
     _arg,
+    _assignment,
     _call_expr,
     _conditional_expr,
     _extent_for_source_snippet,
@@ -235,6 +236,161 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
 
     assert inferred is not None
     assert inferred.render() == expected
+
+
+def test_return_type_detects_pycapsule_new_factory() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                "PyCapsule_New",
+                _identifier_node("pointer"),
+                _identifier_node("name"),
+                _identifier_node("destructor"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "types.CapsuleType"
+
+
+def test_return_type_traces_local_decl_ref_initialized_from_factory() -> None:
+    cobj_decl = _var_decl(
+        "cobj",
+        _call_expr(
+            "PyCapsule_New",
+            _identifier_node("pointer"),
+            _identifier_node("name"),
+            _identifier_node("destructor"),
+        ),
+    )
+    cursor = _fake_function_cursor_with_children(
+        cobj_decl,
+        _return_stmt(_token_identifier_node("cobj", referenced=cobj_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "types.CapsuleType"
+
+
+def test_py_buildvalue_traces_local_decl_ref_assigned_after_zero_initializer() -> None:
+    cobj_decl = _var_decl("cobj", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        cobj_decl,
+        _assignment(
+            "cobj",
+            _call_expr(
+                "PyCapsule_New",
+                _identifier_node("pointer"),
+                _identifier_node("name"),
+                _identifier_node("destructor"),
+            ),
+            referenced=cobj_decl,
+        ),
+        _return_stmt(
+            _call_expr(
+                "Py_BuildValue",
+                _string_literal("iN"),
+                _identifier_node("changed"),
+                _token_identifier_node("cobj", referenced=cobj_decl),
+            )
+        ),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "tuple[int, types.CapsuleType]"
+
+
+def test_return_type_accepts_multiple_local_assignments_when_types_converge() -> None:
+    value_decl = _var_decl("value", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        _assignment(
+            "value",
+            _call_expr("PyLong_FromLong", _identifier_node("left")),
+            referenced=value_decl,
+        ),
+        _assignment(
+            "value",
+            _call_expr("PyLong_FromLong", _identifier_node("right")),
+            referenced=value_decl,
+        ),
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("int")
+
+
+def test_return_type_rejects_local_assignments_when_types_diverge() -> None:
+    value_decl = _var_decl("value", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        _assignment(
+            "value",
+            _call_expr("PyLong_FromLong", _identifier_node("left")),
+            referenced=value_decl,
+        ),
+        _assignment(
+            "value",
+            _call_expr("PyFloat_FromDouble", _identifier_node("right")),
+            referenced=value_decl,
+        ),
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == AnyType()
+
+
+def test_return_type_rejects_local_decl_ref_when_only_zero_candidates_exist() -> None:
+    value_decl = _var_decl("value", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == AnyType()
+
+
+def test_return_type_does_not_trace_global_decl_ref() -> None:
+    value_decl = _var_decl(
+        "value",
+        _call_expr("PyLong_FromLong", _identifier_node("value")),
+    )
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == AnyType()
+
+
+def test_return_type_does_not_trace_static_local_decl_ref() -> None:
+    value_decl = _var_decl(
+        "value",
+        _call_expr("PyLong_FromLong", _identifier_node("value")),
+        storage_class=clang.cindex.StorageClass.STATIC,
+    )
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == AnyType()
 
 
 def test_return_type_parses_py_buildvalue() -> None:

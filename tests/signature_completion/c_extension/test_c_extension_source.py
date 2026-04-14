@@ -13,7 +13,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_O,
     METH_VARARGS,
 )
-from pcstubgen.signature_completion.c_extension.runtime import BuiltinFunctionRuntimeInfo
+from pcstubgen.runtime import BuiltinFunctionRuntimeInfo
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
     CInferenceResult,

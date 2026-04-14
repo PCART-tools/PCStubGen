@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import cast
 
 import clang.cindex
-from clang.cindex import LinkageKind
+from clang.cindex import LinkageKind, StorageClass
 import pytest
 
 from pcstubgen.signature_completion.c_extension import (
@@ -156,6 +156,9 @@ class _FakeNode:
         definition: object | None = None,
         is_definition: bool = False,
         linkage: object = LinkageKind.EXTERNAL,
+        semantic_parent: object | None = None,
+        lexical_parent: object | None = None,
+        storage_class: object = StorageClass.NONE,
     ) -> None:
         self.kind = kind
         self._tokens = tokens or []
@@ -169,6 +172,9 @@ class _FakeNode:
         self._definition = definition
         self._is_definition = is_definition
         self.linkage = linkage
+        self.semantic_parent = semantic_parent
+        self.lexical_parent = lexical_parent
+        self.storage_class = storage_class
         self.type = None
 
     def get_tokens(self) -> list[_FakeToken]:
@@ -252,12 +258,33 @@ def _token_identifier_node(
     )
 
 
-def _var_decl(name: str, initializer: _FakeNode | None = None) -> _FakeNode:
+def _var_decl(
+    name: str,
+    initializer: _FakeNode | None = None,
+    *,
+    storage_class: object = StorageClass.NONE,
+) -> _FakeNode:
     children = [initializer] if initializer is not None else []
     return _FakeNode(
         kind=clang.cindex.CursorKind.VAR_DECL,
         spelling=name,
         children=children,
+        storage_class=storage_class,
+    )
+
+
+def _assignment(name: str, value: _FakeNode, *, referenced: object | None = None) -> _FakeNode:
+    """构造 `name = value` 形式的赋值节点。"""
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.BINARY_OPERATOR,
+        tokens=[
+            _FakeToken(clang.cindex.TokenKind.IDENTIFIER, name),
+            _FakeToken(clang.cindex.TokenKind.PUNCTUATION, "="),
+        ],
+        children=[
+            _token_identifier_node(name, referenced=referenced),
+            value,
+        ],
     )
 
 
@@ -321,14 +348,26 @@ def _fake_function_cursor_with_children(
     name: str = "fake_function",
 ) -> clang.cindex.Cursor:
     """构造带子节点的假函数游标。"""
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling=name,
+        children=list(children),
+    )
+    for child in children:
+        _attach_fake_parent(child, function_cursor)
     return cast(
         clang.cindex.Cursor,
-        _FakeNode(
-            kind=clang.cindex.CursorKind.FUNCTION_DECL,
-            spelling=name,
-            children=list(children),
-        ),
+        function_cursor,
     )
+
+
+def _attach_fake_parent(node: _FakeNode, parent: _FakeNode) -> None:
+    """递归补齐 fake AST 的语义与词法父节点。"""
+    node.semantic_parent = parent
+    node.lexical_parent = parent
+    for child in node.get_children():
+        if isinstance(child, _FakeNode):
+            _attach_fake_parent(child, node)
 
 
 ExtractedArgument = Argument

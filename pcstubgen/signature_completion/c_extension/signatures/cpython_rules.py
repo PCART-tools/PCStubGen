@@ -28,6 +28,7 @@ OBJECT_NAME_TO_TYPE: dict[str, Type] = {
 }
 
 FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+    "PyCapsule_New": RawType("types.CapsuleType", imports=("types",)),
     "PyBool_FromLong": RawType("bool"),
     "PyLong_FromLong": RawType("int"),
     "PyLong_FromUnsignedLong": RawType("int"),
