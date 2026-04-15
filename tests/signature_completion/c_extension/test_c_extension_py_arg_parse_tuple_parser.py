@@ -6,7 +6,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.models import Argument
-from pcstubgen.type_models import RawType
+from pcstubgen.type_models import RawType, Type
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
@@ -43,7 +43,7 @@ def _parse(
         infer_name_func=infer_name_func or _default_infer_name,
         infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
         infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
-        infer_default_value_func=infer_default_value_func or (lambda cursor: "None"),
+        infer_default_value_func=infer_default_value_func or (lambda cursor, expected_type: "None"),
     ).parse()
 
 
@@ -56,7 +56,7 @@ def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators
     parsed = _parse(
         " \ti, s# | z* :ignored",
         [count_cursor, payload_cursor, payload_len_cursor, maybe_cursor],
-        infer_default_value_func=lambda cursor: {maybe_cursor: "None"}[cursor],
+        infer_default_value_func=lambda cursor, expected_type: {maybe_cursor: "None"}[cursor],
     )
 
     assert parsed == [
@@ -96,7 +96,8 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
     def infer_converter(cursor: Cursor) -> RawType:
         return {converter_cursor: RawType("ConvertedValue")}[cursor]
 
-    def infer_default_value(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        _ = expected_type
         return {
             text_buffer_cursor: '"utf8"',
             typed_result_cursor: "None",
@@ -136,6 +137,31 @@ def test_parse_uses_name_object_and_default_resolvers_for_multi_slot_units() -> 
     ]
 
 
+def test_parse_maps_p_unit_to_bool() -> None:
+    predicate_cursor = _cursor("predicate")
+
+    parsed = _parse("p", [predicate_cursor])
+
+    assert parsed == [_arg("predicate", "bool")]
+
+
+def test_parse_passes_p_unit_type_to_optional_default_inference() -> None:
+    predicate_cursor = _cursor("predicate")
+    observed: list[tuple[Cursor, Type]] = []
+
+    parsed = _parse(
+        "|p",
+        [predicate_cursor],
+        infer_default_value_func=lambda cursor, expected_type: observed.append(
+            (cursor, expected_type)
+        )
+        or "False",
+    )
+
+    assert parsed == [_arg("predicate", "bool", default_value="False")]
+    assert observed == [(predicate_cursor, RawType("bool"))]
+
+
 def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
     one_cursor = _cursor("one")
     text_cursor = _cursor("text")
@@ -173,7 +199,8 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
     label_cursor = _cursor("label")
     label_len_cursor = _cursor("label_len")
 
-    def infer_default_value(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        _ = expected_type
         return {
             count_cursor: "1",
             label_cursor: "'abc'",
@@ -193,6 +220,34 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
             imports=("collections.abc",),
             default_value="(1, ('abc',))",
         )
+    ]
+
+
+def test_parse_passes_leaf_type_to_tuple_default_inference() -> None:
+    count_cursor = _cursor("count")
+    flag_cursor = _cursor("flag")
+    observed: list[tuple[Cursor, Type]] = []
+
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        observed.append((cursor, expected_type))
+        return {
+            count_cursor: "1",
+            flag_cursor: "False",
+        }[cursor]
+
+    parsed = _parse(
+        "|(i, p)",
+        [count_cursor, flag_cursor],
+        infer_name_func=lambda c_args: "payload",
+        infer_default_value_func=infer_default_value,
+    )
+
+    assert parsed == [
+        _arg("payload", "tuple[int, bool]", default_value="(1, False)")
+    ]
+    assert observed == [
+        (count_cursor, RawType("int")),
+        (flag_cursor, RawType("bool")),
     ]
 
 
@@ -253,7 +308,9 @@ def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises
     parsed = _parse(
         "i|i",
         [first_cursor, second_cursor],
-        infer_default_value_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+        infer_default_value_func=lambda cursor, expected_type: (_ for _ in ()).throw(
+            RuntimeError("boom")
+        ),
     )
 
     assert parsed == [
@@ -267,7 +324,8 @@ def test_parse_marks_tuple_default_as_unknown_when_any_leaf_default_inference_ra
     label_cursor = _cursor("label")
     label_len_cursor = _cursor("label_len")
 
-    def infer_default_value(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        _ = expected_type
         if cursor is count_cursor:
             return "1"
         raise RuntimeError("boom")

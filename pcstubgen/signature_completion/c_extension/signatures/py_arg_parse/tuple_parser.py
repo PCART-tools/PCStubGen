@@ -12,6 +12,8 @@ from .....models import Argument
 from .format_units import _FORMAT_UNIT_SPECS
 from .....type_models import RawType, Type
 
+_InferDefaultValueFunc = Callable[[Cursor, Type], str]
+
 
 class PyArgParseTupleTypeParserError(ValueError):
     """表示 `PyArg_ParseTuple` 格式串无法被当前解析器接受。"""
@@ -28,7 +30,7 @@ class _ParsedValue:
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str],
+        infer_default_value_func: _InferDefaultValueFunc,
     ) -> str:
         raise NotImplementedError
 
@@ -46,10 +48,10 @@ class _ScalarParsedValue(_ParsedValue):
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str],
+        infer_default_value_func: _InferDefaultValueFunc,
     ) -> str:
         try:
-            return infer_default_value_func(self.default_value_cursor)
+            return infer_default_value_func(self.default_value_cursor, self.type)
         except Exception as ex:
             logger.warning(
                 "PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: {}: {}",
@@ -80,7 +82,7 @@ class _TupleParsedValue(_ParsedValue):
 
     def render_default_value(
         self,
-        infer_default_value_func: Callable[[Cursor], str],
+        infer_default_value_func: _InferDefaultValueFunc,
     ) -> str:
         if not self.items:
             raise PyArgParseTupleTypeParserError("不支持空 tuple format '()'。")
@@ -107,7 +109,7 @@ class PyArgParseTupleTypeParser:
         infer_name_func: Callable[[list[Cursor]], str],
         infer_type_object_func: Callable[[Cursor], Type],
         infer_converter_type_func: Callable[[Cursor], Type],
-        infer_default_value_func: Callable[[Cursor], str],
+        infer_default_value_func: _InferDefaultValueFunc,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt

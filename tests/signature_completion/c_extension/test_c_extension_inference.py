@@ -59,6 +59,10 @@ def _unary_default_expr(child: _FakeNode) -> _FakeNode:
     return _wrap(clang.cindex.CursorKind.UNARY_OPERATOR, child)
 
 
+def _cxx_bool_literal() -> _FakeNode:
+    return _FakeNode(kind=clang.cindex.CursorKind.CXX_BOOL_LITERAL_EXPR)
+
+
 class _FakeCanonicalType:
     def __init__(self, kind: object) -> None:
         self.kind = kind
@@ -793,6 +797,22 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     ]
 
 
+def test_infer_argument_lists_maps_pyarg_p_unit_to_bool() -> None:
+    flag_decl = _var_decl("flag")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("p"),
+            _address_of("flag", referenced=flag_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("flag", "bool")]]
+
+
 @pytest.mark.parametrize(
     ("struct_name", "expected_default"),
     [
@@ -848,7 +868,7 @@ def test_infer_argument_lists_renders_pointer_zero_default_as_unknown(
     assert observed == [initializer]
 
 
-def test_render_default_expr_renders_pointer_zero_default_as_unknown(
+def test_infer_default_value_for_pyarg_renders_pointer_zero_default_as_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     initializer = _int_literal("0")
@@ -856,7 +876,13 @@ def test_render_default_expr_renders_pointer_zero_default_as_unknown(
     value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
     monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: True)
 
-    assert signature_rules_module._render_default_expr(initializer, value_decl) == "..."
+    assert (
+        signature_rules_module._infer_default_value_for_pyarg(
+            _address_of("value", referenced=value_decl),
+            RawType("object"),
+        )
+        == "..."
+    )
 
 
 def test_infer_argument_lists_renders_char_pointer_null_default_as_unknown(
@@ -912,6 +938,81 @@ def test_infer_argument_lists_keeps_non_pointer_zero_default_as_integer(
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [[_arg("value", "int", default_value="0")]]
+    assert observed == [initializer]
+
+
+@pytest.mark.parametrize(
+    ("evaluated", "expected_default"),
+    [
+        (0, "False"),
+        (1, "True"),
+    ],
+)
+def test_infer_argument_lists_renders_integer_bool_default_values(
+    monkeypatch: pytest.MonkeyPatch,
+    evaluated: int,
+    expected_default: str,
+) -> None:
+    initializer = _int_literal(str(evaluated))
+    flag_decl = _var_decl("flag", initializer)
+    flag_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|p"),
+            _address_of("flag", referenced=flag_decl),
+        )
+    )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda received_cursor: observed.append(received_cursor) or evaluated,
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("flag", "bool", default_value=expected_default)]]
+    assert observed == [initializer]
+
+
+@pytest.mark.parametrize(
+    ("format_unit", "argument_type", "evaluated", "expected_default"),
+    [
+        ("p", "bool", 0, "False"),
+        ("p", "bool", 1, "True"),
+        ("i", "int", 0, "0"),
+    ],
+)
+def test_infer_argument_lists_renders_cxx_bool_default_values(
+    monkeypatch: pytest.MonkeyPatch,
+    format_unit: str,
+    argument_type: str,
+    evaluated: int,
+    expected_default: str,
+) -> None:
+    initializer = _cxx_bool_literal()
+    value_decl = _var_decl("value", initializer)
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal(f"|{format_unit}"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda received_cursor: observed.append(received_cursor) or evaluated,
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
     assert observed == [initializer]
 
 
@@ -1328,25 +1429,28 @@ def test_infer_argument_lists_raises_when_parse_tuple_format_string_is_not_liter
         signature_rules_module.infer_argument_lists(cursor)
 
 
-def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() -> None:
+def test_infer_default_value_for_pyarg_raises_with_cursor_location_for_unsupported_expr() -> None:
     expr_cursor = _call_expr("PyLong_FromLong", _identifier_node("value"))
     expr_cursor.location = _location_text("default_value.c:15:3")
-    target_decl = _var_decl("value")
+    target_decl = _var_decl("value", expr_cursor)
     target_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
 
     with pytest.raises(
         RuntimeError,
         match=rf"不支持的默认值表达式类型.*{re.escape('default_value.c:15:3')}",
     ):
-        signature_rules_module._render_default_expr(expr_cursor, target_decl)
+        signature_rules_module._infer_default_value_for_pyarg(
+            _address_of("value", referenced=target_decl),
+            RawType("int"),
+        )
 
 
-def test_render_default_expr_uses_evaluated_float_result(
+def test_infer_default_value_for_pyarg_uses_evaluated_float_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     observed: list[_FakeNode] = []
     cursor = _float_literal("1e+06")
-    target_decl = _var_decl("value")
+    target_decl = _var_decl("value", cursor)
     target_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.DOUBLE)
 
     monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: False)
@@ -1356,7 +1460,13 @@ def test_render_default_expr_uses_evaluated_float_result(
         lambda received_cursor: observed.append(received_cursor) or 1000000.0,
     )
 
-    assert signature_rules_module._render_default_expr(cursor, target_decl) == "1000000.0"
+    assert (
+        signature_rules_module._infer_default_value_for_pyarg(
+            _address_of("value", referenced=target_decl),
+            RawType("float"),
+        )
+        == "1000000.0"
+    )
     assert observed == [cursor]
 
 

@@ -12,6 +12,8 @@ from .....models import Argument, ArgumentKind
 from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 from .....type_models import RawType, Type
 
+_InferDefaultValueFunc = Callable[[Cursor, Type], str]
+
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):
     """表示 `PyArg_ParseTupleAndKeywords` 格式串无法被当前解析器接受。"""
@@ -33,7 +35,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         args: list[Cursor],
         infer_type_object_func: Callable[[Cursor], Type],
         infer_converter_type_func: Callable[[Cursor], Type],
-        infer_default_value_func: Callable[[Cursor], str],
+        infer_default_value_func: _InferDefaultValueFunc,
     ) -> None:
         """初始化格式串解析器。"""
         self._format = fmt
@@ -107,7 +109,10 @@ class PyArgParseTupleAndKeywordsTypeParser:
 
         default_value: str | None = None
         if section is not _ArgumentSection.REQUIRED:
-            default_value = self._infer_default_value(c_args[spec.decl_ref_offset])
+            default_value = self._infer_default_value(
+                c_args[spec.decl_ref_offset],
+                arg_type,
+            )
 
         kind = ArgumentKind.POSITIONAL_OR_KEYWORD
         if section is _ArgumentSection.KEYWORD_ONLY:
@@ -224,10 +229,10 @@ class PyArgParseTupleAndKeywordsTypeParser:
             )
             return RawType("object")
 
-    def _infer_default_value(self, cursor: Cursor) -> str:
+    def _infer_default_value(self, cursor: Cursor, expected_type: Type) -> str:
         """解析可选参数的默认值文本，失败时回退为 `...`。"""
         try:
-            return self._infer_default_value_func(cursor)
+            return self._infer_default_value_func(cursor, expected_type)
         except Exception as ex:
             logger.warning(
                 "PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: {}: {}",

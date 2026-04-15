@@ -4,7 +4,7 @@ import pytest
 from clang.cindex import Cursor
 
 from pcstubgen.models import Argument, ArgumentKind
-from pcstubgen.type_models import RawType
+from pcstubgen.type_models import RawType, Type
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
@@ -34,7 +34,7 @@ def _parse(
         args,
         infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
         infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
-        infer_default_value_func=infer_default_value_func or (lambda cursor: "None"),
+        infer_default_value_func=infer_default_value_func or (lambda cursor, expected_type: "None"),
     ).parse()
 
 
@@ -47,7 +47,7 @@ def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
         "i|z$O",
         ["count", "label", "target"],
         [count_cursor, label_cursor, target_cursor],
-        infer_default_value_func=lambda cursor: {
+        infer_default_value_func=lambda cursor, expected_type: {
             label_cursor: "None",
             target_cursor: "None",
         }[cursor],
@@ -114,7 +114,8 @@ def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
     def infer_converter(cursor: Cursor) -> RawType:
         return {converter_cursor: resolved_types[converter_cursor]}[cursor]
 
-    def infer_default_value(cursor: Cursor) -> str:
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        _ = expected_type
         return resolved_defaults[cursor]
 
     parsed = _parse(
@@ -214,7 +215,7 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
         "|$i",
         ["value"],
         [value_cursor],
-        infer_default_value_func=lambda cursor: {value_cursor: "0"}[cursor],
+        infer_default_value_func=lambda cursor, expected_type: {value_cursor: "0"}[cursor],
     )
 
     assert parsed == [
@@ -274,7 +275,9 @@ def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises
         "i|i",
         ["first", "second"],
         [first_cursor, second_cursor],
-        infer_default_value_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("boom")),
+        infer_default_value_func=lambda cursor, expected_type: (_ for _ in ()).throw(
+            RuntimeError("boom")
+        ),
     )
 
     assert parsed == [
@@ -283,12 +286,46 @@ def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises
     ]
 
 
-def test_parse_maps_p_unit_to_object() -> None:
+def test_parse_maps_p_unit_to_bool() -> None:
     predicate_cursor = _cursor("predicate")
 
     parsed = _parse("p", ["predicate"], [predicate_cursor])
 
-    assert parsed == [_arg("predicate", "object")]
+    assert parsed == [_arg("predicate", "bool")]
+
+
+def test_parse_passes_p_unit_type_to_optional_and_keyword_only_default_inference() -> None:
+    optional_cursor = _cursor("optional")
+    keyword_only_cursor = _cursor("keyword_only")
+    observed: list[tuple[Cursor, Type]] = []
+
+    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
+        observed.append((cursor, expected_type))
+        return {
+            optional_cursor: "False",
+            keyword_only_cursor: "True",
+        }[cursor]
+
+    parsed = _parse(
+        "|p$p",
+        ["optional", "keyword_only"],
+        [optional_cursor, keyword_only_cursor],
+        infer_default_value_func=infer_default_value,
+    )
+
+    assert parsed == [
+        _arg("optional", "bool", default_value="False"),
+        _arg(
+            "keyword_only",
+            "bool",
+            default_value="True",
+            kind=ArgumentKind.KEYWORD_ONLY,
+        ),
+    ]
+    assert observed == [
+        (optional_cursor, RawType("bool")),
+        (keyword_only_cursor, RawType("bool")),
+    ]
 
 
 @pytest.mark.parametrize(

@@ -66,5 +66,5 @@ _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
     _FormatUnitSpec("d", 1, 0, RawType("float")),
     _FormatUnitSpec("D", 1, 0, RawType("complex")),
     _FormatUnitSpec("O", 1, 0, RawType("object")),
-    _FormatUnitSpec("p", 1, 0, RawType("object")),
+    _FormatUnitSpec("p", 1, 0, RawType("bool")),
 )

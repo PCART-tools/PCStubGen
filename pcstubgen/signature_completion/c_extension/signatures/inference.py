@@ -57,6 +57,7 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_TrueStruct": "True",
     "_Py_FalseStruct": "False",
 }
+_BOOL_TYPE = RawType("bool")
 
 
 def infer_signature(
@@ -475,12 +476,72 @@ def _infer_converter_type_for_pyarg(cursor: Cursor) -> Type:
     return mapped
 
 
-def _infer_default_value_for_pyarg(cursor: Cursor) -> str:
+def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
     """从参数接收变量的声明初始化式中解析默认值文本。"""
     target_decl = _find_decl_candidate(cursor)
+    expr = _extract_decl_initializer(target_decl)
+    expr = unwrap_transparent(expr)
+    expected_type = expected_type.canonicalize()
 
-    initializer = _extract_decl_initializer(target_decl)
-    return _render_default_expr(initializer, target_decl)
+    if (
+        target_decl.type.get_canonical().kind == TypeKind.POINTER
+        and is_nullptr_or_zero(expr)
+    ):
+        return "..."
+
+    if expr.kind == CursorKind.STRING_LITERAL:
+        return get_string_literal(expr)
+
+    if expr.kind == CursorKind.FLOATING_LITERAL:
+        return str(evaluate_cursor(expr))
+
+    if expr.kind == CursorKind.CXX_BOOL_LITERAL_EXPR:
+        evaluated = evaluate_cursor(expr)
+        if type(evaluated) is not int:
+            raise RuntimeError(
+                f"C++ bool 字面量求值结果不是整数: {evaluated!r}, cursor: {expr.location}"
+            )
+        if expected_type == _BOOL_TYPE:
+            if evaluated == 0:
+                return "False"
+            if evaluated == 1:
+                return "True"
+            raise RuntimeError(
+                f"C++ bool 字面量求值结果不是 0 或 1: {evaluated!r}, cursor: {expr.location}"
+            )
+        return str(evaluated)
+
+    if (
+        expr.kind == CursorKind.INTEGER_LITERAL
+        and target_decl.type.get_canonical().kind != TypeKind.POINTER
+    ):
+        evaluated = evaluate_cursor(expr)
+        if expected_type == _BOOL_TYPE:
+            if evaluated == 0:
+                return "False"
+            if evaluated == 1:
+                return "True"
+            raise RuntimeError(
+                f"bool 默认值整数不是 0 或 1: {evaluated!r}, cursor: {expr.location}"
+            )
+        return str(evaluated)
+
+    if expr.kind == CursorKind.UNARY_OPERATOR:
+        children = list(expr.get_children())
+        assert len(children) == 1
+        child = unwrap_transparent(children[0])
+        if child.kind == CursorKind.DECL_REF_EXPR:
+            rendered = _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE.get(child.spelling)
+            if rendered is not None:
+                return rendered
+        if target_decl.type.get_canonical().kind != TypeKind.POINTER:
+            evaluated = evaluate_cursor(expr)
+            if type(evaluated) in (int, float):
+                return str(evaluated)
+
+    raise RuntimeError(
+        f"不支持的默认值表达式类型: {expr.kind.name}, cursor: {expr.location}"
+    )
 
 
 def _find_decl_candidate(cursor: Cursor) -> Cursor:
@@ -545,37 +606,3 @@ def _extract_decl_initializer(decl_cursor: Cursor) -> Cursor:
             f"声明节点缺少初始化表达式: {decl_cursor.spelling}, cursor: {decl_cursor.location}"
         )
     return unwrap_transparent(children[-1])
-
-
-def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
-    """结合目标声明节点，将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
-    expr = unwrap_transparent(expr)
-
-    if target_decl.type.get_canonical().kind == TypeKind.POINTER and is_nullptr_or_zero(expr):
-        return "..."
-
-    if expr.kind == CursorKind.STRING_LITERAL:
-        return get_string_literal(expr)
-
-    if expr.kind == CursorKind.FLOATING_LITERAL:
-        return str(evaluate_cursor(expr))
-
-    if expr.kind == CursorKind.UNARY_OPERATOR:
-        children = list(expr.get_children())
-        assert len(children) == 1
-        child = unwrap_transparent(children[0])
-        if child.kind == CursorKind.DECL_REF_EXPR:
-            rendered = _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE.get(child.spelling)
-            if rendered is not None:
-                return rendered
-        if target_decl.type.get_canonical().kind != TypeKind.POINTER:
-            evaluated = evaluate_cursor(expr)
-            if type(evaluated) in (int, float):
-                return str(evaluated)
-
-    if expr.kind == CursorKind.INTEGER_LITERAL and target_decl.type.get_canonical().kind != TypeKind.POINTER:
-        return str(evaluate_cursor(expr))
-
-    raise RuntimeError(
-        f"不支持的默认值表达式类型: {expr.kind.name}, cursor: {expr.location}"
-    )
