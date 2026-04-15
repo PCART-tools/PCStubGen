@@ -551,6 +551,9 @@ def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
     """结合目标声明节点，将有限集合内的 C 初始化式渲染为 Python 默认值文本。"""
     expr = unwrap_transparent(expr)
 
+    if target_decl.type.get_canonical().kind == TypeKind.POINTER and is_nullptr_or_zero(expr):
+        return "..."
+
     if expr.kind == CursorKind.STRING_LITERAL:
         return get_string_literal(expr)
 

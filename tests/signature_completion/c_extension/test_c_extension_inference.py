@@ -768,6 +768,7 @@ def test_return_type_skips_failed_return_expr_and_keeps_successful_returns() -> 
 def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     count_decl = _var_decl("count", _int_literal("1"))
     label_decl = _var_decl("label", _identifier_node("Py_None"))
+    label_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
@@ -805,6 +806,7 @@ def test_infer_argument_lists_renders_python_singleton_default_values(
     expected_default: str,
 ) -> None:
     value_decl = _var_decl("value", _python_singleton_default_expr(struct_name))
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
@@ -819,8 +821,11 @@ def test_infer_argument_lists_renders_python_singleton_default_values(
     assert inferred == [[_arg("value", "object", default_value=expected_default)]]
 
 
-def test_infer_argument_lists_keeps_pointer_zero_default_as_unknown() -> None:
-    value_decl = _var_decl("value", _int_literal("0"))
+def test_infer_argument_lists_renders_pointer_zero_default_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initializer = _int_literal("0")
+    value_decl = _var_decl("value", initializer)
     value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -830,10 +835,84 @@ def test_infer_argument_lists_keeps_pointer_zero_default_as_unknown() -> None:
             _address_of("value", referenced=value_decl),
         )
     )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "is_nullptr_or_zero",
+        lambda received_cursor: observed.append(received_cursor) or True,
+    )
 
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [[_arg("value", "object", default_value="...")]]
+    assert observed == [initializer]
+
+
+def test_render_default_expr_renders_pointer_zero_default_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initializer = _int_literal("0")
+    value_decl = _var_decl("value", initializer)
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: True)
+
+    assert signature_rules_module._render_default_expr(initializer, value_decl) == "..."
+
+
+def test_infer_argument_lists_renders_char_pointer_null_default_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initializer = _int_literal("0")
+    value_decl = _var_decl("value", initializer)
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|z"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+    monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: True)
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [
+        [
+            _arg(
+                "value",
+                UnionType((RawType("str"), RawType("None"))),
+                default_value="...",
+            )
+        ]
+    ]
+
+
+def test_infer_argument_lists_keeps_non_pointer_zero_default_as_integer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initializer = _int_literal("0")
+    value_decl = _var_decl("value", initializer)
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|i"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda received_cursor: observed.append(received_cursor) or 0,
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "int", default_value="0")]]
+    assert observed == [initializer]
 
 
 @pytest.mark.parametrize(
@@ -1097,6 +1176,7 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_ampersand_conve
 
 def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_parse_fails() -> None:
     label_decl = _var_decl("label", _identifier_node("UNSUPPORTED_DEFAULT"))
+    label_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "PyArg_ParseTuple",
@@ -1169,6 +1249,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias(
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0.0)
     kwlist_decl = _var_decl("kwlist", _init_list(_string_literal("x"), _null_ptr_literal()))
     x_decl = _var_decl("x", _float_literal("0.0"))
+    x_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.DOUBLE)
     cursor = _fake_function_cursor_with_children(
         _call_expr(
             "_PyArg_ParseTupleAndKeywords_SizeT",
@@ -1251,6 +1332,7 @@ def test_render_default_expr_raises_with_cursor_location_for_unsupported_expr() 
     expr_cursor = _call_expr("PyLong_FromLong", _identifier_node("value"))
     expr_cursor.location = _location_text("default_value.c:15:3")
     target_decl = _var_decl("value")
+    target_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
 
     with pytest.raises(
         RuntimeError,
@@ -1265,6 +1347,7 @@ def test_render_default_expr_uses_evaluated_float_result(
     observed: list[_FakeNode] = []
     cursor = _float_literal("1e+06")
     target_decl = _var_decl("value")
+    target_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.DOUBLE)
 
     monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: False)
     monkeypatch.setattr(
