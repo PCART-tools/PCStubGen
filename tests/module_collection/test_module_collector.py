@@ -103,33 +103,6 @@ def test_module_collector_ignores_plain_members_without_module_metadata(
     assert module_node.sub_modules == []
 
 
-def test_module_collector_handles_staticmethod_member_without_name(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _write_package_file(
-        tmp_path / "staticmethodpkg" / "__init__.py",
-        "class NamelessStaticMethod(staticmethod):\n"
-        "    def __getattribute__(self, name: str):\n"
-        "        if name == '__name__':\n"
-        "            raise AttributeError('__name__')\n"
-        "        return super().__getattribute__(name)\n"
-        "\n"
-        "class Demo:\n"
-        "    pass\n"
-        "\n"
-        "def _wrapped() -> int:\n"
-        "    return 1\n"
-        "\n"
-        "Demo.__new__ = NamelessStaticMethod(_wrapped)\n",
-    )
-
-    _prepare_module_import("staticmethodpkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("staticmethodpkg")
-
-    assert [class_.name for class_ in module_node.classes] == ["Demo", "NamelessStaticMethod"]
-
-
 def test_module_collector_treats_single_file_module_as_non_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

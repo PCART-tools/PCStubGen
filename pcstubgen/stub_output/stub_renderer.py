@@ -161,6 +161,10 @@ class StubRenderer:
         rendered.append(":")
         return "".join(rendered)
 
+    def render_function_signature_lines(self, *, func_name: str, signature: Signature) -> list[str]:
+        """将单条函数签名渲染为 def 头行列表。"""
+        return self._build_function_signature(func_name=func_name, signature=signature)
+
     def _render_function_block(
         self,
         *,

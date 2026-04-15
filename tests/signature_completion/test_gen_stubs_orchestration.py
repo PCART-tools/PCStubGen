@@ -32,8 +32,12 @@ def test_gen_stubs_orchestrates_collection_completion_and_writing(
         lambda compilation_database: object(),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.supports_builtin_function_inference",
+        "pcstubgen.signature_completion.completion.is_cpython_builtin",
         lambda handle: True,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.is_pybind11_builtin",
+        lambda handle: False,
     )
     _patch_c_signature_extractor(
         monkeypatch,

@@ -190,25 +190,3 @@ class ModuleCollector:
         if inspect.isclass(member) or inspect.isroutine(member):
             return self._get_module_name(member) != module.__name__
         return False
-
-    @staticmethod
-    def _get_member_name(member: Any) -> str | None:
-        """读取成员自身声明的名称。"""
-        member_name = getattr(member, "__name__", None)
-        if isinstance(member_name, str):
-            return member_name
-        if isinstance(member, staticmethod | classmethod):
-            wrapped_name = getattr(member.__func__, "__name__", None)
-            if isinstance(wrapped_name, str):
-                return wrapped_name
-        return None
-
-    @staticmethod
-    def _is_member_alias(path: QualifiedName, member: Any) -> bool:
-        """判断成员名是否只是原对象名称的别名。"""
-        if inspect.isroutine(member) or inspect.isclass(member):
-            member_name = ModuleCollector._get_member_name(member)
-            if member_name is None:
-                return False
-            return path.name != member_name
-        return False

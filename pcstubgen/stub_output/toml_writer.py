@@ -148,9 +148,11 @@ class TomlWriter:
                 module_name=module_name,
                 class_name=class_name,
                 function_name=func.name,
-                signature=renderer.render_function_signature(
-                    func_name=func.name,
-                    signature=signature,
+                signature="\n".join(
+                    renderer.render_function_signature_lines(
+                        func_name=func.name,
+                        signature=signature,
+                    )
                 ),
                 comment=func.comment,
             )

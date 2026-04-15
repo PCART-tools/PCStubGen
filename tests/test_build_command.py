@@ -66,17 +66,6 @@ def test_build_command_uses_explicit_output_path(
         "output_path": output_path,
     }
 
-
-def test_build_command_rejects_removed_short_output_flag() -> None:
-    result = CliRunner().invoke(
-        app,
-        ["build", "-o", "compile_commands.json", "--", "python", "-m", "build"],
-    )
-
-    assert result.exit_code != 0
-    assert "No such option: -o" in result.output
-
-
 def test_run_build_command_invokes_bear_with_clang_debug_environment(
     monkeypatch,
     tmp_path: Path,

@@ -92,7 +92,7 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
     }
 
 
-def test_toml_writer_renders_multi_argument_signature_on_single_line(tmp_path) -> None:
+def test_toml_writer_renders_multi_argument_signature_on_multiple_lines(tmp_path) -> None:
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -123,7 +123,7 @@ def test_toml_writer_renders_multi_argument_signature_on_single_line(tmp_path) -
             {
                 "module_name": "pkg.mod",
                 "function_name": "foo",
-                "signature": "def foo(value: int, flag: bool) -> str:",
+                "signature": "def foo(\n    value: int,\n    flag: bool,\n) -> str:",
             }
         ]
     }

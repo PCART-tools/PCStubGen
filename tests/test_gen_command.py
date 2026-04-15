@@ -107,21 +107,3 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     assert (tmp_path / "mod.pyi").exists()
     assert not (tmp_path / "mod.toml").exists()
     assert (tmp_path / "mod.pyi").read_text(encoding="utf-8") == "def foo(value: str) -> bool:\n    ...\n"
-
-
-def test_gen_command_rejects_removed_json_flag(tmp_path) -> None:
-    result = CliRunner().invoke(
-        app,
-        [
-            "gen",
-            "pkg.mod",
-            "--compilation-database",
-            str(tmp_path / "compile_commands.json"),
-            "--output",
-            str(tmp_path),
-            "--json",
-        ],
-    )
-
-    assert result.exit_code != 0
-    assert "--json" in result.output

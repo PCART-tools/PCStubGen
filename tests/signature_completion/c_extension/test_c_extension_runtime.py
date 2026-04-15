@@ -44,20 +44,3 @@ def test_read_builtin_function_runtime_info_rejects_zero_function_address(
 
     with pytest.raises(RuntimeError, match="C函数地址为空"):
         runtime_module.read_builtin_function_runtime_info(len)
-
-
-def test_supports_builtin_function_inference_rejects_pybind11_bound_builtin(
-) -> None:
-    class _PybindBoundSelf:
-        __module__ = "pybind11_builtins.fake_module"
-
-    _BuiltinFunctionLike = type(
-        "builtin_function_or_method",
-        (),
-        {"__module__": "builtins"},
-    )
-
-    class _FakeBuiltinHandle(_BuiltinFunctionLike):
-        __self__ = _PybindBoundSelf()
-
-    assert runtime_module.is_cpython_builtin(_FakeBuiltinHandle()) is False

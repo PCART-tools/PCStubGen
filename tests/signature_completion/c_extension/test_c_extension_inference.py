@@ -55,6 +55,10 @@ def _python_singleton_default_expr(struct_name: str) -> _FakeNode:
     )
 
 
+def _unary_default_expr(child: _FakeNode) -> _FakeNode:
+    return _wrap(clang.cindex.CursorKind.UNARY_OPERATOR, child)
+
+
 class _FakeCanonicalType:
     def __init__(self, kind: object) -> None:
         self.kind = kind
@@ -830,6 +834,72 @@ def test_infer_argument_lists_keeps_pointer_zero_default_as_unknown() -> None:
     inferred = signature_rules_module.infer_argument_lists(cursor)
 
     assert inferred == [[_arg("value", "object", default_value="...")]]
+
+
+@pytest.mark.parametrize(
+    ("format_unit", "argument_type", "type_kind", "evaluated", "expected_default"),
+    [
+        ("i", "int", clang.cindex.TypeKind.INT, -1, "-1"),
+        ("i", "int", clang.cindex.TypeKind.INT, -10, "-10"),
+        ("d", "float", clang.cindex.TypeKind.DOUBLE, -1.0, "-1.0"),
+    ],
+)
+def test_infer_argument_lists_renders_numeric_unary_default_values(
+    monkeypatch: pytest.MonkeyPatch,
+    format_unit: str,
+    argument_type: str,
+    type_kind: object,
+    evaluated: int | float,
+    expected_default: str,
+) -> None:
+    initializer = _unary_default_expr(_int_literal("1"))
+    value_decl = _var_decl("value", initializer)
+    value_decl.type = _FakeCanonicalType(type_kind)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal(f"|{format_unit}"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda received_cursor: observed.append(received_cursor) or evaluated,
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
+    assert observed == [initializer]
+
+
+def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value_decl = _var_decl("value", _unary_default_expr(_int_literal("1")))
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|O"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+    observed: list[_FakeNode] = []
+    monkeypatch.setattr(
+        signature_rules_module,
+        "evaluate_cursor",
+        lambda received_cursor: observed.append(received_cursor) or -1,
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "object", default_value="...")]]
+    assert observed == []
 
 
 def test_infer_type_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:

@@ -565,6 +565,10 @@ def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
             rendered = _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE.get(child.spelling)
             if rendered is not None:
                 return rendered
+        if target_decl.type.get_canonical().kind != TypeKind.POINTER:
+            evaluated = evaluate_cursor(expr)
+            if type(evaluated) in (int, float):
+                return str(evaluated)
 
     if expr.kind == CursorKind.INTEGER_LITERAL and target_decl.type.get_canonical().kind != TypeKind.POINTER:
         return str(evaluate_cursor(expr))

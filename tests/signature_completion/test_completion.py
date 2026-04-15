@@ -38,25 +38,24 @@ def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _patch_c_runtime_support(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.supports_builtin_function_inference",
+        "pcstubgen.signature_completion.completion.is_cpython_builtin",
+        lambda handle: True,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.is_pybind11_builtin",
         lambda handle: True,
     )
 
 
-def _make_pybind11_builtin_handle() -> object:
-    """构造满足 pybind11 判定的 builtin-like 句柄。"""
-    class _PybindBoundSelf:
-        __module__ = "pybind11_builtins.fake_module"
-
-    builtin_function_like = type(
-        "builtin_function_or_method",
-        (),
-        {
-            "__module__": "builtins",
-            "__self__": _PybindBoundSelf(),
-        },
+def _patch_pybind11_runtime_support(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.is_cpython_builtin",
+        lambda handle: False,
     )
-    return builtin_function_like()
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.is_pybind11_builtin",
+        lambda handle: True,
+    )
 
 
 def test_completer_prefers_c_branch_over_docstring_and_writes_comment(
@@ -165,12 +164,13 @@ def test_completer_uses_docstring_for_pybind11_builtin(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_pybind11_runtime_support(monkeypatch)
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
             Function(
                 name="fallback",
-                runtime_handle=_make_pybind11_builtin_handle(),
+                runtime_handle=object(),
                 doc="fallback(value: str) -> bool\n\nparsed from docstring",
             )
         ],
@@ -192,17 +192,18 @@ def test_completer_continues_after_pybind11_docstring_exception(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_pybind11_runtime_support(monkeypatch)
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
             Function(
                 name="broken",
-                runtime_handle=_make_pybind11_builtin_handle(),
+                runtime_handle=object(),
                 doc="broken(value: str) -> bool",
             ),
             Function(
                 name="working",
-                runtime_handle=_make_pybind11_builtin_handle(),
+                runtime_handle=object(),
                 doc="working(value: str) -> bool",
             ),
         ],
@@ -233,12 +234,13 @@ def test_completer_does_not_swallow_pybind11_docstring_base_exception(
     tmp_path: Path,
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
+    _patch_pybind11_runtime_support(monkeypatch)
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
             Function(
                 name="broken",
-                runtime_handle=_make_pybind11_builtin_handle(),
+                runtime_handle=object(),
                 doc="broken(value: str) -> bool",
             ),
         ],
