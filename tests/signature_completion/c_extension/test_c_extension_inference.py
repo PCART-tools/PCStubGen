@@ -48,6 +48,21 @@ def _location_text(text: str) -> object:
     return _Location()
 
 
+def _python_singleton_default_expr(struct_name: str) -> _FakeNode:
+    return _wrap(
+        clang.cindex.CursorKind.UNARY_OPERATOR,
+        _token_identifier_node(struct_name),
+    )
+
+
+class _FakeCanonicalType:
+    def __init__(self, kind: object) -> None:
+        self.kind = kind
+
+    def get_canonical(self) -> "_FakeCanonicalType":
+        return self
+
+
 @pytest.fixture(autouse=True)
 def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     """让 fake cursor 支持本组测试依赖的 clang helper。"""
@@ -771,6 +786,50 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
             ),
         ]
     ]
+
+
+@pytest.mark.parametrize(
+    ("struct_name", "expected_default"),
+    [
+        ("_Py_NoneStruct", "None"),
+        ("_Py_TrueStruct", "True"),
+        ("_Py_FalseStruct", "False"),
+    ],
+)
+def test_infer_argument_lists_renders_python_singleton_default_values(
+    struct_name: str,
+    expected_default: str,
+) -> None:
+    value_decl = _var_decl("value", _python_singleton_default_expr(struct_name))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|O"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "object", default_value=expected_default)]]
+
+
+def test_infer_argument_lists_keeps_pointer_zero_default_as_unknown() -> None:
+    value_decl = _var_decl("value", _int_literal("0"))
+    value_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("|O"),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = signature_rules_module.infer_argument_lists(cursor)
+
+    assert inferred == [[_arg("value", "object", default_value="...")]]
 
 
 def test_infer_type_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:

@@ -52,6 +52,12 @@ _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES = {
     "_PyArg_ParseTupleAndKeywords_SizeT",
 }
 
+_PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
+    "_Py_NoneStruct": "None",
+    "_Py_TrueStruct": "True",
+    "_Py_FalseStruct": "False",
+}
+
 
 def infer_signature(
     func_cursor: Cursor,
@@ -550,6 +556,15 @@ def _render_default_expr(expr: Cursor, target_decl: Cursor) -> str:
 
     if expr.kind == CursorKind.FLOATING_LITERAL:
         return str(evaluate_cursor(expr))
+
+    if expr.kind == CursorKind.UNARY_OPERATOR:
+        children = list(expr.get_children())
+        assert len(children) == 1
+        child = unwrap_transparent(children[0])
+        if child.kind == CursorKind.DECL_REF_EXPR:
+            rendered = _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE.get(child.spelling)
+            if rendered is not None:
+                return rendered
 
     if expr.kind == CursorKind.INTEGER_LITERAL and target_decl.type.get_canonical().kind != TypeKind.POINTER:
         return str(evaluate_cursor(expr))
