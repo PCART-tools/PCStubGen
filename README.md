@@ -20,6 +20,12 @@ uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_com
 
 ```bash
 cd /path/to/python-project
-uv run pcstubgen build -- python -m build --wheel
-uv run pcstubgen build --output ./out/compile_commands.json -- uv build --wheel
+uv run pcstubgen wrap -- python -m build --wheel
+uv run pcstubgen wrap --output ./out/compile_commands.json -- uv build --wheel
+```
+
+构建 Python 项目，并为 stub 生成产出 `compile_commands.json`:
+
+```bash
+uv run pcstubgen build /path/to/python-project
 ```

@@ -7,23 +7,25 @@ import subprocess
 from typer.testing import CliRunner
 
 from pcstubgen.__main__ import app
-import pcstubgen._build_command as build_command_module
+import pcstubgen._wrap_command as wrap_command_module
 
 
-def test_build_command_passes_through_original_command_after_separator(
+def test_wrap_command_passes_through_original_command_after_separator(
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
 
-    def fake_run_build_command(command: list[str], output_path: Path) -> int:
+    def fake_run_wrap_command(command: list[str], output_path: Path) -> int:
         captured["command"] = command
         captured["output_path"] = output_path
         return 0
 
-    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
-    monkeypatch.setattr(build_command_module, "run_build_command", fake_run_build_command)
+    monkeypatch.setattr(
+        wrap_command_module, "ensure_wrap_programs_available", lambda: None
+    )
+    monkeypatch.setattr(wrap_command_module, "run_wrap_command", fake_run_wrap_command)
 
-    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+    result = CliRunner().invoke(app, ["wrap", "--", "python", "-m", "build"])
 
     assert result.exit_code == 0
     assert captured == {
@@ -33,24 +35,26 @@ def test_build_command_passes_through_original_command_after_separator(
     assert "compile_commands.json" in result.output
 
 
-def test_build_command_uses_explicit_output_path(
+def test_wrap_command_uses_explicit_output_path(
     monkeypatch,
 ) -> None:
     captured: dict[str, object] = {}
     output_path = Path("out/compile_commands.json")
 
-    def fake_run_build_command(command: list[str], resolved_output_path: Path) -> int:
+    def fake_run_wrap_command(command: list[str], resolved_output_path: Path) -> int:
         captured["command"] = command
         captured["output_path"] = resolved_output_path
         return 0
 
-    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
-    monkeypatch.setattr(build_command_module, "run_build_command", fake_run_build_command)
+    monkeypatch.setattr(
+        wrap_command_module, "ensure_wrap_programs_available", lambda: None
+    )
+    monkeypatch.setattr(wrap_command_module, "run_wrap_command", fake_run_wrap_command)
 
     result = CliRunner().invoke(
         app,
         [
-            "build",
+            "wrap",
             "--output",
             str(output_path),
             "--",
@@ -66,7 +70,8 @@ def test_build_command_uses_explicit_output_path(
         "output_path": output_path,
     }
 
-def test_run_build_command_invokes_bear_with_clang_debug_environment(
+
+def test_run_wrap_command_invokes_bear_with_clang_debug_environment(
     monkeypatch,
     tmp_path: Path,
 ) -> None:
@@ -81,17 +86,23 @@ def test_run_build_command_invokes_bear_with_clang_debug_environment(
         assert text is True
         return "/llvm/lib\n"
 
-    def fake_run(command: list[str], env: dict[str, str], check: bool) -> subprocess.CompletedProcess[str]:
+    def fake_run(
+        command: list[str], env: dict[str, str], check: bool
+    ) -> subprocess.CompletedProcess[str]:
         nonlocal captured_command, captured_env, captured_check
         captured_command = command
         captured_env = env
         captured_check = check
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr(build_command_module.subprocess, "check_output", fake_check_output)
-    monkeypatch.setattr(build_command_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        wrap_command_module.subprocess, "check_output", fake_check_output
+    )
+    monkeypatch.setattr(wrap_command_module.subprocess, "run", fake_run)
 
-    return_code = build_command_module.run_build_command(["python", "-m", "build"], output_path)
+    return_code = wrap_command_module.run_wrap_command(
+        ["python", "-m", "build"], output_path
+    )
 
     assert return_code == 0
     assert captured_command == [
@@ -111,31 +122,39 @@ def test_run_build_command_invokes_bear_with_clang_debug_environment(
     assert captured_env["CMAKE_BUILD_TYPE"] == "Debug"
     assert captured_env["CFLAGS"] == "-O0 -g -UNDEBUG"
     assert captured_env["CXXFLAGS"] == "-O0 -g -UNDEBUG"
-    assert captured_env["LIBRARY_PATH"] == os.pathsep.join(["/llvm/lib", "/existing/lib"])
+    assert captured_env["LIBRARY_PATH"] == os.pathsep.join(
+        ["/llvm/lib", "/existing/lib"]
+    )
 
 
-def test_build_command_propagates_wrapped_command_exit_code(
+def test_wrap_command_propagates_wrapped_command_exit_code(
     monkeypatch,
 ) -> None:
-    monkeypatch.setattr(build_command_module, "ensure_build_programs_available", lambda: None)
-    monkeypatch.setattr(build_command_module, "run_build_command", lambda command, output_path: 7)
+    monkeypatch.setattr(
+        wrap_command_module, "ensure_wrap_programs_available", lambda: None
+    )
+    monkeypatch.setattr(
+        wrap_command_module, "run_wrap_command", lambda command, output_path: 7
+    )
 
-    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+    result = CliRunner().invoke(app, ["wrap", "--", "python", "-m", "build"])
 
     assert result.exit_code == 7
     assert "构建完成" not in result.output
 
 
-def test_build_command_reports_missing_external_programs(monkeypatch) -> None:
+def test_wrap_command_reports_missing_external_programs(monkeypatch) -> None:
     program_paths = {
         "clang": "/usr/bin/clang",
         "clang++": "/usr/bin/clang++",
         "llvm-config": "/usr/bin/llvm-config",
         "bear": None,
     }
-    monkeypatch.setattr(build_command_module.shutil, "which", lambda program: program_paths[program])
+    monkeypatch.setattr(
+        wrap_command_module.shutil, "which", lambda program: program_paths[program]
+    )
 
-    result = CliRunner().invoke(app, ["build", "--", "python", "-m", "build"])
+    result = CliRunner().invoke(app, ["wrap", "--", "python", "-m", "build"])
 
     assert result.exit_code == 1
-    assert "build 命令缺少外部程序依赖: bear" in result.output
+    assert "wrap 命令缺少外部程序依赖: bear" in result.output
