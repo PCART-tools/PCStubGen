@@ -2,6 +2,11 @@
 为 Python 模块生成 `.pyi` stub。
 基于docstring解析支持 pybind11 扩展，基于libclang C源码解析支持Python C扩展。
 
+## 安装
+```bash
+sudo apt install llvm bear
+```
+
 ## 使用
 生成 stub:
 
@@ -29,3 +34,5 @@ uv run pcstubgen wrap --output ./out/compile_commands.json -- uv build --wheel
 ```bash
 uv run pcstubgen build /path/to/python-project
 ```
+
+## 样例

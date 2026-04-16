@@ -45,8 +45,12 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(member):
-                module_node.functions.append(self._collect_function(member_path, member))
+            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(
+                member
+            ):
+                module_node.functions.append(
+                    self._collect_function(member_path, member)
+                )
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
 
@@ -54,7 +58,8 @@ class ModuleCollector:
             for submodule_name in self._iter_submodule_names(module):
                 try:
                     sub_module = importlib.import_module(submodule_name)
-                except Exception as ex:
+                except BaseException as ex:
+                    '''必须用BaseException，有些错误Exception拦截不到'''
                     logger.error(
                         "模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}",
                         submodule_name,
@@ -62,7 +67,9 @@ class ModuleCollector:
                     )
                     continue
                 module_node.sub_modules.append(
-                    self._collect_module(QualifiedName.from_str(submodule_name), sub_module)
+                    self._collect_module(
+                        QualifiedName.from_str(submodule_name), sub_module
+                    )
                 )
 
         return module_node
@@ -79,7 +86,9 @@ class ModuleCollector:
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
 
-            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(member):
+            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(
+                member
+            ):
                 class_node.methods.append(
                     self._collect_method(
                         member_path,
@@ -87,7 +96,9 @@ class ModuleCollector:
                         owner=class_,
                     )
                 )
-            elif inspect.isclass(member):
+            elif inspect.isclass(member) and member.__qualname__.startswith(
+                class_.__qualname__ + "."
+            ):
                 class_node.classes.append(self._collect_class(member_path, member))
 
         return class_node
@@ -97,7 +108,7 @@ class ModuleCollector:
         path: QualifiedName,
         func: Any,
     ) -> Function:
-        """收集函数节点但不补全签名。"""
+        """收集函数节点。"""
         return Function(
             name=path.name,
             doc=self._get_doc(func),
@@ -144,14 +155,20 @@ class ModuleCollector:
     def _is_package(module: types.ModuleType) -> bool:
         """判断模块是否为包或命名空间包。"""
         spec = module.__spec__
-        assert spec is not None
-        return spec.submodule_search_locations is not None
+        return spec is not None and spec.submodule_search_locations is not None
 
-    def _iter_submodule_names(self, module: types.ModuleType) -> list[str]:
+    @staticmethod
+    def _iter_submodule_names(module: types.ModuleType) -> list[str]:
         """按 import 拓扑枚举包的直接子模块全名。"""
         spec = module.__spec__
-        assert spec is not None
-        assert spec.submodule_search_locations is not None
+        if spec is None:
+            logger.warning("module.__spec__ is None, module: {}", module)
+            return []
+        if spec.submodule_search_locations is None:
+            logger.warning(
+                "module.__spec__.submodule_search_locations is None, module: {}", module
+            )
+            return []
 
         return sorted(
             module_info.name
@@ -173,7 +190,7 @@ class ModuleCollector:
     @staticmethod
     def _get_module_name(obj: Any) -> str | None:
         """读取对象的 `__module__`。"""
-        module_name = obj.__module__
+        module_name = getattr(obj, "__module__", None)
         if isinstance(module_name, str):
             return module_name
         return None
