@@ -8,31 +8,72 @@ sudo apt install llvm bear
 ```
 
 ## 使用
-生成 stub:
 
-```bash
-uv run pcstubgen gen numpy --compilation-database ./build/compile_commands.json --output ./stubs
-uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_commands.json
-```
+1. 构建目标项目，得到 `compile_commands.json` 和带调试符号的 Wheel 包:
+   
+   - 使用自带构建命令
+   ```bash
+   uv run pcstubgen build <目标项目目录>
+   ```
 
-输出 TOML 格式的结构化函数记录:
+   - 或者，使用自定义构建命令
+   ```bash
+   cd <目标项目目录>
+   uv run pcstubgen wrap -- <构建命令>
+   ```
 
-```bash
-uv run pcstubgen gen pandas._libs.lib --compilation-database ./build/compile_commands.json --output ./stubs --toml
-```
-
-以前缀包装器运行原始构建命令，并产出 `compile_commands.json`:
-
-```bash
-cd /path/to/python-project
-uv run pcstubgen wrap -- python -m build --wheel
-uv run pcstubgen wrap --output ./out/compile_commands.json -- uv build --wheel
-```
-
-构建 Python 项目，并为 stub 生成产出 `compile_commands.json`:
-
-```bash
-uv run pcstubgen build /path/to/python-project
-```
+2. 安装 Wheel 包到环境
+   
+3. 生成 stub
+   ```bash
+   uv run pcstubgen gen <项目Python内名> --compilation-database ./build/compile_commands.json
+   ```
 
 ## 样例
+
+### [SciPy](https://github.com/scipy/scipy)
+
+安装构建依赖
+```bash
+sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
+```
+
+### [Pillow](https://github.com/python-pillow/Pillow)
+
+安装构建依赖
+```bash
+sudo apt install libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev \
+    libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev python3-tk \
+    libharfbuzz-dev libfribidi-dev libxcb1-dev
+```
+
+### [NumPy](https://github.com/numpy/numpy)
+
+安装构建依赖
+```bash
+sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
+```
+
+### [psycopg2](https://github.com/psycopg/psycopg2)
+
+安装构建依赖
+```bash
+sudo apt-get install libpq-dev
+```
+
+### [UltraJSON](https://github.com/ultrajson/ultrajson)
+
+### [PyTorch](https://github.com/pytorch/pytorch)
+
+安装构建依赖
+```bash
+sudo apt install libomp-dev
+```
+
+## 开发
+```bash
+sudo apt install llvm bear
+git clone https://github.com/PCART-tools/PCStubGen
+cd PCStubGen
+uv sync --no-build-isolation
+```
