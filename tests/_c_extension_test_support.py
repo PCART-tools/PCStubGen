@@ -299,10 +299,44 @@ def _assignment(
     )
 
 
+def _expr_assignment(target: _FakeNode, value: _FakeNode) -> _FakeNode:
+    """构造 `target = value` 形式的赋值节点。"""
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.BINARY_OPERATOR,
+        children=[
+            target,
+            value,
+        ],
+        binary_operator_kind=CX_BINARY_OPERATOR_ASSIGN,
+    )
+
+
 def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
         children=[_token_identifier_node(name, referenced=referenced)],
+    )
+
+
+def _address_of_expr(expr: _FakeNode) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        children=[expr],
+    )
+
+
+def _array_subscript(
+    name: str,
+    index: _FakeNode,
+    *,
+    referenced: object | None = None,
+) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.ARRAY_SUBSCRIPT_EXPR,
+        children=[
+            _token_identifier_node(name, referenced=referenced),
+            index,
+        ],
     )
 
 

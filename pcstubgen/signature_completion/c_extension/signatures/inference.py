@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from clang.cindex import Cursor, CursorKind, StorageClass, TypeKind
 from loguru import logger
 
@@ -58,6 +60,7 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_FalseStruct": "False",
 }
 _BOOL_TYPE = RawType("bool")
+_FLOAT_TYPE = RawType("float")
 
 
 def infer_signature(
@@ -151,10 +154,19 @@ def infer_argument_lists(func_cursor: Cursor) -> list[list[Argument]]:
             continue
 
         call_name = call_expr.spelling
-        if call_name in _PYARG_PARSETUPLE_CALL_NAMES:
-            arguments_list.append(_infer_pyarg_parsetuple_arguments(call_expr))
-        elif call_name in _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES:
-            arguments_list.append(_infer_pyarg_parsetuple_and_keywords_arguments(call_expr))
+        try:
+            if call_name in _PYARG_PARSETUPLE_CALL_NAMES:
+                arguments_list.append(_infer_pyarg_parsetuple_arguments(call_expr))
+            elif call_name in _PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES:
+                arguments_list.append(_infer_pyarg_parsetuple_and_keywords_arguments(call_expr))
+        except Exception as ex:
+            logger.warning(
+                "跳过无法推断的 PyArg 参数列表, func_name: {}, call_name: {}, reason: {}: {}",
+                func_cursor.spelling,
+                call_name,
+                type(ex).__name__,
+                ex,
+            )
 
     return arguments_list
 
@@ -197,7 +209,11 @@ def _infer_pyarg_parsetuple_arguments(call_expr: Cursor) -> list[Argument]:
         infer_name_func=_infer_argument_name,
         infer_type_object_func=_infer_type_object_type_for_pyarg,
         infer_converter_type_func=_infer_converter_type_for_pyarg,
-        infer_default_value_func=_infer_default_value_for_pyarg,
+        infer_default_value_func=lambda cursor, expected_type: _infer_default_value_for_pyarg(
+            cursor,
+            expected_type,
+            before_cursor=call_expr,
+        ),
     ).parse()
 
 
@@ -213,7 +229,11 @@ def _infer_pyarg_parsetuple_and_keywords_arguments(call_expr: Cursor) -> list[Ar
         args[4:],
         infer_type_object_func=_infer_type_object_type_for_pyarg,
         infer_converter_type_func=_infer_converter_type_for_pyarg,
-        infer_default_value_func=_infer_default_value_for_pyarg,
+        infer_default_value_func=lambda cursor, expected_type: _infer_default_value_for_pyarg(
+            cursor,
+            expected_type,
+            before_cursor=call_expr,
+        ),
     ).parse()
 
 
@@ -382,12 +402,17 @@ def _is_decl_ref_to_decl(expr_cursor: Cursor, target_decl: Cursor) -> bool:
     referenced = expr_cursor.referenced
     if referenced is None:
         return False
-    if referenced == target_decl:
+    return _is_same_decl(referenced, target_decl)
+
+
+def _is_same_decl(left_decl: Cursor, right_decl: Cursor) -> bool:
+    """判断两个声明节点是否指向同一个 C 声明。"""
+    if left_decl == right_decl:
         return True
 
-    referenced_usr = referenced.get_usr()
-    target_usr = target_decl.get_usr()
-    return bool(referenced_usr and target_usr and referenced_usr == target_usr)
+    left_usr = left_decl.get_usr()
+    right_usr = right_decl.get_usr()
+    return bool(left_usr and right_usr and left_usr == right_usr)
 
 
 def _infer_call_expr_type(cursor: Cursor) -> Type:
@@ -433,11 +458,15 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type:
 
 
 def _infer_argument_name(c_args: list[Cursor]) -> str:
-    """将 parser 提供的 decl-ref 槽位变量名按顺序拼接为参数名。"""
+    """将 parser 提供的槽位变量名按首次出现顺序拼接为参数名。"""
     names: list[str] = []
+    seen_names: set[str] = set()
     for c_arg in c_args:
         candidate = _find_decl_candidate(c_arg)
+        if candidate.spelling in seen_names:
+            continue
         names.append(candidate.spelling)
+        seen_names.add(candidate.spelling)
 
     return "_".join(names)
 
@@ -476,10 +505,28 @@ def _infer_converter_type_for_pyarg(cursor: Cursor) -> Type:
     return mapped
 
 
-def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
+def _infer_default_value_for_pyarg(
+    cursor: Cursor,
+    expected_type: Type,
+    *,
+    before_cursor: Cursor | None = None,
+) -> str:
     """从参数接收变量的声明初始化式中解析默认值文本。"""
+    array_slot = _extract_array_subscript_slot(cursor)
+    if array_slot is not None:
+        array_decl, index = array_slot
+        expr = _find_array_element_assignment_value(array_decl, index, before_cursor)
+        return _render_default_value_expr(expr, array_decl, expected_type)
+
     target_decl = _find_decl_candidate(cursor)
-    expr = _extract_decl_initializer(target_decl)
+    expr = _find_decl_assignment_value(target_decl, before_cursor)
+    if expr is None:
+        expr = _extract_decl_initializer(target_decl)
+    return _render_default_value_expr(expr, target_decl, expected_type)
+
+
+def _render_default_value_expr(expr: Cursor, target_decl: Cursor, expected_type: Type) -> str:
+    """将 C 默认值表达式渲染为 Python 字面量。"""
     expr = unwrap_transparent(expr)
     expected_type = expected_type.canonicalize()
 
@@ -490,10 +537,10 @@ def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
         return "..."
 
     if expr.kind == CursorKind.STRING_LITERAL:
-        return get_string_literal(expr)
+        return repr(get_string_literal(expr))
 
     if expr.kind == CursorKind.FLOATING_LITERAL:
-        return str(evaluate_cursor(expr))
+        return _render_number_default(_evaluate_number_cursor(expr), expected_type)
 
     if expr.kind == CursorKind.CXX_BOOL_LITERAL_EXPR:
         evaluated = evaluate_cursor(expr)
@@ -509,13 +556,17 @@ def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
             raise RuntimeError(
                 f"C++ bool 字面量求值结果不是 0 或 1: {evaluated!r}, cursor: {expr.location}"
             )
-        return str(evaluated)
+        return _render_number_default(cast(int, evaluated), expected_type)
 
     if (
         expr.kind == CursorKind.INTEGER_LITERAL
         and target_decl.type.get_canonical().kind != TypeKind.POINTER
     ):
         evaluated = evaluate_cursor(expr)
+        if type(evaluated) is not int:
+            raise RuntimeError(
+                f"整数默认值求值结果不是整数: {evaluated!r}, cursor: {expr.location}"
+            )
         if expected_type == _BOOL_TYPE:
             if evaluated == 0:
                 return "False"
@@ -524,7 +575,7 @@ def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
             raise RuntimeError(
                 f"bool 默认值整数不是 0 或 1: {evaluated!r}, cursor: {expr.location}"
             )
-        return str(evaluated)
+        return _render_number_default(cast(int, evaluated), expected_type)
 
     if expr.kind == CursorKind.UNARY_OPERATOR:
         children = list(expr.get_children())
@@ -535,13 +586,26 @@ def _infer_default_value_for_pyarg(cursor: Cursor, expected_type: Type) -> str:
             if rendered is not None:
                 return rendered
         if target_decl.type.get_canonical().kind != TypeKind.POINTER:
-            evaluated = evaluate_cursor(expr)
-            if type(evaluated) in (int, float):
-                return str(evaluated)
+            return _render_number_default(_evaluate_number_cursor(expr), expected_type)
 
     raise RuntimeError(
         f"不支持的默认值表达式类型: {expr.kind.name}, cursor: {expr.location}"
     )
+
+
+def _evaluate_number_cursor(expr: Cursor) -> int | float:
+    """求值 C 数字表达式，并拒绝非数字求值结果。"""
+    evaluated = evaluate_cursor(expr)
+    if type(evaluated) in (int, float):
+        return cast(int | float, evaluated)
+    raise RuntimeError(f"数字默认值求值结果不是数字: {evaluated!r}, cursor: {expr.location}")
+
+
+def _render_number_default(value: int | float, expected_type: Type) -> str:
+    """将已求值的 C 数字默认值渲染为 Python 字面量。"""
+    if expected_type == _FLOAT_TYPE:
+        return str(float(value))
+    return str(value)
 
 
 def _find_decl_candidate(cursor: Cursor) -> Cursor:
@@ -554,7 +618,154 @@ def _find_decl_candidate(cursor: Cursor) -> Cursor:
         referenced = target.referenced
         if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
             return referenced
+    if target.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        referenced = _find_array_subscript_base_decl(target)
+        if referenced is not None:
+            return referenced
     raise RuntimeError(f"无法将 C 参数槽位解析为声明节点, cursor: {cursor.location}")
+
+
+def _extract_array_subscript_slot(cursor: Cursor) -> tuple[Cursor, int] | None:
+    """从 `array[index]` 槽位中提取数组声明和固定下标。"""
+    target = _unwrap_pointer_target(cursor)
+    if target.kind != CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        return None
+
+    array_decl = _find_array_subscript_base_decl(target)
+    if array_decl is None:
+        return None
+
+    children = list(target.get_children())
+    if len(children) != 2:
+        raise RuntimeError(f"数组下标表达式结构不受支持, cursor: {target.location}")
+
+    index_expr = unwrap_transparent(children[1])
+    evaluated = evaluate_cursor(index_expr)
+    if type(evaluated) is not int:
+        raise RuntimeError(
+            f"数组下标表达式求值结果不是整数: {evaluated!r}, cursor: {index_expr.location}"
+        )
+    return array_decl, int(evaluated)
+
+
+def _find_array_subscript_base_decl(cursor: Cursor) -> Cursor | None:
+    """从数组下标表达式中提取数组变量声明。"""
+    if cursor.kind != CursorKind.ARRAY_SUBSCRIPT_EXPR:
+        return None
+
+    children = list(cursor.get_children())
+    if len(children) != 2:
+        return None
+
+    array_expr = unwrap_transparent(children[0])
+    if array_expr.kind != CursorKind.DECL_REF_EXPR:
+        return None
+
+    referenced = array_expr.referenced
+    if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
+        return referenced
+    return None
+
+
+def _find_array_element_assignment_value(
+    array_decl: Cursor,
+    index: int,
+    before_cursor: Cursor | None,
+) -> Cursor:
+    """查找函数内指定数组元素在目标调用前的最后一个直接赋值右值。"""
+    function_cursor = _find_local_decl_function_parent(array_decl)
+    candidates: list[Cursor] = []
+
+    for cursor in walk_cursor(function_cursor):
+        if before_cursor is not None and cursor == before_cursor:
+            break
+        if cursor.kind != CursorKind.BINARY_OPERATOR:
+            continue
+        assignment_value = _extract_array_element_assignment_value(cursor, array_decl, index)
+        if assignment_value is not None:
+            candidates.append(assignment_value)
+
+    if not candidates:
+        raise RuntimeError(
+            f"数组元素没有可用定值表达式: {array_decl.spelling}[{index}]"
+        )
+    return candidates[-1]
+
+
+def _find_decl_assignment_value(
+    target_decl: Cursor,
+    before_cursor: Cursor | None,
+) -> Cursor | None:
+    """查找函数内目标声明在目标调用前的最后一个直接赋值右值。"""
+    try:
+        function_cursor = _find_local_decl_function_parent(target_decl)
+    except RuntimeError:
+        return None
+
+    candidates: list[Cursor] = []
+
+    for cursor in walk_cursor(function_cursor):
+        if before_cursor is not None and cursor == before_cursor:
+            break
+        if cursor.kind != CursorKind.BINARY_OPERATOR:
+            continue
+        candidates.extend(_extract_decl_assignment_values(cursor, target_decl))
+
+    if not candidates:
+        return None
+    return candidates[-1]
+
+
+def _extract_decl_assignment_values(
+    assignment_cursor: Cursor,
+    target_decl: Cursor,
+) -> list[Cursor]:
+    """递归提取链式赋值中目标声明对应的最终右值表达式。"""
+    if get_cursor_binary_operator_kind(assignment_cursor) != CX_BINARY_OPERATOR_ASSIGN:
+        return []
+
+    children = list(assignment_cursor.get_children())
+    if len(children) != 2:
+        return []
+
+    target_expr = unwrap_transparent(children[0])
+    value_expr = children[1]
+    values: list[Cursor] = []
+    if _is_decl_ref_to_decl(target_expr, target_decl):
+        values.append(_unwrap_assignment_chain_value(value_expr))
+
+    nested_value_expr = unwrap_transparent(value_expr)
+    if nested_value_expr.kind == CursorKind.BINARY_OPERATOR:
+        values.extend(_extract_decl_assignment_values(nested_value_expr, target_decl))
+    return values
+
+
+def _extract_array_element_assignment_value(
+    assignment_cursor: Cursor,
+    array_decl: Cursor,
+    index: int,
+) -> Cursor | None:
+    """在 `array[index] = expr` 中提取指定数组元素的右值表达式。"""
+    if get_cursor_binary_operator_kind(assignment_cursor) != CX_BINARY_OPERATOR_ASSIGN:
+        return None
+
+    children = list(assignment_cursor.get_children())
+    if len(children) != 2:
+        return None
+
+    try:
+        array_slot = _extract_array_subscript_slot(children[0])
+    except RuntimeError:
+        return None
+    if array_slot is None:
+        return None
+
+    candidate_decl, candidate_index = array_slot
+    if not _is_same_decl(candidate_decl, array_decl):
+        return None
+    if candidate_index != index:
+        return None
+    return children[1]
 
 
 def _unwrap_pointer_target(cursor: Cursor) -> Cursor:
