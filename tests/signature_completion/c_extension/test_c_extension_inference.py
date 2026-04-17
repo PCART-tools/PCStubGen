@@ -1305,6 +1305,55 @@ def test_infer_type_object_type_for_pyarg_reads_numpy_name_from_extent_source_te
     assert inferred.render() == "numpy.ndarray"
 
 
+def test_infer_type_object_type_for_pyarg_reads_pillow_imaging_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "pillow_imaging_object_type_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", &Imaging_Type, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent=_extent_for_source_snippet(source, "&Imaging_Type"),
+    )
+
+    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "object"
+
+
+def test_infer_type_object_type_for_pyarg_reads_pillow_cms_profile_name_from_extent_source_text(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "pillow_cms_profile_object_type_from_extent.c"
+    source.write_text(
+        "\n".join(
+            [
+                "/* 中文注释 */",
+                "PyArg_ParseTuple(args, \"O!\", &CmsProfile_Type, &value);",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent=_extent_for_source_snippet(source, "&CmsProfile_Type"),
+    )
+
+    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "PIL.ImageCms.core.CmsProfile"
+    assert inferred.collect_imports() == {"PIL.ImageCms"}
+
+
 def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
