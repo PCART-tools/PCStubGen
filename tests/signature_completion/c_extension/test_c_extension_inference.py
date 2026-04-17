@@ -19,6 +19,7 @@ from pcstubgen.signature_completion.c_extension.signatures import inference as s
 from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
     _FakeNode,
+    _FakeToken,
     _address_of,
     _address_of_expr,
     _arg,
@@ -1326,7 +1327,8 @@ def test_infer_type_object_type_for_pyarg_reads_pillow_imaging_name_from_extent_
     inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
     assert inferred is not None
-    assert inferred.render() == "object"
+    assert inferred.render() == "PIL.Image.core.ImagingCore"
+    assert inferred.collect_imports() == {"PIL.Image"}
 
 
 def test_infer_type_object_type_for_pyarg_reads_pillow_cms_profile_name_from_extent_source_text(
@@ -1352,6 +1354,151 @@ def test_infer_type_object_type_for_pyarg_reads_pillow_cms_profile_name_from_ext
     assert inferred is not None
     assert inferred.render() == "PIL.ImageCms.core.CmsProfile"
     assert inferred.collect_imports() == {"PIL.ImageCms"}
+
+
+@pytest.mark.parametrize(
+    ("call_name", "expected", "imports"),
+    [
+        ("PyImagingNew", "PIL.Image.core.ImagingCore", {"PIL.Image"}),
+        ("PyImaging_DecoderNew", "PIL.Image.core.ImagingDecoder", {"PIL.Image"}),
+        ("PyImaging_EncoderNew", "PIL.Image.core.ImagingEncoder", {"PIL.Image"}),
+        ("cms_profile_new", "PIL.ImageCms.core.CmsProfile", {"PIL.ImageCms"}),
+        ("cms_transform_new", "PIL.ImageCms.core.CmsTransform", {"PIL.ImageCms"}),
+        ("_outline_new", "PIL.Image.core._Outline", {"PIL.Image"}),
+        ("path_new", "PIL.ImagePath.Path", {"PIL.ImagePath"}),
+    ],
+)
+def test_infer_expr_type_detects_pillow_factory_mappings(
+    call_name: str,
+    expected: str,
+    imports: set[str],
+) -> None:
+    inferred = signature_rules_module.infer_expr_type(_call_expr(call_name, _identifier_node("arg")))
+
+    assert inferred.render() == expected
+    assert inferred.collect_imports() == imports
+
+
+@pytest.mark.parametrize(
+    "call_name",
+    [
+        "ImagingError_MemoryError",
+        "ImagingError_ValueError",
+        "HandleMuxError",
+        "geterror",
+    ],
+)
+def test_infer_expr_type_detects_pillow_error_return_factories(call_name: str) -> None:
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            call_name,
+            _identifier_node("arg"),
+        )
+    )
+
+    assert inferred == UnionType(())
+
+
+def test_infer_expr_type_detects_pyobject_new_from_type_object() -> None:
+    type_object_arg = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent="&ImagingEncoder_Type",
+        children=[_identifier_node("ImagingEncoder_Type")],
+    )
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "PyObject_New",
+            _identifier_node("ImagingEncoderObject"),
+            type_object_arg,
+        )
+    )
+
+    assert inferred.render() == "PIL.Image.core.ImagingEncoder"
+    assert inferred.collect_imports() == {"PIL.Image"}
+
+
+def test_infer_expr_type_detects_pyobject_new_macro_expansion_shape() -> None:
+    type_object_arg = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent="&ImagingDraw_Type",
+        children=[_identifier_node("ImagingDraw_Type")],
+    )
+    call_expr = _FakeNode(
+        kind=clang.cindex.CursorKind.CALL_EXPR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, "PyObject_New")],
+        spelling="PyObject_New",
+        children=[
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
+                spelling="PyObject_New",
+                extent="PyObject_New(ImagingDrawObject, &ImagingDraw_Type)",
+                children=[_token_identifier_node("PyObject_New")],
+            ),
+            type_object_arg,
+        ],
+    )
+
+    inferred = signature_rules_module.infer_expr_type(call_expr)
+
+    assert inferred.render() == "PIL.Image.core.ImagingDraw"
+    assert inferred.collect_imports() == {"PIL.Image"}
+
+
+def test_infer_expr_type_detects_private_pyobject_new_call() -> None:
+    type_object_arg = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent="&Font_Type",
+        children=[_identifier_node("Font_Type")],
+    )
+    inferred = signature_rules_module.infer_expr_type(
+        _call_expr(
+            "_PyObject_New",
+            type_object_arg,
+        )
+    )
+
+    assert inferred.render() == "PIL._imagingft.Font"
+    assert inferred.collect_imports() == {"PIL._imagingft"}
+
+
+def test_return_type_traces_local_decl_ref_initialized_from_pyobject_new() -> None:
+    type_object_arg = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        extent="&ImagingDecoder_Type",
+        children=[_identifier_node("ImagingDecoder_Type")],
+    )
+    self_decl = _var_decl(
+        "self",
+        _call_expr(
+            "PyObject_New",
+            _identifier_node("ImagingDecoderObject"),
+            type_object_arg,
+        ),
+    )
+    cursor = _fake_function_cursor_with_children(
+        self_decl,
+        _return_stmt(_token_identifier_node("self", referenced=self_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "PIL.Image.core.ImagingDecoder"
+    assert inferred.collect_imports() == {"PIL.Image"}
+
+
+def test_return_type_drops_pillow_error_return_factory_branch() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("HandleMuxError", _identifier_node("mux"))),
+        _return_stmt(_call_expr("PyImagingNew", _identifier_node("image"))),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType(
+        "PIL.Image.core.ImagingCore",
+        imports=("PIL.Image",),
+    )
 
 
 def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_error(

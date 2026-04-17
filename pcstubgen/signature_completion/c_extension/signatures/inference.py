@@ -426,6 +426,8 @@ def _infer_call_expr_type(cursor: Cursor) -> Type:
 
     if call_name == "Py_BuildValue":
         return _infer_py_buildvalue_type(cursor)
+    if call_name in {"PyObject_New", "_PyObject_New"}:
+        return _infer_pyobject_new_type(cursor)
     mapped = FUNCTION_NAME_TO_TYPE.get(call_name)
     if mapped is None:
         raise RuntimeError(
@@ -455,6 +457,16 @@ def _infer_py_buildvalue_type(call_cursor: Cursor) -> Type:
         args[1:],
         infer_object_type_func=infer_expr_type,
     ).parse()
+
+
+def _infer_pyobject_new_type(call_cursor: Cursor) -> Type:
+    """从 `PyObject_New` 宏或 `_PyObject_New` 调用的类型对象参数推断 Python 类型。"""
+    args = list(call_cursor.get_children())[1:]
+    if not args:
+        raise RuntimeError(
+            f"PyObject_New 缺少类型对象参数, cursor: {call_cursor.location}"
+        )
+    return _infer_type_object_type_for_pyarg(args[-1])
 
 
 def _infer_argument_name(c_args: list[Cursor]) -> str:
