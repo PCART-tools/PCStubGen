@@ -116,12 +116,32 @@ class TomlWriter:
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """将类方法转换为 TOML 记录。"""
-        return self._build_function_entries(
-            module_name=module_name,
-            class_name=class_name,
-            func=method,
-            renderer=renderer,
-        )
+        if not method.signatures:
+            return [
+                self._build_entry(
+                    module_name=module_name,
+                    class_name=class_name,
+                    function_name=method.name,
+                    signature=None,
+                    comment=method.comment,
+                )
+            ]
+
+        return [
+            self._build_entry(
+                module_name=module_name,
+                class_name=class_name,
+                function_name=method.name,
+                signature="\n".join(
+                    renderer.render_method_signature_lines(
+                        func=method,
+                        signature=signature,
+                    )
+                ),
+                comment=method.comment,
+            )
+            for signature in method.signatures
+        ]
 
     def _build_function_entries(
         self,

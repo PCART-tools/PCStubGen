@@ -244,10 +244,135 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
     assert lines == [
         "@classmethod",
         "@typing.overload",
-        "def build(x: int) -> int:",
+        "def build(",
+        "    cls,",
+        "    x: int,",
+        ") -> int:",
         "    ...",
         "@classmethod",
         "@typing.overload",
-        "def build(x: str) -> str:",
+        "def build(",
+        "    cls,",
+        "    x: str,",
+        ") -> str:",
         "    ...",
+    ]
+
+
+def test_renderer_inserts_self_for_instance_method_output() -> None:
+    method = Function(
+        name="append",
+        runtime_handle=object(),
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+    )
+
+    lines = StubRenderer(include_docstrings=False).render_method(method)
+
+    assert lines == [
+        "def append(",
+        "    self,",
+        "    value: int,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_renderer_does_not_duplicate_self_or_cls_for_method_output() -> None:
+    renderer = StubRenderer(include_docstrings=False)
+    instance_method = Function(
+        name="append",
+        runtime_handle=object(),
+        signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
+    )
+    class_method = Function(
+        name="build",
+        runtime_handle=object(),
+        signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
+        decorator="classmethod",
+    )
+
+    instance_lines = renderer.render_method(instance_method)
+    class_lines = renderer.render_method(class_method)
+
+    assert instance_lines == [
+        "def append(",
+        "    self,",
+        "    value,",
+        "):",
+        "    ...",
+    ]
+    assert class_lines == [
+        "@classmethod",
+        "def build(",
+        "    cls,",
+        "    value,",
+        "):",
+        "    ...",
+    ]
+
+
+def test_renderer_does_not_insert_receiver_for_staticmethod_output() -> None:
+    method = Function(
+        name="build",
+        runtime_handle=object(),
+        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+        decorator="staticmethod",
+    )
+
+    lines = StubRenderer(include_docstrings=False).render_method(method)
+
+    assert lines == [
+        "@staticmethod",
+        "def build(value: int):",
+        "    ...",
+    ]
+
+
+def test_renderer_sorts_class_methods_only_by_name() -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Example",
+                methods=[
+                    Function(
+                        name="zeta",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                        decorator="classmethod",
+                    ),
+                    Function(
+                        name="alpha",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                    ),
+                    Function(
+                        name="middle",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                        decorator="staticmethod",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    lines = StubRenderer(include_docstrings=False).render_module(module)
+
+    assert lines == [
+        "class Example:",
+        "    def alpha(",
+        "        self,",
+        "        value,",
+        "    ):",
+        "        ...",
+        "    @staticmethod",
+        "    def middle(value):",
+        "        ...",
+        "    @classmethod",
+        "    def zeta(",
+        "        cls,",
+        "        value,",
+        "    ):",
+        "        ...",
     ]

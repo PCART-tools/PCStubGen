@@ -64,18 +64,7 @@ class StubRenderer:
         for sub_class in sorted(class_node.classes, key=lambda c: c.name):
             result.extend(self.render_class(sub_class))
 
-        decorator_order: dict[Decorator, int] = {
-            "staticmethod": 0,
-            "classmethod": 1,
-            None: 2,
-        }
-        for method in sorted(
-            class_node.methods,
-            key=lambda method: (
-                decorator_order.get(method.decorator, 2),
-                method.name,
-            ),
-        ):
+        for method in sorted(class_node.methods, key=lambda method: method.name):
             result.extend(self.render_method(method))
 
         if not result:
@@ -87,7 +76,7 @@ class StubRenderer:
         """渲染类方法。"""
         result: list[str] = []
         overload = len(func.signatures) > 1
-        for signature in self._get_renderable_signatures(func):
+        for signature in self._get_renderable_method_signatures(func):
             result.extend(
                 self._render_function_block(
                     func_name=func.name,
@@ -167,6 +156,18 @@ class StubRenderer:
     def render_function_signature_lines(self, *, func_name: str, signature: Signature) -> list[str]:
         """将单条函数签名渲染为 def 头行列表。"""
         return self._build_function_signature(func_name=func_name, signature=signature)
+
+    def render_method_signature_lines(
+        self,
+        *,
+        func: Function,
+        signature: Signature,
+    ) -> list[str]:
+        """将类方法签名渲染为 def 头行列表。"""
+        return self._build_function_signature(
+            func_name=func.name,
+            signature=self._normalize_method_signature(signature, func.decorator),
+        )
 
     def _render_function_block(
         self,
@@ -288,6 +289,36 @@ class StubRenderer:
         if func.signatures:
             return func.signatures
         return [self._build_placeholder_signature(func)]
+
+    def _get_renderable_method_signatures(self, func: Function) -> list[Signature]:
+        """返回可渲染的方法签名，并补齐接收者参数。"""
+        return [
+            self._normalize_method_signature(signature, func.decorator)
+            for signature in self._get_renderable_signatures(func)
+        ]
+
+    def _normalize_method_signature(
+        self,
+        signature: Signature,
+        decorator: Decorator,
+    ) -> Signature:
+        """按方法类型补齐输出所需的接收者参数。"""
+        receiver_name: str | None = None
+        if decorator is None:
+            receiver_name = "self"
+        elif decorator == "classmethod":
+            receiver_name = "cls"
+
+        if receiver_name is None:
+            return signature
+
+        if signature.args and signature.args[0].name == receiver_name:
+            return signature
+
+        return Signature(
+            args=[Argument(name=receiver_name), *signature.args],
+            return_type=signature.return_type,
+        )
 
     def _build_placeholder_signature(self, func: Function) -> Signature:
         """为未知签名函数合成仅用于输出的占位签名。"""

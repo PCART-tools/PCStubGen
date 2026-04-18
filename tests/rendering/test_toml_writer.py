@@ -203,13 +203,111 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                 "module_name": "pkg.mod",
                 "class_name": "Outer",
                 "function_name": "build",
-                "signature": "def build(value: int) -> int:",
+                "signature": "def build(\n    self,\n    value: int,\n) -> int:",
             },
             {
                 "module_name": "pkg.mod",
                 "class_name": "Outer.Inner",
                 "function_name": "build_inner",
-                "signature": "def build_inner() -> int:",
+                "signature": "def build_inner(self) -> int:",
             },
         ]
     }
+
+
+def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Factory",
+                methods=[
+                    Function(
+                        name="build",
+                        runtime_handle=object(),
+                        signatures=[
+                            _signature(
+                                args=[Argument(name="value", type=RawType("int"))],
+                                return_type=RawType("int"),
+                            )
+                        ],
+                        decorator="classmethod",
+                    ),
+                    Function(
+                        name="make",
+                        runtime_handle=object(),
+                        signatures=[
+                            _signature(
+                                args=[Argument(name="value", type=RawType("str"))],
+                                return_type=RawType("str"),
+                            )
+                        ],
+                        decorator="staticmethod",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    TomlWriter().write(
+        module,
+        StubRenderer(include_docstrings=False),
+        to=tmp_path,
+    )
+
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "class_name": "Factory",
+                "function_name": "build",
+                "signature": "def build(\n    cls,\n    value: int,\n) -> int:",
+            },
+            {
+                "module_name": "pkg.mod",
+                "class_name": "Factory",
+                "function_name": "make",
+                "signature": "def make(value: str) -> str:",
+            },
+        ]
+    }
+
+
+def test_toml_writer_sorts_class_methods_only_by_name(tmp_path) -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Factory",
+                methods=[
+                    Function(
+                        name="zeta",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                        decorator="classmethod",
+                    ),
+                    Function(
+                        name="alpha",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                    ),
+                    Function(
+                        name="middle",
+                        runtime_handle=object(),
+                        signatures=[_signature(args=[Argument(name="value")])],
+                        decorator="staticmethod",
+                    ),
+                ],
+            )
+        ],
+    )
+
+    TomlWriter().write(
+        module,
+        StubRenderer(include_docstrings=False),
+        to=tmp_path,
+    )
+
+    entries = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["entries"]
+
+    assert [entry["function_name"] for entry in entries] == ["alpha", "middle", "zeta"]
