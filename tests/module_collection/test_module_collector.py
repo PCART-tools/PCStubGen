@@ -265,9 +265,7 @@ def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> N
 
     assert maketrans_method.decorator == "staticmethod"
     assert maketrans_method.function.runtime_handle is str.__dict__["maketrans"].__func__
-    assert maketrans_method.function.doc is not None
-    assert "translation table" in maketrans_method.function.doc
-    assert "staticmethod(function)" not in maketrans_method.function.doc
+    assert maketrans_method.function.doc == str.__dict__["maketrans"].__func__.__doc__
 
 
 def _write_package_file(path: Path, content: str) -> None:

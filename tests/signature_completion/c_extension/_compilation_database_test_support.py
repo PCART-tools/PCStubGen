@@ -3,8 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from clang.cindex import CompileCommand
-
 from pcstubgen.signature_completion.c_extension.clang import parser as parser_module
 
 
@@ -43,25 +41,6 @@ def compile_command_filename(command: FakeCompileCommand) -> Path:
     if not file_path.is_absolute():
         file_path = Path(command.directory) / file_path
     return file_path.resolve()
-
-
-def make_compile_command(
-    *,
-    working_directory: Path,
-    source: Path,
-    arguments: list[str],
-) -> CompileCommand:
-    return cast(
-        CompileCommand,
-        cast(
-            object,
-            FakeCompileCommand(
-                directory=working_directory,
-                filename=str(source),
-                arguments=arguments,
-            ),
-        ),
-    )
 
 
 def make_parser(

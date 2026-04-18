@@ -11,6 +11,7 @@ from tests._c_extension_test_support import (
     _FakeCursorLocation,
     _FakeNode,
     _FakeSourceRange,
+    _extent_for_source_snippet,
     _identifier_node,
     ast_utils_module,
 )
@@ -46,6 +47,7 @@ def _parse_first_call_cursor(source_arg: str) -> clang.cindex.Cursor:
     )
 
 
+@pytest.mark.libclang
 def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_path: Path) -> None:
     source = tmp_path / "extent_text.c"
     snippet = "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);"
@@ -68,6 +70,7 @@ def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_
     assert snippet in extracted
 
 
+@pytest.mark.libclang
 def test_get_call_expr_source_name_reads_direct_call_start_token(tmp_path: Path) -> None:
     source = tmp_path / "direct_call_name.c"
     source.write_text(
@@ -88,6 +91,7 @@ def test_get_call_expr_source_name_reads_direct_call_start_token(tmp_path: Path)
     assert call_name == "PyLong_FromLong"
 
 
+@pytest.mark.libclang
 def test_get_call_expr_source_name_reads_function_like_macro_start_token(tmp_path: Path) -> None:
     source = tmp_path / "macro_call_name.c"
     source.write_text(
@@ -109,6 +113,7 @@ def test_get_call_expr_source_name_reads_function_like_macro_start_token(tmp_pat
     assert call_name == "PyArray_ContiguousFromObject"
 
 
+@pytest.mark.libclang
 def test_extract_cursor_source_text_reads_relative_path_extent_from_translation_unit_buffer(
     tmp_path: Path,
 ) -> None:
@@ -177,6 +182,188 @@ def test_extract_string_literal_raises_with_cursor_location() -> None:
         match=rf"节点不是字符串字面量.*{re.escape('ast_utils.c:12:7')}",
     ):
         ast_utils_module.get_string_literal(cursor)
+
+
+def test_get_func_cursor_matches_linkage_name(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.cpp"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    first_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo(int value) {\n    return value;\n}"),
+    )
+    first_cursor.mangled_name = "_Z3fooi"
+
+    second_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo(int value) {\n    return value;\n}"),
+    )
+    second_cursor.mangled_name = "_Z3food"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[first_cursor, second_cursor],
+            )
+        },
+    )()
+
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo", "_Z3fooi")
+
+    assert matched is first_cursor
+
+
+def test_get_func_cursor_matches_nested_definition_with_linkage_name(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.cpp"
+    source_path.write_text(
+        "\n".join(
+            [
+                "namespace outer {",
+                'extern "C" {',
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+                "}",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.mangled_name = "_Z8foo_impli"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[
+                    _FakeNode(
+                        kind=clang.cindex.CursorKind.NAMESPACE,
+                        children=[
+                            _FakeNode(
+                                kind=clang.cindex.CursorKind.LINKAGE_SPEC,
+                                children=[function_cursor],
+                            )
+                        ],
+                    )
+                ],
+            )
+        },
+    )()
+
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impli")
+
+    assert matched is function_cursor
+
+
+def test_get_func_cursor_matches_spelling_when_linkage_name_is_missing(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.c"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.mangled_name = "foo_impl"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[function_cursor],
+            )
+        },
+    )()
+
+    matched = ast_utils_module.get_func_cursor(translation_unit, "foo_impl", None)
+
+    assert matched is function_cursor
+
+
+def test_get_func_cursor_raises_when_linkage_name_does_not_match(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "foo_impl.cpp"
+    source_path.write_text(
+        "\n".join(
+            [
+                "int foo_impl(int value) {",
+                "    return value;",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+    function_cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        spelling="foo_impl",
+        is_definition=True,
+        location=type("Loc", (), {"file": type("File", (), {"name": str(source_path)})()})(),
+        extent=_extent_for_source_snippet(source_path, "int foo_impl(int value) {\n    return value;\n}"),
+    )
+    function_cursor.mangled_name = "_Z8foo_impli"
+
+    translation_unit = type(
+        "FakeTranslationUnit",
+        (),
+        {
+            "cursor": _FakeNode(
+                kind=clang.cindex.CursorKind.TRANSLATION_UNIT,
+                children=[function_cursor],
+            )
+        },
+    )()
+
+    with pytest.raises(RuntimeError, match="未在 translation unit 中定位到函数定义"):
+        ast_utils_module.get_func_cursor(translation_unit, "foo_impl", "_Z8foo_impld")
 
 
 @pytest.mark.parametrize(

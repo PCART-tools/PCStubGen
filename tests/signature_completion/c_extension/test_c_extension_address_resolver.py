@@ -13,6 +13,7 @@ def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
     tmp_path: Path,
 ) -> None:
     binary_path = tmp_path / "sample.so"
+    captured: dict[str, object] = {}
 
     monkeypatch.setattr(
         resolver_module,
@@ -22,7 +23,11 @@ def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
     monkeypatch.setattr(
         resolver_module.dwarfdump,
         "lookup",
-        lambda binary_path_arg, relative_address_arg: LookupResult(
+        lambda binary_path_arg, relative_address_arg: captured.update(
+            binary_path=binary_path_arg,
+            relative_address=relative_address_arg,
+        )
+        or LookupResult(
             compilation_unit_path=(tmp_path / "sample.c").resolve(),
             function_name="foo_impl",
             linkage_name="_Z8foo_implv",
@@ -31,6 +36,10 @@ def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
 
     result = resolver_module.get_func_file_location(0x1234)
 
+    assert captured == {
+        "binary_path": binary_path,
+        "relative_address": 0x234,
+    }
     assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
     assert result.linkage_name == "_Z8foo_implv"

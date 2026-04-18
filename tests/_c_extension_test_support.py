@@ -12,6 +12,9 @@ import pytest
 from pcstubgen.signature_completion.c_extension import (
     source as c_extension_source_module,
 )
+from pcstubgen.signature_completion.c_extension.signatures import (
+    inference as signature_rules_module,
+)
 from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.clang.libclang_wrap import (
     CX_BINARY_OPERATOR_ASSIGN,
@@ -79,6 +82,14 @@ class ResolvedFunctionFixture:
     function_cursor: clang.cindex.Cursor | None = None
 
 
+class _FakeCanonicalType:
+    def __init__(self, kind: object) -> None:
+        self.kind = kind
+
+    def get_canonical(self) -> "_FakeCanonicalType":
+        return self
+
+
 def _patch_c_signature_extractor(
     monkeypatch: pytest.MonkeyPatch,
     functions: dict[str, ResolvedFunctionFixture] | None = None,
@@ -109,6 +120,70 @@ def _patch_c_signature_extractor(
         c_extension_source_module.CExtensionSource,
         "infer_function_signatures",
         _patched_infer_function_signatures,
+    )
+
+
+def _location_text(text: str) -> object:
+    class _Location:
+        def __str__(self) -> str:
+            return text
+
+    return _Location()
+
+
+def patch_inference_clang_helpers(
+    monkeypatch: pytest.MonkeyPatch,
+    target_module=signature_rules_module,
+) -> None:
+    """让 fake cursor 支持推断测试依赖的 clang helper。"""
+    real_cursor_get_text = target_module.get_cursor_text
+
+    def fake_cursor_get_text(cursor: object) -> str:
+        extent = getattr(cursor, "extent", None)
+        if isinstance(extent, str):
+            return extent
+        if hasattr(extent, "start") and hasattr(extent, "end"):
+            start = extent.start
+            end = extent.end
+            if start.file is not None:
+                source_bytes = Path(start.file.name).read_bytes()
+                return source_bytes[start.offset:end.offset].decode(
+                    "utf-8",
+                    errors="ignore",
+                )
+        return real_cursor_get_text(cast(clang.cindex.Cursor, cursor))
+
+    monkeypatch.setattr(
+        target_module,
+        "get_cursor_text",
+        fake_cursor_get_text,
+    )
+
+    real_get_call_expr_source_name = target_module.get_call_expr_source_name
+
+    def fake_get_call_expr_source_name(cursor: object) -> str:
+        if isinstance(cursor, _FakeNode):
+            tokens = list(cursor.get_tokens())
+            if not tokens:
+                raise RuntimeError(f"调用表达式起点缺少 token, cursor: {cursor.location}")
+            return tokens[0].spelling
+        return real_get_call_expr_source_name(cast(clang.cindex.Cursor, cursor))
+
+    monkeypatch.setattr(
+        target_module,
+        "get_call_expr_source_name",
+        fake_get_call_expr_source_name,
+    )
+
+    def fake_cursor_binary_operator_kind(cursor: object) -> int:
+        operator_kind = cast(_FakeNode, cursor).binary_operator_kind
+        assert operator_kind is not None
+        return operator_kind
+
+    monkeypatch.setattr(
+        target_module,
+        "get_cursor_binary_operator_kind",
+        fake_cursor_binary_operator_kind,
     )
 
 
@@ -224,6 +299,21 @@ def _identifier_node(name: str) -> _FakeNode:
 
 def _wrap(kind: object, child: _FakeNode) -> _FakeNode:
     return _FakeNode(kind=kind, children=[child])
+
+
+def _python_singleton_default_expr(struct_name: str) -> _FakeNode:
+    return _wrap(
+        clang.cindex.CursorKind.UNARY_OPERATOR,
+        _token_identifier_node(struct_name),
+    )
+
+
+def _unary_default_expr(child: _FakeNode) -> _FakeNode:
+    return _wrap(clang.cindex.CursorKind.UNARY_OPERATOR, child)
+
+
+def _cxx_bool_literal() -> _FakeNode:
+    return _FakeNode(kind=clang.cindex.CursorKind.CXX_BOOL_LITERAL_EXPR)
 
 
 def _init_list(*children: _FakeNode) -> _FakeNode:

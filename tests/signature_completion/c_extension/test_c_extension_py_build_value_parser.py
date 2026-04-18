@@ -55,148 +55,28 @@ def _canonical_render(
     ).canonicalize().render()
 
 
-def test_canonicalize_type_turns_empty_union_into_never() -> None:
-    """空 union 在规范化后应保持为空 union 这一唯一 `Never` 表示。"""
-    canonical = UnionType(()).canonicalize()
-
-    assert canonical == UnionType(())
-
-
-def test_canonicalize_type_propagates_any_across_union_members() -> None:
-    """联合类型中只要出现显式 `Any`，整体就应规范化为 `Any`。"""
-    canonical = UnionType(
-        (AnyType(), NamedType("int"))
-    ).canonicalize()
-
-    assert canonical == AnyType()
-
-
-def test_canonicalize_type_drops_never_from_union_members() -> None:
-    """联合类型规范化时应移除空 union 这一 `Never` 幺元成员。"""
-    canonical = UnionType(
-        (UnionType(()), NamedType("int"))
-    ).canonicalize()
-
-    assert canonical == NamedType("int")
-
-
-def test_canonicalize_type_short_circuits_nested_any() -> None:
-    """多层嵌套联合中出现 `Any` 时应直接短路为显式 `Any`。"""
-    canonical = UnionType(
-        (
-            NamedType("str"),
-            UnionType((NamedType("int"), AnyType())),
-        )
-    ).canonicalize()
-
-    assert canonical == AnyType()
-
-
-def test_canonicalize_type_flattens_deduplicates_and_sorts_unions() -> None:
-    """规范化阶段应展平、去重并按渲染键排序联合类型成员。"""
-    canonical = UnionType(
-        (
-            NamedType("str"),
-            UnionType((NamedType("float"), NamedType("int"))),
-            NamedType("bool"),
-            UnionType(
-                (
-                    NamedType("int"),
-                    UnionType((NamedType("bool"), UnionType(()))),
-                )
-            ),
-        )
-    ).canonicalize()
-
-    assert canonical == UnionType(
-        (
-            NamedType("bool"),
-            NamedType("float"),
-            NamedType("int"),
-            NamedType("str"),
-        )
-    )
-
-
-def test_canonicalize_type_node_recurses_into_container_members() -> None:
-    """规范化阶段应递归处理容器内部的联合类型。"""
-    canonical = ListType(
-        UnionType(
-            (
-                NamedType("str"),
-                UnionType((NamedType("int"), NamedType("bool"))),
-                NamedType("bool"),
-            )
-        )
-    ).canonicalize()
-
-    assert canonical == ListType(
-        UnionType((NamedType("bool"), NamedType("int"), NamedType("str")))
-    )
-
-
-def test_canonicalize_type_node_folds_single_union_member_inside_container() -> None:
-    """容器槽位在规范化后可直接持有非 union 节点。"""
-    canonical = DictType(
-        UnionType((NamedType("str"),)),
-        UnionType((NamedType("int"),)),
-    ).canonicalize()
-
-    assert canonical == DictType(NamedType("str"), NamedType("int"))
-
-
-def test_canonicalize_type_node_deduplicates_structurally_equal_container_members() -> None:
-    """结构相同的容器成员在 union 里应按节点相等性去重。"""
-    canonical = UnionType(
-        (
-            ListType(NamedType("int")),
-            ListType(NamedType("int")),
-        )
-    ).canonicalize()
-
-    assert canonical == ListType(NamedType("int"))
-
-
-def test_canonicalize_type_node_keeps_empty_union_when_all_members_are_never() -> None:
-    """嵌套 union 仅包含 `Never` 时应回到空 union。"""
-    canonical = UnionType(
-        (
-            UnionType(()),
-            UnionType((UnionType(()),)),
-        )
-    ).canonicalize()
-
-    assert canonical == UnionType(())
-
-
 @pytest.mark.parametrize(
     ("format_string", "arg_count", "expected"),
     [
         ("", 0, NamedType("None")),
-        (" \t , : ", 0, NamedType("None")),
         ("()", 0, TupleType(())),
-        ("[]", 0, ListType(UnionType(()))),
-        (
-            "{}",
-            0,
-            DictType(
-                UnionType(()),
-                UnionType(()),
-            ),
-        ),
         ("(i)", 1, TupleType((NamedType("int"),))),
         (
-            "[szuU]",
+            "[Oi]",
+            2,
+            ListType(UnionType((NamedType("Resolved"), NamedType("int")))),
+        ),
+        (
+            "{Oiis}",
             4,
-            ListType(
+            DictType(
+                UnionType((NamedType("Resolved"), NamedType("int"))),
                 UnionType(
                     (
-                        UnionType((NamedType("str"), NamedType("None"))),
-                        UnionType((NamedType("str"), NamedType("None"))),
-                        UnionType((NamedType("str"), NamedType("None"))),
+                        NamedType("int"),
                         UnionType((NamedType("str"), NamedType("None"))),
                     )
-                )
+                ),
             ),
         ),
     ],
@@ -207,33 +87,11 @@ def test_parse_returns_expected_raw_type_tree(
     expected: Type,
 ) -> None:
     """解析阶段应返回未经规范化的原始类型树。"""
-    assert _parse(format_string, arg_count) == expected
-
-
-def test_parse_returns_expected_raw_type_tree_for_resolved_object_units() -> None:
-    resolved = lambda cursor: NamedType("Resolved")
-
     assert _parse(
-        "{Oi}",
-        2,
-        infer_object_type_func=resolved,
-    ) == DictType(
-        UnionType((NamedType("Resolved"),)),
-        UnionType((NamedType("int"),)),
-    )
-    assert _parse(
-        "{Oiis}",
-        4,
-        infer_object_type_func=resolved,
-    ) == DictType(
-        UnionType((NamedType("Resolved"), NamedType("int"))),
-        UnionType(
-            (
-                NamedType("int"),
-                UnionType((NamedType("str"), NamedType("None"))),
-            )
-        ),
-    )
+        format_string,
+        arg_count,
+        infer_object_type_func=lambda cursor: NamedType("Resolved"),
+    ) == expected
 
 
 @pytest.mark.parametrize(

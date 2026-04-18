@@ -9,6 +9,9 @@ from clang.cindex import Index
 from pcstubgen.signature_completion.c_extension.clang import libclang_wrap as libclang_wrap_module
 
 
+pytestmark = pytest.mark.libclang
+
+
 class _PointerHolder:
     def __init__(self) -> None:
         self.value: object | None = None

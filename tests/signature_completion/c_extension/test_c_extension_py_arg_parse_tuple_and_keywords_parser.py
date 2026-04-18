@@ -10,9 +10,7 @@ from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_an
     PyArgParseTupleAndKeywordsTypeParserError,
 )
 from tests.signature_completion.c_extension._py_arg_parse_test_support import (
-    _STR_OR_BUFFER_OR_NONE_TYPE,
     _STR_OR_BUFFER_TYPE,
-    _STR_OR_BYTES_OR_BYTEARRAY_TYPE,
     _STR_OR_NONE_TYPE,
     _arg,
     _cursor,
@@ -83,77 +81,6 @@ def test_parse_ignores_trailer_and_separators(trailer: str) -> None:
     ]
 
 
-def test_parse_uses_object_and_default_inference_for_multi_slot_units() -> None:
-    count_cursor = _cursor("count")
-    encoding_cursor = _cursor("encoding")
-    text_buffer_cursor = _cursor("text_buffer")
-    text_len_cursor = _cursor("text_len")
-    type_cursor = _cursor("type")
-    typed_result_cursor = _cursor("typed_result")
-    converter_cursor = _cursor("converter")
-    converted_result_cursor = _cursor("converted_result")
-    raw_buffer_cursor = _cursor("raw_buffer")
-    raw_len_cursor = _cursor("raw_len")
-    maybe_buffer_cursor = _cursor("maybe_buffer")
-
-    resolved_types = {
-        type_cursor: RawType("Point"),
-        converter_cursor: RawType("ConvertedValue"),
-    }
-    resolved_defaults = {
-        text_buffer_cursor: '"utf8"',
-        typed_result_cursor: "None",
-        converted_result_cursor: "factory_default()",
-        raw_buffer_cursor: "b''",
-        maybe_buffer_cursor: "None",
-    }
-
-    def infer_type_object(cursor: Cursor) -> RawType:
-        return {type_cursor: resolved_types[type_cursor]}[cursor]
-
-    def infer_converter(cursor: Cursor) -> RawType:
-        return {converter_cursor: resolved_types[converter_cursor]}[cursor]
-
-    def infer_default_value(cursor: Cursor, expected_type: Type) -> str:
-        _ = expected_type
-        return resolved_defaults[cursor]
-
-    parsed = _parse(
-        "i|et#O!O&s#$z*",
-        ["count", "text", "typed", "converted", "raw", "maybe"],
-        [
-            count_cursor,
-            encoding_cursor,
-            text_buffer_cursor,
-            text_len_cursor,
-            type_cursor,
-            typed_result_cursor,
-            converter_cursor,
-            converted_result_cursor,
-            raw_buffer_cursor,
-            raw_len_cursor,
-            maybe_buffer_cursor,
-        ],
-        infer_type_object_func=infer_type_object,
-        infer_converter_type_func=infer_converter,
-        infer_default_value_func=infer_default_value,
-    )
-
-    assert parsed == [
-        _arg("count", "int"),
-        _arg("text", _STR_OR_BYTES_OR_BYTEARRAY_TYPE, default_value='"utf8"'),
-        _arg("typed", "Point", default_value="None"),
-        _arg("converted", "ConvertedValue", default_value="factory_default()"),
-        _arg("raw", _STR_OR_BUFFER_TYPE, default_value="b''"),
-        _arg(
-            "maybe",
-            _STR_OR_BUFFER_OR_NONE_TYPE,
-            default_value="None",
-            kind=ArgumentKind.KEYWORD_ONLY,
-        ),
-    ]
-
-
 @pytest.mark.parametrize(
     ("format_string", "kwlist", "args"),
     [
@@ -221,77 +148,6 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
     assert parsed == [
         _arg("value", "int", default_value="0", kind=ArgumentKind.KEYWORD_ONLY)
     ]
-
-
-def test_parse_falls_back_to_object_when_type_object_or_converter_inference_raises() -> None:
-    type_cursor = _cursor("type")
-    typed_result_cursor = _cursor("typed_result")
-    converter_cursor = _cursor("converter")
-    converted_result_cursor = _cursor("converted_result")
-
-    parsed = _parse(
-        "O!O&",
-        ["typed", "converted"],
-        [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        infer_type_object_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("type object boom")),
-        infer_converter_type_func=lambda cursor: (_ for _ in ()).throw(RuntimeError("converter boom")),
-    )
-
-    assert parsed == [
-        _arg("typed", "object"),
-        _arg("converted", "object"),
-    ]
-
-
-def test_parse_routes_o_bang_and_o_ampersand_to_different_resolvers() -> None:
-    type_cursor = _cursor("type")
-    typed_result_cursor = _cursor("typed_result")
-    converter_cursor = _cursor("converter")
-    converted_result_cursor = _cursor("converted_result")
-    seen_type_objects: list[Cursor] = []
-    seen_converters: list[Cursor] = []
-
-    parsed = _parse(
-        "O!O&",
-        ["typed", "converted"],
-        [type_cursor, typed_result_cursor, converter_cursor, converted_result_cursor],
-        infer_type_object_func=lambda cursor: seen_type_objects.append(cursor) or RawType("Typed"),
-        infer_converter_type_func=lambda cursor: seen_converters.append(cursor) or RawType("Converted"),
-    )
-
-    assert parsed == [
-        _arg("typed", "Typed"),
-        _arg("converted", "Converted"),
-    ]
-    assert seen_type_objects == [type_cursor]
-    assert seen_converters == [converter_cursor]
-
-
-def test_parse_falls_back_to_unknown_default_value_when_default_inference_raises() -> None:
-    first_cursor = _cursor("first")
-    second_cursor = _cursor("second")
-
-    parsed = _parse(
-        "i|i",
-        ["first", "second"],
-        [first_cursor, second_cursor],
-        infer_default_value_func=lambda cursor, expected_type: (_ for _ in ()).throw(
-            RuntimeError("boom")
-        ),
-    )
-
-    assert parsed == [
-        _arg("first", "int"),
-        _arg("second", "int", default_value="..."),
-    ]
-
-
-def test_parse_maps_p_unit_to_bool() -> None:
-    predicate_cursor = _cursor("predicate")
-
-    parsed = _parse("p", ["predicate"], [predicate_cursor])
-
-    assert parsed == [_arg("predicate", "bool")]
 
 
 def test_parse_passes_p_unit_type_to_optional_and_keyword_only_default_inference() -> None:

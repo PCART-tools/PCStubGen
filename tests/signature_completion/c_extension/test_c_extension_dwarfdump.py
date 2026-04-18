@@ -228,6 +228,7 @@ def test_lookup_propagates_runtime_error_from_native_extension(
         dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
 
 
+@pytest.mark.integration
 def test_lookup_reads_compilation_unit_path_from_relative_dwarf_name(
     tmp_path: Path,
 ) -> None:
@@ -251,6 +252,7 @@ def test_lookup_reads_compilation_unit_path_from_relative_dwarf_name(
     assert result.linkage_name is None
 
 
+@pytest.mark.integration
 def test_lookup_follows_specification_for_cpp_overload(
     tmp_path: Path,
 ) -> None:
@@ -277,6 +279,7 @@ def test_lookup_follows_specification_for_cpp_overload(
     assert result.linkage_name == linkage_name
 
 
+@pytest.mark.integration
 def test_lookup_matches_outer_subprogram_for_inner_address(
     tmp_path: Path,
 ) -> None:
@@ -295,6 +298,7 @@ def test_lookup_matches_outer_subprogram_for_inner_address(
     assert result.function_name == "foo_impl"
 
 
+@pytest.mark.integration
 def test_lookup_rejects_binary_without_dwarf(
     tmp_path: Path,
 ) -> None:
@@ -312,6 +316,7 @@ def test_lookup_rejects_binary_without_dwarf(
         dwarfdump.lookup(binary_path, relative_address)
 
 
+@pytest.mark.integration
 def test_lookup_uses_generated_aranges_when_debug_aranges_missing(
     tmp_path: Path,
 ) -> None:
@@ -331,6 +336,7 @@ def test_lookup_uses_generated_aranges_when_debug_aranges_missing(
     assert result.function_name == "foo_impl"
 
 
+@pytest.mark.integration
 def test_lookup_uses_generated_aranges_for_multi_cu_binary(
     tmp_path: Path,
 ) -> None:
