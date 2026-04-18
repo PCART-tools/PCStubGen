@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tomllib
 
+import pytest
+
 from pcstubgen.models import Argument, Class, Function, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, TomlWriter
 from pcstubgen.type_models import RawType
@@ -129,7 +131,7 @@ def test_toml_writer_renders_multi_argument_signature_on_multiple_lines(tmp_path
     }
 
 
-def test_toml_writer_keeps_unknown_function_record_without_signature(tmp_path) -> None:
+def test_toml_writer_rejects_function_without_exportable_signature(tmp_path) -> None:
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -141,20 +143,12 @@ def test_toml_writer_keeps_unknown_function_record_without_signature(tmp_path) -
         ],
     )
 
-    TomlWriter().write(
-        module,
-        StubRenderer(include_docstrings=False),
-        to=tmp_path,
-    )
-
-    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
-        "entries": [
-            {
-                "module_name": "pkg.mod",
-                "function_name": "missing",
-            }
-        ]
-    }
+    with pytest.raises(RuntimeError, match="pkg.mod.missing 缺少可导出签名"):
+        TomlWriter().write(
+            module,
+            StubRenderer(include_docstrings=False),
+            to=tmp_path,
+        )
 
 
 def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path) -> None:
@@ -169,7 +163,7 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                         runtime_handle=object(),
                         signatures=[
                             _signature(
-                                args=[Argument(name="value", type=RawType("int"))],
+                                args=[Argument(name="self"), Argument(name="value", type=RawType("int"))],
                                 return_type=RawType("int"),
                             )
                         ],
@@ -182,7 +176,7 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                             Function(
                                 name="build_inner",
                                 runtime_handle=object(),
-                                signatures=[_signature(return_type=RawType("int"))],
+                                signatures=[_signature(args=[Argument(name="self")], return_type=RawType("int"))],
                             )
                         ],
                     )
@@ -227,7 +221,7 @@ def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> No
                         runtime_handle=object(),
                         signatures=[
                             _signature(
-                                args=[Argument(name="value", type=RawType("int"))],
+                                args=[Argument(name="cls"), Argument(name="value", type=RawType("int"))],
                                 return_type=RawType("int"),
                             )
                         ],
@@ -283,13 +277,13 @@ def test_toml_writer_sorts_class_methods_only_by_name(tmp_path) -> None:
                     Function(
                         name="zeta",
                         runtime_handle=object(),
-                        signatures=[_signature(args=[Argument(name="value")])],
+                        signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
                         decorator="classmethod",
                     ),
                     Function(
                         name="alpha",
                         runtime_handle=object(),
-                        signatures=[_signature(args=[Argument(name="value")])],
+                        signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
                     ),
                     Function(
                         name="middle",

@@ -6,7 +6,6 @@ from ..models import (
     Argument,
     ArgumentKind,
     Class,
-    Decorator,
     Function,
     Module,
     Signature,
@@ -75,8 +74,9 @@ class StubRenderer:
     def render_method(self, func: Function) -> list[str]:
         """渲染类方法。"""
         result: list[str] = []
-        overload = len(func.signatures) > 1
-        for signature in self._get_renderable_method_signatures(func):
+        signatures = self._require_signatures(func)
+        overload = len(signatures) > 1
+        for signature in signatures:
             result.extend(
                 self._render_function_block(
                     func_name=func.name,
@@ -114,8 +114,9 @@ class StubRenderer:
     def render_function(self, func: Function) -> list[str]:
         """渲染模块级函数。"""
         result: list[str] = []
-        overload = len(func.signatures) > 1
-        for signature in self._get_renderable_signatures(func):
+        signatures = self._require_signatures(func)
+        overload = len(signatures) > 1
+        for signature in signatures:
             result.extend(
                 self._render_function_block(
                     func_name=func.name,
@@ -164,10 +165,7 @@ class StubRenderer:
         signature: Signature,
     ) -> list[str]:
         """将类方法签名渲染为 def 头行列表。"""
-        return self._build_function_signature(
-            func_name=func.name,
-            signature=self._normalize_method_signature(signature, func.decorator),
-        )
+        return self._build_function_signature(func_name=func.name, signature=signature)
 
     def _render_function_block(
         self,
@@ -284,50 +282,12 @@ class StubRenderer:
 
         return rendered_args
 
-    def _get_renderable_signatures(self, func: Function) -> list[Signature]:
-        """返回可渲染签名，缺失时合成占位签名。"""
-        if func.signatures:
-            return func.signatures
-        return [self._build_placeholder_signature(func)]
-
-    def _get_renderable_method_signatures(self, func: Function) -> list[Signature]:
-        """返回可渲染的方法签名，并补齐接收者参数。"""
-        return [
-            self._normalize_method_signature(signature, func.decorator)
-            for signature in self._get_renderable_signatures(func)
-        ]
-
-    def _normalize_method_signature(
-        self,
-        signature: Signature,
-        decorator: Decorator,
-    ) -> Signature:
-        """按方法类型补齐输出所需的接收者参数。"""
-        receiver_name: str | None = None
-        if decorator is None:
-            receiver_name = "self"
-        elif decorator == "classmethod":
-            receiver_name = "cls"
-
-        if receiver_name is None:
-            return signature
-
-        if signature.args and signature.args[0].name == receiver_name:
-            return signature
-
-        return Signature(
-            args=[Argument(name=receiver_name), *signature.args],
-            return_type=signature.return_type,
-        )
-
-    def _build_placeholder_signature(self, func: Function) -> Signature:
-        """为未知签名函数合成仅用于输出的占位签名。"""
-        return Signature(
-            args=[
-                Argument(name="args", kind=ArgumentKind.VAR_POSITIONAL),
-                Argument(name="kwargs", kind=ArgumentKind.VAR_KEYWORD),
-            ],
-        )
+    @staticmethod
+    def _require_signatures(func: Function) -> list[Signature]:
+        """要求函数节点已经带有可导出的签名。"""
+        if not func.signatures:
+            raise RuntimeError(f"函数 {func.name} 缺少可导出签名。")
+        return func.signatures
 
     def _collect_module_imports(self, node: Module) -> list[str]:
         """收集模块内函数/方法签名依赖的 import。"""

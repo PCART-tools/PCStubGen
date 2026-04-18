@@ -9,6 +9,7 @@ import pytest
 from pcstubgen.models import Class, Function, Module, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.signature_completion.c_extension.source import CInferenceResult
+from pcstubgen.signature_completion.c_extension.method_flags import METH_O
 from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import (
     _FakeNode,
@@ -137,7 +138,7 @@ def test_completer_reads_signatures_and_comment_from_c_inference_result(
     )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.CExtensionSource.infer_function_signatures",
+        "pcstubgen.signature_completion.producers.CExtensionSource.infer_function_signatures",
         lambda self, module_node, function_node: CInferenceResult(
             signatures=[
                 _signature(
@@ -202,7 +203,7 @@ def test_completer_recursively_completes_class_methods(
         )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.CExtensionSource.infer_function_signatures",
+        "pcstubgen.signature_completion.producers.CExtensionSource.infer_function_signatures",
         _infer,
     )
 
@@ -210,9 +211,9 @@ def test_completer_recursively_completes_class_methods(
 
     outer_method = module.classes[0].methods[0]
     inner_method = module.classes[0].classes[0].methods[0]
-    assert [arg.name for arg in outer_method.signatures[0].args] == ["value"]
+    assert [arg.name for arg in outer_method.signatures[0].args] == ["cls", "value"]
     assert outer_method.comment == "mock:build"
-    assert [arg.name for arg in inner_method.signatures[0].args] == ["value"]
+    assert [arg.name for arg in inner_method.signatures[0].args] == ["self", "value"]
     assert inner_method.comment == "mock:append"
     assert summary.c_completed == 2
     assert summary.total_functions == 2
@@ -274,13 +275,13 @@ def test_completer_continues_after_pybind11_docstring_exception(
         return [_signature(args=[_arg("value", "str")], return_type=RawType("bool"))]
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.parse_docstring_signatures",
+        "pcstubgen.signature_completion.producers.parse_docstring_signatures",
         _parse_or_raise,
     )
 
     summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
-    assert module.functions[0].signatures == []
+    assert [arg.name for arg in module.functions[0].signatures[0].args] == ["args", "kwargs"]
     assert [arg.name for arg in module.functions[1].signatures[0].args] == ["value"]
     assert module.functions[1].signatures[0].return_type is not None
     assert module.functions[1].signatures[0].return_type.render() == "bool"
@@ -309,9 +310,81 @@ def test_completer_does_not_swallow_pybind11_docstring_base_exception(
         raise BaseException("boom")
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.completion.parse_docstring_signatures",
+        "pcstubgen.signature_completion.producers.parse_docstring_signatures",
         _parse_or_raise,
     )
 
     with pytest.raises(BaseException, match="boom"):
         SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+
+def test_completer_writes_minimal_signature_for_failed_c_method(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.producers.is_cpython_builtin",
+        lambda handle: True,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.producers.read_cpython_function_runtime_info",
+        lambda handle: type("RuntimeInfo", (), {"address": 1234, "flags": METH_O})(),
+    )
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Factory",
+                methods=[_unknown_function("build", decorator="classmethod")],
+            )
+        ],
+    )
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.producers.CExtensionSource.infer_function_signatures",
+        lambda self, module_node, function_node: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    method = module.classes[0].methods[0]
+    assert [arg.name for arg in method.signatures[0].args] == ["cls", "arg"]
+    assert method.signatures[0].args[1].type is not None
+    assert method.signatures[0].args[1].type.render() == "object"
+    assert summary.c_completed == 0
+    assert summary.uncompleted == 1
+
+
+def test_completer_keeps_existing_signatures_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            Function(
+                name="foo",
+                runtime_handle=object(),
+                signatures=[
+                    _signature(
+                        args=[_arg("value", "str")],
+                        return_type=RawType("bool"),
+                    )
+                ],
+            )
+        ],
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    parsed = module.functions[0]
+    assert [arg.name for arg in parsed.signatures[0].args] == ["value"]
+    assert parsed.signatures[0].return_type is not None
+    assert parsed.signatures[0].return_type.render() == "bool"
+    assert summary.total_functions == 1
+    assert summary.c_completed == 0
+    assert summary.docstring_completed == 0
+    assert summary.uncompleted == 0

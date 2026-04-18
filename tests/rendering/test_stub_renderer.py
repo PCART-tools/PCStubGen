@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import typing
+import pytest
 
 from pcstubgen.type_models import RawType, Type
 from pcstubgen.models import Argument, ArgumentKind, Class, Function, Module, Signature, QualifiedName
@@ -35,11 +35,6 @@ def _function(
     )
 
 
-def _unknown_function(name: str, *, doc: str | None = None) -> Function:
-    """构造签名未知的测试函数。"""
-    return _function(name=name, doc=doc)
-
-
 def test_renderer_preserves_raw_optional_annotation_text() -> None:
     func = _function(
         name="foo",
@@ -59,18 +54,11 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
     ]
 
 
-def test_renderer_prints_placeholder_signature_for_unknown_function() -> None:
+def test_renderer_rejects_function_without_exportable_signature() -> None:
     func = _function(name="foo")
 
-    lines = StubRenderer(include_docstrings=False).render_function(func)
-
-    assert lines == [
-        "def foo(",
-        "    *args,",
-        "    **kwargs,",
-        "):",
-        "    ...",
-    ]
+    with pytest.raises(RuntimeError, match="foo 缺少可导出签名"):
+        StubRenderer(include_docstrings=False).render_function(func)
 
 
 def test_renderer_prints_function_doc_for_single_signature() -> None:
@@ -233,8 +221,14 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
         name="build",
         runtime_handle=object(),
         signatures=[
-            _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
-            _signature(args=[Argument(name="x", type=RawType("str"))], return_type=RawType("str")),
+            _signature(
+                args=[Argument(name="cls"), Argument(name="x", type=RawType("int"))],
+                return_type=RawType("int"),
+            ),
+            _signature(
+                args=[Argument(name="cls"), Argument(name="x", type=RawType("str"))],
+                return_type=RawType("str"),
+            ),
         ],
         decorator="classmethod",
     )
@@ -259,11 +253,11 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
     ]
 
 
-def test_renderer_inserts_self_for_instance_method_output() -> None:
+def test_renderer_uses_instance_method_signature_as_is() -> None:
     method = Function(
         name="append",
         runtime_handle=object(),
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="self"), Argument(name="value", type=RawType("int"))])],
     )
 
     lines = StubRenderer(include_docstrings=False).render_method(method)
@@ -338,13 +332,13 @@ def test_renderer_sorts_class_methods_only_by_name() -> None:
                     Function(
                         name="zeta",
                         runtime_handle=object(),
-                        signatures=[_signature(args=[Argument(name="value")])],
+                        signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
                         decorator="classmethod",
                     ),
                     Function(
                         name="alpha",
                         runtime_handle=object(),
-                        signatures=[_signature(args=[Argument(name="value")])],
+                        signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
                     ),
                     Function(
                         name="middle",

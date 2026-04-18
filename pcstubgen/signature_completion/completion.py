@@ -6,9 +6,12 @@ from pathlib import Path
 from loguru import logger
 
 from ..models import Class, Function, Module
-from .c_extension import CExtensionSource
 from ..runtime import is_cpython_builtin, is_pybind11_builtin
-from .docstring_source import parse_docstring_signatures
+from .producers import (
+    CExtensionSignatureProducer,
+    DocstringSignatureProducer,
+    MinimalSignatureProducer,
+)
 
 
 @dataclass
@@ -30,7 +33,9 @@ class SignatureCompletionResult:
 
 class SignatureCompleter:
     def __init__(self, compilation_database: Path) -> None:
-        self._c_source = CExtensionSource(compilation_database)
+        self._c_producer = CExtensionSignatureProducer(compilation_database)
+        self._docstring_producer = DocstringSignatureProducer()
+        self._minimal_producer = MinimalSignatureProducer()
         self._result = SignatureCompletionResult()
 
     def run(self, module: Module) -> SignatureCompletionResult:
@@ -73,6 +78,14 @@ class SignatureCompleter:
     ) -> None:
         """按函数来源分支执行签名补全。"""
         self._result.total_functions += 1
+        if func.signatures:
+            logger.info(
+                "跳过补全, module: {}, func: {}, is_method: {}, reason: 已存在签名",
+                module.full_name,
+                func.name,
+                is_method,
+            )
+            return
 
         branch = "unsupported"
         reason = "函数不属于受支持的签名补全来源。"
@@ -81,12 +94,13 @@ class SignatureCompleter:
         try:
             if is_cpython_builtin(func.runtime_handle):
                 branch = "c_builtin"
-                inference_result = self._c_source.infer_function_signatures(
+                production_result = self._c_producer.produce(
                     module,
                     func,
+                    is_method=is_method,
                 )
-                func.signatures = inference_result.signatures
-                func.comment = inference_result.comment
+                func.signatures = production_result.signatures
+                func.comment = production_result.comment
                 self._result.c_completed += 1
                 logger.info(
                     "补全成功, branch: c_builtin, module: {}, func: {}, is_method: {}",
@@ -98,7 +112,13 @@ class SignatureCompleter:
 
             if is_pybind11_builtin(func.runtime_handle):
                 branch = "pybind11_builtin"
-                func.signatures = parse_docstring_signatures(module, func)
+                production_result = self._docstring_producer.produce(
+                    module,
+                    func,
+                    is_method=is_method,
+                )
+                func.signatures = production_result.signatures
+                func.comment = production_result.comment
                 self._result.docstring_completed += 1
                 logger.info(
                     "补全成功, branch: pybind11_builtin, module: {}, func: {}, is_method: {}",
@@ -110,9 +130,16 @@ class SignatureCompleter:
         except Exception as ex:
             reason = f"{type(ex).__name__}: {ex}"
 
+        minimal_result = self._minimal_producer.produce(
+            module,
+            func,
+            is_method=is_method,
+        )
+        func.signatures = minimal_result.signatures
+        func.comment = minimal_result.comment
         self._result.uncompleted += 1
         logger.warning(
-            "补全失败, branch: {}, module: {}, func: {}, is_method: {}, reason: {}",
+            "补全失败, branch: {}, module: {}, func: {}, is_method: {}, reason: {}, fallback: minimal",
             branch,
             module.full_name,
             func.name,

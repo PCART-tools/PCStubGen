@@ -117,15 +117,7 @@ class TomlWriter:
     ) -> list[dict[str, str]]:
         """将类方法转换为 TOML 记录。"""
         if not method.signatures:
-            return [
-                self._build_entry(
-                    module_name=module_name,
-                    class_name=class_name,
-                    function_name=method.name,
-                    signature=None,
-                    comment=method.comment,
-                )
-            ]
+            raise RuntimeError(f"方法 {class_name}.{method.name} 缺少可导出签名。")
 
         return [
             self._build_entry(
@@ -153,15 +145,7 @@ class TomlWriter:
     ) -> list[dict[str, str]]:
         """将函数展开为一条或多条 TOML 记录。"""
         if not func.signatures:
-            return [
-                self._build_entry(
-                    module_name=module_name,
-                    class_name=class_name,
-                    function_name=func.name,
-                    signature=None,
-                    comment=func.comment,
-                )
-            ]
+            raise RuntimeError(f"函数 {module_name}.{func.name} 缺少可导出签名。")
 
         return [
             self._build_entry(
