@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from ..models import Class, Function, Method, Module
+from ..models import Class, Function, Module
 from .c_extension import CExtensionSource
 from ..runtime import is_cpython_builtin, is_pybind11_builtin
 from .docstring_source import parse_docstring_signatures
@@ -62,14 +62,7 @@ class SignatureCompleter:
             self._complete_class(nested_cls, module)
 
         for method in node.methods:
-            self._complete_method(method, module)
-
-    def _complete_method(
-        self,
-        method: Method,
-        module: Module,
-    ) -> None:
-        self._complete_function(method.function, module, is_method=True)
+            self._complete_function(method, module, is_method=True)
 
     def _complete_function(
         self,

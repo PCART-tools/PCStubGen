@@ -6,7 +6,7 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.models import Class, Function, Method, Module, QualifiedName
+from pcstubgen.models import Class, Function, Module, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.signature_completion.c_extension.source import CInferenceResult
 from pcstubgen.type_models import RawType
@@ -171,19 +171,13 @@ def test_completer_recursively_completes_class_methods(
             Class(
                 name="Outer",
                 methods=[
-                    Method(
-                        function=_unknown_function("build"),
-                        decorator="classmethod",
-                    )
+                    _unknown_function("build", decorator="classmethod")
                 ],
                 classes=[
                     Class(
                         name="Inner",
                         methods=[
-                            Method(
-                                function=_unknown_function("append"),
-                                decorator=None,
-                            )
+                            _unknown_function("append")
                         ],
                     )
                 ],
@@ -214,8 +208,8 @@ def test_completer_recursively_completes_class_methods(
 
     summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
 
-    outer_method = module.classes[0].methods[0].function
-    inner_method = module.classes[0].classes[0].methods[0].function
+    outer_method = module.classes[0].methods[0]
+    inner_method = module.classes[0].classes[0].methods[0]
     assert [arg.name for arg in outer_method.signatures[0].args] == ["value"]
     assert outer_method.comment == "mock:build"
     assert [arg.name for arg in inner_method.signatures[0].args] == ["value"]

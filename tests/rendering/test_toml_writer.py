@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tomllib
 
-from pcstubgen.models import Argument, Class, Function, Method, Module, QualifiedName
+from pcstubgen.models import Argument, Class, Function, Module, QualifiedName
 from pcstubgen.stub_output import StubRenderer, TomlWriter
 from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import _signature
@@ -164,31 +164,25 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
             Class(
                 name="Outer",
                 methods=[
-                    Method(
-                        function=Function(
-                            name="build",
-                            runtime_handle=object(),
-                            signatures=[
-                                _signature(
-                                    args=[Argument(name="value", type=RawType("int"))],
-                                    return_type=RawType("int"),
-                                )
-                            ],
-                        ),
-                        decorator=None,
+                    Function(
+                        name="build",
+                        runtime_handle=object(),
+                        signatures=[
+                            _signature(
+                                args=[Argument(name="value", type=RawType("int"))],
+                                return_type=RawType("int"),
+                            )
+                        ],
                     )
                 ],
                 classes=[
                     Class(
                         name="Inner",
                         methods=[
-                            Method(
-                                function=Function(
-                                    name="build_inner",
-                                    runtime_handle=object(),
-                                    signatures=[_signature(return_type=RawType("int"))],
-                                ),
-                                decorator=None,
+                            Function(
+                                name="build_inner",
+                                runtime_handle=object(),
+                                signatures=[_signature(return_type=RawType("int"))],
                             )
                         ],
                     )

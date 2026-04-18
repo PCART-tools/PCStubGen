@@ -230,13 +230,11 @@ def test_module_collector_collects_cpython_method_descriptor_from_builtin_type()
         list,
     )
 
-    append_method = next(
-        method for method in class_node.methods if method.function.name == "append"
-    )
+    append_method = next(method for method in class_node.methods if method.name == "append")
 
     assert append_method.decorator is None
-    assert append_method.function.runtime_handle is list.__dict__["append"]
-    assert "__new__" not in {method.function.name for method in class_node.methods}
+    assert append_method.runtime_handle is list.__dict__["append"]
+    assert "__new__" not in {method.name for method in class_node.methods}
 
 
 def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_type() -> None:
@@ -246,11 +244,11 @@ def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_t
     )
 
     fromkeys_method = next(
-        method for method in class_node.methods if method.function.name == "fromkeys"
+        method for method in class_node.methods if method.name == "fromkeys"
     )
 
     assert fromkeys_method.decorator == "classmethod"
-    assert fromkeys_method.function.runtime_handle is dict.__dict__["fromkeys"]
+    assert fromkeys_method.runtime_handle is dict.__dict__["fromkeys"]
 
 
 def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> None:
@@ -260,12 +258,12 @@ def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> N
     )
 
     maketrans_method = next(
-        method for method in class_node.methods if method.function.name == "maketrans"
+        method for method in class_node.methods if method.name == "maketrans"
     )
 
     assert maketrans_method.decorator == "staticmethod"
-    assert maketrans_method.function.runtime_handle is str.__dict__["maketrans"].__func__
-    assert maketrans_method.function.doc == str.__dict__["maketrans"].__func__.__doc__
+    assert maketrans_method.runtime_handle is str.__dict__["maketrans"].__func__
+    assert maketrans_method.doc == str.__dict__["maketrans"].__func__.__doc__
 
 
 def _write_package_file(path: Path, content: str) -> None:

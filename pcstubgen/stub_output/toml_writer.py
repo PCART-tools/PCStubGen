@@ -5,7 +5,7 @@ from pathlib import Path
 import toml_rs
 
 from .stub_renderer import StubRenderer
-from ..models import Class, Function, Method, Module
+from ..models import Class, Function, Module
 
 
 class TomlWriter:
@@ -85,7 +85,7 @@ class TomlWriter:
         entries: list[dict[str, str]] = []
         class_name = ".".join(class_path)
 
-        for method in sorted(class_node.methods, key=lambda current: current.function.name):
+        for method in sorted(class_node.methods, key=lambda current: current.name):
             entries.extend(
                 self._build_method_entries(
                     module_name=module_name,
@@ -112,14 +112,14 @@ class TomlWriter:
         *,
         module_name: str,
         class_name: str,
-        method: Method,
+        method: Function,
         renderer: StubRenderer,
     ) -> list[dict[str, str]]:
         """将类方法转换为 TOML 记录。"""
         return self._build_function_entries(
             module_name=module_name,
             class_name=class_name,
-            func=method.function,
+            func=method,
             renderer=renderer,
         )
 

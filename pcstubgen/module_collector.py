@@ -11,9 +11,8 @@ from loguru import logger
 
 from .models import (
     Class,
+    Decorator,
     Function,
-    Method,
-    MethodDecorator,
     Module,
     QualifiedName,
 )
@@ -94,7 +93,6 @@ class ModuleCollector:
                     self._collect_method(
                         member_path,
                         runtime_handle,
-                        owner=class_,
                         decorator=decorator,
                         doc=method_doc,
                     )
@@ -126,22 +124,21 @@ class ModuleCollector:
         path: QualifiedName,
         method: Any,
         *,
-        owner: type | None = None,
-        decorator: MethodDecorator = None,
+        decorator: Decorator = None,
         doc: str | None = None,
-    ) -> Method:
-        """收集方法节点并记录所属类型。"""
-        func = self._collect_function(path, method, doc=doc)
-        return Method(
-            function=func,
+    ) -> Function:
+        """收集类方法节点。"""
+        return Function(
+            name=path.name,
+            doc=self._get_doc(method) if doc is None else doc,
+            runtime_handle=method,
             decorator=decorator,
-            runtime_owner=owner,
         )
 
     def _read_cpython_class_method_member(
         self,
         member: Any,
-    ) -> tuple[Any, MethodDecorator, str | None] | None:
+    ) -> tuple[Any, Decorator, str | None] | None:
         """读取类字典中的 CPython C 扩展方法成员。"""
         if isinstance(member, types.MethodDescriptorType):
             return member, None, self._get_doc(member)

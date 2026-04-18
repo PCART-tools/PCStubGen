@@ -29,7 +29,7 @@ class QualifiedName(Tuple[str, ...]):
         return self[-1]
 
 
-MethodDecorator: TypeAlias = Literal["staticmethod", "classmethod"] | None
+Decorator: TypeAlias = Literal["staticmethod", "classmethod"] | None
 
 
 class ArgumentKind(Enum):
@@ -63,15 +63,9 @@ class Function:
     name: str
     runtime_handle: Any = field(repr=False, compare=False)
     signatures: list[Signature] = field(default_factory=list)
+    decorator: Decorator = None
     doc: str | None = None
     comment: str | None = None
-
-
-@dataclass
-class Method:
-    function: Function
-    decorator: MethodDecorator
-    runtime_owner: type | None = field(default=None, repr=False, compare=False)
 
 
 @dataclass
@@ -80,7 +74,7 @@ class Class:
     doc: str | None = None
     bases: list[QualifiedName] = field(default_factory=list)
     classes: list[Class] = field(default_factory=list)
-    methods: list[Method] = field(default_factory=list)
+    methods: list[Function] = field(default_factory=list)
 
 
 @dataclass
@@ -107,9 +101,8 @@ __all__ = [
     "Argument",
     "ArgumentKind",
     "Class",
+    "Decorator",
     "Function",
-    "Method",
-    "MethodDecorator",
     "Module",
     "Signature",
     "QualifiedName",

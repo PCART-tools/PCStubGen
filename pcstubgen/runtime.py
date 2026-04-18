@@ -66,13 +66,6 @@ def is_cpython_method_descriptor(handle: object) -> bool:
         ),
     )
 
-def is_module_bound(handle: object) -> bool:
-    """判断 builtin function 是否绑定到模块对象。"""
-    self_obj = getattr(handle, "__self__", None)
-    if self_obj is not None and isinstance(self_obj, types.ModuleType):
-        return True
-    return False
-
 def is_pybind11_builtin(handle: object) -> bool:
     """判断运行时函数句柄是否为 pybind11 绑定函数。"""
     return isinstance(handle, types.BuiltinFunctionType) and is_pybind11_bound(handle)

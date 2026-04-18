@@ -3,7 +3,7 @@ from __future__ import annotations
 import typing
 
 from pcstubgen.type_models import RawType, Type
-from pcstubgen.models import Argument, ArgumentKind, Class, Function, Method, Module, Signature, QualifiedName
+from pcstubgen.models import Argument, ArgumentKind, Class, Function, Module, Signature, QualifiedName
 from pcstubgen.stub_output import StubRenderer
 
 
@@ -229,15 +229,13 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
 
 
 def test_renderer_repeats_method_decorator_for_each_overload() -> None:
-    method = Method(
-        function=Function(
-            name="build",
-            runtime_handle=object(),
-            signatures=[
-                _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
-                _signature(args=[Argument(name="x", type=RawType("str"))], return_type=RawType("str")),
-            ],
-        ),
+    method = Function(
+        name="build",
+        runtime_handle=object(),
+        signatures=[
+            _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
+            _signature(args=[Argument(name="x", type=RawType("str"))], return_type=RawType("str")),
+        ],
         decorator="classmethod",
     )
 

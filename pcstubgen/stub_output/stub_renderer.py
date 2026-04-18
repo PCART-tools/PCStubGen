@@ -6,9 +6,8 @@ from ..models import (
     Argument,
     ArgumentKind,
     Class,
+    Decorator,
     Function,
-    Method,
-    MethodDecorator,
     Module,
     Signature,
 )
@@ -65,13 +64,17 @@ class StubRenderer:
         for sub_class in sorted(class_node.classes, key=lambda c: c.name):
             result.extend(self.render_class(sub_class))
 
-        decorator_order: dict[MethodDecorator, int] = {
+        decorator_order: dict[Decorator, int] = {
             "staticmethod": 0,
             "classmethod": 1,
             None: 2,
         }
         for method in sorted(
-            class_node.methods, key=lambda m: (decorator_order.get(m.decorator, 2), m.function.name)
+            class_node.methods,
+            key=lambda method: (
+                decorator_order.get(method.decorator, 2),
+                method.name,
+            ),
         ):
             result.extend(self.render_method(method))
 
@@ -80,18 +83,18 @@ class StubRenderer:
 
         return result
 
-    def render_method(self, node: Method) -> list[str]:
+    def render_method(self, func: Function) -> list[str]:
         """渲染类方法。"""
         result: list[str] = []
-        overload = len(node.function.signatures) > 1
-        for signature in self._get_renderable_signatures(node.function):
+        overload = len(func.signatures) > 1
+        for signature in self._get_renderable_signatures(func):
             result.extend(
                 self._render_function_block(
-                    func_name=node.function.name,
+                    func_name=func.name,
                     signature=signature,
-                    func_doc=node.function.doc,
+                    func_doc=func.doc,
                     overload=overload,
-                    method_decorator=node.decorator,
+                    decorator=func.decorator,
                 )
             )
         return result
@@ -130,7 +133,7 @@ class StubRenderer:
                     signature=signature,
                     func_doc=func.doc,
                     overload=overload,
-                    method_decorator=None,
+                    decorator=None,
                 )
             )
 
@@ -172,12 +175,12 @@ class StubRenderer:
         signature: Signature,
         func_doc: str | None,
         overload: bool,
-        method_decorator: MethodDecorator,
+        decorator: Decorator,
     ) -> list[str]:
         """渲染一条可渲染的函数签名块。"""
         result: list[str] = []
-        if method_decorator is not None:
-            result.append(f"@{method_decorator}")
+        if decorator is not None:
+            result.append(f"@{decorator}")
         if overload:
             result.append("@typing.overload")
         result.extend(self._build_function_signature(func_name=func_name, signature=signature))
@@ -310,7 +313,7 @@ class StubRenderer:
         for sub_class in class_node.classes:
             imports.update(self._collect_class_imports(sub_class))
         for method in class_node.methods:
-            imports.update(self._collect_function_imports(method.function))
+            imports.update(self._collect_function_imports(method))
         return imports
 
     def _collect_function_imports(self, func: Function) -> set[str]:

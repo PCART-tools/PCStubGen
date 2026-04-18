@@ -70,10 +70,16 @@ def _arg(
 def _unknown_function(
     name: str,
     *,
+    decorator: str | None = None,
     doc: str | None = None,
 ) -> Function:
     """构造签名未知的测试函数。"""
-    return Function(name=name, runtime_handle=object(), doc=doc)
+    return Function(
+        name=name,
+        runtime_handle=object(),
+        decorator=decorator,
+        doc=doc,
+    )
 
 
 @dataclass
