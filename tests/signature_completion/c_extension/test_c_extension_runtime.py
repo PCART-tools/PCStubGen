@@ -3,6 +3,34 @@ from __future__ import annotations
 import pytest
 
 from pcstubgen import runtime as runtime_module
+from pcstubgen.signature_completion.c_extension.method_flags import (
+    METH_CLASS,
+    METH_O,
+    METH_STATIC,
+)
+
+
+def test_read_cpython_function_runtime_info_supports_method_descriptor() -> None:
+    info = runtime_module.read_cpython_function_runtime_info(list.__dict__["append"])
+
+    assert info.address != 0
+    assert info.flags == METH_O
+
+
+def test_read_cpython_function_runtime_info_supports_classmethod_descriptor() -> None:
+    info = runtime_module.read_cpython_function_runtime_info(dict.__dict__["fromkeys"])
+
+    assert info.address != 0
+    assert info.flags & METH_CLASS
+
+
+def test_read_cpython_function_runtime_info_supports_staticmethod_inner_function() -> None:
+    info = runtime_module.read_cpython_function_runtime_info(
+        str.__dict__["maketrans"].__func__
+    )
+
+    assert info.address != 0
+    assert info.flags & METH_STATIC
 
 
 def test_read_builtin_function_runtime_info_rejects_unsupported_handle() -> None:

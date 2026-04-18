@@ -86,7 +86,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        "pcstubgen.signature_completion.c_extension.source.read_cpython_function_runtime_info",
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
     )
     monkeypatch.setattr(
@@ -151,7 +151,7 @@ def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
     )
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.read_builtin_function_runtime_info",
+        "pcstubgen.signature_completion.c_extension.source.read_cpython_function_runtime_info",
         lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_O),
     )
     monkeypatch.setattr(

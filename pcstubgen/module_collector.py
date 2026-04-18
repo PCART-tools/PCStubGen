@@ -13,6 +13,7 @@ from .models import (
     Class,
     Function,
     Method,
+    MethodDecorator,
     Module,
     QualifiedName,
 )
@@ -85,15 +86,17 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
+            method_member = self._read_cpython_class_method_member(member)
 
-            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(
-                member
-            ):
+            if method_member is not None:
+                runtime_handle, decorator, method_doc = method_member
                 class_node.methods.append(
                     self._collect_method(
                         member_path,
-                        member,
+                        runtime_handle,
                         owner=class_,
+                        decorator=decorator,
+                        doc=method_doc,
                     )
                 )
             elif inspect.isclass(member) and member.__qualname__.startswith(
@@ -107,11 +110,14 @@ class ModuleCollector:
         self,
         path: QualifiedName,
         func: Any,
+        *,
+        doc: str | None = None,
     ) -> Function:
         """收集函数节点。"""
+        function_doc = self._get_doc(func) if doc is None else doc
         return Function(
             name=path.name,
-            doc=self._get_doc(func),
+            doc=function_doc,
             runtime_handle=func,
         )
 
@@ -121,14 +127,32 @@ class ModuleCollector:
         method: Any,
         *,
         owner: type | None = None,
+        decorator: MethodDecorator = None,
+        doc: str | None = None,
     ) -> Method:
         """收集方法节点并记录所属类型。"""
-        func = self._collect_function(path, method)
+        func = self._collect_function(path, method, doc=doc)
         return Method(
             function=func,
-            decorator=None,
+            decorator=decorator,
             runtime_owner=owner,
         )
+
+    def _read_cpython_class_method_member(
+        self,
+        member: Any,
+    ) -> tuple[Any, MethodDecorator, str | None] | None:
+        """读取类字典中的 CPython C 扩展方法成员。"""
+        if isinstance(member, types.MethodDescriptorType):
+            return member, None, self._get_doc(member)
+
+        if isinstance(member, types.ClassMethodDescriptorType):
+            return member, "classmethod", self._get_doc(member)
+
+        if isinstance(member, staticmethod) and runtime.is_cpython_builtin(member.__func__):
+            return member.__func__, "staticmethod", self._get_doc(member.__func__)
+
+        return None
 
     def _collect_bases(self, class_: type) -> list[QualifiedName]:
         """收集类基类，遇到 pybind11 builtins 时停止。"""

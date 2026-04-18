@@ -6,7 +6,7 @@ from typing import cast
 import clang.cindex
 import pytest
 
-from pcstubgen.models import Function, Module, QualifiedName
+from pcstubgen.models import Class, Function, Method, Module, QualifiedName
 from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.signature_completion.c_extension.source import CInferenceResult
 from pcstubgen.type_models import RawType
@@ -157,6 +157,71 @@ def test_completer_reads_signatures_and_comment_from_c_inference_result(
     assert parsed.signatures[0].return_type.render() == "bool"
     assert parsed.comment == "mock:pkg.mod.foo\nmocked source"
     assert summary.c_completed == 1
+
+
+def test_completer_recursively_completes_class_methods(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    _patch_c_runtime_support(monkeypatch)
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Outer",
+                methods=[
+                    Method(
+                        function=_unknown_function("build"),
+                        decorator="classmethod",
+                    )
+                ],
+                classes=[
+                    Class(
+                        name="Inner",
+                        methods=[
+                            Method(
+                                function=_unknown_function("append"),
+                                decorator=None,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+
+    def _infer(
+        self,
+        module_node: Module,
+        function_node: Function,
+    ) -> CInferenceResult:
+        _ = self, module_node
+        return CInferenceResult(
+            signatures=[
+                _signature(
+                    args=[_arg("value", "int")],
+                    return_type=RawType("bool"),
+                )
+            ],
+            comment=f"mock:{function_node.name}",
+        )
+
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.completion.CExtensionSource.infer_function_signatures",
+        _infer,
+    )
+
+    summary = SignatureCompleter(tmp_path / "compile_commands.json").run(module)
+
+    outer_method = module.classes[0].methods[0].function
+    inner_method = module.classes[0].classes[0].methods[0].function
+    assert [arg.name for arg in outer_method.signatures[0].args] == ["value"]
+    assert outer_method.comment == "mock:build"
+    assert [arg.name for arg in inner_method.signatures[0].args] == ["value"]
+    assert inner_method.comment == "mock:append"
+    assert summary.c_completed == 2
+    assert summary.total_functions == 2
 
 
 def test_completer_uses_docstring_for_pybind11_builtin(

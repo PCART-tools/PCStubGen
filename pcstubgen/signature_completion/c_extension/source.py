@@ -9,7 +9,7 @@ from .address_resolver import (
 )
 from .clang.ast_utils import get_cursor_text, get_func_cursor
 from .clang.parser import ClangParser
-from pcstubgen.runtime import read_builtin_function_runtime_info
+from pcstubgen.runtime import read_cpython_function_runtime_info
 from .signatures import inference
 
 
@@ -33,8 +33,8 @@ class CExtensionSource:
         module_node: Module,
         function_node: Function,
     ) -> CInferenceResult:
-        """按函数懒解析 builtin function 的 C 扩展签名。"""
-        runtime_info = read_builtin_function_runtime_info(function_node.runtime_handle)
+        """按函数懒解析 CPython C 扩展函数句柄的签名。"""
+        runtime_info = read_cpython_function_runtime_info(function_node.runtime_handle)
         location = get_func_file_location(runtime_info.address)
         tu = self._clang_parser.get_translation_unit(location.compilation_unit_path)
         func_cursor = get_func_cursor(tu, location.function_name, location.linkage_name)

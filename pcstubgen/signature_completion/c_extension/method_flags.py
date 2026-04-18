@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 METH_VARARGS = 1
 METH_KEYWORDS = 2
 METH_NOARGS = 4

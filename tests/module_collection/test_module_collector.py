@@ -8,6 +8,7 @@ import pytest
 
 import pcstubgen.module_collector as module_collector_module
 from pcstubgen.module_collector import ModuleCollector
+from pcstubgen.models import QualifiedName
 
 
 def test_module_collector_discovers_direct_submodules_from_package_path(
@@ -215,6 +216,52 @@ def test_module_collector_does_not_swallow_base_exception_from_submodule_import(
 
     with pytest.raises(KeyboardInterrupt, match="stop"):
         ModuleCollector().run("interruptpkg")
+
+
+def test_module_collector_collects_cpython_method_descriptor_from_builtin_type() -> None:
+    class_node = ModuleCollector()._collect_class(
+        QualifiedName.from_str("builtins.list"),
+        list,
+    )
+
+    append_method = next(
+        method for method in class_node.methods if method.function.name == "append"
+    )
+
+    assert append_method.decorator is None
+    assert append_method.function.runtime_handle is list.__dict__["append"]
+    assert "__new__" not in {method.function.name for method in class_node.methods}
+
+
+def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_type() -> None:
+    class_node = ModuleCollector()._collect_class(
+        QualifiedName.from_str("builtins.dict"),
+        dict,
+    )
+
+    fromkeys_method = next(
+        method for method in class_node.methods if method.function.name == "fromkeys"
+    )
+
+    assert fromkeys_method.decorator == "classmethod"
+    assert fromkeys_method.function.runtime_handle is dict.__dict__["fromkeys"]
+
+
+def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> None:
+    class_node = ModuleCollector()._collect_class(
+        QualifiedName.from_str("builtins.str"),
+        str,
+    )
+
+    maketrans_method = next(
+        method for method in class_node.methods if method.function.name == "maketrans"
+    )
+
+    assert maketrans_method.decorator == "staticmethod"
+    assert maketrans_method.function.runtime_handle is str.__dict__["maketrans"].__func__
+    assert maketrans_method.function.doc is not None
+    assert "translation table" in maketrans_method.function.doc
+    assert "staticmethod(function)" not in maketrans_method.function.doc
 
 
 def _write_package_file(path: Path, content: str) -> None:
