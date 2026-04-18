@@ -59,8 +59,8 @@ class ModuleCollector:
             for submodule_name in self._iter_submodule_names(module):
                 try:
                     sub_module = importlib.import_module(submodule_name)
-                except BaseException as ex:
-                    '''必须用BaseException，有些错误Exception拦截不到'''
+                except (Exception, SystemExit) as ex:
+                    """子模块导入失败时跳过；SystemExit 用于兼容 import 时调用 sys.exit 的包。"""
                     logger.error(
                         "模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}",
                         submodule_name,

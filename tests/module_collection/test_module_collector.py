@@ -151,6 +151,12 @@ def test_module_collector_supports_namespace_packages(
             "raise OSError('dll load failed')\n",
             OSError,
         ),
+        (
+            "systemexitpkg",
+            "broken",
+            "raise SystemExit('skip this optional module')\n",
+            SystemExit,
+        ),
     ],
 )
 def test_module_collector_skips_submodule_when_submodule_import_fails(
