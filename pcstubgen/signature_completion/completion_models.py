@@ -45,19 +45,3 @@ class SignatureCompletionSummary:
             f"pybind11命中={self.pybind11}, "
             f"失败={self.failed}"
         )
-
-
-class SignatureProviderError(RuntimeError):
-    """provider 处理失败时携带已完成产物。"""
-
-    def __init__(
-        self,
-        *,
-        doc: str | None = None,
-        decorator: Decorator = None,
-        comment: str | None = None,
-    ) -> None:
-        super().__init__("provider 处理失败")
-        self.doc = doc
-        self.decorator = decorator
-        self.comment = comment

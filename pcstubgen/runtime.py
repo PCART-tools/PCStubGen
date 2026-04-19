@@ -111,14 +111,6 @@ def read_cpython_function_runtime_info(handle: object) -> BuiltinFunctionRuntime
     raise RuntimeError(f"不支持的 CPython 函数对象: {type(handle).__name__}")
 
 
-def read_builtin_function_runtime_info(handle: object) -> BuiltinFunctionRuntimeInfo:
-    """读取 CPython C 扩展函数句柄的入口地址与调用约定。"""
-    if not is_cpython_builtin(handle):
-        raise RuntimeError(f"不支持的 builtin function 对象: {type(handle).__name__}")
-
-    return read_cpython_function_runtime_info(handle)
-
-
 def _read_builtin_function_runtime_info(
     handle: types.BuiltinFunctionType,
 ) -> BuiltinFunctionRuntimeInfo:

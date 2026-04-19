@@ -27,7 +27,7 @@ def gen_stubs(
     completer = SignatureCompleter(compilation_database)
     collector = ModuleCollector(completer)
     module_node = collector.run(module_name)
-    logger.info("{}", collector.summary)
+    logger.info("{}", completer.summary)
 
     output.mkdir(parents=True, exist_ok=True)
     renderer = StubRenderer(include_docstrings=include_docstrings)

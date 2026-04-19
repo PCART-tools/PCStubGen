@@ -28,18 +28,9 @@ class ModuleCollector:
 
     def run(self, module_name: str) -> Module:
         """导入目标模块并递归收集其模型结构。"""
-        if hasattr(self._signature_completer, "reset_summary"):
-            self._signature_completer.reset_summary()
+        self._signature_completer.reset_summary()
         module = importlib.import_module(module_name)
         return self._collect_module(QualifiedName.from_str(module_name), module)
-
-    @property
-    def summary(self) -> SignatureCompletionSummary:
-        """返回最近一次收集的签名补全统计。"""
-        summary = getattr(self._signature_completer, "summary", None)
-        if isinstance(summary, SignatureCompletionSummary):
-            return summary
-        return SignatureCompletionSummary()
 
     def _collect_module(
         self,
@@ -58,7 +49,7 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if self._signature_completer.support(member):
+            if self._signature_completer.support(member, False):
                 module_node.functions.append(self._collect_function(member_path, member))
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
@@ -94,7 +85,7 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
-            if not isinstance(member, types.BuiltinFunctionType) and self._signature_completer.support(member):
+            if self._signature_completer.support(member, True):
                 class_node.methods.append(self._collect_method(member_path, member))
             elif inspect.isclass(member) and member.__qualname__.startswith(
                 class_.__qualname__ + "."

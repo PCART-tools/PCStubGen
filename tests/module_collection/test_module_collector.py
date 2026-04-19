@@ -29,13 +29,23 @@ class _DummySignatureCompleter:
         self._member_results = member_results or {}
         self.contexts = []
 
-    def support(self, member: object) -> bool:
+    def support(self, member: object, is_method: bool) -> bool:
+        if is_method:
+            return (
+                id(member) in self._member_results
+                or CExtensionProvider.support(member, True)
+                or Pybind11Provider.support(member, True)
+            )
         return (
             id(member) in self._member_results
             or self._support_result and inspect.isroutine(member)
-            or CExtensionProvider.support(member)
-            or Pybind11Provider.support(member)
+            or CExtensionProvider.support(member, False)
+            or Pybind11Provider.support(member, False)
         )
+
+    def reset_summary(self) -> None:
+        """兼容真实 SignatureCompleter 接口。"""
+        return None
 
     def complete(self, context) -> SignatureCompletionResult:
         self.contexts.append(context)

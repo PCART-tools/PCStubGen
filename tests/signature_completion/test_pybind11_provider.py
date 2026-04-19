@@ -56,8 +56,8 @@ def test_pybind11_provider_supports_module_level_builtin(monkeypatch) -> None:
         lambda handle: False,
     )
 
-    assert Pybind11Provider.support(sentinel) is True
-    assert Pybind11Provider.support(object()) is False
+    assert Pybind11Provider.support(sentinel, False) is True
+    assert Pybind11Provider.support(object(), False) is False
 
 
 def test_pybind11_provider_gets_instance_method_result() -> None:
@@ -86,4 +86,5 @@ def test_pybind11_provider_gets_staticmethod_result() -> None:
 
 
 def test_pybind11_provider_rejects_non_pybind11_member() -> None:
-    assert Pybind11Provider.support(object()) is False
+    assert Pybind11Provider.support(object(), False) is False
+    assert Pybind11Provider.support(object(), True) is False

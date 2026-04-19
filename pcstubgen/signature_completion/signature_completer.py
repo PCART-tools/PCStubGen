@@ -9,7 +9,6 @@ from .completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
     SignatureCompletionSummary,
-    SignatureProviderError,
 )
 from .minimal_provider import MinimalProvider
 from .pybind11_provider import Pybind11Provider
@@ -28,58 +27,41 @@ class SignatureCompleter:
         """重置本轮补全统计。"""
         self.summary = SignatureCompletionSummary()
 
-    def support(self, member: object) -> bool:
+    def support(self, member: object, is_method: bool) -> bool:
         """判断运行时对象是否属于受支持的补全来源。"""
-        return self._pick_provider(member) is not None
+        return (
+            self._c_extension_provider.support(member, is_method)
+            or self._pybind11_provider.support(member, is_method)
+        )
 
     def complete(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         """补全单个 callable。"""
-        provider_name, provider = self._pick_provider(context.member)
-        if provider is None:
-            result = SignatureCompletionResult(
-                success=False,
-                message="函数不属于受支持的签名补全来源。",
-                provider="minimal",
-                signatures=self._minimal_provider.get(context),
-            )
-            self._record_result(context, result)
-            return result
-
+        message = "函数不属于受支持的签名补全来源。"
+        provider = "minimal"
         try:
-            result = provider.get(context)
-        except SignatureProviderError as ex:
-            cause = ex.__cause__ if ex.__cause__ is not None else ex
-            result = SignatureCompletionResult(
-                success=False,
-                message=f"{type(cause).__name__}: {cause}",
-                provider=provider_name,
-                signatures=self._minimal_provider.get(
-                    context,
-                    decorator=ex.decorator,
-                ),
-                doc=ex.doc,
-                decorator=ex.decorator,
-                comment=ex.comment,
-            )
-        except Exception as ex:
-            result = SignatureCompletionResult(
-                success=False,
-                message=f"{type(ex).__name__}: {ex}",
-                provider=provider_name,
-                signatures=self._minimal_provider.get(context),
-            )
+            if self._c_extension_provider.support(context.member, context.is_method):
+                provider = "c_extension"
+                result = self._c_extension_provider.get(context)
+                self._record_result(context, result)
+                return result
 
+            if self._pybind11_provider.support(context.member, context.is_method):
+                provider = "pybind11"
+                result = self._pybind11_provider.get(context)
+                self._record_result(context, result)
+                return result
+
+        except Exception as ex:
+            message = f"{type(ex).__name__}: {ex}"
+
+        result = SignatureCompletionResult(
+            success=False,
+            message=message,
+            provider=provider,
+            signatures=self._minimal_provider.get(context),
+        )
         self._record_result(context, result)
         return result
-
-    def _pick_provider(self, member: object) -> tuple[str, object] | tuple[None, None]:
-        if self._c_extension_provider.support(member):
-            return "c_extension", self._c_extension_provider
-
-        if self._pybind11_provider.support(member):
-            return "pybind11", self._pybind11_provider
-
-        return None, None
 
     def _record_result(
         self,

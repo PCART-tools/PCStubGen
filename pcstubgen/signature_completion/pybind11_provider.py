@@ -5,7 +5,6 @@ from pcstubgen import runtime
 from .completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
-    SignatureProviderError,
 )
 from .docstring_source import parse_docstring_signature_text
 from . import producers
@@ -16,28 +15,22 @@ class Pybind11Provider:
     """从 pybind11 docstring 生产最终可导出的结果。"""
 
     @staticmethod
-    def support(member: object) -> bool:
-        return (
-            runtime.is_pybind11_module_function(member)
-            or runtime.is_pybind11_instance_method(member)
-            or runtime.is_pybind11_static_method(member)
-        )
+    def support(member: object, is_method: bool) -> bool:
+        if is_method:
+            return (
+                runtime.is_pybind11_instance_method(member)
+                or runtime.is_pybind11_static_method(member)
+            )
+        return runtime.is_pybind11_module_function(member)
 
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
-
-        try:
-            signatures = parse_docstring_signature_text(context.func_name, doc)
-            signatures = producers._finalize_signatures(
-                signatures,
-                is_method=context.is_method,
-                decorator=decorator,
-            )
-        except Exception as ex:
-            raise SignatureProviderError(
-                doc=doc,
-                decorator=decorator,
-            ) from ex
+        signatures = parse_docstring_signature_text(context.func_name, doc)
+        signatures = producers._finalize_signatures(
+            signatures,
+            is_method=context.is_method,
+            decorator=decorator,
+        )
 
         _ = runtime_handle
         return SignatureCompletionResult(
