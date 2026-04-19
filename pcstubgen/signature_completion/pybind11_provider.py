@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import typing
+
 from pcstubgen import runtime
 
 from .completion_models import (
@@ -7,7 +9,6 @@ from .completion_models import (
     SignatureCompletionResult,
 )
 from .docstring_source import parse_docstring_signature_text
-from . import producers
 from ..models import Decorator
 
 
@@ -26,17 +27,9 @@ class Pybind11Provider:
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
         signatures = parse_docstring_signature_text(context.func_name, doc)
-        signatures = producers._finalize_signatures(
-            signatures,
-            is_method=context.is_method,
-            decorator=decorator,
-        )
 
         _ = runtime_handle
         return SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="pybind11",
             signatures=signatures,
             doc=doc,
             decorator=decorator,
@@ -44,7 +37,7 @@ class Pybind11Provider:
 
     def _analyze_member(
         self,
-        member: object,
+        member: typing.Any,
     ) -> tuple[object, Decorator, str | None]:
         if runtime.is_pybind11_module_function(member):
             return member, None, _get_doc(member)
@@ -52,7 +45,7 @@ class Pybind11Provider:
         if runtime.is_pybind11_instance_method(member):
             return member, None, _get_doc(member)
 
-        if isinstance(member, staticmethod) and runtime.is_pybind11_bound(member.__func__):
+        if runtime.is_pybind11_static_method(member):
             return member.__func__, "staticmethod", _get_doc(member.__func__)
 
         raise RuntimeError(f"不支持的 pybind11 成员: {type(member).__name__}")

@@ -36,60 +36,47 @@ class SignatureCompleter:
 
     def complete(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         """补全单个 callable。"""
-        message = "函数不属于受支持的签名补全来源。"
+        self.summary.total += 1
         provider = "minimal"
+        reason = "函数不属于受支持的签名补全来源。"
         try:
             if self._c_extension_provider.support(context.member, context.is_method):
                 provider = "c_extension"
                 result = self._c_extension_provider.get(context)
-                self._record_result(context, result)
+                self.summary.c_extension += 1
+                _log_success(context, provider)
                 return result
 
             if self._pybind11_provider.support(context.member, context.is_method):
                 provider = "pybind11"
                 result = self._pybind11_provider.get(context)
-                self._record_result(context, result)
+                self.summary.pybind11 += 1
+                _log_success(context, provider)
                 return result
 
         except Exception as ex:
-            message = f"{type(ex).__name__}: {ex}"
-
-        result = SignatureCompletionResult(
-            success=False,
-            message=message,
-            provider=provider,
-            signatures=self._minimal_provider.get(context),
-        )
-        self._record_result(context, result)
-        return result
-
-    def _record_result(
-        self,
-        context: SignatureCompletionContext,
-        result: SignatureCompletionResult,
-    ) -> None:
-        self.summary.total += 1
-        if result.provider == "c_extension":
-            self.summary.c_extension += 1
-        elif result.provider == "pybind11":
-            self.summary.pybind11 += 1
-
-        if result.success:
-            logger.info(
-                "补全成功, provider: {}, module: {}, func: {}, is_method: {}",
-                result.provider,
-                context.module_name,
-                context.func_name,
-                context.is_method,
-            )
-            return
+            reason = f"{type(ex).__name__}: {ex}"
 
         self.summary.failed += 1
-        logger.warning(
-            "补全失败, provider: {}, module: {}, func: {}, is_method: {}, message: {}",
-            result.provider,
-            context.module_name,
-            context.func_name,
-            context.is_method,
-            result.message,
-        )
+        result = self._minimal_provider.get(context)
+        _log_failure(context, provider, reason)
+        return result
+
+def _log_success(context: SignatureCompletionContext, provider: str) -> None:
+    logger.info(
+        "补全成功, provider: {}, module: {}, func: {}, is_method: {}",
+        provider,
+        context.module_name,
+        context.func_name,
+        context.is_method,
+    )
+
+def _log_failure(context: SignatureCompletionContext, provider: str, reason: str) -> None:
+    logger.warning(
+        "补全失败, provider: {}, module: {}, func: {}, is_method: {}, reason: {}",
+        provider,
+        context.module_name,
+        context.func_name,
+        context.is_method,
+        reason,
+    )

@@ -18,10 +18,6 @@ class SignatureCompletionContext:
 @dataclass(frozen=True)
 class SignatureCompletionResult:
     """单个 callable 的补全结果。"""
-
-    success: bool
-    message: str
-    provider: str
     signatures: list[Signature]
     doc: str | None = None
     decorator: Decorator = None

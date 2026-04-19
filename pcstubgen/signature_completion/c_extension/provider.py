@@ -54,16 +54,8 @@ class CExtensionProvider:
         source_text = ast_utils.get_cursor_source_text(func_cursor)
         comment = f"{func_cursor.location}\n{source_text}"
         signatures = Inferencer(func_cursor, flags, context.is_method).run()
-        signatures = producers._finalize_signatures(
-            signatures,
-            is_method=context.is_method,
-            decorator=decorator,
-        )
 
         return SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="c_extension",
             signatures=signatures,
             doc=doc,
             decorator=decorator,
