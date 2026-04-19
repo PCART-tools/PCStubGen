@@ -4,6 +4,7 @@ import importlib
 import inspect
 import sys
 from pathlib import Path
+import types
 
 import pytest
 
@@ -11,6 +12,8 @@ import pcstubgen.module_collector as module_collector_module
 from pcstubgen.module_collector import ModuleCollector
 from pcstubgen.models import QualifiedName, Signature
 from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
+from pcstubgen.signature_completion.c_extension.provider import CExtensionProvider
+from pcstubgen.signature_completion.pybind11_provider import Pybind11Provider
 
 
 class _DummySignatureCompleter:
@@ -19,21 +22,33 @@ class _DummySignatureCompleter:
         *,
         support_result: bool = False,
         signatures: list[Signature] | None = None,
+        member_results: dict[int, SignatureCompletionResult] | None = None,
     ) -> None:
         self._support_result = support_result
         self._signatures = [Signature()] if signatures is None else signatures
+        self._member_results = member_results or {}
         self.contexts = []
 
-    def support(self, handle: object) -> bool:
-        return self._support_result and inspect.isroutine(handle)
+    def support(self, member: object) -> bool:
+        return (
+            id(member) in self._member_results
+            or self._support_result and inspect.isroutine(member)
+            or CExtensionProvider.support(member)
+            or Pybind11Provider.support(member)
+        )
 
     def complete(self, context) -> SignatureCompletionResult:
         self.contexts.append(context)
+        if id(context.member) in self._member_results:
+            return self._member_results[id(context.member)]
+
         return SignatureCompletionResult(
             success=True,
             message="",
             provider="pybind11",
             signatures=self._signatures,
+            doc=_get_member_doc(context.member),
+            decorator=_get_member_decorator(context.member),
         )
 
 
@@ -301,11 +316,6 @@ def test_module_collector_completes_signatures_when_collecting_module_functions(
     )
 
     _prepare_module_import("signedpkg", tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        module_collector_module.SignatureCompleter,
-        "support",
-        staticmethod(lambda handle: inspect.isroutine(handle)),
-    )
     completer = _DummySignatureCompleter(support_result=True, signatures=[Signature()])
 
     module_node = ModuleCollector(completer).run("signedpkg")
@@ -329,27 +339,27 @@ def test_module_collector_passes_method_context_to_completer() -> None:
     fromkeys_context = next(
         context for context in completer.contexts if context.func_name == "fromkeys"
     )
-    assert fromkeys_context.decorator == "classmethod"
+    assert fromkeys_context.member is dict.__dict__["fromkeys"]
     assert fromkeys_context.is_method is True
 
 
 def test_module_collector_collects_pybind11_instance_method_from_provider(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sentinel_method = object()
 
     class Sample:
         member = sentinel_method
 
-    completer = _DummySignatureCompleter()
-    monkeypatch.setattr(
-        module_collector_module.Pybind11Provider,
-        "normalize_class_member",
-        staticmethod(
-            lambda member: (member, None, "member(self: Sample) -> int")
-            if member is sentinel_method
-            else None
-        ),
+    completer = _DummySignatureCompleter(
+        member_results={
+            id(sentinel_method): SignatureCompletionResult(
+                success=True,
+                message="",
+                provider="pybind11",
+                signatures=[Signature()],
+                doc="member(self: Sample) -> int",
+            )
+        },
     )
 
     class_node = ModuleCollector(completer)._collect_class(
@@ -362,28 +372,28 @@ def test_module_collector_collects_pybind11_instance_method_from_provider(
     assert member.doc == "member(self: Sample) -> int"
 
     context = next(context for context in completer.contexts if context.func_name == "member")
-    assert context.handle is sentinel_method
-    assert context.doc == "member(self: Sample) -> int"
+    assert context.member is sentinel_method
     assert context.is_method is True
 
 
 def test_module_collector_collects_pybind11_staticmethod_from_provider(
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     sentinel_static = object()
 
     class Sample:
         member = sentinel_static
 
-    completer = _DummySignatureCompleter()
-    monkeypatch.setattr(
-        module_collector_module.Pybind11Provider,
-        "normalize_class_member",
-        staticmethod(
-            lambda member: (object(), "staticmethod", "build(value: int) -> int")
-            if member is sentinel_static
-            else None
-        ),
+    completer = _DummySignatureCompleter(
+        member_results={
+            id(sentinel_static): SignatureCompletionResult(
+                success=True,
+                message="",
+                provider="pybind11",
+                signatures=[Signature()],
+                doc="build(value: int) -> int",
+                decorator="staticmethod",
+            )
+        },
     )
 
     class_node = ModuleCollector(completer)._collect_class(
@@ -396,8 +406,26 @@ def test_module_collector_collects_pybind11_staticmethod_from_provider(
     assert member.doc == "build(value: int) -> int"
 
     context = next(context for context in completer.contexts if context.func_name == "member")
-    assert context.decorator == "staticmethod"
+    assert context.member is sentinel_static
     assert context.is_method is True
+
+
+def _get_member_doc(member: object) -> str | None:
+    if isinstance(member, staticmethod):
+        return _get_member_doc(member.__func__)
+
+    doc = getattr(member, "__doc__", None)
+    if isinstance(doc, str) and doc and not doc.isspace():
+        return doc
+    return None
+
+
+def _get_member_decorator(member: object) -> str | None:
+    if isinstance(member, types.ClassMethodDescriptorType):
+        return "classmethod"
+    if isinstance(member, staticmethod):
+        return "staticmethod"
+    return None
 
 
 def _write_package_file(path: Path, content: str) -> None:

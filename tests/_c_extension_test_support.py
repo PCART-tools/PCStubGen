@@ -96,15 +96,14 @@ def _patch_c_signature_extractor(
 
     def _patched_get(
         self,
-        function_node: Function,
-        is_method: bool,
+        context,
     ) -> SignatureCompletionResult:
-        _ = self, is_method
-        extracted = extracted_functions.get(function_node.name)
+        _ = self
+        extracted = extracted_functions.get(context.func_name)
         if extracted is None:
-            raise RuntimeError(f"未找到函数 {function_node.name}")
+            raise RuntimeError(f"未找到函数 {context.func_name}")
         if not extracted.signatures:
-            raise RuntimeError(f"C函数 {function_node.name} 没有可用签名")
+            raise RuntimeError(f"C函数 {context.func_name} 没有可用签名")
 
         comment = ""
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
@@ -112,7 +111,13 @@ def _patch_c_signature_extractor(
             source_text = ast_utils_module.get_cursor_source_text(extracted.function_cursor)
             comment = f"{location_text}\n{source_text}"
 
-        return SignatureCompletionResult(signatures=extracted.signatures, comment=comment)
+        return SignatureCompletionResult(
+            success=True,
+            message="",
+            provider="c_extension",
+            signatures=extracted.signatures,
+            comment=comment,
+        )
 
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",

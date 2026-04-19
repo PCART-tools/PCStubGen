@@ -6,20 +6,16 @@ import pkgutil
 import types
 from typing import Any
 
-from . import runtime
-
 from loguru import logger
 
 from .models import (
     Class,
-    Decorator,
     Function,
     Module,
     QualifiedName,
 )
 from .signature_completion import SignatureCompleter, SignatureCompletionSummary
-from .signature_completion.completion_models import SignatureCompletionContext, SignatureCompletionResult
-from .signature_completion.pybind11_provider import Pybind11Provider
+from .signature_completion.completion_models import SignatureCompletionContext
 
 __all__ = ["ModuleCollector"]
 
@@ -29,13 +25,21 @@ class ModuleCollector:
 
     def __init__(self, signature_completer: SignatureCompleter) -> None:
         self._signature_completer = signature_completer
-        self.summary = SignatureCompletionSummary()
 
     def run(self, module_name: str) -> Module:
         """导入目标模块并递归收集其模型结构。"""
-        self.summary = SignatureCompletionSummary()
+        if hasattr(self._signature_completer, "reset_summary"):
+            self._signature_completer.reset_summary()
         module = importlib.import_module(module_name)
         return self._collect_module(QualifiedName.from_str(module_name), module)
+
+    @property
+    def summary(self) -> SignatureCompletionSummary:
+        """返回最近一次收集的签名补全统计。"""
+        summary = getattr(self._signature_completer, "summary", None)
+        if isinstance(summary, SignatureCompletionSummary):
+            return summary
+        return SignatureCompletionSummary()
 
     def _collect_module(
         self,
@@ -54,10 +58,8 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if SignatureCompleter.support(member):
-                module_node.functions.append(
-                    self._collect_function(member_path, member)
-                )
+            if self._signature_completer.support(member):
+                module_node.functions.append(self._collect_function(member_path, member))
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
 
@@ -92,20 +94,8 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
-            method_member = self._read_cpython_class_method_member(member)
-            if method_member is None:
-                method_member = Pybind11Provider.normalize_class_member(member)
-
-            if method_member is not None:
-                runtime_handle, decorator, method_doc = method_member
-                class_node.methods.append(
-                    self._collect_method(
-                        member_path,
-                        runtime_handle,
-                        decorator=decorator,
-                        doc=method_doc,
-                    )
-                )
+            if not isinstance(member, types.BuiltinFunctionType) and self._signature_completer.support(member):
+                class_node.methods.append(self._collect_method(member_path, member))
             elif inspect.isclass(member) and member.__qualname__.startswith(
                 class_.__qualname__ + "."
             ):
@@ -113,47 +103,19 @@ class ModuleCollector:
 
         return class_node
 
-    def _record_result(self, context: SignatureCompletionContext, result: SignatureCompletionResult) -> None:
-        self.summary.total += 1
-        if result.success:
-            if result.provider == "c_extension":
-                self.summary.c_extension += 1
-            elif result.provider == "pybind11":
-                self.summary.pybind11 += 1
-
-            logger.info(
-                "补全成功, provider: {}, module: {}, func: {}, is_method: {}",
-                result.provider,
-                context.module_name,
-                context.func_name,
-                context.is_method,
-            )
-        else:
-            self.summary.failed += 1
-            logger.warning(
-                "补全失败, provider: {}, module: {}, func: {}, is_method: {}, message: {}",
-                result.provider,
-                context.module_name,
-                context.func_name,
-                context.is_method,
-                result.message,
-            )
-
     def _collect_function(self, path: QualifiedName, func: object) -> Function:
         """收集函数节点。"""
-        doc = self._get_doc(func)
         context = SignatureCompletionContext(
             module_name=path.parent,
             func_name=path.name,
-            handle=func,
-            doc=doc,
+            member=func,
         )
         result = self._signature_completer.complete(context)
-        self._record_result(context, result)
 
         return Function(
             name=path.name,
-            doc=doc,
+            doc=result.doc,
+            decorator=result.decorator,
             signatures=result.signatures,
             comment=result.comment,
         )
@@ -162,45 +124,23 @@ class ModuleCollector:
         self,
         path: QualifiedName,
         method: Any,
-        *,
-        decorator: Decorator = None,
-        doc: str | None = None,
     ) -> Function:
         """收集类方法节点。"""
         context = SignatureCompletionContext(
             module_name=path.parent,
             func_name=path.name,
-            handle=method,
-            doc=doc,
-            decorator=decorator,
+            member=method,
             is_method=True,
         )
         result = self._signature_completer.complete(context)
-        self._record_result(context, result)
 
         return Function(
             name=path.name,
-            doc=doc,
-            decorator=decorator,
+            doc=result.doc,
+            decorator=result.decorator,
             signatures=result.signatures,
             comment=result.comment,
         )
-
-    def _read_cpython_class_method_member(
-        self,
-        member: Any,
-    ) -> tuple[Any, Decorator, str | None] | None:
-        """读取类字典中的 CPython C 扩展方法成员。"""
-        if isinstance(member, types.MethodDescriptorType):
-            return member, None, self._get_doc(member)
-
-        if isinstance(member, types.ClassMethodDescriptorType):
-            return member, "classmethod", self._get_doc(member)
-
-        if isinstance(member, staticmethod) and runtime.is_cpython_builtin(member.__func__):
-            return member.__func__, "staticmethod", self._get_doc(member.__func__)
-
-        return None
 
     def _collect_bases(self, class_: type) -> list[QualifiedName]:
         """收集类基类，遇到 pybind11 builtins 时停止。"""

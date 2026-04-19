@@ -11,20 +11,20 @@ class SignatureCompletionContext:
 
     module_name: QualifiedName
     func_name: str
-    handle: object
-    doc: str | None = None
-    decorator: Decorator = None
+    member: object
     is_method: bool = False
 
 
 @dataclass(frozen=True)
 class SignatureCompletionResult:
-    """签名结果。"""
+    """单个 callable 的补全结果。"""
 
     success: bool
     message: str
     provider: str
     signatures: list[Signature]
+    doc: str | None = None
+    decorator: Decorator = None
     comment: str | None = None
 
 
@@ -41,7 +41,23 @@ class SignatureCompletionSummary:
         return (
             "签名补全结果: "
             f"函数总数={self.total}, "
-            f"C扩展补全={self.c_extension}, "
-            f"pybind11补全={self.pybind11}, "
+            f"C扩展命中={self.c_extension}, "
+            f"pybind11命中={self.pybind11}, "
             f"失败={self.failed}"
         )
+
+
+class SignatureProviderError(RuntimeError):
+    """provider 处理失败时携带已完成产物。"""
+
+    def __init__(
+        self,
+        *,
+        doc: str | None = None,
+        decorator: Decorator = None,
+        comment: str | None = None,
+    ) -> None:
+        super().__init__("provider 处理失败")
+        self.doc = doc
+        self.decorator = decorator
+        self.comment = comment
