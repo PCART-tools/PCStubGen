@@ -12,7 +12,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_O,
     METH_VARARGS,
 )
-from pcstubgen.runtime import BuiltinFunctionRuntimeInfo
+from pcstubgen.runtime import CExtensionFunctionRuntimeInfo
 from pcstubgen.signature_completion.c_extension.source import (
     CExtensionSource,
     CInferenceResult,
@@ -86,7 +86,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
 
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.read_cpython_function_runtime_info",
-        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
+        lambda handle: CExtensionFunctionRuntimeInfo(address=0x1234, flags=METH_VARARGS),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.get_func_file_location",
@@ -151,7 +151,7 @@ def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
 
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.read_cpython_function_runtime_info",
-        lambda handle: BuiltinFunctionRuntimeInfo(address=0x1234, flags=METH_O),
+        lambda handle: CExtensionFunctionRuntimeInfo(address=0x1234, flags=METH_O),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.source.get_func_file_location",

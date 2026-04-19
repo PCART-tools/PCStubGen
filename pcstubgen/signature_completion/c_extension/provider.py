@@ -36,7 +36,7 @@ class CExtensionProvider:
 
     def get_func_cursor_and_flags(self, handle: object) -> tuple[Cursor, int]:
         """根据运行时句柄反查函数 cursor 和调用 flags。"""
-        runtime_info = runtime.read_cpython_function_runtime_info(handle)
+        runtime_info = runtime.read_c_extension_function_runtime_info(handle)
         binary_path, ra = dladdr.get_binary_and_ra(runtime_info.address)
         lookup_result = dwarfdump.lookup(binary_path, ra)
         tu = self._clang_parser.get_translation_unit(lookup_result.compilation_unit_path)

@@ -11,21 +11,21 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
 
 
 def test_read_cpython_function_runtime_info_supports_method_descriptor() -> None:
-    info = runtime_module.read_cpython_function_runtime_info(list.__dict__["append"])
+    info = runtime_module.read_c_extension_function_runtime_info(list.__dict__["append"])
 
     assert info.address != 0
     assert info.flags == METH_O
 
 
 def test_read_cpython_function_runtime_info_supports_classmethod_descriptor() -> None:
-    info = runtime_module.read_cpython_function_runtime_info(dict.__dict__["fromkeys"])
+    info = runtime_module.read_c_extension_function_runtime_info(dict.__dict__["fromkeys"])
 
     assert info.address != 0
     assert info.flags & METH_CLASS
 
 
 def test_read_cpython_function_runtime_info_supports_staticmethod_inner_function() -> None:
-    info = runtime_module.read_cpython_function_runtime_info(
+    info = runtime_module.read_c_extension_function_runtime_info(
         str.__dict__["maketrans"].__func__
     )
 
