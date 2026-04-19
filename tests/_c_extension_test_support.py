@@ -9,26 +9,19 @@ import clang.cindex
 from clang.cindex import LinkageKind, StorageClass
 import pytest
 
-from pcstubgen.signature_completion.c_extension import (
-    source as c_extension_source_module,
-)
 from pcstubgen.signature_completion.c_extension.signatures import (
-    inference as signature_rules_module,
+    inferencer as signature_rules_module,
 )
-from pcstubgen.signature_completion.c_extension.clang import ast_utils as ast_utils_module
-from pcstubgen.signature_completion.c_extension.clang.libclang_wrap import (
+from pcstubgen.signature_completion.c_extension.libclang import ast_utils as ast_utils_module
+from pcstubgen.signature_completion.c_extension.libclang.libclang_wrap import (
     CX_BINARY_OPERATOR_ASSIGN,
 )
 from pcstubgen.type_models import RawType, Type
-from pcstubgen.signature_completion.c_extension.source import (
-    CInferenceResult,
-    CExtensionSource,
-)
+from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
 from pcstubgen.models import (
     Argument,
     ArgumentKind,
     Function,
-    Module,
     Signature,
 )
 
@@ -76,7 +69,7 @@ def _unknown_function(
     """构造签名未知的测试函数。"""
     return Function(
         name=name,
-        runtime_handle=object(),
+        handle=object(),
         decorator=decorator,
         doc=doc,
     )
@@ -102,30 +95,29 @@ def _patch_c_signature_extractor(
 ) -> None:
     extracted_functions = functions or {}
 
-    def _patched_infer_function_signatures(
-        self: CExtensionSource,
-        module_node: Module,
+    def _patched_get(
+        self,
         function_node: Function,
-    ) -> CInferenceResult:
-        _ = self
+        is_method: bool,
+    ) -> SignatureCompletionResult:
+        _ = self, is_method
         extracted = extracted_functions.get(function_node.name)
         if extracted is None:
-            raise RuntimeError(f"未找到函数 {module_node.full_name}.{function_node.name}")
+            raise RuntimeError(f"未找到函数 {function_node.name}")
         if not extracted.signatures:
-            raise RuntimeError(f"C函数 {module_node.full_name}.{function_node.name} 没有可用签名")
+            raise RuntimeError(f"C函数 {function_node.name} 没有可用签名")
 
         comment = ""
         if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
             location_text = str(extracted.function_cursor.location)
-            source_text = ast_utils_module.get_cursor_text(extracted.function_cursor)
+            source_text = ast_utils_module.get_cursor_source_text(extracted.function_cursor)
             comment = f"{location_text}\n{source_text}"
 
-        return CInferenceResult(signatures=extracted.signatures, comment=comment)
+        return SignatureCompletionResult(signatures=extracted.signatures, comment=comment)
 
     monkeypatch.setattr(
-        c_extension_source_module.CExtensionSource,
-        "infer_function_signatures",
-        _patched_infer_function_signatures,
+        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
+        _patched_get,
     )
 
 
@@ -141,8 +133,8 @@ def patch_inference_clang_helpers(
     monkeypatch: pytest.MonkeyPatch,
     target_module=signature_rules_module,
 ) -> None:
-    """让 fake cursor 支持推断测试依赖的 clang helper。"""
-    real_cursor_get_text = target_module.get_cursor_text
+    """让 fake cursor 支持推断测试依赖的 libclang helper。"""
+    real_cursor_get_text = target_module.get_cursor_source_text
 
     def fake_cursor_get_text(cursor: object) -> str:
         extent = getattr(cursor, "extent", None)
@@ -165,7 +157,7 @@ def patch_inference_clang_helpers(
         fake_cursor_get_text,
     )
 
-    real_get_call_expr_source_name = target_module.get_call_expr_source_name
+    real_get_call_expr_source_name = target_module.get_first_token_str
 
     def fake_get_call_expr_source_name(cursor: object) -> str:
         if isinstance(cursor, _FakeNode):
@@ -410,6 +402,7 @@ def _expr_assignment(target: _FakeNode, value: _FakeNode) -> _FakeNode:
 def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.PUNCTUATION, "&")],
         children=[_token_identifier_node(name, referenced=referenced)],
     )
 
@@ -417,6 +410,7 @@ def _address_of(name: str, *, referenced: object | None = None) -> _FakeNode:
 def _address_of_expr(expr: _FakeNode) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.PUNCTUATION, "&")],
         children=[expr],
     )
 

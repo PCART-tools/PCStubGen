@@ -5,6 +5,7 @@ import inspect
 import pkgutil
 import types
 from typing import Any
+
 from . import runtime
 
 from loguru import logger
@@ -16,12 +17,17 @@ from .models import (
     Module,
     QualifiedName,
 )
+from .signature_completion import SignatureCompleter
+from .signature_completion.completion_models import SignatureCompletionContext
 
 __all__ = ["ModuleCollector"]
 
 
 class ModuleCollector:
     """收集模块运行时对象并构建 Module 树。"""
+
+    def __init__(self, signature_completer: SignatureCompleter) -> None:
+        self._signature_completer = signature_completer
 
     def run(self, module_name: str) -> Module:
         """导入目标模块并递归收集其模型结构。"""
@@ -45,9 +51,7 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if runtime.is_cpython_builtin(member) or runtime.is_pybind11_builtin(
-                member
-            ):
+            if self._signature_completer.support(member):
                 module_node.functions.append(
                     self._collect_function(member_path, member)
                 )
@@ -108,15 +112,22 @@ class ModuleCollector:
         self,
         path: QualifiedName,
         func: Any,
-        *,
-        doc: str | None = None,
     ) -> Function:
         """收集函数节点。"""
-        function_doc = self._get_doc(func) if doc is None else doc
+        doc = self._get_doc(func)
+        completion = self._signature_completer.complete(
+            SignatureCompletionContext(
+                path=path,
+                handle=func,
+                doc=doc,
+            )
+        )
         return Function(
             name=path.name,
-            doc=function_doc,
-            runtime_handle=func,
+            doc=doc,
+            handle=func,
+            signatures=completion.signatures,
+            comment=completion.comment,
         )
 
     def _collect_method(
@@ -128,11 +139,23 @@ class ModuleCollector:
         doc: str | None = None,
     ) -> Function:
         """收集类方法节点。"""
+        method_doc = self._get_doc(method) if doc is None else doc
+        completion = self._signature_completer.complete(
+            SignatureCompletionContext(
+                path=path,
+                handle=method,
+                doc=method_doc,
+                decorator=decorator,
+                is_method=True,
+            )
+        )
         return Function(
             name=path.name,
-            doc=self._get_doc(method) if doc is None else doc,
-            runtime_handle=method,
+            doc=method_doc,
+            handle=method,
             decorator=decorator,
+            signatures=completion.signatures,
+            comment=completion.comment,
         )
 
     def _read_cpython_class_method_member(

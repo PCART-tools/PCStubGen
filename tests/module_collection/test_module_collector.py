@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import inspect
 import sys
 from pathlib import Path
 
@@ -8,7 +9,27 @@ import pytest
 
 import pcstubgen.module_collector as module_collector_module
 from pcstubgen.module_collector import ModuleCollector
-from pcstubgen.models import QualifiedName
+from pcstubgen.models import QualifiedName, Signature
+from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
+
+
+class _DummySignatureCompleter:
+    def __init__(
+        self,
+        *,
+        support_result: bool = False,
+        signatures: list[Signature] | None = None,
+    ) -> None:
+        self._support_result = support_result
+        self._signatures = [Signature()] if signatures is None else signatures
+        self.contexts = []
+
+    def support(self, handle: object) -> bool:
+        return self._support_result and inspect.isroutine(handle)
+
+    def complete(self, context) -> SignatureCompletionResult:
+        self.contexts.append(context)
+        return SignatureCompletionResult(signatures=self._signatures)
 
 
 def test_module_collector_discovers_direct_submodules_from_package_path(
@@ -33,7 +54,7 @@ def test_module_collector_discovers_direct_submodules_from_package_path(
     )
 
     _prepare_module_import("samplepkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("samplepkg")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("samplepkg")
 
     assert module_node.functions == []
     assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == [
@@ -63,7 +84,7 @@ def test_module_collector_discovers_hidden_private_subpackage_not_exposed_by_dir
     )
 
     _prepare_module_import("hiddenpkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("hiddenpkg")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("hiddenpkg")
 
     assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == [
         "_hidden",
@@ -82,7 +103,7 @@ def test_module_collector_ignores_module_attributes_not_on_package_path(
     )
 
     _prepare_module_import("attrpkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("attrpkg")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("attrpkg")
 
     assert module_node.sub_modules == []
 
@@ -97,7 +118,7 @@ def test_module_collector_ignores_plain_members_without_module_metadata(
     )
 
     _prepare_module_import("plainattrpkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("plainattrpkg")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("plainattrpkg")
 
     assert module_node.functions == []
     assert module_node.classes == []
@@ -112,7 +133,7 @@ def test_module_collector_treats_single_file_module_as_non_package(
     module_path.write_text("VALUE = 1\n", encoding="utf-8")
 
     _prepare_module_import("singlemod", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("singlemod")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("singlemod")
 
     assert module_node.is_package is False
     assert module_node.sub_modules == []
@@ -130,7 +151,7 @@ def test_module_collector_supports_namespace_packages(
     )
 
     _prepare_module_import("namespacepkg", tmp_path, monkeypatch)
-    module_node = ModuleCollector().run("namespacepkg")
+    module_node = ModuleCollector(_DummySignatureCompleter()).run("namespacepkg")
 
     assert module_node.is_package is True
     assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == ["child"]
@@ -193,7 +214,7 @@ def test_module_collector_skips_submodule_when_submodule_import_fails(
 
     monkeypatch.setattr(module_collector_module.logger, "error", fake_error)
 
-    module_node = ModuleCollector().run(package_name)
+    module_node = ModuleCollector(_DummySignatureCompleter()).run(package_name)
 
     assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == ["healthy"]
     assert len(error_records) == 1
@@ -221,11 +242,11 @@ def test_module_collector_does_not_swallow_base_exception_from_submodule_import(
     _prepare_module_import("interruptpkg", tmp_path, monkeypatch)
 
     with pytest.raises(KeyboardInterrupt, match="stop"):
-        ModuleCollector().run("interruptpkg")
+        ModuleCollector(_DummySignatureCompleter()).run("interruptpkg")
 
 
 def test_module_collector_collects_cpython_method_descriptor_from_builtin_type() -> None:
-    class_node = ModuleCollector()._collect_class(
+    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
         QualifiedName.from_str("builtins.list"),
         list,
     )
@@ -233,12 +254,12 @@ def test_module_collector_collects_cpython_method_descriptor_from_builtin_type()
     append_method = next(method for method in class_node.methods if method.name == "append")
 
     assert append_method.decorator is None
-    assert append_method.runtime_handle is list.__dict__["append"]
+    assert append_method.handle is list.__dict__["append"]
     assert "__new__" not in {method.name for method in class_node.methods}
 
 
 def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_type() -> None:
-    class_node = ModuleCollector()._collect_class(
+    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
         QualifiedName.from_str("builtins.dict"),
         dict,
     )
@@ -248,11 +269,11 @@ def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_t
     )
 
     assert fromkeys_method.decorator == "classmethod"
-    assert fromkeys_method.runtime_handle is dict.__dict__["fromkeys"]
+    assert fromkeys_method.handle is dict.__dict__["fromkeys"]
 
 
 def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> None:
-    class_node = ModuleCollector()._collect_class(
+    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
         QualifiedName.from_str("builtins.str"),
         str,
     )
@@ -262,8 +283,44 @@ def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> N
     )
 
     assert maketrans_method.decorator == "staticmethod"
-    assert maketrans_method.runtime_handle is str.__dict__["maketrans"].__func__
+    assert maketrans_method.handle is str.__dict__["maketrans"].__func__
     assert maketrans_method.doc == str.__dict__["maketrans"].__func__.__doc__
+
+
+def test_module_collector_completes_signatures_when_collecting_module_functions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_package_file(
+        tmp_path / "signedpkg" / "__init__.py",
+        "def foo(value):\n    return value\n",
+    )
+
+    _prepare_module_import("signedpkg", tmp_path, monkeypatch)
+    completer = _DummySignatureCompleter(support_result=True, signatures=[Signature()])
+
+    module_node = ModuleCollector(completer).run("signedpkg")
+
+    assert [function.name for function in module_node.functions] == ["foo"]
+    assert module_node.functions[0].signatures == [Signature()]
+    assert len(completer.contexts) == 1
+    assert completer.contexts[0].path == QualifiedName.from_str("signedpkg.foo")
+    assert completer.contexts[0].is_method is False
+
+
+def test_module_collector_passes_method_context_to_completer() -> None:
+    completer = _DummySignatureCompleter()
+
+    ModuleCollector(completer)._collect_class(
+        QualifiedName.from_str("builtins.dict"),
+        dict,
+    )
+
+    fromkeys_context = next(
+        context for context in completer.contexts if context.name == "fromkeys"
+    )
+    assert fromkeys_context.decorator == "classmethod"
+    assert fromkeys_context.is_method is True
 
 
 def _write_package_file(path: Path, content: str) -> None:

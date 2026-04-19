@@ -11,7 +11,7 @@ from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_O,
     METH_VARARGS,
 )
-from pcstubgen.signature_completion.c_extension.signatures import inference as signature_rules_module
+from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
 from pcstubgen.type_models import AnyType, RawType
 from tests._c_extension_test_support import (
     _address_of,

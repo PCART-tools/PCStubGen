@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from pcstubgen.signature_completion.c_extension import address_resolver as resolver_module
+from pcstubgen.signature_completion.c_extension import dladdr as resolver_module
 from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
 
 
@@ -51,7 +51,7 @@ def test_get_binary_and_ra_rejects_unresolved_address(
     monkeypatch.setattr(resolver_module, "_dladdr", lambda *args: 0)
 
     with pytest.raises(RuntimeError, match="无法定位函数地址所属共享库"):
-        resolver_module._get_binary_and_ra(0x1234)
+        resolver_module.get_binary_and_ra(0x1234)
 
 
 def test_get_binary_and_ra_rejects_incomplete_shared_library_info(
@@ -60,4 +60,4 @@ def test_get_binary_and_ra_rejects_incomplete_shared_library_info(
     monkeypatch.setattr(resolver_module, "_dladdr", lambda *args: 1)
 
     with pytest.raises(RuntimeError, match="共享库位置信息不完整"):
-        resolver_module._get_binary_and_ra(0x1234)
+        resolver_module.get_binary_and_ra(0x1234)

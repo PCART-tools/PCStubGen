@@ -7,13 +7,13 @@ from clang.cindex import Cursor, CursorKind, SourceLocation, SourceRange, Transl
 
 from .libclang_wrap import evaluate_cursor, get_file_contents, get_file_location
 
-_SINGLE_TRANSPARENT_CURSOR_KINDS = {
+SINGLE_TRANSPARENT_CURSOR_KINDS = {
     # python libclang 未暴露的若干表达式会落到 UNEXPOSED_EXPR。
     CursorKind.UNEXPOSED_EXPR,
     CursorKind.PAREN_EXPR,
 }
 
-_CAST_CURSOR_KINDS = {
+CAST_CURSOR_KINDS = {
     CursorKind.CSTYLE_CAST_EXPR,
     CursorKind.CXX_STATIC_CAST_EXPR,
     CursorKind.CXX_REINTERPRET_CAST_EXPR,
@@ -21,9 +21,9 @@ _CAST_CURSOR_KINDS = {
     CursorKind.CXX_FUNCTIONAL_CAST_EXPR,
 }
 
-_TRANSPARENT_CURSOR_KINDS = _SINGLE_TRANSPARENT_CURSOR_KINDS | _CAST_CURSOR_KINDS
+TRANSPARENT_CURSOR_KINDS = SINGLE_TRANSPARENT_CURSOR_KINDS | CAST_CURSOR_KINDS
 
-_NULLPTR_CURSOR_KINDS = {
+NULLPTR_CURSOR_KINDS = {
     CursorKind.CXX_NULL_PTR_LITERAL_EXPR,
     CursorKind.GNU_NULL_EXPR,
 }
@@ -34,58 +34,77 @@ DECL_CURSOR_KINDS = {
     CursorKind.FIELD_DECL,
 }
 
-_FUNCTION_DECL_CONTEXT_KINDS = {
+FUNCTION_DECL_CONTEXT_KINDS = {
     CursorKind.TRANSLATION_UNIT,
     CursorKind.NAMESPACE,
     CursorKind.LINKAGE_SPEC,
 }
 
+def to_str(cursor: Cursor) -> str:
+    return f"kind: {cursor.kind}, location: {cursor.location}"
+
 
 def unwrap_transparent(cursor: Cursor) -> Cursor:
     """剥离透明包装节点，定位到更有语义价值的底层表达式。"""
-    while cursor.kind in _TRANSPARENT_CURSOR_KINDS:
+    while cursor.kind in TRANSPARENT_CURSOR_KINDS:
         children = list(cursor.get_children())
         if not children:
             break
-        if cursor.kind in _SINGLE_TRANSPARENT_CURSOR_KINDS:
+        if cursor.kind in SINGLE_TRANSPARENT_CURSOR_KINDS:
             cursor = children[0]
         else:
             cursor = children[-1]
     return cursor
 
 
-def walk_cursor(node: Cursor) -> Iterable[Cursor]:
+def walk(cursor: Cursor) -> Iterable[Cursor]:
     """生成器，前序遍历 cursor 子树。"""
-    yield node
-    for child in node.get_children():
-        yield from walk_cursor(child)
+    yield cursor
+    for child in cursor.get_children():
+        yield from walk(child)
 
 
-def is_integer_literal_zero(cursor: Cursor) -> bool:
-    """判断是否为值为 0 的整数字面量。"""
-    if cursor.kind != CursorKind.INTEGER_LITERAL:
-        return False
-    return evaluate_cursor(cursor) == 0
-
-
-def is_nullptr_or_zero(node: Cursor) -> bool:
+def is_nullptr_or_zero(cursor: Cursor) -> bool:
     """识别 `0` / `NULL` 展开后的空指针 / `nullptr`。"""
-    if node.kind in _NULLPTR_CURSOR_KINDS:
+    if cursor.kind in NULLPTR_CURSOR_KINDS:
         return True
-    return is_integer_literal_zero(node)
+    return cursor.kind == CursorKind.INTEGER_LITERAL and evaluate_cursor(cursor) == 0
+
+def extract_array_subscript(cursor: Cursor) -> tuple[Cursor, int]:
+    """从 `array[index]` 槽位中提取数组声明和固定下标。"""
+    assert cursor.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR
+
+    children = list(cursor.get_children())
+
+    array_decl = unwrap_transparent(children[0]).referenced
+
+    index_expr = unwrap_transparent(children[1])
+    evaluated = evaluate_cursor(index_expr)
+    if type(evaluated) is not int:
+        raise RuntimeError(
+            f"数组下标表达式求值结果不是整数: {evaluated!r}, cursor: {index_expr.location}"
+        )
+    return array_decl, int(evaluated)
 
 
 def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     """从变量声明直接找出其初始化列表节点。"""
-    if cursor.kind != CursorKind.VAR_DECL:
-        raise RuntimeError(f"只能从 VAR_DECL 提取初始化列表, cursor: {cursor.location}")
-    for child in walk_cursor(cursor):
+    assert cursor.kind == CursorKind.VAR_DECL
+    for child in walk(cursor):
         if child.kind == CursorKind.INIT_LIST_EXPR:
             return child
     raise RuntimeError(f"变量声明未包含初始化列表, cursor: {cursor.location}")
 
 
-def get_cursor_text(cursor: Cursor) -> str:
+def unwrap_addr_of(cursor: Cursor) -> Cursor:
+    """剥离透明包装和一层取地址节点，定位到底层目标。"""
+    cursor = unwrap_transparent(cursor)
+    if cursor.kind == CursorKind.UNARY_OPERATOR and list(cursor.get_tokens())[0] == "&":
+        children = list(cursor.get_children())
+        cursor = unwrap_transparent(children[0])
+    return cursor
+
+def get_cursor_source_text(cursor: Cursor) -> str:
     """从 cursor 对应的源码范围中提取原始文本。"""
     extent = cursor.extent
     start_file, _, _, start_offset = get_file_location(extent.start)
@@ -104,14 +123,10 @@ def get_cursor_text(cursor: Cursor) -> str:
     return source_bytes.decode("utf-8", errors="ignore")
 
 
-def get_call_expr_source_name(cursor: Cursor) -> str:
-    """从调用表达式起点 token 提取源码调用名。"""
-    if cursor.kind != CursorKind.CALL_EXPR:
-        raise RuntimeError(f"只能从 CALL_EXPR 提取源码调用名, cursor: {cursor.location}")
-
+def get_first_token_str(cursor: Cursor) -> str:
     start_file, _, _, start_offset = get_file_location(cursor.extent.start)
     if start_file is None:
-        raise RuntimeError(f"调用表达式起点缺少文件信息, cursor: {cursor.location}")
+        raise RuntimeError(f"起点缺少文件信息, cursor: {cursor.location}")
 
     token_range = SourceRange.from_locations(
         SourceLocation.from_offset(cursor.translation_unit, start_file, start_offset),
@@ -119,7 +134,7 @@ def get_call_expr_source_name(cursor: Cursor) -> str:
     )
     tokens = list(cursor.translation_unit.get_tokens(extent=token_range))
     if not tokens:
-        raise RuntimeError(f"调用表达式起点缺少 token, cursor: {cursor.location}")
+        raise RuntimeError(f"起点缺少 token, cursor: {cursor.location}")
     return tokens[0].spelling
 
 
@@ -163,5 +178,5 @@ def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
             if child.is_definition():
                 yield child
             continue
-        if child.kind in _FUNCTION_DECL_CONTEXT_KINDS:
+        if child.kind in FUNCTION_DECL_CONTEXT_KINDS:
             yield from _iter_function_definition_candidates(child)

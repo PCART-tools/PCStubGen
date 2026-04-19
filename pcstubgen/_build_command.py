@@ -63,8 +63,8 @@ def get_build_context(srcdir: Path) -> BuildContext:
 
 def add_clang_environ(env: dict[str, str]) -> None:
     # C/C++ 编译器前端。
-    env["CC"] = "clang"
-    env["CXX"] = "clang++"
+    env["CC"] = "libclang"
+    env["CXX"] = "libclang++"
 
     # 让 LLVM lib 目录进入隐式库搜索路径，便于上游 CMake 的
     # find_library(NAMES omp gomp iomp5 ...) 优先命中 libomp 而不是 libgomp。
@@ -120,7 +120,7 @@ def bear_runner(
 def ensure_build_programs_available() -> None:
     missing_programs = [
         program
-        for program in ("clang", "clang++", "llvm-config", "bear")
+        for program in ("libclang", "libclang++", "llvm-config", "bear")
         if shutil.which(program) is None
     ]
     if missing_programs:

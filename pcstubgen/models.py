@@ -61,7 +61,7 @@ class Function:
     """模型中的函数节点。"""
 
     name: str
-    runtime_handle: Any = field(repr=False, compare=False)
+    handle: Any = field(repr=False, compare=False)
     signatures: list[Signature] = field(default_factory=list)
     decorator: Decorator = None
     doc: str | None = None

@@ -218,7 +218,7 @@ def test_run_ast_export_writes_available_outputs_even_when_clang_reports_error(
     assert len(errors) == 1
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
     assert clang_path.read_text(encoding="utf-8") == "partial ast\n"
-    assert "clang AST export failed" in captured.err
+    assert "libclang AST export failed" in captured.err
 
 
 def test_run_ast_export_allows_partial_success_when_libclang_export_fails(
@@ -230,13 +230,13 @@ def test_run_ast_export_allows_partial_success_when_libclang_export_fails(
         tmp_path,
         monkeypatch,
         parse_translation_unit_impl=lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("libclang unavailable")),
-        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
+        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="libclang payload\n", stderr="", returncode=0),
     )
     captured = capsys.readouterr()
 
     assert len(errors) == 1
     assert not libclang_path.exists()
-    assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
+    assert clang_path.read_text(encoding="utf-8") == "libclang payload\n"
     assert "libclang AST export failed" in captured.err
 
 
@@ -249,9 +249,9 @@ def test_run_ast_export_writes_both_outputs_when_exports_succeed(
         monkeypatch,
         parse_translation_unit_impl=lambda *args, **kwargs: SimpleNamespace(cursor=object(), diagnostics=[]),
         build_ast_payload_impl=lambda *args, **kwargs: "libclang payload",
-        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="clang payload\n", stderr="", returncode=0),
+        clang_dump_result=clang_ast.ClangAstDumpResult(stdout="libclang payload\n", stderr="", returncode=0),
     )
 
     assert errors == []
     assert libclang_path.read_text(encoding="utf-8") == "libclang payload\n"
-    assert clang_path.read_text(encoding="utf-8") == "clang payload\n"
+    assert clang_path.read_text(encoding="utf-8") == "libclang payload\n"

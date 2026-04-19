@@ -21,8 +21,8 @@ OBJECT_NAME_TO_TYPE = {
     **pillow_rules.OBJECT_NAME_TO_TYPE,
 }
 
-FUNCTION_NAME_TO_TYPE = {
-    **cpython_rules.FUNCTION_NAME_TO_TYPE,
-    **numpy_rules.FUNCTION_NAME_TO_TYPE,
-    **pillow_rules.FUNCTION_NAME_TO_TYPE,
+CALL_NAME_TO_TYPE = {
+    **cpython_rules.CALL_NAME_TO_TYPE,
+    **numpy_rules.CALL_NAME_TO_TYPE,
+    **pillow_rules.CALL_NAME_TO_TYPE,
 }

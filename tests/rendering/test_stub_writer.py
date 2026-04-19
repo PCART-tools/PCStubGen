@@ -12,7 +12,7 @@ def test_stub_writer_writes_regular_module_file(tmp_path) -> None:
         functions=[
             Function(
                 name="foo",
-                runtime_handle=object(),
+                handle=object(),
                 signatures=[
                     _signature(
                         return_type=RawType("int"),

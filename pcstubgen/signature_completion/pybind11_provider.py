@@ -3,8 +3,11 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
+from pcstubgen.runtime import is_pybind11_builtin
+
+from .completion_models import SignatureCompletionResult
+from ..models import Argument, ArgumentKind, Function, Signature
 from ..type_models import RawType, Type
-from ..models import Argument, ArgumentKind, Function, Module, Signature
 
 
 class _ArgsParseState(Enum):
@@ -14,13 +17,10 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-def parse_docstring_signatures(
-    _irmodule: Module,
-    function_node: Function,
-) -> list[Signature]:
+def parse_docstring_signatures(func: Function) -> list[Signature]:
     """从函数 docstring 中解析签名，失败时抛出 RuntimeError。"""
-    func_name = function_node.name
-    doc = function_node.doc
+    func_name = func.name
+    doc = func.doc
     if not doc:
         raise RuntimeError("docstring为空或缺失，无法解析签名。")
 
@@ -101,14 +101,14 @@ def parse_args_str(args_str: str) -> list[Argument]:
 
         if arg_decl == "/":
             if (
-                state is not _ArgsParseState.POSITIONAL
-                or annotation is not None
-                or default_str is not None
+                    state is not _ArgsParseState.POSITIONAL
+                    or annotation is not None
+                    or default_str is not None
             ):
                 raise ValueError("位置参数分隔符 '/' 位置非法。")
 
             if not any(
-                arg.kind is ArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
+                    arg.kind is ArgumentKind.POSITIONAL_OR_KEYWORD for arg in result
             ):
                 raise ValueError("位置参数分隔符 '/' 前必须至少有一个普通参数。")
 
@@ -120,9 +120,9 @@ def parse_args_str(args_str: str) -> list[Argument]:
 
         if arg_decl == "*":
             if (
-                state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD)
-                or annotation is not None
-                or default_str is not None
+                    state not in (_ArgsParseState.POSITIONAL, _ArgsParseState.POSITIONAL_OR_KEYWORD)
+                    or annotation is not None
+                    or default_str is not None
             ):
                 raise ValueError("关键字专用分隔符 '*' 位置非法。")
 
@@ -181,7 +181,7 @@ def parse_annotation_str(annotation_str: str) -> Type | None:
 
 
 def _split_args_str(
-    args_str: str,
+        args_str: str,
 ) -> list[tuple[str, Type | None, str | None]]:
     if not args_str.strip():
         return []
@@ -262,3 +262,16 @@ def _find_str_end(text: str, start: int) -> int:
             return index
         index += 1
     raise ValueError("字符串字面量未闭合。")
+
+class Pybind11Provider:
+    """从 docstring 直接生产最终可导出的签名。"""
+
+    @staticmethod
+    def support(handle: object) -> bool:
+        return is_pybind11_builtin(handle)
+
+    @staticmethod
+    def get(func: Function, is_method: bool) -> SignatureCompletionResult:
+        _ = is_method
+        signatures = parse_docstring_signatures(func)
+        return SignatureCompletionResult(signatures)

@@ -17,10 +17,11 @@ class ClangParser:
         self,
         compilation_database: Path,
     ) -> None:
-        """创建持有编译数据库、Index 与 TU 缓存的 clang 解析器。"""
+        """创建持有编译数据库、Index 与 TU 缓存的 libclang 解析器。"""
         self._compilation_database = _load_compilation_database(compilation_database)
         self._translation_units: dict[Path, TranslationUnit] = {}
         self._index = Index.create()
+        self._resource_dir = try_get_clang_resource_dir()
 
     def get_translation_unit(self, path: Path) -> TranslationUnit:
         """按源码路径懒解析并缓存 translation unit。"""
@@ -67,12 +68,27 @@ class ClangParser:
     def _parse_translation_unit(self, compile_command: CompileCommand) -> TranslationUnit:
         """在编译命令工作目录下用完整 argv 解析 translation unit。"""
         arguments = list(compile_command.arguments)
-        resource_dir = try_get_clang_resource_dir()
-        if resource_dir is not None:
-            arguments.extend(["-resource-dir", str(resource_dir)])
+        if self._resource_dir is not None:
+            arguments.extend(["-resource-dir", str(self._resource_dir)])
 
         with contextlib.chdir(Path(str(compile_command.directory)).resolve()):
             return parse_translation_unit_full_argv(self._index, arguments)
+
+def try_get_clang_resource_dir() -> Path | None:
+    """尝试解析 libclang resource dir，失败时返回 None。"""
+    try:
+        resource_dir_text = subprocess.check_output(
+            ["libclang", "-print-resource-dir"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as ex:
+        logger.debug("libclang resource dir 获取失败: {!r}", ex)
+        return None
+
+    if not resource_dir_text:
+        return None
+
+    return Path(resource_dir_text)
 
 
 def validate_compilation_database_path(compilation_database: Path) -> Path:
@@ -115,7 +131,7 @@ def diagnostic_severity_to_str(severity: int) -> str:
 
 
 def diagnostic_to_str(diagnostic: Diagnostic) -> str:
-    """将单条 clang diagnostic 格式化为稳定的一行文本。"""
+    """将单条 libclang diagnostic 格式化为稳定的一行文本。"""
     severity = diagnostic_severity_to_str(diagnostic.severity)
     location = diagnostic.location
     message = diagnostic.spelling
@@ -128,21 +144,3 @@ def has_error_diagnostics(diagnostics: list[Diagnostic]) -> bool:
         if diagnostic.severity >= clang.cindex.Diagnostic.Error:
             return True
     return False
-
-
-@functools.cache
-def try_get_clang_resource_dir() -> Path | None:
-    """尝试解析 clang resource dir，失败时返回 None。"""
-    try:
-        resource_dir_text = subprocess.check_output(
-            ["clang", "-print-resource-dir"],
-            text=True,
-        ).strip()
-    except (OSError, subprocess.CalledProcessError) as ex:
-        logger.debug("clang resource dir 获取失败: {!r}", ex)
-        return None
-
-    if not resource_dir_text:
-        return None
-
-    return Path(resource_dir_text)

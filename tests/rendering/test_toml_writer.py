@@ -16,7 +16,7 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
         functions=[
             Function(
                 name="foo",
-                runtime_handle=object(),
+                handle=object(),
                 signatures=[
                     _signature(
                         args=[Argument(name="value", type=RawType("int"))],
@@ -54,7 +54,7 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
         functions=[
             Function(
                 name="foo",
-                runtime_handle=object(),
+                handle=object(),
                 signatures=[
                     _signature(
                         args=[Argument(name="value", type=RawType("int"))],
@@ -100,7 +100,7 @@ def test_toml_writer_renders_multi_argument_signature_on_multiple_lines(tmp_path
         functions=[
             Function(
                 name="foo",
-                runtime_handle=object(),
+                handle=object(),
                 signatures=[
                     _signature(
                         args=[
@@ -137,7 +137,7 @@ def test_toml_writer_rejects_function_without_exportable_signature(tmp_path) -> 
         functions=[
             Function(
                 name="missing",
-                runtime_handle=object(),
+                handle=object(),
                 signatures=[],
             )
         ],
@@ -160,7 +160,7 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                 methods=[
                     Function(
                         name="build",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[
                             _signature(
                                 args=[Argument(name="self"), Argument(name="value", type=RawType("int"))],
@@ -175,7 +175,7 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                         methods=[
                             Function(
                                 name="build_inner",
-                                runtime_handle=object(),
+                                handle=object(),
                                 signatures=[_signature(args=[Argument(name="self")], return_type=RawType("int"))],
                             )
                         ],
@@ -218,7 +218,7 @@ def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> No
                 methods=[
                     Function(
                         name="build",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[
                             _signature(
                                 args=[Argument(name="cls"), Argument(name="value", type=RawType("int"))],
@@ -229,7 +229,7 @@ def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> No
                     ),
                     Function(
                         name="make",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[
                             _signature(
                                 args=[Argument(name="value", type=RawType("str"))],
@@ -276,18 +276,18 @@ def test_toml_writer_sorts_class_methods_only_by_name(tmp_path) -> None:
                 methods=[
                     Function(
                         name="zeta",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
                         decorator="classmethod",
                     ),
                     Function(
                         name="alpha",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
                     ),
                     Function(
                         name="middle",
-                        runtime_handle=object(),
+                        handle=object(),
                         signatures=[_signature(args=[Argument(name="value")])],
                         decorator="staticmethod",
                     ),

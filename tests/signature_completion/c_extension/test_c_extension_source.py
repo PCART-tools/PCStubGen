@@ -7,7 +7,7 @@ import clang.cindex
 import pytest
 
 from pcstubgen.models import Function, Module, Signature, QualifiedName
-from pcstubgen.signature_completion.c_extension.address_resolver import FuncFileLocation
+from pcstubgen.signature_completion.c_extension.dladdr import FuncFileLocation
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_O,
     METH_VARARGS,
@@ -116,7 +116,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", handle=object())],
     )
 
     result = source.infer_function_signatures(module, module.functions[0])
@@ -176,7 +176,7 @@ def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", runtime_handle=object())],
+        functions=[Function(name="foo", handle=object())],
     )
 
     with pytest.raises(

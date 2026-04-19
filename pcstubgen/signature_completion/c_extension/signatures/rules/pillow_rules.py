@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ....type_models import RawType, Type, UnionType
+from .....type_models import RawType, Type, UnionType
 
 
 _IMAGING_CORE_TYPE = RawType(
@@ -67,7 +67,7 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {}
 
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {}
 
-FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+CALL_NAME_TO_TYPE: dict[str, Type] = {
     "ImagingError_MemoryError": _ERROR_RETURN_TYPE,
     "ImagingError_ValueError": _ERROR_RETURN_TYPE,
     "HandleMuxError": _ERROR_RETURN_TYPE,

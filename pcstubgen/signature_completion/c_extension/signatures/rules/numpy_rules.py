@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ....type_models import RawType, Type, UnionType
+from .....type_models import RawType, Type, UnionType
 
 _NDARRAY_TYPE = RawType("numpy.ndarray", imports=("numpy",))
 _NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType("None")))
@@ -21,7 +21,7 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {}
 
 
-FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_ContiguousFromObject": _NDARRAY_TYPE,
     "PyArray_Arange": _NDARRAY_TYPE,
     "PyArray_SimpleNew": _NDARRAY_TYPE,

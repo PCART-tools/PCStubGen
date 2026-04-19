@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from pcstubgen.signature_completion.c_extension.clang import parser as parser_module
+from pcstubgen.signature_completion.c_extension.libclang import parser as parser_module
 
 
 class FakeCompileCommand:

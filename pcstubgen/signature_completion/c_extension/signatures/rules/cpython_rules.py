@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ....type_models import RawType, Type, UnionType
+from .....type_models import RawType, Type, UnionType
 
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
@@ -47,7 +47,7 @@ ERROR_RETURN_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyErr_SetImportErrorSubclass": _ERROR_RETURN_TYPE,
 }
 
-FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
+CALL_NAME_TO_TYPE: dict[str, Type] = {
     **ERROR_RETURN_FUNCTION_NAME_TO_TYPE,
     "PyCapsule_New": RawType("types.CapsuleType", imports=("types",)),
     "PyBool_FromLong": RawType("bool"),

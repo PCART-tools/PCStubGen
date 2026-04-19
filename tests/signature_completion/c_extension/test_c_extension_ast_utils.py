@@ -65,7 +65,7 @@ def test_extract_cursor_source_text_reads_text_from_translation_unit_buffer(tmp_
 
     function_cursor = _parse_first_function_cursor(str(source))
 
-    extracted = ast_utils_module.get_cursor_text(function_cursor)
+    extracted = ast_utils_module.get_cursor_source_text(function_cursor)
 
     assert snippet in extracted
 
@@ -86,7 +86,7 @@ def test_get_call_expr_source_name_reads_direct_call_start_token(tmp_path: Path)
     )
     call_cursor = _parse_first_call_cursor(str(source))
 
-    call_name = ast_utils_module.get_call_expr_source_name(call_cursor)
+    call_name = ast_utils_module.get_first_token_str(call_cursor)
 
     assert call_name == "PyLong_FromLong"
 
@@ -108,7 +108,7 @@ def test_get_call_expr_source_name_reads_function_like_macro_start_token(tmp_pat
     )
     call_cursor = _parse_first_call_cursor(str(source))
 
-    call_name = ast_utils_module.get_call_expr_source_name(call_cursor)
+    call_name = ast_utils_module.get_first_token_str(call_cursor)
 
     assert call_name == "PyArray_ContiguousFromObject"
 
@@ -136,7 +136,7 @@ def test_extract_cursor_source_text_reads_relative_path_extent_from_translation_
 
     function_cursor = _parse_first_function_cursor("../src/relative_extent.c", cwd=build_dir)
 
-    extracted = ast_utils_module.get_cursor_text(function_cursor)
+    extracted = ast_utils_module.get_cursor_source_text(function_cursor)
 
     assert snippet in extracted
 
@@ -170,7 +170,7 @@ def test_cursor_get_text_raises_with_cursor_location_when_extent_lacks_file_info
         RuntimeError,
         match=rf"源码范围缺少起止文件信息.*{re.escape('ast_utils.c:8:2')}",
     ):
-        ast_utils_module.get_cursor_text(cursor)
+        ast_utils_module.get_cursor_source_text(cursor)
 
 
 def test_extract_string_literal_raises_with_cursor_location() -> None:

@@ -6,7 +6,7 @@ import clang.cindex
 import pytest
 from clang.cindex import Index
 
-from pcstubgen.signature_completion.c_extension.clang import libclang_wrap as libclang_wrap_module
+from pcstubgen.signature_completion.c_extension.libclang import libclang_wrap as libclang_wrap_module
 
 
 pytestmark = pytest.mark.libclang
@@ -101,7 +101,7 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
     ):
         libclang_wrap_module.parse_translation_unit_full_argv(
             index,
-            ["clang", "src/module.c"],
+            ["libclang", "src/module.c"],
         )
 
 

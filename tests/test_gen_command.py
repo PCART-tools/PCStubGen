@@ -15,9 +15,10 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.ClangParser",
+        "pcstubgen.signature_completion.c_extension.provider.ClangParser",
         lambda compilation_database: object(),
     )
+    (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
     monkeypatch.setattr(
         "pcstubgen.api.ModuleCollector.run",
         lambda self, module_name: Module(
@@ -25,7 +26,7 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
             functions=[
                 Function(
                     name="foo",
-                    runtime_handle=object(),
+                    handle=object(),
                     signatures=[
                         _signature(
                             args=[Argument(name="value", type=RawType("int"))],
@@ -69,9 +70,10 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.source.ClangParser",
+        "pcstubgen.signature_completion.c_extension.provider.ClangParser",
         lambda compilation_database: object(),
     )
+    (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
     monkeypatch.setattr(
         "pcstubgen.api.ModuleCollector.run",
         lambda self, module_name: Module(
@@ -79,7 +81,7 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
             functions=[
                 Function(
                     name="foo",
-                    runtime_handle=object(),
+                    handle=object(),
                     signatures=[
                         _signature(
                             args=[Argument(name="value", type=RawType("str"))],

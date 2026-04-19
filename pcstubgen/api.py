@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from loguru import logger
+
 from .module_collector import ModuleCollector
 from .signature_completion import SignatureCompleter
 from .stub_output import StubRenderer, StubWriter, TomlWriter
@@ -22,9 +24,9 @@ def gen_stubs(
     """
     _writer = writer if writer is not None else StubWriter()
 
-    module_node = ModuleCollector().run(module_name)
-
-    SignatureCompleter(compilation_database).run(module_node)
+    signature_completer = SignatureCompleter(compilation_database)
+    module_node = ModuleCollector(signature_completer).run(module_name)
+    logger.info("{}", signature_completer.summary)
 
     output.mkdir(parents=True, exist_ok=True)
     renderer = StubRenderer(include_docstrings=include_docstrings)
