@@ -23,7 +23,7 @@ def _parse_docstring(
     module_node = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
     )
-    function_node = Function(name=function_name, handle=object(), doc=doc)
+    function_node = Function(name=function_name, doc=doc)
     return parse_docstring_signatures(module_node, function_node)
 
 

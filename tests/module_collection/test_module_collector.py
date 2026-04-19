@@ -29,7 +29,12 @@ class _DummySignatureCompleter:
 
     def complete(self, context) -> SignatureCompletionResult:
         self.contexts.append(context)
-        return SignatureCompletionResult(signatures=self._signatures)
+        return SignatureCompletionResult(
+            success=True,
+            message="",
+            provider="pybind11",
+            signatures=self._signatures,
+        )
 
 
 def test_module_collector_discovers_direct_submodules_from_package_path(
@@ -254,7 +259,7 @@ def test_module_collector_collects_cpython_method_descriptor_from_builtin_type()
     append_method = next(method for method in class_node.methods if method.name == "append")
 
     assert append_method.decorator is None
-    assert append_method.handle is list.__dict__["append"]
+    assert append_method.doc == list.__dict__["append"].__doc__
     assert "__new__" not in {method.name for method in class_node.methods}
 
 
@@ -269,7 +274,7 @@ def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_t
     )
 
     assert fromkeys_method.decorator == "classmethod"
-    assert fromkeys_method.handle is dict.__dict__["fromkeys"]
+    assert fromkeys_method.doc == dict.__dict__["fromkeys"].__doc__
 
 
 def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> None:
@@ -283,7 +288,6 @@ def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> N
     )
 
     assert maketrans_method.decorator == "staticmethod"
-    assert maketrans_method.handle is str.__dict__["maketrans"].__func__
     assert maketrans_method.doc == str.__dict__["maketrans"].__func__.__doc__
 
 
@@ -297,6 +301,11 @@ def test_module_collector_completes_signatures_when_collecting_module_functions(
     )
 
     _prepare_module_import("signedpkg", tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        module_collector_module.SignatureCompleter,
+        "support",
+        staticmethod(lambda handle: inspect.isroutine(handle)),
+    )
     completer = _DummySignatureCompleter(support_result=True, signatures=[Signature()])
 
     module_node = ModuleCollector(completer).run("signedpkg")
@@ -304,7 +313,8 @@ def test_module_collector_completes_signatures_when_collecting_module_functions(
     assert [function.name for function in module_node.functions] == ["foo"]
     assert module_node.functions[0].signatures == [Signature()]
     assert len(completer.contexts) == 1
-    assert completer.contexts[0].path == QualifiedName.from_str("signedpkg.foo")
+    assert completer.contexts[0].module_name == QualifiedName.from_str("signedpkg")
+    assert completer.contexts[0].func_name == "foo"
     assert completer.contexts[0].is_method is False
 
 
@@ -317,10 +327,77 @@ def test_module_collector_passes_method_context_to_completer() -> None:
     )
 
     fromkeys_context = next(
-        context for context in completer.contexts if context.name == "fromkeys"
+        context for context in completer.contexts if context.func_name == "fromkeys"
     )
     assert fromkeys_context.decorator == "classmethod"
     assert fromkeys_context.is_method is True
+
+
+def test_module_collector_collects_pybind11_instance_method_from_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel_method = object()
+
+    class Sample:
+        member = sentinel_method
+
+    completer = _DummySignatureCompleter()
+    monkeypatch.setattr(
+        module_collector_module.Pybind11Provider,
+        "normalize_class_member",
+        staticmethod(
+            lambda member: (member, None, "member(self: Sample) -> int")
+            if member is sentinel_method
+            else None
+        ),
+    )
+
+    class_node = ModuleCollector(completer)._collect_class(
+        QualifiedName.from_str("pkg.Sample"),
+        Sample,
+    )
+
+    member = next(method for method in class_node.methods if method.name == "member")
+    assert member.decorator is None
+    assert member.doc == "member(self: Sample) -> int"
+
+    context = next(context for context in completer.contexts if context.func_name == "member")
+    assert context.handle is sentinel_method
+    assert context.doc == "member(self: Sample) -> int"
+    assert context.is_method is True
+
+
+def test_module_collector_collects_pybind11_staticmethod_from_provider(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sentinel_static = object()
+
+    class Sample:
+        member = sentinel_static
+
+    completer = _DummySignatureCompleter()
+    monkeypatch.setattr(
+        module_collector_module.Pybind11Provider,
+        "normalize_class_member",
+        staticmethod(
+            lambda member: (object(), "staticmethod", "build(value: int) -> int")
+            if member is sentinel_static
+            else None
+        ),
+    )
+
+    class_node = ModuleCollector(completer)._collect_class(
+        QualifiedName.from_str("pkg.Sample"),
+        Sample,
+    )
+
+    member = next(method for method in class_node.methods if method.name == "member")
+    assert member.decorator == "staticmethod"
+    assert member.doc == "build(value: int) -> int"
+
+    context = next(context for context in completer.contexts if context.func_name == "member")
+    assert context.decorator == "staticmethod"
+    assert context.is_method is True
 
 
 def _write_package_file(path: Path, content: str) -> None:

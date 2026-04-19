@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from pcstubgen.runtime import is_pybind11_builtin
+from pcstubgen import runtime
 
-from .completion_models import SignatureCompletionResult
-from ..models import Argument, ArgumentKind, Function, Signature
+from .completion_models import SignatureCompletionContext
+from ..models import Argument, ArgumentKind, Decorator, Signature
 from ..type_models import RawType, Type
 
 
@@ -17,10 +17,8 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-def parse_docstring_signatures(func: Function) -> list[Signature]:
+def parse_docstring_signatures(func_name: str, doc: str | None) -> list[Signature]:
     """从函数 docstring 中解析签名，失败时抛出 RuntimeError。"""
-    func_name = func.name
-    doc = func.doc
     if not doc:
         raise RuntimeError("docstring为空或缺失，无法解析签名。")
 
@@ -268,10 +266,38 @@ class Pybind11Provider:
 
     @staticmethod
     def support(handle: object) -> bool:
-        return is_pybind11_builtin(handle)
+        return (runtime.is_pybind11_module_function(handle) or
+                runtime.is_pybind11_instance_method(handle) or
+                runtime.is_pybind11_static_method(handle))
 
     @staticmethod
-    def get(func: Function, is_method: bool) -> SignatureCompletionResult:
-        _ = is_method
-        signatures = parse_docstring_signatures(func)
-        return SignatureCompletionResult(signatures)
+    def support_class_member(member: object) -> bool:
+        return Pybind11Provider.normalize_class_member(member) is not None
+
+    @staticmethod
+    def normalize_class_member(
+        member: object,
+    ) -> tuple[object, Decorator, str | None] | None:
+        if isinstance(member, staticmethod) and runtime.is_pybind11_bound(member.__func__):
+            return member.__func__, "staticmethod", _get_doc(member.__func__)
+
+        if (
+            type(member).__module__ == "builtins"
+            and type(member).__name__ == "instancemethod"
+            and runtime.is_pybind11_bound(member)
+        ):
+            return member, None, _get_doc(member)
+
+        return None
+
+    @staticmethod
+    def get(context: SignatureCompletionContext) -> tuple[list[Signature], str | None]:
+        signatures = parse_docstring_signatures(context.func_name, context.doc)
+        return signatures, None
+
+
+def _get_doc(obj: object) -> str | None:
+    doc = getattr(obj, "__doc__", None)
+    if isinstance(doc, str) and doc and not doc.isspace():
+        return doc
+    return None

@@ -26,7 +26,6 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
             functions=[
                 Function(
                     name="foo",
-                    handle=object(),
                     signatures=[
                         _signature(
                             args=[Argument(name="value", type=RawType("int"))],
@@ -81,7 +80,6 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
             functions=[
                 Function(
                     name="foo",
-                    handle=object(),
                     signatures=[
                         _signature(
                             args=[Argument(name="value", type=RawType("str"))],

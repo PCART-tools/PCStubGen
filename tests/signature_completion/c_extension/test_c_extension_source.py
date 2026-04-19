@@ -116,7 +116,7 @@ def test_c_extension_source_prefers_ast_inference_and_preserves_comment(
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", handle=object())],
+        functions=[Function(name="foo")],
     )
 
     result = source.infer_function_signatures(module, module.functions[0])
@@ -176,7 +176,7 @@ def test_c_extension_source_raises_when_ast_inference_returns_no_signatures(
     source = _make_source(monkeypatch, tmp_path, translation_unit=object())
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[Function(name="foo", handle=object())],
+        functions=[Function(name="foo")],
     )
 
     with pytest.raises(

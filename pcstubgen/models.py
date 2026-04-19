@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Literal, Tuple, TypeAlias
+from typing import Literal, Tuple, TypeAlias
 
 from .type_models import Type
 
@@ -61,7 +61,6 @@ class Function:
     """模型中的函数节点。"""
 
     name: str
-    handle: Any = field(repr=False, compare=False)
     signatures: list[Signature] = field(default_factory=list)
     decorator: Decorator = None
     doc: str | None = None

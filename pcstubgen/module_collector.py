@@ -17,8 +17,9 @@ from .models import (
     Module,
     QualifiedName,
 )
-from .signature_completion import SignatureCompleter
-from .signature_completion.completion_models import SignatureCompletionContext
+from .signature_completion import SignatureCompleter, SignatureCompletionSummary
+from .signature_completion.completion_models import SignatureCompletionContext, SignatureCompletionResult
+from .signature_completion.pybind11_provider import Pybind11Provider
 
 __all__ = ["ModuleCollector"]
 
@@ -28,9 +29,11 @@ class ModuleCollector:
 
     def __init__(self, signature_completer: SignatureCompleter) -> None:
         self._signature_completer = signature_completer
+        self.summary = SignatureCompletionSummary()
 
     def run(self, module_name: str) -> Module:
         """导入目标模块并递归收集其模型结构。"""
+        self.summary = SignatureCompletionSummary()
         module = importlib.import_module(module_name)
         return self._collect_module(QualifiedName.from_str(module_name), module)
 
@@ -51,7 +54,7 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if self._signature_completer.support(member):
+            if SignatureCompleter.support(member):
                 module_node.functions.append(
                     self._collect_function(member_path, member)
                 )
@@ -65,7 +68,7 @@ class ModuleCollector:
                 except (Exception, SystemExit) as ex:
                     """子模块导入失败时跳过；SystemExit 用于兼容 import 时调用 sys.exit 的包。"""
                     logger.error(
-                        "模块导入失败, 安装来获得更完整的存根. module: {}, error: {!r}",
+                        "模块导入失败, 安装可能获得更完整的存根. module: {}, error: {!r}",
                         submodule_name,
                         ex,
                     )
@@ -90,6 +93,8 @@ class ModuleCollector:
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
             method_member = self._read_cpython_class_method_member(member)
+            if method_member is None:
+                method_member = Pybind11Provider.normalize_class_member(member)
 
             if method_member is not None:
                 runtime_handle, decorator, method_doc = method_member
@@ -108,26 +113,49 @@ class ModuleCollector:
 
         return class_node
 
-    def _collect_function(
-        self,
-        path: QualifiedName,
-        func: Any,
-    ) -> Function:
+    def _record_result(self, context: SignatureCompletionContext, result: SignatureCompletionResult) -> None:
+        self.summary.total += 1
+        if result.success:
+            if result.provider == "c_extension":
+                self.summary.c_extension += 1
+            elif result.provider == "pybind11":
+                self.summary.pybind11 += 1
+
+            logger.info(
+                "补全成功, provider: {}, module: {}, func: {}, is_method: {}",
+                result.provider,
+                context.module_name,
+                context.func_name,
+                context.is_method,
+            )
+        else:
+            self.summary.failed += 1
+            logger.warning(
+                "补全失败, provider: {}, module: {}, func: {}, is_method: {}, message: {}",
+                result.provider,
+                context.module_name,
+                context.func_name,
+                context.is_method,
+                result.message,
+            )
+
+    def _collect_function(self, path: QualifiedName, func: object) -> Function:
         """收集函数节点。"""
         doc = self._get_doc(func)
-        completion = self._signature_completer.complete(
-            SignatureCompletionContext(
-                path=path,
-                handle=func,
-                doc=doc,
-            )
+        context = SignatureCompletionContext(
+            module_name=path.parent,
+            func_name=path.name,
+            handle=func,
+            doc=doc,
         )
+        result = self._signature_completer.complete(context)
+        self._record_result(context, result)
+
         return Function(
             name=path.name,
             doc=doc,
-            handle=func,
-            signatures=completion.signatures,
-            comment=completion.comment,
+            signatures=result.signatures,
+            comment=result.comment,
         )
 
     def _collect_method(
@@ -139,23 +167,23 @@ class ModuleCollector:
         doc: str | None = None,
     ) -> Function:
         """收集类方法节点。"""
-        method_doc = self._get_doc(method) if doc is None else doc
-        completion = self._signature_completer.complete(
-            SignatureCompletionContext(
-                path=path,
-                handle=method,
-                doc=method_doc,
-                decorator=decorator,
-                is_method=True,
-            )
+        context = SignatureCompletionContext(
+            module_name=path.parent,
+            func_name=path.name,
+            handle=method,
+            doc=doc,
+            decorator=decorator,
+            is_method=True,
         )
+        result = self._signature_completer.complete(context)
+        self._record_result(context, result)
+
         return Function(
             name=path.name,
-            doc=method_doc,
-            handle=method,
+            doc=doc,
             decorator=decorator,
-            signatures=completion.signatures,
-            comment=completion.comment,
+            signatures=result.signatures,
+            comment=result.comment,
         )
 
     def _read_cpython_class_method_member(

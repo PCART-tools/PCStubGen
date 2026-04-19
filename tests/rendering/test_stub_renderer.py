@@ -28,7 +28,6 @@ def _function(
 ) -> Function:
     return Function(
         name=name,
-        handle=object(),
         signatures=list(signatures or ()),
         doc=doc,
         comment=comment,
@@ -191,7 +190,6 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
         functions=[
             Function(
                 name="foo",
-                handle=object(),
                 signatures=[
                     _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
                     _signature(
@@ -219,7 +217,6 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
 def test_renderer_repeats_method_decorator_for_each_overload() -> None:
     method = Function(
         name="build",
-        handle=object(),
         signatures=[
             _signature(
                 args=[Argument(name="cls"), Argument(name="x", type=RawType("int"))],
@@ -256,7 +253,6 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
 def test_renderer_uses_instance_method_signature_as_is() -> None:
     method = Function(
         name="append",
-        handle=object(),
         signatures=[_signature(args=[Argument(name="self"), Argument(name="value", type=RawType("int"))])],
     )
 
@@ -275,12 +271,10 @@ def test_renderer_does_not_duplicate_self_or_cls_for_method_output() -> None:
     renderer = StubRenderer(include_docstrings=False)
     instance_method = Function(
         name="append",
-        handle=object(),
         signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
     )
     class_method = Function(
         name="build",
-        handle=object(),
         signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
         decorator="classmethod",
     )
@@ -308,7 +302,6 @@ def test_renderer_does_not_duplicate_self_or_cls_for_method_output() -> None:
 def test_renderer_does_not_insert_receiver_for_staticmethod_output() -> None:
     method = Function(
         name="build",
-        handle=object(),
         signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
         decorator="staticmethod",
     )
@@ -331,18 +324,15 @@ def test_renderer_sorts_class_methods_only_by_name() -> None:
                 methods=[
                     Function(
                         name="zeta",
-                        handle=object(),
                         signatures=[_signature(args=[Argument(name="cls"), Argument(name="value")])],
                         decorator="classmethod",
                     ),
                     Function(
                         name="alpha",
-                        handle=object(),
                         signatures=[_signature(args=[Argument(name="self"), Argument(name="value")])],
                     ),
                     Function(
                         name="middle",
-                        handle=object(),
                         signatures=[_signature(args=[Argument(name="value")])],
                         decorator="staticmethod",
                     ),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .completion_models import SignatureCompletionResult
+from .completion_models import SignatureCompletionResult, SignatureCompletionContext
 from ..models import Argument, ArgumentKind, Function, Signature
 
 
@@ -8,8 +8,7 @@ class MinimalProvider:
     """生成最小签名。"""
 
     @staticmethod
-    def get(func: Function, is_method: bool) -> SignatureCompletionResult:
-        _ = func, is_method
+    def get(context: SignatureCompletionContext) -> tuple[list[Signature], str]:
         signatures = [
             Signature(
                 args=[
@@ -18,4 +17,4 @@ class MinimalProvider:
                 ]
             )
         ]
-        return SignatureCompletionResult(signatures)
+        return signatures, ""

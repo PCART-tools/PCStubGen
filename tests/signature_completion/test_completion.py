@@ -62,9 +62,9 @@ def test_completer_returns_c_extension_signature_and_comment(
     assert result.signatures[0].return_type is not None
     assert result.signatures[0].return_type.render() == "bool"
     assert result.comment == "mock:pkg.mod.foo\nmocked source"
-    assert completer.summary.total_functions == 1
-    assert completer.summary.c_extension_completed == 1
-    assert completer.summary.pybind11_completed == 0
+    assert completer.summary.total == 1
+    assert completer.summary.c_extension == 1
+    assert completer.summary.pybind11 == 0
     assert completer.summary.failed == 0
 
 
@@ -134,7 +134,7 @@ def test_completer_returns_pybind11_signature(
     assert result.signatures[0].args[0].type.render() == "str"
     assert result.signatures[0].return_type is not None
     assert result.signatures[0].return_type.render() == "bool"
-    assert completer.summary.pybind11_completed == 1
+    assert completer.summary.pybind11 == 1
     assert completer.summary.failed == 0
 
 
@@ -168,5 +168,5 @@ def test_completer_falls_back_to_minimal_signature_on_failure(
 
     assert [arg.name for arg in result.signatures[0].args] == ["cls", "args", "kwargs"]
     assert result.comment is None
-    assert completer.summary.c_extension_completed == 0
+    assert completer.summary.c_extension == 0
     assert completer.summary.failed == 1

@@ -24,9 +24,10 @@ def gen_stubs(
     """
     _writer = writer if writer is not None else StubWriter()
 
-    signature_completer = SignatureCompleter(compilation_database)
-    module_node = ModuleCollector(signature_completer).run(module_name)
-    logger.info("{}", signature_completer.summary)
+    completer = SignatureCompleter(compilation_database)
+    collector = ModuleCollector(completer)
+    module_node = collector.run(module_name)
+    logger.info("{}", collector.summary)
 
     output.mkdir(parents=True, exist_ok=True)
     renderer = StubRenderer(include_docstrings=include_docstrings)

@@ -47,6 +47,27 @@ _pycfunction_get_flags.argtypes = [ctypes.py_object]
 _pycfunction_get_flags.restype = ctypes.c_int
 
 
+def is_c_extension_module_function(handle: object) -> bool:
+    return isinstance(handle, types.BuiltinFunctionType) and not is_pybind11_bound(handle)
+
+def is_c_extension_instance_method(handle: object) -> bool:
+    return isinstance(handle, types.MethodDescriptorType)
+
+def is_c_extension_static_method(handle: object) -> bool:
+    return isinstance(handle, staticmethod) and is_c_extension_module_function(handle.__func__)
+
+def is_c_extension_class_method(handle: object) -> bool:
+    return isinstance(handle, types.ClassMethodDescriptorType)
+
+def is_pybind11_module_function(handle: object) -> bool:
+    return isinstance(handle, types.BuiltinFunctionType) and is_pybind11_bound(handle)
+
+def is_pybind11_instance_method(handle: object) -> bool:
+    return type(handle).__module__ == "builtins" and type(handle).__name__ == "instancemethod" and is_pybind11_bound(handle)
+
+def is_pybind11_static_method(handle: object) -> bool:
+    return isinstance(handle, staticmethod) and is_pybind11_module_function(handle.__func__)
+
 def is_cpython_builtin(handle: object) -> bool:
     """判断运行时对象是否支持 CPython C 扩展签名推导。"""
     if is_pybind11_builtin(handle):
@@ -102,49 +123,21 @@ def _read_builtin_function_runtime_info(
     handle: types.BuiltinFunctionType,
 ) -> BuiltinFunctionRuntimeInfo:
     """读取 builtin function 的入口地址与调用约定。"""
-    try:
-        method_address = int(_pycfunction_get_function(handle))
-        flags = int(_pycfunction_get_flags(handle))
-    except (SystemError, TypeError) as ex:
-        raise RuntimeError("读取 builtin function 运行时信息失败。") from ex
+    method_address = int(_pycfunction_get_function(handle))
+    flags = int(_pycfunction_get_flags(handle))
+    if method_address == 0:
+        raise RuntimeError("读取 builtin function 运行时信息失败: C函数地址为空。")
 
-    return _build_runtime_info(
-        method_address=method_address,
-        flags=flags,
-        error_prefix="读取 builtin function 运行时信息失败",
-    )
+    return BuiltinFunctionRuntimeInfo(method_address, flags)
 
 
 def _read_method_descriptor_runtime_info(
     handle: object,
 ) -> BuiltinFunctionRuntimeInfo:
     """读取方法描述器保存的入口地址与调用约定。"""
-    try:
-        descriptor = _PyMethodDescrObject.from_address(id(handle))
-        method_definition = descriptor.d_method.contents
-    except (TypeError, ValueError) as ex:
-        raise RuntimeError("读取 method descriptor 运行时信息失败。") from ex
-    except Exception as ex:
-        raise RuntimeError("读取 method descriptor 运行时信息失败。") from ex
+    descriptor = _PyMethodDescrObject.from_address(id(handle))
+    method_definition = descriptor.d_method.contents
+    if method_definition.ml_meth == 0:
+        raise RuntimeError("读取 method descriptor 运行时信息失败: C函数地址为空。")
 
-    return _build_runtime_info(
-        method_address=int(method_definition.ml_meth),
-        flags=int(method_definition.ml_flags),
-        error_prefix="读取 method descriptor 运行时信息失败",
-    )
-
-
-def _build_runtime_info(
-    *,
-    method_address: int,
-    flags: int,
-    error_prefix: str,
-) -> BuiltinFunctionRuntimeInfo:
-    """构造运行时信息并校验函数地址。"""
-    if method_address == 0:
-        raise RuntimeError(f"{error_prefix}: C函数地址为空。")
-
-    return BuiltinFunctionRuntimeInfo(
-        address=method_address,
-        flags=flags,
-    )
+    return BuiltinFunctionRuntimeInfo(method_definition.address, method_definition.flags)

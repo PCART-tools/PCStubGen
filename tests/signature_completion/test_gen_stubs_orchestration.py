@@ -22,7 +22,6 @@ def test_gen_stubs_writes_stub_from_collected_module(
         functions=[
             Function(
                 name="foo",
-                handle=object(),
                 signatures=[
                     _signature(
                         args=[Argument(name="value", type=RawType("str"))],

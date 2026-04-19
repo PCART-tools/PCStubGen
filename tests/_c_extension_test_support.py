@@ -69,7 +69,6 @@ def _unknown_function(
     """构造签名未知的测试函数。"""
     return Function(
         name=name,
-        handle=object(),
         decorator=decorator,
         doc=doc,
     )
