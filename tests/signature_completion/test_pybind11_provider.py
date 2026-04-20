@@ -62,6 +62,44 @@ def test_pybind11_provider_supports_module_level_builtin(monkeypatch) -> None:
     assert Pybind11Provider.support(object(), False) is False
 
 
+def test_pybind11_provider_rejects_internal_conduit_method(monkeypatch) -> None:
+    member = _make_pybind11_instance_method("ignored(self: pkg.Sample) -> None")
+    member.__name__ = "_pybind11_conduit_v1_"
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_module_function",
+        lambda handle: False,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_instance_method",
+        lambda handle: handle is member,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
+        lambda handle: False,
+    )
+
+    assert Pybind11Provider.support(member, True) is False
+
+
+def test_pybind11_provider_supports_regular_instance_method(monkeypatch) -> None:
+    member = _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int")
+    member.__name__ = "build"
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_module_function",
+        lambda handle: False,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_instance_method",
+        lambda handle: handle is member,
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
+        lambda handle: False,
+    )
+
+    assert Pybind11Provider.support(member, True) is True
+
+
 def test_pybind11_provider_gets_instance_method_result() -> None:
     provider = Pybind11Provider()
     member = _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int")

@@ -17,6 +17,8 @@ class Pybind11Provider:
 
     @staticmethod
     def support(member: object, is_method: bool) -> bool:
+        if _is_internal_pybind11_member(member):
+            return False
         if is_method:
             return (
                 runtime.is_pybind11_instance_method(member)
@@ -56,3 +58,8 @@ def _get_doc(obj: object) -> str | None:
     if isinstance(doc, str) and doc and not doc.isspace():
         return doc
     return None
+
+
+def _is_internal_pybind11_member(member: object) -> bool:
+    """判断成员是否为不应导出的 pybind11 内部符号。不是用户代码导出的，是pybind11的内部互操作函数"""
+    return getattr(member, "__name__", None) == "_pybind11_conduit_v1_"

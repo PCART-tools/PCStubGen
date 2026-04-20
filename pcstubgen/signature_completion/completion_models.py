@@ -37,7 +37,7 @@ class SignatureCompletionSummary:
         return (
             "签名补全结果: "
             f"函数总数={self.total}, "
-            f"C扩展命中={self.c_extension}, "
-            f"pybind11命中={self.pybind11}, "
+            f"C扩展补全={self.c_extension}, "
+            f"pybind11补全={self.pybind11}, "
             f"失败={self.failed}"
         )
