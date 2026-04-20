@@ -7,13 +7,13 @@ import re
 import clang.cindex
 import pytest
 
+from pcstubgen.signature_completion.c_extension.libclang import ast_utils as ast_utils_module
 from tests._c_extension_test_support import (
     _FakeCursorLocation,
     _FakeNode,
     _FakeSourceRange,
     _extent_for_source_snippet,
     _identifier_node,
-    ast_utils_module,
 )
 
 

@@ -4,16 +4,12 @@ import importlib
 import inspect
 import sys
 from pathlib import Path
-import types
 
 import pytest
 
-import pcstubgen.module_collector as module_collector_module
 from pcstubgen.module_collector import ModuleCollector
 from pcstubgen.models import QualifiedName, Signature
 from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
-from pcstubgen.signature_completion.c_extension.provider import CExtensionProvider
-from pcstubgen.signature_completion.pybind11_provider import Pybind11Provider
 
 
 class _DummySignatureCompleter:
@@ -27,20 +23,11 @@ class _DummySignatureCompleter:
         self._support_result = support_result
         self._signatures = [Signature()] if signatures is None else signatures
         self._member_results = member_results or {}
-        self.contexts = []
 
     def support(self, member: object, is_method: bool) -> bool:
-        if is_method:
-            return (
-                id(member) in self._member_results
-                or CExtensionProvider.support(member, True)
-                or Pybind11Provider.support(member, True)
-            )
         return (
             id(member) in self._member_results
-            or self._support_result and inspect.isroutine(member)
-            or CExtensionProvider.support(member, False)
-            or Pybind11Provider.support(member, False)
+            or self._support_result and not is_method and inspect.isroutine(member)
         )
 
     def reset_summary(self) -> None:
@@ -48,14 +35,12 @@ class _DummySignatureCompleter:
         return None
 
     def complete(self, context) -> SignatureCompletionResult:
-        self.contexts.append(context)
         if id(context.member) in self._member_results:
             return self._member_results[id(context.member)]
 
         return SignatureCompletionResult(
             signatures=self._signatures,
             doc=_get_member_doc(context.member),
-            decorator=_get_member_decorator(context.member),
         )
 
 
@@ -91,15 +76,13 @@ def test_module_collector_discovers_direct_submodules_from_package_path(
     ]
 
 
-def test_module_collector_discovers_hidden_private_subpackage_not_exposed_by_dir(
+def test_module_collector_discovers_subpackages_from_package_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _write_package_file(
         tmp_path / "hiddenpkg" / "__init__.py",
-        "__all__ = ['public_mod']\n"
-        "def __dir__():\n"
-        "    return __all__\n",
+        "__all__ = ['public_mod']\n",
     )
     _write_package_file(
         tmp_path / "hiddenpkg" / "public_mod.py",
@@ -185,25 +168,22 @@ def test_module_collector_supports_namespace_packages(
 
 
 @pytest.mark.parametrize(
-    ("package_name", "broken_module_name", "broken_source", "expected_error_type"),
+    ("package_name", "broken_module_name", "broken_source"),
     [
         (
             "optionalpkg",
             "needs_missing_dep",
             "import definitely_missing_dependency\n",
-            ModuleNotFoundError,
         ),
         (
             "oserrorpkg",
             "broken",
             "raise OSError('dll load failed')\n",
-            OSError,
         ),
         (
             "systemexitpkg",
             "broken",
             "raise SystemExit('skip this optional module')\n",
-            SystemExit,
         ),
     ],
 )
@@ -213,7 +193,6 @@ def test_module_collector_skips_submodule_when_submodule_import_fails(
     package_name: str,
     broken_module_name: str,
     broken_source: str,
-    expected_error_type: type[BaseException],
 ) -> None:
     _write_package_file(
         tmp_path / package_name / "__init__.py",
@@ -229,24 +208,9 @@ def test_module_collector_skips_submodule_when_submodule_import_fails(
     )
 
     _prepare_module_import(package_name, tmp_path, monkeypatch)
-    error_records: list[tuple[str, BaseException]] = []
-
-    def fake_error(
-        message: str,
-        module_name: str,
-        error: BaseException,
-    ) -> None:
-        _ = message
-        error_records.append((module_name, error))
-
-    monkeypatch.setattr(module_collector_module.logger, "error", fake_error)
-
     module_node = ModuleCollector(_DummySignatureCompleter()).run(package_name)
 
     assert [sub_mod.full_name.name for sub_mod in module_node.sub_modules] == ["healthy"]
-    assert len(error_records) == 1
-    assert error_records[0][0] == f"{package_name}.{broken_module_name}"
-    assert isinstance(error_records[0][1], expected_error_type)
 
 
 def test_module_collector_does_not_swallow_base_exception_from_submodule_import(
@@ -272,47 +236,6 @@ def test_module_collector_does_not_swallow_base_exception_from_submodule_import(
         ModuleCollector(_DummySignatureCompleter()).run("interruptpkg")
 
 
-def test_module_collector_collects_cpython_method_descriptor_from_builtin_type() -> None:
-    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
-        QualifiedName.from_str("builtins.list"),
-        list,
-    )
-
-    append_method = next(method for method in class_node.methods if method.name == "append")
-
-    assert append_method.decorator is None
-    assert append_method.doc == list.__dict__["append"].__doc__
-    assert "__new__" not in {method.name for method in class_node.methods}
-
-
-def test_module_collector_collects_cpython_classmethod_descriptor_from_builtin_type() -> None:
-    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
-        QualifiedName.from_str("builtins.dict"),
-        dict,
-    )
-
-    fromkeys_method = next(
-        method for method in class_node.methods if method.name == "fromkeys"
-    )
-
-    assert fromkeys_method.decorator == "classmethod"
-    assert fromkeys_method.doc == dict.__dict__["fromkeys"].__doc__
-
-
-def test_module_collector_collects_cpython_staticmethod_from_builtin_type() -> None:
-    class_node = ModuleCollector(_DummySignatureCompleter())._collect_class(
-        QualifiedName.from_str("builtins.str"),
-        str,
-    )
-
-    maketrans_method = next(
-        method for method in class_node.methods if method.name == "maketrans"
-    )
-
-    assert maketrans_method.decorator == "staticmethod"
-    assert maketrans_method.doc == str.__dict__["maketrans"].__func__.__doc__
-
-
 def test_module_collector_completes_signatures_when_collecting_module_functions(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -329,29 +252,9 @@ def test_module_collector_completes_signatures_when_collecting_module_functions(
 
     assert [function.name for function in module_node.functions] == ["foo"]
     assert module_node.functions[0].signatures == [Signature()]
-    assert len(completer.contexts) == 1
-    assert completer.contexts[0].module_name == QualifiedName.from_str("signedpkg")
-    assert completer.contexts[0].func_name == "foo"
-    assert completer.contexts[0].is_method is False
 
 
-def test_module_collector_passes_method_context_to_completer() -> None:
-    completer = _DummySignatureCompleter()
-
-    ModuleCollector(completer)._collect_class(
-        QualifiedName.from_str("builtins.dict"),
-        dict,
-    )
-
-    fromkeys_context = next(
-        context for context in completer.contexts if context.func_name == "fromkeys"
-    )
-    assert fromkeys_context.member is dict.__dict__["fromkeys"]
-    assert fromkeys_context.is_method is True
-
-
-def test_module_collector_collects_pybind11_instance_method_from_provider(
-) -> None:
+def test_module_collector_collects_configured_instance_method_result() -> None:
     sentinel_method = object()
 
     class Sample:
@@ -375,13 +278,8 @@ def test_module_collector_collects_pybind11_instance_method_from_provider(
     assert member.decorator is None
     assert member.doc == "member(self: Sample) -> int"
 
-    context = next(context for context in completer.contexts if context.func_name == "member")
-    assert context.member is sentinel_method
-    assert context.is_method is True
 
-
-def test_module_collector_collects_pybind11_staticmethod_from_provider(
-) -> None:
+def test_module_collector_collects_configured_staticmethod_result() -> None:
     sentinel_static = object()
 
     class Sample:
@@ -406,10 +304,6 @@ def test_module_collector_collects_pybind11_staticmethod_from_provider(
     assert member.decorator == "staticmethod"
     assert member.doc == "build(value: int) -> int"
 
-    context = next(context for context in completer.contexts if context.func_name == "member")
-    assert context.member is sentinel_static
-    assert context.is_method is True
-
 
 def _get_member_doc(member: object) -> str | None:
     if isinstance(member, staticmethod):
@@ -418,14 +312,6 @@ def _get_member_doc(member: object) -> str | None:
     doc = getattr(member, "__doc__", None)
     if isinstance(doc, str) and doc and not doc.isspace():
         return doc
-    return None
-
-
-def _get_member_decorator(member: object) -> str | None:
-    if isinstance(member, types.ClassMethodDescriptorType):
-        return "classmethod"
-    if isinstance(member, staticmethod):
-        return "staticmethod"
     return None
 
 

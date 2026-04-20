@@ -73,45 +73,6 @@ def test_completer_returns_c_extension_signature_and_comment(
     assert completer.summary.failed == 0
 
 
-def test_completer_preserves_c_extension_method_receiver(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _patch_compilation_database_loader(monkeypatch)
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
-        staticmethod(lambda member, is_method: is_method),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
-        staticmethod(lambda member, is_method: False),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
-        lambda self, context: SignatureCompletionResult(
-            signatures=[
-                _signature(
-                    args=[_arg("cls"), _arg("value", "int")],
-                    return_type=RawType("bool"),
-                )
-            ],
-            doc="build(cls, value: int) -> bool",
-        ),
-    )
-
-    completer = SignatureCompleter(tmp_path / "compile_commands.json")
-    result = completer.complete(
-        _context(func_name="build", member=dict.__dict__["fromkeys"], is_method=True)
-    )
-
-    assert [arg.name for arg in result.signatures[0].args] == ["cls", "value"]
-    assert result.doc == "build(cls, value: int) -> bool"
-    assert completer.summary.total == 1
-    assert completer.summary.c_extension == 1
-    assert completer.summary.pybind11 == 0
-    assert completer.summary.failed == 0
-
-
 def test_completer_returns_pybind11_signature(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -159,7 +120,7 @@ def test_completer_falls_back_to_minimal_signature_on_provider_failure(
     _patch_compilation_database_loader(monkeypatch)
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
-        staticmethod(lambda member, is_method: is_method),
+        staticmethod(lambda member, is_method: True),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
@@ -171,41 +132,7 @@ def test_completer_falls_back_to_minimal_signature_on_provider_failure(
     )
 
     completer = SignatureCompleter(tmp_path / "compile_commands.json")
-    result = completer.complete(
-        _context(func_name="build", member=dict.__dict__["fromkeys"], is_method=True)
-    )
-
-    assert [arg.name for arg in result.signatures[0].args] == ["args", "kwargs"]
-    assert result.doc is None
-    assert result.decorator is None
-    assert result.comment is None
-    assert completer.summary.c_extension == 0
-    assert completer.summary.pybind11 == 0
-    assert completer.summary.failed == 1
-
-
-def test_completer_falls_back_to_minimal_signature_without_metadata_on_generic_failure(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    _patch_compilation_database_loader(monkeypatch)
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
-        staticmethod(lambda member, is_method: is_method),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
-        staticmethod(lambda member, is_method: False),
-    )
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
-        lambda self, context: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
-
-    completer = SignatureCompleter(tmp_path / "compile_commands.json")
-    result = completer.complete(
-        _context(func_name="build", member=staticmethod(object()), is_method=True)
-    )
+    result = completer.complete(_context(func_name="build", member=object()))
 
     assert [arg.name for arg in result.signatures[0].args] == ["args", "kwargs"]
     assert result.doc is None

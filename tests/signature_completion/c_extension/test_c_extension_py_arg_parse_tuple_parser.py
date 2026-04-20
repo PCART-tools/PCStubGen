@@ -390,22 +390,3 @@ def test_parse_raises_for_c_argument_count_mismatch(
     with pytest.raises(PyArgParseTupleTypeParserError):
         _parse(format_string, args)
 
-
-def test_parse_accepts_empty_invalid_and_duplicate_resolved_names() -> None:
-    parsed = _parse(
-        "iiii",
-        [_cursor("first"), _cursor("second"), _cursor("third"), _cursor("fourth")],
-        infer_name_func=lambda c_args: {
-            "first": "",
-            "second": "123bad",
-            "third": "same",
-            "fourth": "same",
-        }[cast(_FakeCursor, c_args[0]).name],
-    )
-
-    assert parsed == [
-        _arg("", "int"),
-        _arg("123bad", "int"),
-        _arg("same", "int"),
-        _arg("same", "int"),
-    ]

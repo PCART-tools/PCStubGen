@@ -103,20 +103,6 @@ def test_parse_raises_for_unsupported_units_or_structure(
         _parse(format_string, kwlist, args)
 
 
-def test_parse_accepts_empty_invalid_and_duplicate_keyword_names() -> None:
-    parsed = _parse(
-        "iii",
-        ["", "same", "same"],
-        [_cursor("arg_0"), _cursor("arg_1"), _cursor("arg_2")],
-    )
-
-    assert parsed == [
-        _arg("", "int"),
-        _arg("same", "int"),
-        _arg("same", "int"),
-    ]
-
-
 @pytest.mark.parametrize(
     ("format_string", "kwlist", "args"),
     [

@@ -92,6 +92,10 @@ def test_build_ast_payload_includes_metadata_and_filters_external_children() -> 
                 kind=clang.cindex.CursorKind.CALL_EXPR,
                 spelling="PyModule_Create2",
                 type_spelling="PyObject *",
+                tokens=[
+                    _FakeToken(kind=clang.cindex.TokenKind.LITERAL, spelling='"a"'),
+                    _FakeToken(kind=clang.cindex.TokenKind.IDENTIFIER, spelling=r"C:\tmp"),
+                ],
                 file=str(source_path),
                 children=[
                     _FakeCursor(
@@ -118,6 +122,7 @@ def test_build_ast_payload_includes_metadata_and_filters_external_children() -> 
     assert f"output_file: {output_path}" in output
     assert 'parse_args: ["--std", "c11"]' in output
     assert "CALL_EXPR spelling=PyModule_Create2" in output
+    assert 'tokens=["\\"a\\"", "C:\\\\tmp"]' in output
     assert 'INTEGER_LITERAL type=int literal=3 tokens=["3"]' in output
     assert "Python.h" not in output
 
@@ -148,23 +153,6 @@ def test_build_ast_payload_formats_diagnostics() -> None:
     assert "[WARNING]" in output
     assert "unused value" in output
     assert f"{source_path}:12:8" in output
-
-
-def test_format_cursor_line_renders_tokens_and_escapes_spellings() -> None:
-    cursor = _FakeCursor(
-        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        type_spelling="const char *",
-        tokens=[
-            _FakeToken(kind=clang.cindex.TokenKind.LITERAL, spelling='"a"'),
-            _FakeToken(kind=clang.cindex.TokenKind.IDENTIFIER, spelling=r"C:\tmp"),
-        ],
-    )
-
-    output = clang_ast._format_cursor_line(cursor)
-
-    assert output.startswith("UNEXPOSED_EXPR type=const char *")
-    assert '\\"a\\"' in output
-    assert "C:\\\\tmp" in output
 
 
 def _run_ast_export_case(

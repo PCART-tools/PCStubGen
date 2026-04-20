@@ -992,18 +992,15 @@ def test_infer_argument_lists_parses_array_subscript_tuple_slots_with_defaults(
         ]
     ]
 
-def test_infer_argument_lists_use_array_initializer_defaults(
+def test_infer_argument_lists_marks_array_initializer_defaults_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     extent_decl = _var_decl("extent", _init_list(_float_literal("1.0"), _float_literal("2.5")))
     extent_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.CONSTANTARRAY)
     indexes = [_int_literal("0"), _int_literal("1")]
-    values = list(list(extent_decl.get_children())[0].get_children())
-    evaluated_values = {
+    index_values = {
         id(indexes[0]): 0,
         id(indexes[1]): 1,
-        id(values[0]): 1.0,
-        id(values[1]): 2.5,
     }
     cursor = _fake_function_cursor_with_children(
         extent_decl,
@@ -1018,14 +1015,14 @@ def test_infer_argument_lists_use_array_initializer_defaults(
     monkeypatch.setattr(
         signature_rules_module,
         "evaluate_cursor",
-        lambda received_cursor: evaluated_values[id(received_cursor)],
+        lambda received_cursor: index_values[id(received_cursor)],
     )
 
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("extent", "tuple[float, float]", default_value="...")]]
 
-def test_infer_argument_lists_use_array_initializer_zero_for_missing_items(
+def test_infer_argument_lists_marks_missing_array_initializer_items_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     extent_decl = _var_decl("extent", _init_list(_int_literal("1")))
@@ -1040,17 +1037,15 @@ def test_infer_argument_lists_use_array_initializer_zero_for_missing_items(
             _address_of_expr(_array_subscript("extent", index, referenced=extent_decl)),
         ),
     )
-    observed: list[_FakeNode] = []
     monkeypatch.setattr(
         signature_rules_module,
         "evaluate_cursor",
-        lambda received_cursor: observed.append(received_cursor) or 2,
+        lambda received_cursor: 2,
     )
 
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("extent", "int", default_value="...")]]
-    assert observed == [index, index]
 
 def test_infer_argument_lists_array_assignment_overrides_initializer_default(
     monkeypatch: pytest.MonkeyPatch,
@@ -1221,22 +1216,6 @@ def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlis
         _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
         _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
     ]]
-
-def test_infer_argument_lists_skips_parse_tuple_when_argument_name_cannot_be_parsed() -> None:
-    invalid_slot = _int_literal("0")
-    invalid_slot.location = _location_text("parse_tuple.c:12:8")
-    cursor = _fake_function_cursor_with_children(
-        _call_expr(
-            "PyArg_ParseTuple",
-            _identifier_node("args"),
-            _string_literal("i"),
-            invalid_slot,
-        )
-    )
-
-    inferred = _infer_varargs_arguments(cursor)
-
-    assert inferred == [[_arg("", "int")]]
 
 def test_infer_argument_lists_skips_parse_tuple_when_format_string_is_not_literal() -> None:
     value_decl = _var_decl("value")

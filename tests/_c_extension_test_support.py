@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -12,16 +11,13 @@ import pytest
 from pcstubgen.signature_completion.c_extension.signatures import (
     inferencer as signature_rules_module,
 )
-from pcstubgen.signature_completion.c_extension.libclang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.libclang.libclang_wrap import (
     CX_BINARY_OPERATOR_ASSIGN,
 )
 from pcstubgen.type_models import RawType, Type
-from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
 from pcstubgen.models import (
     Argument,
     ArgumentKind,
-    Function,
     Signature,
 )
 
@@ -60,66 +56,12 @@ def _arg(
     )
 
 
-def _unknown_function(
-    name: str,
-    *,
-    decorator: str | None = None,
-    doc: str | None = None,
-) -> Function:
-    """构造签名未知的测试函数。"""
-    return Function(
-        name=name,
-        decorator=decorator,
-        doc=doc,
-    )
-
-
-@dataclass
-class ResolvedFunctionFixture:
-    signatures: list[Signature]
-    function_cursor: clang.cindex.Cursor | None = None
-
-
 class _FakeCanonicalType:
     def __init__(self, kind: object) -> None:
         self.kind = kind
 
     def get_canonical(self) -> "_FakeCanonicalType":
         return self
-
-
-def _patch_c_signature_extractor(
-    monkeypatch: pytest.MonkeyPatch,
-    functions: dict[str, ResolvedFunctionFixture] | None = None,
-) -> None:
-    extracted_functions = functions or {}
-
-    def _patched_get(
-        self,
-        context,
-    ) -> SignatureCompletionResult:
-        _ = self
-        extracted = extracted_functions.get(context.func_name)
-        if extracted is None:
-            raise RuntimeError(f"未找到函数 {context.func_name}")
-        if not extracted.signatures:
-            raise RuntimeError(f"C函数 {context.func_name} 没有可用签名")
-
-        comment = ""
-        if extracted.function_cursor is not None and extracted.function_cursor.extent is not None:
-            location_text = str(extracted.function_cursor.location)
-            source_text = ast_utils_module.get_cursor_source_text(extracted.function_cursor)
-            comment = f"{location_text}\n{source_text}"
-
-        return SignatureCompletionResult(
-            signatures=extracted.signatures,
-            comment=comment,
-        )
-
-    monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
-        _patched_get,
-    )
 
 
 def _location_text(text: str) -> object:
@@ -630,10 +572,6 @@ def _attach_fake_parent(node: _FakeNode, parent: _FakeNode) -> None:
     for child in node.get_children():
         if isinstance(child, _FakeNode):
             _attach_fake_parent(child, node)
-
-
-ExtractedArgument = Argument
-ExtractedSignature = Signature
 
 
 __all__ = [name for name in globals() if not name.startswith("__")]

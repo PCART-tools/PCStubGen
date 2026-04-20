@@ -1,11 +1,29 @@
 from __future__ import annotations
 
-from pcstubgen.models import Argument, Function, Module, QualifiedName
-from pcstubgen.type_models import RawType
-from tests._c_extension_test_support import _signature
+from pathlib import Path
+
+from pcstubgen.models import Module, QualifiedName
+from pcstubgen.stub_output import StubRenderer
 
 
-def test_gen_stubs_writes_stub_from_collected_module(
+class _RecordingWriter:
+    def __init__(self) -> None:
+        self.module: Module | None = None
+        self.renderer: StubRenderer | None = None
+        self.output: Path | None = None
+
+    def write(
+        self,
+        module: Module,
+        renderer: StubRenderer,
+        to: Path,
+    ) -> None:
+        self.module = module
+        self.renderer = renderer
+        self.output = to
+
+
+def test_gen_stubs_uses_collected_module_and_injected_writer(
     monkeypatch,
     tmp_path,
 ) -> None:
@@ -19,18 +37,9 @@ def test_gen_stubs_writes_stub_from_collected_module(
 
     module_node = Module(
         full_name=QualifiedName.from_str("math"),
-        functions=[
-            Function(
-                name="foo",
-                signatures=[
-                    _signature(
-                        args=[Argument(name="value", type=RawType("str"))],
-                        return_type=RawType("bool"),
-                    )
-                ],
-            )
-        ],
     )
+    writer = _RecordingWriter()
+    output_dir = tmp_path / "nested" / "stubs"
 
     monkeypatch.setattr(
         stubgen_module.ModuleCollector,
@@ -40,10 +49,14 @@ def test_gen_stubs_writes_stub_from_collected_module(
 
     stubgen_module.gen_stubs(
         "math",
-        tmp_path,
+        output_dir,
         tmp_path / "compile_commands.json",
+        include_docstrings=True,
+        writer=writer,
     )
 
-    stub_path = tmp_path / "math.pyi"
-    assert stub_path.exists()
-    assert stub_path.read_text(encoding="utf-8") == "def foo(value: str) -> bool:\n    ...\n"
+    assert output_dir.is_dir()
+    assert writer.module is module_node
+    assert writer.output == output_dir
+    assert writer.renderer is not None
+    assert writer.renderer.include_docstrings is True

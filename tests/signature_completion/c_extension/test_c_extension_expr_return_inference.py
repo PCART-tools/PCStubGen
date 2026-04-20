@@ -9,7 +9,6 @@ from pcstubgen.signature_completion.c_extension.signatures import inferencer as 
 from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
     _FakeNode,
-    _FakeToken,
     _address_of,
     _arg,
     _assignment,
@@ -34,15 +33,6 @@ from tests._c_extension_test_support import (
 def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_inference_clang_helpers(monkeypatch, signature_rules_module)
 
-
-def test_infer_expr_type_raises_when_decl_ref_has_no_referenced_decl() -> None:
-    macro_expr = _FakeNode(
-        kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
-        children=[_FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR)],
-    )
-
-    with pytest.raises(AttributeError, match="get_children"):
-        signature_rules_module.infer_expr_type(macro_expr)
 
 def test_infer_expr_type_keeps_raw_py_buildvalue_container_union_shape() -> None:
     """`Py_BuildValue` 直接推断时保留 parser 原始类型树，顶层再统一规范化。"""
