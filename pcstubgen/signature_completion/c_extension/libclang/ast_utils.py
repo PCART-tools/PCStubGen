@@ -96,6 +96,18 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
     raise RuntimeError(f"变量声明未包含初始化列表, cursor: {cursor.location}")
 
 
+def try_get_decl_initializer(cursor: Cursor) -> Cursor | None:
+    """提取声明初始化表达式；无初始化式时返回 `None`。"""
+    children = list(cursor.get_children())
+    if not children:
+        return None
+
+    initializer = unwrap_transparent(children[-1])
+    if initializer.kind == CursorKind.TYPE_REF:
+        return None
+    return initializer
+
+
 def unwrap_addr_of(cursor: Cursor) -> Cursor:
     """剥离透明包装和一层取地址节点，定位到底层目标。"""
     cursor = unwrap_transparent(cursor)

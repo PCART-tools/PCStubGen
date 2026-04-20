@@ -35,13 +35,13 @@ def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_inference_clang_helpers(monkeypatch, signature_rules_module)
 
 
-def test_infer_expr_type_raises_when_macro_name_is_not_exposed_by_ast() -> None:
+def test_infer_expr_type_raises_when_decl_ref_has_no_referenced_decl() -> None:
     macro_expr = _FakeNode(
         kind=clang.cindex.CursorKind.UNEXPOSED_EXPR,
         children=[_FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR)],
     )
 
-    with pytest.raises(RuntimeError, match="AST 节点提取名称|对象返回标识符"):
+    with pytest.raises(AttributeError, match="get_children"):
         signature_rules_module.infer_expr_type(macro_expr)
 
 def test_infer_expr_type_keeps_raw_py_buildvalue_container_union_shape() -> None:
@@ -421,7 +421,7 @@ def test_return_type_traces_local_assignment_without_tokens() -> None:
 
     assert inferred == RawType("int")
 
-def test_return_type_accepts_multiple_local_assignments_when_types_converge() -> None:
+def test_return_type_uses_last_assignment_before_return_when_types_converge() -> None:
     value_decl = _var_decl("value", _null_ptr_literal())
     cursor = _fake_function_cursor_with_children(
         value_decl,
@@ -442,7 +442,7 @@ def test_return_type_accepts_multiple_local_assignments_when_types_converge() ->
 
     assert inferred == RawType("int")
 
-def test_return_type_rejects_local_assignments_when_types_diverge() -> None:
+def test_return_type_uses_last_assignment_before_return_when_types_diverge() -> None:
     value_decl = _var_decl("value", _null_ptr_literal())
     cursor = _fake_function_cursor_with_children(
         value_decl,
@@ -454,6 +454,27 @@ def test_return_type_rejects_local_assignments_when_types_diverge() -> None:
         _assignment(
             "value",
             _call_expr("PyFloat_FromDouble", _identifier_node("right")),
+            referenced=value_decl,
+        ),
+        _return_stmt(_token_identifier_node("value", referenced=value_decl)),
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("float")
+
+def test_return_type_does_not_revisit_earlier_assignment_when_last_assignment_is_null() -> None:
+    value_decl = _var_decl("value", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        value_decl,
+        _assignment(
+            "value",
+            _call_expr("PyLong_FromLong", _identifier_node("left")),
+            referenced=value_decl,
+        ),
+        _assignment(
+            "value",
+            _null_ptr_literal(),
             referenced=value_decl,
         ),
         _return_stmt(_token_identifier_node("value", referenced=value_decl)),
@@ -474,7 +495,7 @@ def test_return_type_rejects_local_decl_ref_when_only_zero_candidates_exist() ->
 
     assert inferred == AnyType()
 
-def test_return_type_does_not_trace_global_decl_ref() -> None:
+def test_return_type_traces_global_decl_ref_initializer() -> None:
     value_decl = _var_decl(
         "value",
         _call_expr("PyLong_FromLong", _identifier_node("value")),
@@ -485,9 +506,9 @@ def test_return_type_does_not_trace_global_decl_ref() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == AnyType()
+    assert inferred == RawType("int")
 
-def test_return_type_does_not_trace_static_local_decl_ref() -> None:
+def test_return_type_traces_static_local_decl_ref_initializer() -> None:
     value_decl = _var_decl(
         "value",
         _call_expr("PyLong_FromLong", _identifier_node("value")),
@@ -500,7 +521,7 @@ def test_return_type_does_not_trace_static_local_decl_ref() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == AnyType()
+    assert inferred == RawType("int")
 
 def test_return_type_parses_py_buildvalue() -> None:
     cursor = _fake_function_cursor_with_children(
@@ -643,4 +664,3 @@ def test_return_type_skips_failed_return_expr_and_keeps_successful_returns() -> 
     inferred = signature_rules_module.infer_return_type(cursor)
 
     assert inferred == RawType("int")
-
