@@ -1,46 +1,46 @@
 # PCStubGen
 
-[中文](README.zh.md)
+[English](README.md)
 
-Generate `.pyi` stubs for Python modules.
-PCStubGen supports pybind11 extensions by parsing docstrings, and supports Python C extensions by parsing C sources with libclang.
+为 Python 模块生成 `.pyi` stub。
+PCStubGen 基于 docstring 解析支持 pybind11 扩展，基于 libclang C 源码解析支持 Python C 扩展。
 
-## Installation
+## 安装
 
 ```bash
 sudo apt install llvm bear
 ```
 
-## Usage
+## 使用
 
-1. Build the target project to produce `compile_commands.json` and a wheel package with debug symbols.
+1. 构建目标项目，得到 `compile_commands.json` 和带调试符号的 wheel 包。
 
-   - Use the built-in build command:
-
-   ```bash
-   uv run pcstubgen build <target-project-directory>
-   ```
-
-   - Or wrap a custom build command:
+   - 使用自带构建命令：
 
    ```bash
-   cd <target-project-directory>
-   uv run pcstubgen wrap -- <build-command>
+   uv run pcstubgen build <目标项目目录>
    ```
 
-2. Install the wheel package into the environment.
-
-3. Generate stubs:
+   - 或者，使用自定义构建命令：
 
    ```bash
-   uv run pcstubgen gen <python-module-name> --compilation-database ./build/compile_commands.json
+   cd <目标项目目录>
+   uv run pcstubgen wrap -- <构建命令>
    ```
 
-## Example Projects
+2. 安装 wheel 包到环境。
+
+3. 生成 stub：
+
+   ```bash
+   uv run pcstubgen gen <项目 Python 内名> --compilation-database ./build/compile_commands.json
+   ```
+
+## 样例项目
 
 ### [SciPy](https://github.com/scipy/scipy)
 
-Install build dependencies:
+安装构建依赖：
 
 ```bash
 sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
@@ -48,7 +48,7 @@ sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
 
 ### [Pillow](https://github.com/python-pillow/Pillow)
 
-Install build dependencies:
+安装构建依赖：
 
 ```bash
 sudo apt install libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev \
@@ -58,7 +58,7 @@ sudo apt install libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev \
 
 ### [NumPy](https://github.com/numpy/numpy)
 
-Install build dependencies:
+安装构建依赖：
 
 ```bash
 sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
@@ -66,7 +66,7 @@ sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
 
 ### [psycopg2](https://github.com/psycopg/psycopg2)
 
-Install build dependencies:
+安装构建依赖：
 
 ```bash
 sudo apt-get install libpq-dev
@@ -76,13 +76,13 @@ sudo apt-get install libpq-dev
 
 ### [PyTorch](https://github.com/pytorch/pytorch)
 
-Install build dependencies:
+安装构建依赖：
 
 ```bash
 sudo apt install libomp-dev
 ```
 
-## Development
+## 开发
 
 ```bash
 sudo apt install llvm bear
