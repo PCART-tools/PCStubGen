@@ -395,7 +395,7 @@ def test_lookup_matches_llvm_dwarfdump_for_low_pc_high_pc(
 def test_lookup_matches_llvm_dwarfdump_for_rnglists(
     tmp_path: Path,
 ) -> None:
-    compiler = _require_program("libclang")
+    compiler = _require_program("clang")
     _require_program("llvm-dwarfdump")
     binary_path = _build_discontinuous_range_library(
         tmp_path,

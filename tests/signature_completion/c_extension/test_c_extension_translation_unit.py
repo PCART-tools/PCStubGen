@@ -23,7 +23,7 @@ def test_get_translation_unit_caches_successful_result_by_absolute_path(
     compile_command = FakeCompileCommand(
         directory=tmp_path,
         filename="src/module.c",
-        arguments=["libclang", "src/module.c"],
+        arguments=["clang", "src/module.c"],
     )
     translation_unit = SimpleNamespace(diagnostics=[])
     parser = make_parser(database=FakeCompilationDatabase([compile_command]))
@@ -53,7 +53,7 @@ def test_get_translation_unit_does_not_cache_parse_failure(
     compile_command = FakeCompileCommand(
         directory=tmp_path,
         filename="src/module.c",
-        arguments=["libclang", "src/module.c"],
+        arguments=["clang", "src/module.c"],
     )
     parser = make_parser(database=FakeCompilationDatabase([compile_command]))
     calls: list[CompileCommand] = []

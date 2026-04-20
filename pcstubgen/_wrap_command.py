@@ -12,7 +12,7 @@ def ensure_wrap_programs_available() -> None:
     """检查 wrap 命令依赖的外部程序。"""
     missing_programs = [
         program
-        for program in ("libclang", "libclang++", "llvm-config", "bear")
+        for program in ("clang", "clang++", "llvm-config", "bear")
         if shutil.which(program) is None
     ]
     if missing_programs:
@@ -24,9 +24,9 @@ def ensure_wrap_programs_available() -> None:
 
 
 def add_clang_environ(env: dict[str, str]) -> None:
-    """向构建进程注入 libclang 与 debug 构建环境变量。"""
-    env["CC"] = "libclang"
-    env["CXX"] = "libclang++"
+    """向构建进程注入 clang 与 debug 构建环境变量。"""
+    env["CC"] = "clang"
+    env["CXX"] = "clang++"
 
     try:
         llvm_libdir = subprocess.check_output(

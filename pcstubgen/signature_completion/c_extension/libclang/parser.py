@@ -75,14 +75,14 @@ class ClangParser:
             return parse_translation_unit_full_argv(self._index, arguments)
 
 def try_get_clang_resource_dir() -> Path | None:
-    """尝试解析 libclang resource dir，失败时返回 None。"""
+    """尝试解析 clang resource dir，失败时返回 None。"""
     try:
         resource_dir_text = subprocess.check_output(
-            ["libclang", "-print-resource-dir"],
+            ["clang", "-print-resource-dir"],
             text=True,
         ).strip()
     except (OSError, subprocess.CalledProcessError) as ex:
-        logger.debug("libclang resource dir 获取失败: {!r}", ex)
+        logger.warning("clang resource dir 获取失败: {!r}", ex)
         return None
 
     if not resource_dir_text:

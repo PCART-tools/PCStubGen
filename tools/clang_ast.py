@@ -18,7 +18,7 @@ SCRIPT_PATH = Path(__file__).resolve()
 SCRIPT_DIR = SCRIPT_PATH.parent
 DEFAULT_OUTPUT_DIR = SCRIPT_DIR / f"{SCRIPT_PATH.stem}_output"
 LIBCLANG_OUTPUT_EXTENSION = ".libclang.txt"
-CLANG_OUTPUT_EXTENSION = ".libclang.txt"
+CLANG_OUTPUT_EXTENSION = ".clang.txt"
 
 EXIT_ERROR = 1
 
@@ -158,10 +158,11 @@ def _build_parse_args(
 
 
 def build_output_paths(source_path: Path) -> tuple[Path, Path]:
-    return (
-        DEFAULT_OUTPUT_DIR / f"{source_path.stem}{LIBCLANG_OUTPUT_EXTENSION}",
-        DEFAULT_OUTPUT_DIR / f"{source_path.stem}{CLANG_OUTPUT_EXTENSION}",
-    )
+    libclang_output_path = DEFAULT_OUTPUT_DIR / f"{source_path.stem}{LIBCLANG_OUTPUT_EXTENSION}"
+    clang_output_path = DEFAULT_OUTPUT_DIR / f"{source_path.stem}{CLANG_OUTPUT_EXTENSION}"
+    if libclang_output_path == clang_output_path:
+        raise AssertionError("libclang output path and clang output path must differ")
+    return libclang_output_path, clang_output_path
 
 
 def _diagnostic_severity_name(severity: int) -> str:
@@ -352,7 +353,7 @@ def build_ast_payload(
 
 def build_clang_ast_dump_command(*, source_path: Path, clang_args: Sequence[str]) -> list[str]:
     return [
-        "libclang",
+        "clang",
         "-Xclang",
         "-ast-dump-all",
         "-fsyntax-only",
@@ -392,7 +393,7 @@ def _build_clang_failure(result: ClangAstDumpResult) -> RuntimeError | None:
         return None
     stderr_text = result.stderr.strip()
     stdout_text = result.stdout.strip()
-    details = stderr_text or stdout_text or f"libclang exited with code {result.returncode}"
+    details = stderr_text or stdout_text or f"clang exited with code {result.returncode}"
     return RuntimeError(details)
 
 
@@ -406,7 +407,7 @@ def run_ast_export(
     clang_library_path: str | None,
 ) -> list[Exception]:
     """
-    导出单个源文件的 libclang 与 libclang AST，并返回执行过程中收集到的失败。
+    导出单个源文件的 libclang 与 clang AST，并返回执行过程中收集到的失败。
     """
     source_path = source_path.resolve()
 
@@ -459,15 +460,15 @@ def run_ast_export(
         clang_error = _build_clang_failure(clang_result)
         if clang_error is not None:
             errors.append(clang_error)
-            _report_failure("libclang AST export", clang_error)
+            _report_failure("clang AST export", clang_error)
     except Exception as error:
         errors.append(error)
-        _report_failure("libclang AST export", error)
+        _report_failure("clang AST export", error)
 
     return errors
 
 
-@app.command(help="使用 libclang 和 libclang 导出单个 C/C++ 源文件的 AST 文本。")
+@app.command(help="使用 libclang 和 clang 导出单个 C/C++ 源文件的 AST 文本。")
 def command(
     source_path: Path = typer.Argument(
         ...,

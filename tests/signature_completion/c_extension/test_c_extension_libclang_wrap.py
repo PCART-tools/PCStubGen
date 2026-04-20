@@ -101,7 +101,7 @@ def test_parse_translation_unit_full_argv_raises_on_libclang_error(
     ):
         libclang_wrap_module.parse_translation_unit_full_argv(
             index,
-            ["libclang", "src/module.c"],
+            ["clang", "src/module.c"],
         )
 
 

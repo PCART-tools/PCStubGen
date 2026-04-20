@@ -116,8 +116,8 @@ def test_run_wrap_command_invokes_bear_with_clang_debug_environment(
     ]
     assert captured_check is False
     assert captured_env is not None
-    assert captured_env["CC"] == "libclang"
-    assert captured_env["CXX"] == "libclang++"
+    assert captured_env["CC"] == "clang"
+    assert captured_env["CXX"] == "clang++"
     assert captured_env["DEBUG"] == "1"
     assert captured_env["CMAKE_BUILD_TYPE"] == "Debug"
     assert captured_env["CFLAGS"] == "-O0 -g -UNDEBUG"
@@ -145,8 +145,8 @@ def test_wrap_command_propagates_wrapped_command_exit_code(
 
 def test_wrap_command_reports_missing_external_programs(monkeypatch) -> None:
     program_paths = {
-        "libclang": "/usr/bin/libclang",
-        "libclang++": "/usr/bin/libclang++",
+        "clang": "/usr/bin/clang",
+        "clang++": "/usr/bin/clang++",
         "llvm-config": "/usr/bin/llvm-config",
         "bear": None,
     }
