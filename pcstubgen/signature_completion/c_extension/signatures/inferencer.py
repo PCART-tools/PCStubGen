@@ -333,7 +333,7 @@ class Inferencer:
     ) -> list[Cursor]:
         """收集函数内目标局部变量的声明初始化和直接赋值右值表达式。"""
         candidates: list[Cursor] = []
-        initializer = self._extract_optional_decl_initializer(target_decl)
+        initializer = self._try_extract_decl_initializer(target_decl)
         if initializer is not None:
             candidates.append(initializer)
 
@@ -345,7 +345,7 @@ class Inferencer:
                 candidates.append(assignment_value)
         return candidates
 
-    def _extract_optional_decl_initializer(self, decl_cursor: Cursor) -> Cursor | None:
+    def _try_extract_decl_initializer(self, decl_cursor: Cursor) -> Cursor | None:
         """提取声明初始化表达式；无初始化式时返回 `None`。"""
         children = list(decl_cursor.get_children())
         if not children:
@@ -490,16 +490,12 @@ class Inferencer:
         cursor = ast_utils.unwrap_addr_of(cursor)
         if cursor.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
             array_decl, _ = ast_utils.extract_array_subscript(cursor)
-            expr = self._get_array_element_reaching_definition_cursor(cursor)
+            expr = self._get_array_subscript_expr_reaching_definition(cursor)
             return self._render_default_value_expr(expr, array_decl, expected_type)
 
         if cursor.kind == CursorKind.DECL_REF_EXPR:
             target_decl = cursor.referenced
-            if target_decl is None or target_decl.kind not in DECL_CURSOR_KINDS:
-                raise RuntimeError(
-                    f"引用节点未指向声明节点, cursor: {ast_utils.to_str(cursor)}"
-                )
-            expr = self._get_decl_ref_expr_reaching_definition_cursor(cursor)
+            expr = self._get_decl_ref_expr_reaching_definition(cursor)
             return self._render_default_value_expr(expr, target_decl, expected_type)
 
         raise RuntimeError(f"infer_default_value_for_pyarg，不支持的cursor类型, cursor: {ast_utils.to_str(cursor)}")
@@ -601,25 +597,14 @@ class Inferencer:
             return str(float(value))
         return str(value)
 
-    def _find_decl(self, cursor: Cursor) -> Cursor:
-        """将实参槽位解析为被写入的目标声明节点。"""
-        if cursor.kind in DECL_CURSOR_KINDS:
-            return cursor
-
-        if cursor.kind == CursorKind.DECL_REF_EXPR:
-            referenced = cursor.referenced
-            if referenced is not None and referenced.kind in DECL_CURSOR_KINDS:
-                return referenced
-        raise RuntimeError(f"无法将 C 参数槽位解析为声明节点, cursor: {cursor.location}")
-
-    def _get_array_element_reaching_definition_cursor(
+    def _get_array_subscript_expr_reaching_definition(
         self,
         array_subscript_expr: Cursor,
     ) -> Cursor | int:
         """查找数组元素在目标槽位引用前的最后一个定值表达式。"""
         assert array_subscript_expr.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR
         array_decl, index = ast_utils.extract_array_subscript(array_subscript_expr)
-        ret = self._extract_array_initializer_value(array_decl, index)
+        ret = None
 
         for cursor in walk(self._func_cursor):
             if cursor == array_subscript_expr:
@@ -628,9 +613,22 @@ class Inferencer:
                 continue
             if get_cursor_binary_operator_kind(cursor) != CX_BINARY_OPERATOR_ASSIGN:
                 continue
-            assignment_value = self._extract_array_element_assignment_value(cursor, array_decl, index)
-            if assignment_value is not None:
-                ret = assignment_value
+
+            children = list(cursor.get_children())
+            left = unwrap_transparent(children[0])
+            if left.kind != CursorKind.ARRAY_SUBSCRIPT_EXPR:
+                continue
+            got_decl, got_index = ast_utils.extract_array_subscript()
+            if got_decl != array_decl or got_index != index:
+                continue
+
+            right = unwrap_transparent(children[1])
+            while (right.kind == CursorKind.BINARY_OPERATOR
+                and get_cursor_binary_operator_kind(right) == CX_BINARY_OPERATOR_ASSIGN):
+                right = list(right.get_children())[1]
+                right = unwrap_transparent(right)
+            if right.kind != CursorKind.BINARY_OPERATOR:
+                ret = right
 
         if ret is None:
             raise RuntimeError(
@@ -638,12 +636,10 @@ class Inferencer:
             )
         return ret
 
-    def _get_decl_ref_expr_reaching_definition_cursor(self, decl_ref_expr: Cursor) -> Cursor:
+    def _get_decl_ref_expr_reaching_definition(self, decl_ref_expr: Cursor) -> Cursor:
         """查找目标声明在参数槽位引用前的最后一个定值表达式。"""
         target_decl = decl_ref_expr.referenced
-        if target_decl is None or target_decl.kind not in DECL_CURSOR_KINDS:
-            raise RuntimeError(f"引用节点未指向声明节点, cursor: {ast_utils.to_str(decl_ref_expr)}")
-        ret = self._extract_optional_decl_initializer(target_decl)
+        ret = self._try_extract_decl_initializer(target_decl)
 
         for cursor in walk(self._func_cursor):
             if cursor == decl_ref_expr:
@@ -654,75 +650,29 @@ class Inferencer:
                 continue
 
             children = list(cursor.get_children())
-            if len(children) != 2:
-                continue
 
             target_expr = unwrap_transparent(children[0])
             if target_expr.kind != CursorKind.DECL_REF_EXPR:
                 continue
             if target_expr.referenced != target_decl:
                 continue
-            ret = self._unwrap_assignment_chain_value(children[1])
+            right = unwrap_transparent(children[1])
+            while (right.kind == CursorKind.BINARY_OPERATOR
+                and get_cursor_binary_operator_kind(right) == CX_BINARY_OPERATOR_ASSIGN):
+                right = list(right.get_children())[1]
+                right = unwrap_transparent(right)
+            if right.kind != CursorKind.BINARY_OPERATOR:
+                ret = right
 
         if ret is None:
             raise RuntimeError(f"声明节点没有可用定值表达式: {target_decl.spelling}")
         return ret
 
-    def _extract_array_initializer_value(self, array_decl: Cursor, index: int) -> Cursor | int | None:
-        """提取数组声明初始化中指定下标的初始值。"""
-        initializer = self._extract_optional_decl_initializer(array_decl)
-        if initializer is None:
-            return None
-        if initializer.kind != CursorKind.INIT_LIST_EXPR:
-            raise RuntimeError(
-                f"数组声明初始化仅支持顺序初始化列表: {array_decl.spelling}, cursor: {array_decl.location}"
-            )
-
-        children = list(initializer.get_children())
-        for child in children:
-            if self._is_designated_initializer(child):
-                raise RuntimeError(
-                    f"数组声明初始化不支持指定初始化: {array_decl.spelling}, cursor: {array_decl.location}"
-                )
-
-        if index < len(children):
-            return unwrap_transparent(children[index])
-        return 0
-
-    def _is_designated_initializer(self, cursor: Cursor) -> bool:
-        """判断初始化列表项是否为指定初始化。"""
-        tokens = list(cursor.get_tokens())
-        if not tokens:
-            return False
-        return tokens[0].spelling in ("[", ".")
-
-    def _extract_array_element_assignment_value(
-        self,
-        assignment_cursor: Cursor,
-        array_decl: Cursor,
-        index: int,
-    ) -> Cursor | None:
-        """在 `array[index] = expr` 中提取指定数组元素对应的最终右值。"""
-        children = list(assignment_cursor.get_children())
-        if len(children) != 2:
-            return None
-
-        target_expr = unwrap_transparent(children[0])
-        if target_expr.kind != CursorKind.ARRAY_SUBSCRIPT_EXPR:
-            return None
-
-        candidate_decl, candidate_index = ast_utils.extract_array_subscript(target_expr)
-        if candidate_decl != array_decl:
-            return None
-        if candidate_index != index:
-            return None
-        return self._unwrap_assignment_chain_value(children[1])
-
-    def _extract_kwlist(self, node: Cursor) -> list[str]:
+    def _extract_kwlist(self, cursor: Cursor) -> list[str]:
         """解析 `PyArg_ParseTupleAndKeywords` 的静态关键字名数组。"""
-        kwlist_decl = self._find_decl(node)
-        if kwlist_decl.kind != CursorKind.VAR_DECL:
-            raise RuntimeError(f"kwlist 必须引用 VAR_DECL, cursor: {node.location}")
+        cursor = unwrap_transparent(cursor)
+        assert cursor.kind == CursorKind.DECL_REF_EXPR
+        kwlist_decl = cursor.referenced
 
         init_list_expr = var_decl_to_init_list_expr(kwlist_decl)
 
@@ -736,12 +686,3 @@ class Inferencer:
             result.append(keyword_name)
 
         return result
-
-    def _extract_decl_initializer(self, decl_cursor: Cursor) -> Cursor:
-        """提取声明节点的初始化表达式。"""
-        children = list(decl_cursor.get_children())
-        if not children:
-            raise RuntimeError(
-                f"声明节点缺少初始化表达式: {decl_cursor.spelling}, cursor: {decl_cursor.location}"
-            )
-        return unwrap_transparent(children[-1])
