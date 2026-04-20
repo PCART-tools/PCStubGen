@@ -103,7 +103,7 @@ def _read_method_descriptor_runtime_info(handle: object) -> CExtensionFunctionRu
     descriptor = _PyMethodDescrObject.from_address(id(handle))
     method_definition = descriptor.d_method.contents
     address = int(method_definition.ml_meth)
-    flags = int(method_definition.flags)
+    flags = int(method_definition.ml_flags)
     if address == 0:
         raise RuntimeError("读取 method descriptor 运行时信息失败: C函数地址为空。")
 

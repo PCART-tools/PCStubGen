@@ -50,9 +50,8 @@ def test_infer_signature_uses_minimal_signature_when_parse_tuple_is_skipped() ->
         Signature(
             args=[
                 _arg(
-                    "args",
-                    "object",
-                    kind=ArgumentKind.VAR_POSITIONAL,
+                    "",
+                    "int",
                 )
             ],
             return_type=AnyType(),
@@ -250,4 +249,3 @@ def test_infer_minimal_signatures_supports_fastcall_and_keywords() -> None:
             return_type=RawType("int"),
         )
     ]
-

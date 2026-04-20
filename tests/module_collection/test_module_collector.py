@@ -53,9 +53,6 @@ class _DummySignatureCompleter:
             return self._member_results[id(context.member)]
 
         return SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="pybind11",
             signatures=self._signatures,
             doc=_get_member_doc(context.member),
             decorator=_get_member_decorator(context.member),
@@ -363,9 +360,6 @@ def test_module_collector_collects_pybind11_instance_method_from_provider(
     completer = _DummySignatureCompleter(
         member_results={
             id(sentinel_method): SignatureCompletionResult(
-                success=True,
-                message="",
-                provider="pybind11",
                 signatures=[Signature()],
                 doc="member(self: Sample) -> int",
             )
@@ -396,9 +390,6 @@ def test_module_collector_collects_pybind11_staticmethod_from_provider(
     completer = _DummySignatureCompleter(
         member_results={
             id(sentinel_static): SignatureCompletionResult(
-                success=True,
-                message="",
-                provider="pybind11",
                 signatures=[Signature()],
                 doc="build(value: int) -> int",
                 decorator="staticmethod",

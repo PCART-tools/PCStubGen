@@ -33,9 +33,11 @@ def test_read_cpython_function_runtime_info_supports_staticmethod_inner_function
     assert info.flags & METH_STATIC
 
 
-def test_read_builtin_function_runtime_info_rejects_unsupported_handle() -> None:
-    with pytest.raises(RuntimeError, match="不支持的 builtin function 对象"):
-        runtime_module.read_builtin_function_runtime_info(object())
+def test_read_cpython_function_runtime_info_supports_builtin_function() -> None:
+    info = runtime_module.read_c_extension_function_runtime_info(len)
+
+    assert info.address != 0
+    assert info.flags == METH_O
 
 
 @pytest.mark.parametrize(
@@ -51,7 +53,7 @@ def test_read_builtin_function_runtime_info_rejects_unsupported_handle() -> None
         ),
     ],
 )
-def test_read_builtin_function_runtime_info_wraps_cpython_api_errors(
+def test_read_cpython_function_runtime_info_propagates_cpython_api_errors(
     monkeypatch: pytest.MonkeyPatch,
     attr_name: str,
     replacement: object,
@@ -60,18 +62,23 @@ def test_read_builtin_function_runtime_info_wraps_cpython_api_errors(
     monkeypatch.setattr(runtime_module, "_pycfunction_get_flags", lambda handle: 8)
     monkeypatch.setattr(runtime_module, attr_name, replacement)
 
-    with pytest.raises(RuntimeError, match="读取 builtin function 运行时信息失败"):
-        runtime_module.read_builtin_function_runtime_info(len)
+    with pytest.raises(SystemError, match="bad argument"):
+        runtime_module.read_c_extension_function_runtime_info(len)
 
 
-def test_read_builtin_function_runtime_info_rejects_zero_function_address(
+def test_read_cpython_function_runtime_info_rejects_zero_function_address(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(runtime_module, "_pycfunction_get_function", lambda handle: 0)
     monkeypatch.setattr(runtime_module, "_pycfunction_get_flags", lambda handle: 8)
 
     with pytest.raises(RuntimeError, match="C函数地址为空"):
-        runtime_module.read_builtin_function_runtime_info(len)
+        runtime_module.read_c_extension_function_runtime_info(len)
+
+
+def test_read_cpython_function_runtime_info_rejects_unsupported_handle() -> None:
+    with pytest.raises(RuntimeError, match="不支持的 CPython 函数对象"):
+        runtime_module.read_c_extension_function_runtime_info(object())
 
 
 def test_runtime_recognizes_c_extension_handle_kinds() -> None:
@@ -93,7 +100,6 @@ def test_runtime_recognizes_pybind11_handle_kinds(monkeypatch: pytest.MonkeyPatc
 
     fake_builtin = len
     fake_staticmethod = staticmethod(fake_builtin)
-    monkeypatch.setattr(runtime_module, "is_pybind11_builtin", lambda handle: handle is fake_builtin)
     monkeypatch.setattr(
         runtime_module,
         "is_pybind11_bound",

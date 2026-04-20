@@ -112,9 +112,6 @@ def _patch_c_signature_extractor(
             comment = f"{location_text}\n{source_text}"
 
         return SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="c_extension",
             signatures=extracted.signatures,
             comment=comment,
         )
@@ -157,7 +154,12 @@ def patch_inference_clang_helpers(
 
     monkeypatch.setattr(
         target_module,
-        "get_cursor_text",
+        "get_cursor_source_text",
+        fake_cursor_get_text,
+    )
+    monkeypatch.setattr(
+        target_module.ast_utils,
+        "get_cursor_source_text",
         fake_cursor_get_text,
     )
 
@@ -173,8 +175,41 @@ def patch_inference_clang_helpers(
 
     monkeypatch.setattr(
         target_module,
-        "get_call_expr_source_name",
+        "get_first_token_str",
         fake_get_call_expr_source_name,
+    )
+    monkeypatch.setattr(
+        target_module.ast_utils,
+        "get_first_token_str",
+        fake_get_call_expr_source_name,
+    )
+
+    real_unwrap_addr_of = target_module.ast_utils.unwrap_addr_of
+
+    def fake_unwrap_addr_of(cursor: object) -> object:
+        if not isinstance(cursor, _FakeNode):
+            return real_unwrap_addr_of(cast(clang.cindex.Cursor, cursor))
+
+        cursor = target_module.unwrap_transparent(cursor)
+        tokens = list(cursor.get_tokens())
+        if (
+            cursor.kind == clang.cindex.CursorKind.UNARY_OPERATOR
+            and tokens
+            and tokens[0].spelling == "&"
+        ):
+            children = list(cursor.get_children())
+            return target_module.unwrap_transparent(cast(_FakeNode, children[0]))
+        return cursor
+
+    monkeypatch.setattr(
+        target_module.ast_utils,
+        "unwrap_addr_of",
+        fake_unwrap_addr_of,
+    )
+    monkeypatch.setattr(
+        target_module.ast_utils,
+        "evaluate_cursor",
+        lambda cursor: target_module.evaluate_cursor(cursor),
     )
 
     def fake_cursor_binary_operator_kind(cursor: object) -> int:
@@ -186,6 +221,112 @@ def patch_inference_clang_helpers(
         target_module,
         "get_cursor_binary_operator_kind",
         fake_cursor_binary_operator_kind,
+    )
+
+    def _find_function_cursor(cursor: object) -> clang.cindex.Cursor:
+        current = cursor
+        while current is not None:
+            if getattr(current, "kind", None) == clang.cindex.CursorKind.FUNCTION_DECL:
+                return cast(clang.cindex.Cursor, current)
+            current = getattr(current, "semantic_parent", None)
+        return _fake_function_cursor_with_children(cast(_FakeNode, cursor))
+
+    def infer_expr_type(
+        cursor: clang.cindex.Cursor,
+        *,
+        flags: int = 0,
+        is_method: bool = False,
+    ) -> Type:
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), flags, is_method)
+        return inferencer._infer_expr_type(cursor)
+
+    def infer_return_type(
+        cursor: clang.cindex.Cursor,
+        *,
+        flags: int = 0,
+        is_method: bool = False,
+    ) -> Type:
+        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        return inferencer._infer_return_type()
+
+    def infer_arguments_list(
+        cursor: clang.cindex.Cursor,
+        *,
+        flags: int = 0,
+        is_method: bool = False,
+    ) -> list[list[Argument]]:
+        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        return inferencer._infer_arguments_list()
+
+    def infer_signature(
+        cursor: clang.cindex.Cursor,
+        *,
+        flags: int = 0,
+        is_method: bool = False,
+    ) -> list[Signature]:
+        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        return inferencer.run()
+
+    def infer_minimal_signatures(
+        flags: int,
+        *,
+        return_type: Type,
+        is_method: bool = False,
+    ) -> list[Signature]:
+        inferencer = target_module.Inferencer(
+            _fake_function_cursor_with_children(),
+            flags,
+            is_method,
+        )
+        return inferencer._infer_minimal_signatures(return_type)
+
+    def infer_type_object_type_for_pyarg(cursor: clang.cindex.Cursor) -> Type:
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        return inferencer._infer_type_object_type_for_pyarg(cursor)
+
+    def infer_converter_type_for_pyarg(cursor: clang.cindex.Cursor) -> Type:
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        return inferencer._infer_converter_type_for_pyarg(cursor)
+
+    def infer_default_value_for_pyarg(
+        cursor: clang.cindex.Cursor,
+        expected_type: Type,
+    ) -> str:
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        return inferencer._infer_default_value_for_pyarg(cursor, expected_type)
+
+    monkeypatch.setattr(target_module, "infer_expr_type", infer_expr_type, raising=False)
+    monkeypatch.setattr(target_module, "infer_return_type", infer_return_type, raising=False)
+    monkeypatch.setattr(
+        target_module,
+        "infer_arguments_list",
+        infer_arguments_list,
+        raising=False,
+    )
+    monkeypatch.setattr(target_module, "infer_signature", infer_signature, raising=False)
+    monkeypatch.setattr(
+        target_module,
+        "infer_minimal_signatures",
+        infer_minimal_signatures,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        target_module,
+        "_infer_type_object_type_for_pyarg",
+        infer_type_object_type_for_pyarg,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        target_module,
+        "_infer_converter_type_for_pyarg",
+        infer_converter_type_for_pyarg,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        target_module,
+        "_infer_default_value_for_pyarg",
+        infer_default_value_for_pyarg,
+        raising=False,
     )
 
 

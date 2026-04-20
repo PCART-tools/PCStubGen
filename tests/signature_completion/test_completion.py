@@ -46,9 +46,6 @@ def test_completer_returns_c_extension_signature_and_comment(
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
         lambda self, context: SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="c_extension",
             signatures=[
                 _signature(
                     args=[_arg("value", "int")],
@@ -92,9 +89,6 @@ def test_completer_returns_pybind11_signature(
     monkeypatch.setattr(
         "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.get",
         lambda self, context: SignatureCompletionResult(
-            success=True,
-            message="",
-            provider="pybind11",
             signatures=[
                 _signature(
                     args=[_arg("value", "str")],
@@ -142,14 +136,12 @@ def test_completer_falls_back_to_minimal_signature_on_provider_failure(
         _context(func_name="build", member=dict.__dict__["fromkeys"], is_method=True)
     )
 
-    assert [arg.name for arg in result.signatures[0].args] == ["cls", "args", "kwargs"]
-    assert result.provider == "c_extension"
-    assert result.success is False
+    assert [arg.name for arg in result.signatures[0].args] == ["args", "kwargs"]
     assert result.doc is None
     assert result.decorator is None
     assert result.comment is None
-    assert result.message == "RuntimeError: boom"
-    assert completer.summary.c_extension == 1
+    assert completer.summary.c_extension == 0
+    assert completer.summary.pybind11 == 0
     assert completer.summary.failed == 1
 
 
@@ -177,11 +169,9 @@ def test_completer_falls_back_to_minimal_signature_without_metadata_on_generic_f
     )
 
     assert [arg.name for arg in result.signatures[0].args] == ["args", "kwargs"]
-    assert result.provider == "c_extension"
-    assert result.success is False
     assert result.doc is None
     assert result.decorator is None
     assert result.comment is None
-    assert result.message == "RuntimeError: boom"
-    assert completer.summary.c_extension == 1
+    assert completer.summary.c_extension == 0
+    assert completer.summary.pybind11 == 0
     assert completer.summary.failed == 1

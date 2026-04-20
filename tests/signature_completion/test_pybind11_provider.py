@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from pcstubgen.models import QualifiedName
 from pcstubgen.signature_completion.completion_models import SignatureCompletionContext
 from pcstubgen.signature_completion.pybind11_provider import Pybind11Provider
@@ -64,9 +66,21 @@ def test_pybind11_provider_gets_instance_method_result() -> None:
     provider = Pybind11Provider()
     member = _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int")
 
-    result = provider.get(_make_context(member, func_name="build", is_method=True))
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_module_function",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_instance_method",
+            lambda handle: handle is member,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
+            lambda handle: False,
+        )
+        result = provider.get(_make_context(member, func_name="build", is_method=True))
 
-    assert result.provider == "pybind11"
     assert result.decorator is None
     assert result.doc == "build(self: pkg.Sample, value: int) -> int"
     assert [arg.name for arg in result.signatures[0].args] == ["self", "value"]
@@ -74,14 +88,26 @@ def test_pybind11_provider_gets_instance_method_result() -> None:
 
 def test_pybind11_provider_gets_staticmethod_result() -> None:
     provider = Pybind11Provider()
-    func = _FakeBuiltinFunction("build(self: pkg.Sample, value: int) -> int")
+    func = _FakeBuiltinFunction("build(value: int) -> int")
     member = staticmethod(func)
 
-    result = provider.get(_make_context(member, func_name="build", is_method=True))
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_module_function",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_instance_method",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
+            lambda handle: handle is member,
+        )
+        result = provider.get(_make_context(member, func_name="build", is_method=True))
 
-    assert result.provider == "pybind11"
     assert result.decorator == "staticmethod"
-    assert result.doc == "build(self: pkg.Sample, value: int) -> int"
+    assert result.doc == "build(value: int) -> int"
     assert [arg.name for arg in result.signatures[0].args] == ["value"]
 
 

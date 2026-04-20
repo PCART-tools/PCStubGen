@@ -145,10 +145,7 @@ def test_var_decl_to_init_list_expr_raises_with_cursor_location() -> None:
     cursor = _identifier_node("value")
     cursor.location = _location_text("ast_utils.c:3:5")
 
-    with pytest.raises(
-        RuntimeError,
-        match=rf"VAR_DECL.*{re.escape('ast_utils.c:3:5')}",
-    ):
+    with pytest.raises(AssertionError):
         ast_utils_module.var_decl_to_init_list_expr(cursor)
 
 
@@ -381,4 +378,4 @@ def test_is_integer_literal_zero_only_accepts_int_zero(
     cursor = _FakeNode(kind=clang.cindex.CursorKind.INTEGER_LITERAL)
     monkeypatch.setattr(ast_utils_module, "evaluate_cursor", lambda _: value)
 
-    assert ast_utils_module.is_integer_literal_zero(cursor) is expected
+    assert ast_utils_module.is_nullptr_or_zero(cursor) is expected

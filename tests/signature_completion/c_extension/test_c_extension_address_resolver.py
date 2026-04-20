@@ -1,48 +1,33 @@
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 
 import pytest
 
 from pcstubgen.signature_completion.c_extension import dladdr as resolver_module
-from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
 
 
-def test_get_symbolized_address_location_delegates_to_dwarfdump_lookup(
+def test_get_binary_and_ra_returns_binary_path_and_relative_address(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     binary_path = tmp_path / "sample.so"
-    captured: dict[str, object] = {}
+    base_address = 0x1000
+    address = 0x1234
 
-    monkeypatch.setattr(
-        resolver_module,
-        "_get_binary_and_ra",
-        lambda address: (binary_path, 0x234),
-    )
-    monkeypatch.setattr(
-        resolver_module.dwarfdump,
-        "lookup",
-        lambda binary_path_arg, relative_address_arg: captured.update(
-            binary_path=binary_path_arg,
-            relative_address=relative_address_arg,
-        )
-        or LookupResult(
-            compilation_unit_path=(tmp_path / "sample.c").resolve(),
-            function_name="foo_impl",
-            linkage_name="_Z8foo_implv",
-        ),
-    )
+    def fake_dladdr(pointer: ctypes.c_void_p, info_ptr: object) -> int:
+        _ = pointer
+        info_ptr._obj.dli_fname = str(binary_path).encode()
+        info_ptr._obj.dli_fbase = base_address
+        return 1
 
-    result = resolver_module.get_func_file_location(0x1234)
+    monkeypatch.setattr(resolver_module, "_dladdr", fake_dladdr)
 
-    assert captured == {
-        "binary_path": binary_path,
-        "relative_address": 0x234,
-    }
-    assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
-    assert result.function_name == "foo_impl"
-    assert result.linkage_name == "_Z8foo_implv"
+    resolved_binary_path, relative_address = resolver_module.get_binary_and_ra(address)
+
+    assert resolved_binary_path == binary_path.resolve()
+    assert relative_address == address - base_address
 
 
 def test_get_binary_and_ra_rejects_unresolved_address(
