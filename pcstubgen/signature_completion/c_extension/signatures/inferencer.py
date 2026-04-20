@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import cast
 
 from ..libclang import ast_utils
@@ -30,6 +31,7 @@ from ..method_flags import (
     METH_KEYWORDS,
     METH_NOARGS,
     METH_O,
+    METH_STATIC,
     METH_VARARGS,
 )
 from .py_arg_parse.tuple_and_keywords_parser import (
@@ -62,41 +64,23 @@ class Inferencer:
 
     def run(self) -> list[Signature]:
         """汇合参数推断与返回值推断结果，直接生成签名。"""
-        arguments_list = self._infer_arguments_list()
         return_type = self._infer_return_type()
+        arguments_list = self._infer_arguments_list()
+        for args in arguments_list:
+            self._try_add_receiver(args)
 
-        if arguments_list:
-            return [
-                Signature(
-                    args=arguments,
-                    return_type=return_type,
-                )
-                for arguments in arguments_list
-            ]
-
-        minimal_signatures = self._infer_minimal_signatures(return_type)
-        if minimal_signatures:
-            return minimal_signatures
-        return [Signature(return_type=return_type)]
-
-    def _infer_minimal_signatures(self, return_type: Type) -> list[Signature]:
-        """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小签名。"""
-        argument_lists = self._infer_argument_lists_from_flags()
-        if not argument_lists:
-            return []
         return [
             Signature(
                 args=arguments,
                 return_type=return_type,
             )
-            for arguments in argument_lists
+            for arguments in arguments_list
         ]
 
-    def _infer_argument_lists_from_flags(self) -> list[list[Argument]]:
-        """根据来自 `PyMethodDef.ml_flags` 的 flags 值推断最小参数形状。"""
+    def _infer_arguments_list(self) -> list[list[Argument]]:
+        """按 flags 决定业务参数骨架，并在允许时读取 `PyArg_*` 细化。"""
         if self._flags & METH_NOARGS:
             return [[]]
-
         if self._flags & METH_O:
             return [[
                 Argument(
@@ -105,39 +89,49 @@ class Inferencer:
                     kind=ArgumentKind.POSITIONAL_ONLY,
                 )
             ]]
-
-        if self._flags & (METH_VARARGS | METH_FASTCALL):
-            arguments = [
-                Argument(
-                    name="args",
-                    type=RawType("object"),
-                    kind=ArgumentKind.VAR_POSITIONAL,
-                )
-            ]
+        if self._flags & METH_FASTCALL:
+            return [self._build_minimal_arguments()]
+        if self._flags & METH_VARARGS:
             if self._flags & METH_KEYWORDS:
-                arguments.append(
-                    Argument(
-                        name="kwargs",
-                        type=RawType("object"),
-                        kind=ArgumentKind.VAR_KEYWORD,
-                    )
+                arguments_list = self._infer_arguments_for_call_name(
+                    "PyArg_ParseTupleAndKeywords",
+                    self._infer_pyarg_parse_tuple_and_keywords_arguments,
                 )
-            return [arguments]
+            else:
+                arguments_list = self._infer_arguments_for_call_name(
+                    "PyArg_ParseTuple",
+                    self._infer_pyarg_parse_tuple_arguments,
+                )
+            if arguments_list:
+                return arguments_list
+            return [self._build_minimal_arguments()]
+        return [[]]
 
-        return []
+    def _build_minimal_arguments(self) -> list[Argument]:
+        """构造 variadic 调用约定的最小业务参数骨架。"""
+        arguments = [
+            Argument(
+                name="args",
+                type=RawType("object"),
+                kind=ArgumentKind.VAR_POSITIONAL,
+            )
+        ]
+        if self._flags & METH_KEYWORDS:
+            arguments.append(
+                Argument(
+                    name="kwargs",
+                    type=RawType("object"),
+                    kind=ArgumentKind.VAR_KEYWORD,
+                )
+            )
+        return arguments
 
-    # def try_add_bound(args: list[Argument], is_method: bool, flags: int) -> bool:
-    #     if is_method:
-    #         name = "self"
-    #         if flags & METH_CLASS:
-    #             name
-    #         bound = Argument()
-
-    def _infer_arguments_list(self) -> list[list[Argument]]:
-        """遍历函数体内支持的 `PyArg_*` 调用并收集参数列表。"""
-        if self._flags & METH_NOARGS:
-            return [[]]
-
+    def _infer_arguments_for_call_name(
+        self,
+        expected_call_name: str,
+        parser: Callable[[Cursor], list[Argument]],
+    ) -> list[list[Argument]]:
+        """只按指定 `PyArg_*` 入口扫描参数解析调用。"""
         arguments_list: list[list[Argument]] = []
 
         for call_expr in walk(self._func_cursor):
@@ -145,11 +139,10 @@ class Inferencer:
                 continue
 
             call_name = ast_utils.get_first_token_str(call_expr)
+            if call_name != expected_call_name:
+                continue
             try:
-                if call_name == "PyArg_ParseTuple":
-                    arguments_list.append(self._infer_pyarg_parse_tuple_arguments(call_expr))
-                elif call_name == "PyArg_ParseTupleAndKeywords":
-                    arguments_list.append(self._infer_pyarg_parse_tuple_and_keywords_arguments(call_expr))
+                arguments_list.append(parser(call_expr))
             except Exception as ex:
                 logger.warning(
                     "跳过无法推断的 PyArg 参数列表, func_name: {}, call_name: {}, reason: {!r}",
@@ -162,6 +155,19 @@ class Inferencer:
             logger.warning("多个参数列表, func_name: {}", self._func_cursor.spelling)
 
         return arguments_list
+
+    def _try_add_receiver(self, arguments: list[Argument]) -> list[Argument]:
+        """按方法绑定类型在参数列表头部原地插入 receiver。"""
+        if self._is_method and self._flags & METH_STATIC == 0:
+            if self._flags & METH_CLASS:
+                arg_name = "cls"
+            else:
+                arg_name = "self"
+            kind = ArgumentKind.POSITIONAL_OR_KEYWORD
+            if arguments and arguments[0].kind is ArgumentKind.POSITIONAL_ONLY:
+                kind = ArgumentKind.POSITIONAL_ONLY
+            arguments.insert(0, Argument(name=arg_name, kind=kind))
+        return arguments
 
     def _infer_return_type(self) -> Type:
         """遍历函数子树中的 return 语句并汇总返回类型。"""
@@ -618,7 +624,7 @@ class Inferencer:
             left = unwrap_transparent(children[0])
             if left.kind != CursorKind.ARRAY_SUBSCRIPT_EXPR:
                 continue
-            got_decl, got_index = ast_utils.extract_array_subscript()
+            got_decl, got_index = ast_utils.extract_array_subscript(left)
             if got_decl != array_decl or got_index != index:
                 continue
 

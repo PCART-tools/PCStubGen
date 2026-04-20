@@ -6,6 +6,11 @@ from pathlib import Path
 import clang.cindex
 import pytest
 
+from pcstubgen.models import ArgumentKind
+from pcstubgen.signature_completion.c_extension.method_flags import (
+    METH_KEYWORDS,
+    METH_VARARGS,
+)
 from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
 from pcstubgen.type_models import RawType, UnionType
 from tests._c_extension_test_support import (
@@ -44,6 +49,17 @@ def _patch_fake_clang_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_inference_clang_helpers(monkeypatch, signature_rules_module)
 
 
+def _infer_varargs_arguments(cursor: clang.cindex.Cursor) -> list[list[object]]:
+    return signature_rules_module.infer_arguments_list(cursor, flags=METH_VARARGS)
+
+
+def _infer_varargs_keywords_arguments(cursor: clang.cindex.Cursor) -> list[list[object]]:
+    return signature_rules_module.infer_arguments_list(
+        cursor,
+        flags=METH_VARARGS | METH_KEYWORDS,
+    )
+
+
 def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     count_decl = _var_decl("count", _int_literal("1"))
     label_decl = _var_decl("label", _identifier_node("Py_None"))
@@ -58,7 +74,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [
@@ -82,7 +98,7 @@ def test_infer_argument_lists_maps_pyarg_p_unit_to_bool() -> None:
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("flag", "bool")]]
 
@@ -109,7 +125,7 @@ def test_infer_argument_lists_renders_python_singleton_default_values(
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "object", default_value=expected_default)]]
 
@@ -134,7 +150,7 @@ def test_infer_argument_lists_renders_pointer_zero_default_as_unknown(
         lambda received_cursor: observed.append(received_cursor) or True,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "object", default_value="...")]]
     assert observed == [initializer]
@@ -180,7 +196,7 @@ def test_infer_argument_lists_renders_char_pointer_null_default_as_unknown(
     )
     monkeypatch.setattr(signature_rules_module, "is_nullptr_or_zero", lambda _: True)
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [
@@ -213,7 +229,7 @@ def test_infer_argument_lists_keeps_non_pointer_zero_default_as_integer(
         lambda received_cursor: observed.append(received_cursor) or 0,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "int", default_value="0")]]
     assert observed == [initializer]
@@ -236,7 +252,7 @@ def test_infer_argument_lists_renders_default_from_assignment_before_parse(
     )
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 12)
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "int", default_value="12")]]
 
@@ -259,7 +275,7 @@ def test_infer_argument_lists_uses_last_assignment_before_parse_for_default(
     )
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 2)
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "int", default_value="2")]]
 
@@ -292,7 +308,7 @@ def test_infer_argument_lists_ignores_assignment_after_parse_for_default(
         or evaluated_values[id(received_cursor)],
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "int", default_value="1")]]
     assert observed == [initializer]
@@ -323,7 +339,7 @@ def test_infer_argument_lists_renders_integer_defaults_from_chained_assignment(
     )
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 512)
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [_arg("left_right", "tuple[int, int]", default_value="(512, 512)")]
@@ -355,7 +371,7 @@ def test_infer_argument_lists_renders_float_defaults_from_chained_assignment(
     )
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: -1.0)
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [_arg("left_right", "tuple[float, float]", default_value="(-1.0, -1.0)")]
@@ -391,7 +407,7 @@ def test_infer_argument_lists_renders_integer_bool_default_values(
         lambda received_cursor: observed.append(received_cursor) or evaluated,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("flag", "bool", default_value=expected_default)]]
     assert observed == [initializer]
@@ -429,7 +445,7 @@ def test_infer_argument_lists_renders_cxx_bool_default_values(
         lambda received_cursor: observed.append(received_cursor) or evaluated,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
     assert observed == [initializer]
@@ -468,7 +484,7 @@ def test_infer_argument_lists_renders_numeric_unary_default_values(
         lambda received_cursor: observed.append(received_cursor) or evaluated,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
     assert observed == [initializer]
@@ -493,7 +509,7 @@ def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
         lambda received_cursor: observed.append(received_cursor) or -1,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "object", default_value="...")]]
     assert observed == []
@@ -832,7 +848,7 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "object")]]
 
@@ -863,7 +879,7 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_ampersand_conve
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", "object")]]
 
@@ -879,7 +895,7 @@ def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_p
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [
@@ -904,7 +920,7 @@ def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("left_right", "tuple[int, int]")]]
 
@@ -964,7 +980,7 @@ def test_infer_argument_lists_parses_array_subscript_tuple_slots_with_defaults(
         lambda received_cursor: evaluated_values[id(received_cursor)],
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [
@@ -1005,11 +1021,9 @@ def test_infer_argument_lists_use_array_initializer_defaults(
         lambda received_cursor: evaluated_values[id(received_cursor)],
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [
-        [_arg("extent", "tuple[float, float]", default_value="(1.0, 2.5)")]
-    ]
+    assert inferred == [[_arg("extent", "tuple[float, float]", default_value="...")]]
 
 def test_infer_argument_lists_use_array_initializer_zero_for_missing_items(
     monkeypatch: pytest.MonkeyPatch,
@@ -1033,9 +1047,9 @@ def test_infer_argument_lists_use_array_initializer_zero_for_missing_items(
         lambda received_cursor: observed.append(received_cursor) or 2,
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("extent", "int", default_value="0")]]
+    assert inferred == [[_arg("extent", "int", default_value="...")]]
     assert observed == [index, index]
 
 def test_infer_argument_lists_array_assignment_overrides_initializer_default(
@@ -1068,7 +1082,7 @@ def test_infer_argument_lists_array_assignment_overrides_initializer_default(
         lambda received_cursor: evaluated_values[id(received_cursor)],
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("extent", "float", default_value="3.5")]]
 
@@ -1105,7 +1119,7 @@ def test_infer_argument_lists_array_defaults_follow_chained_assignment(
         lambda received_cursor: evaluated_values[id(received_cursor)],
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("extent", "int", default_value="5")]]
 
@@ -1121,20 +1135,20 @@ def test_infer_default_value_for_pyarg_rejects_designated_array_initializer(
     index = _int_literal("0")
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0)
 
-    with pytest.raises(RuntimeError, match="不支持指定初始化"):
+    with pytest.raises(RuntimeError, match="数组元素没有可用定值表达式"):
         signature_rules_module._infer_default_value_for_pyarg(
             _address_of_expr(_array_subscript("extent", index, referenced=extent_decl)),
             RawType("int"),
         )
 
-def test_infer_argument_lists_returns_empty_when_no_supported_pyarg_calls_exist() -> None:
+def test_infer_argument_lists_falls_back_to_minimal_varargs_when_no_supported_pyarg_calls_exist() -> None:
     cursor = _fake_function_cursor_with_children(
         _call_expr("PyLong_FromLong", _identifier_node("value"))
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[_arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL)]]
 
 def test_infer_argument_lists_skips_pyarg_parsetuple_sizet_alias() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
@@ -1147,9 +1161,9 @@ def test_infer_argument_lists_skips_pyarg_parsetuple_sizet_alias() -> None:
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[_arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL)]]
 
 def test_infer_argument_lists_skips_pyarg_parsetuple_and_keywords_sizet_alias(
     monkeypatch: pytest.MonkeyPatch,
@@ -1169,18 +1183,21 @@ def test_infer_argument_lists_skips_pyarg_parsetuple_and_keywords_sizet_alias(
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_keywords_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[
+        _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
+        _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
+    ]]
 
 def test_infer_argument_lists_does_not_match_pyarg_from_single_character_name() -> None:
     cursor = _fake_function_cursor_with_children(
         _call_expr("e", _identifier_node("args"))
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[_arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL)]]
 
 def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlist() -> None:
     invalid_entry = _identifier_node("bad")
@@ -1198,9 +1215,12 @@ def test_infer_argument_lists_skips_parse_tuple_and_keywords_without_valid_kwlis
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_keywords_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[
+        _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
+        _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
+    ]]
 
 def test_infer_argument_lists_skips_parse_tuple_when_argument_name_cannot_be_parsed() -> None:
     invalid_slot = _int_literal("0")
@@ -1214,7 +1234,7 @@ def test_infer_argument_lists_skips_parse_tuple_when_argument_name_cannot_be_par
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("", "int")]]
 
@@ -1231,9 +1251,9 @@ def test_infer_argument_lists_skips_parse_tuple_when_format_string_is_not_litera
         )
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == []
+    assert inferred == [[_arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL)]]
 
 def test_infer_default_value_for_pyarg_raises_with_cursor_location_for_unsupported_expr() -> None:
     expr_cursor = _call_expr("PyLong_FromLong", _identifier_node("value"))
@@ -1292,7 +1312,7 @@ def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:
         ),
     )
 
-    inferred = signature_rules_module.infer_arguments_list(cursor)
+    inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
         [_arg("value", "int")],

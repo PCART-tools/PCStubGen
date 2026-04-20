@@ -267,19 +267,6 @@ def patch_inference_clang_helpers(
         inferencer = target_module.Inferencer(cursor, flags, is_method)
         return inferencer.run()
 
-    def infer_minimal_signatures(
-        flags: int,
-        *,
-        return_type: Type,
-        is_method: bool = False,
-    ) -> list[Signature]:
-        inferencer = target_module.Inferencer(
-            _fake_function_cursor_with_children(),
-            flags,
-            is_method,
-        )
-        return inferencer._infer_minimal_signatures(return_type)
-
     def infer_type_object_type_for_pyarg(cursor: clang.cindex.Cursor) -> Type:
         inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
         return inferencer._infer_type_object_type_for_pyarg(cursor)
@@ -304,12 +291,6 @@ def patch_inference_clang_helpers(
         raising=False,
     )
     monkeypatch.setattr(target_module, "infer_signature", infer_signature, raising=False)
-    monkeypatch.setattr(
-        target_module,
-        "infer_minimal_signatures",
-        infer_minimal_signatures,
-        raising=False,
-    )
     monkeypatch.setattr(
         target_module,
         "_infer_type_object_type_for_pyarg",
