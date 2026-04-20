@@ -99,7 +99,8 @@ def var_decl_to_init_list_expr(cursor: Cursor) -> Cursor:
 def unwrap_addr_of(cursor: Cursor) -> Cursor:
     """剥离透明包装和一层取地址节点，定位到底层目标。"""
     cursor = unwrap_transparent(cursor)
-    if cursor.kind == CursorKind.UNARY_OPERATOR and list(cursor.get_tokens())[0] == "&":
+    tokens = list(cursor.get_tokens())
+    if cursor.kind == CursorKind.UNARY_OPERATOR and tokens and tokens[0].spelling == "&":
         children = list(cursor.get_children())
         cursor = unwrap_transparent(children[0])
     return cursor
