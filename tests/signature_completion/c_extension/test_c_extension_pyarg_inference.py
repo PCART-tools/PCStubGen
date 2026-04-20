@@ -1136,7 +1136,7 @@ def test_infer_argument_lists_returns_empty_when_no_supported_pyarg_calls_exist(
 
     assert inferred == []
 
-def test_infer_argument_lists_parses_pyarg_parsetuple_sizet_alias() -> None:
+def test_infer_argument_lists_skips_pyarg_parsetuple_sizet_alias() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -1151,7 +1151,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_sizet_alias() -> None:
 
     assert inferred == []
 
-def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias(
+def test_infer_argument_lists_skips_pyarg_parsetuple_and_keywords_sizet_alias(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0.0)
@@ -1167,6 +1167,15 @@ def test_infer_argument_lists_parses_pyarg_parsetuple_and_keywords_sizet_alias(
             _token_identifier_node("kwlist", referenced=kwlist_decl),
             _address_of("x", referenced=x_decl),
         )
+    )
+
+    inferred = signature_rules_module.infer_arguments_list(cursor)
+
+    assert inferred == []
+
+def test_infer_argument_lists_does_not_match_pyarg_from_single_character_name() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _call_expr("e", _identifier_node("args"))
     )
 
     inferred = signature_rules_module.infer_arguments_list(cursor)

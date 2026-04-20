@@ -44,16 +44,6 @@ from .rules import (
     PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE,
 )
 
-_PYARG_PARSETUPLE_CALL_NAMES = {
-    "PyArg_ParseTuple",
-    "_PyArg_ParseTuple_SizeT",
-}
-
-_PYARG_PARSETUPLE_AND_KEYWORDS_CALL_NAMES = {
-    "PyArg_ParseTupleAndKeywords",
-    "_PyArg_ParseTupleAndKeywords_SizeT",
-}
-
 _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_NoneStruct": "None",
     "_Py_TrueStruct": "True",
@@ -156,9 +146,9 @@ class Inferencer:
 
             call_name = ast_utils.get_first_token_str(call_expr)
             try:
-                if call_name in "PyArg_ParseTuple":
+                if call_name == "PyArg_ParseTuple":
                     arguments_list.append(self._infer_pyarg_parse_tuple_arguments(call_expr))
-                elif call_name in "PyArg_ParseTupleAndKeywords":
+                elif call_name == "PyArg_ParseTupleAndKeywords":
                     arguments_list.append(self._infer_pyarg_parse_tuple_and_keywords_arguments(call_expr))
             except Exception as ex:
                 logger.warning(
