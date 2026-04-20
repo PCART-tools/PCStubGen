@@ -197,8 +197,7 @@ class PyBuildValueTypeParser:
             return self._infer_object_type_func(cursor)
         except Exception as ex:
             logger.warning(
-                "Py_BuildValue 对象类型推断失败，回退为 Any, reason: {}: {}",
-                type(ex).__name__,
+                "Py_BuildValue 对象类型推断失败，回退为 Any, reason: {!r}",
                 ex,
             )
             return AnyType()

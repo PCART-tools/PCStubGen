@@ -55,7 +55,7 @@ class SignatureCompleter:
                 return result
 
         except Exception as ex:
-            reason = f"{type(ex).__name__}: {ex}"
+            reason = f"{ex!r}"
 
         self.summary.failed += 1
         result = self._minimal_provider.get(context)

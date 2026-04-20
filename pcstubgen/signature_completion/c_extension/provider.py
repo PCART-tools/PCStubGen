@@ -9,7 +9,6 @@ from . import dladdr, dwarfdump
 from .libclang import ast_utils
 from .libclang.parser import ClangParser
 from .signatures.inferencer import Inferencer
-from .. import producers
 from ..completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,

@@ -162,10 +162,9 @@ class Inferencer:
                     arguments_list.append(self._infer_pyarg_parse_tuple_and_keywords_arguments(call_expr))
             except Exception as ex:
                 logger.warning(
-                    "跳过无法推断的 PyArg 参数列表, func_name: {}, call_name: {}, reason: {}: {}",
+                    "跳过无法推断的 PyArg 参数列表, func_name: {}, call_name: {}, reason: {!r}",
                     self._func_cursor.spelling,
                     call_name,
-                    type(ex).__name__,
                     ex,
                 )
 
@@ -187,9 +186,8 @@ class Inferencer:
                 return_type_list.append(self._infer_expr_type(return_expr))
             except Exception as ex:
                 logger.warning(
-                    "跳过无法推断的 return 表达式, func_name: {}, reason: {}: {}",
+                    "跳过无法推断的 return 表达式, func_name: {}, reason: {!r}",
                     self._func_cursor.spelling,
-                    type(ex).__name__,
                     ex,
                 )
 
@@ -268,8 +266,7 @@ class Inferencer:
                 branch_types.append(self._infer_expr_type(branch))
             except Exception as ex:
                 logger.warning(
-                    "跳过无法推断的条件分支表达式, reason: {}: {}",
-                    type(ex).__name__,
+                    "跳过无法推断的条件分支表达式, reason: {!r}",
                     ex,
                 )
         return UnionType(tuple(branch_types))

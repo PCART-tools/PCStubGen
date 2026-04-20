@@ -211,8 +211,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
             return self._infer_type_object_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTupleAndKeywords 类型对象推断失败，回退为 object, reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTupleAndKeywords 类型对象推断失败，回退为 object, reason: {!r}",
                 ex,
             )
             return RawType("object")
@@ -223,8 +222,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
             return self._infer_converter_type_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTupleAndKeywords converter 类型推断失败，回退为 object, reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTupleAndKeywords converter 类型推断失败，回退为 object, reason: {!r}",
                 ex,
             )
             return RawType("object")
@@ -235,8 +233,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
             return self._infer_default_value_func(cursor, expected_type)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: {!r}",
                 ex,
             )
             return "..."

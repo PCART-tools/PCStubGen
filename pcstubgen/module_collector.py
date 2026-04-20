@@ -58,8 +58,10 @@ class ModuleCollector:
             for submodule_name in self._iter_submodule_names(module):
                 try:
                     sub_module = importlib.import_module(submodule_name)
-                except (Exception, SystemExit) as ex:
-                    """子模块导入失败时跳过；SystemExit 用于兼容 import 时调用 sys.exit 的包。"""
+                except (KeyboardInterrupt, GeneratorExit):
+                    raise
+                except BaseException as ex:
+                    """子模块导入失败时跳过，只能用BaseException，有些第三方库的异常直接继承BaseException"""
                     logger.error(
                         "模块导入失败, 安装可能获得更完整的存根. module: {}, error: {!r}",
                         submodule_name,

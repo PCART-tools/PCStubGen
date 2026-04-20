@@ -54,8 +54,7 @@ class _ScalarParsedValue(_ParsedValue):
             return infer_default_value_func(self.default_value_cursor, self.type)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: {!r}",
                 ex,
             )
             return "..."
@@ -252,8 +251,7 @@ class PyArgParseTupleTypeParser:
             return self._infer_type_object_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTuple 类型对象推断失败，回退为 object, reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTuple 类型对象推断失败，回退为 object, reason: {!r}",
                 ex,
             )
             return RawType("object")
@@ -264,8 +262,7 @@ class PyArgParseTupleTypeParser:
             return self._infer_converter_type_func(cursor)
         except Exception as ex:
             logger.warning(
-                "PyArg_ParseTuple converter 类型推断失败，回退为 object, reason: {}: {}",
-                type(ex).__name__,
+                "PyArg_ParseTuple converter 类型推断失败，回退为 object, reason: {!r}",
                 ex,
             )
             return RawType("object")
