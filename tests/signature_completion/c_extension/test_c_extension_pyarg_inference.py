@@ -60,6 +60,10 @@ def _infer_varargs_keywords_arguments(cursor: clang.cindex.Cursor) -> list[list[
     )
 
 
+def _typing_literal(text: str) -> RawType:
+    return RawType(f"typing.Literal[{text}]", imports=("typing",))
+
+
 def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     count_decl = _var_decl("count", _int_literal("1"))
     label_decl = _var_decl("label", _identifier_node("Py_None"))
@@ -820,6 +824,109 @@ def test_infer_converter_type_for_pyarg_reads_tuple_converter_name_from_extent_s
 
     assert inferred is not None
     assert inferred.render() == "tuple[int, ...]"
+
+
+@pytest.mark.parametrize(
+    ("converter_name", "expected"),
+    [
+        (
+            "PyArray_OutputConverter",
+            UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType("None"))),
+        ),
+        (
+            "PyArray_AxisConverter",
+            UnionType((RawType("int"), RawType("None"))),
+        ),
+        ("PyArray_BoolConverter", RawType("bool")),
+        (
+            "PyArray_OptionalBoolConverter",
+            UnionType((RawType("bool"), RawType("None"))),
+        ),
+        (
+            "PyArray_OrderConverter",
+            UnionType((_typing_literal('"K", "A", "C", "F"'), RawType("None"))),
+        ),
+        (
+            "PyArray_ByteorderConverter",
+            _typing_literal('"S", "<", "L", "little", ">", "B", "big", "=", "N", "native", "|", "I"'),
+        ),
+        (
+            "PyArray_CastingConverter",
+            _typing_literal('"no", "equiv", "safe", "same_kind", "unsafe"'),
+        ),
+        (
+            "PyArray_SearchsideConverter",
+            _typing_literal('"left", "right"'),
+        ),
+        (
+            "PyArray_SelectkindConverter",
+            _typing_literal('"introselect"'),
+        ),
+        (
+            "PyArray_SortkindConverter",
+            _typing_literal('"Q", "quick", "quicksort", "M", "merge", "mergesort", "H", "heap", "heapsort", "S", "stable", "stablesort"'),
+        ),
+        (
+            "PyArray_ClipmodeConverter",
+            UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType("int"))),
+        ),
+    ],
+)
+def test_infer_argument_lists_maps_numpy_low_risk_converters(
+    converter_name: str,
+    expected: RawType | UnionType,
+) -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O&"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+                extent=converter_name,
+            ),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", expected)]]
+
+
+@pytest.mark.parametrize(
+    ("type_object_name", "expected"),
+    [
+        ("PyArrayDescr_Type", RawType("numpy.dtype", imports=("numpy",))),
+        (
+            "NpyBusDayCalendar_Type",
+            RawType("numpy.busdaycalendar", imports=("numpy",)),
+        ),
+        ("PyUFunc_Type", RawType("numpy.ufunc", imports=("numpy",))),
+    ],
+)
+def test_infer_argument_lists_maps_numpy_low_risk_type_objects(
+    type_object_name: str,
+    expected: RawType,
+) -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O!"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+                extent=f"&{type_object_name}",
+            ),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", expected)]]
 
 def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
     tmp_path: Path,
