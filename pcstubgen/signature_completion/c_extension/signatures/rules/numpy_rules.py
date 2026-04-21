@@ -12,12 +12,21 @@ from ...libclang.ast_utils import get_string_literal, is_nullptr_or_zero, unwrap
 _NDARRAY_TYPE = RawType("numpy.ndarray", imports=("numpy",))
 _NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType("None")))
 _DTYPE_TYPE = RawType("numpy.dtype", imports=("numpy",))
+_DTYPE_META_TYPE = RawType("type[numpy.dtype]", imports=("numpy",))
+_DTYPE_LIKE_TYPE = RawType("numpy.typing.DTypeLike", imports=("numpy.typing",))
+_DTYPE_LIKE_OR_NONE_TYPE = UnionType((_DTYPE_LIKE_TYPE, RawType("None")))
+_ARRAY_LIKE_TYPE = RawType("numpy.typing.ArrayLike", imports=("numpy.typing",))
+_ARRAY_LIKE_OR_NONE_TYPE = UnionType((_ARRAY_LIKE_TYPE, RawType("None")))
 _BUSDAYCALENDAR_TYPE = RawType("numpy.busdaycalendar", imports=("numpy",))
 _UFUNC_TYPE = RawType("numpy.ufunc", imports=("numpy",))
 _LIST_TYPE = RawType("list")
 _BYTES_TYPE = RawType("bytes")
 _INT_OR_NONE_TYPE = UnionType((RawType("int"), RawType("None")))
 _BOOL_OR_NONE_TYPE = UnionType((RawType("bool"), RawType("None")))
+_INTP_TYPE = RawType("int")
+_INTP_OR_SHAPE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]")))
+_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]"), RawType("None")))
+_SEQUENCE_STR_TYPE = RawType("collections.abc.Sequence[str]", imports=("collections.abc",))
 _ORDER_TYPE = RawType(
     'typing.Literal["K", "A", "C", "F"]',
     imports=("typing",),
@@ -29,6 +38,10 @@ _BYTEORDER_TYPE = RawType(
 )
 _CASTING_TYPE = RawType(
     'typing.Literal["no", "equiv", "safe", "same_kind", "unsafe"]',
+    imports=("typing",),
+)
+_CASTING_WITH_SAME_VALUE_TYPE = RawType(
+    'typing.Literal["no", "equiv", "safe", "same_kind", "same_value", "unsafe"]',
     imports=("typing",),
 )
 _SEARCHSIDE_TYPE = RawType(
@@ -48,10 +61,41 @@ _CLIPMODE_STRING_TYPE = RawType(
     imports=("typing",),
 )
 _CLIPMODE_TYPE = UnionType((_CLIPMODE_STRING_TYPE, RawType("int")))
+_CORRELATEMODE_TYPE = RawType(
+    'typing.Literal["valid", "same", "full"]',
+    imports=("typing",),
+)
+_COPY_MODE_TYPE = UnionType(
+    (
+        RawType("bool"),
+        RawType('typing.Literal[False, True, 2]', imports=("typing",)),
+        RawType("None"),
+    )
+)
+_DEVICE_TYPE = RawType('typing.Literal["cpu"] | None', imports=("typing",))
+_ERRMODE_TYPE = RawType(
+    'typing.Literal["ignore", "warn", "raise", "call", "print", "log"] | None',
+    imports=("typing",),
+)
+_TRIMMODE_TYPE = RawType(
+    'typing.Literal["k", ".", "0", "-"]',
+    imports=("typing",),
+)
+_PYSCALAR_MODE_TYPE = RawType(
+    'typing.Literal["convert", "preserve", "convert_if_no_array"]',
+    imports=("typing",),
+)
+_BUSDAY_ROLL_TYPE = RawType(
+    'typing.Literal["raise", "nat", "forward", "following", "backward", "preceding", "modifiedfollowing", "modifiedpreceding"]',
+    imports=("typing",),
+)
+_DLPACK_DEVICE_TYPE = RawType("tuple[int, int] | None")
+_STR_OR_NONE_TYPE = UnionType((RawType("str"), RawType("None")))
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_Type": _NDARRAY_TYPE,
     "PyArrayDescr_Type": _DTYPE_TYPE,
+    "PyArrayDTypeMeta_Type": _DTYPE_META_TYPE,
     "NpyBusDayCalendar_Type": _BUSDAYCALENDAR_TYPE,
     "PyUFunc_Type": _UFUNC_TYPE,
 }
@@ -62,18 +106,40 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
     "NI_ObjectToInputOutputArray": _NDARRAY_TYPE,
     "NI_ObjectToOptionalInputArray": _NDARRAY_OR_NONE_TYPE,
     "NI_ObjectToOptionalOutputArray": _NDARRAY_OR_NONE_TYPE,
-    "PyArray_IntpConverter": RawType("tuple[int, ...]"),
+    "PyArray_IntpConverter": _INTP_OR_SHAPE_TYPE,
+    "PyArray_IntpFromPyIntConverter": _INTP_TYPE,
+    "PyArray_OptionalIntpConverter": _INTP_OR_SHAPE_OR_NONE_TYPE,
     "PyArray_OutputConverter": _NDARRAY_OR_NONE_TYPE,
+    "PyArray_Converter": _ARRAY_LIKE_TYPE,
     "PyArray_AxisConverter": _INT_OR_NONE_TYPE,
     "PyArray_BoolConverter": RawType("bool"),
     "PyArray_OptionalBoolConverter": _BOOL_OR_NONE_TYPE,
     "PyArray_OrderConverter": _ORDER_OR_NONE_TYPE,
     "PyArray_ByteorderConverter": _BYTEORDER_TYPE,
     "PyArray_CastingConverter": _CASTING_TYPE,
+    "PyArray_CastingConverterSameValue": _CASTING_WITH_SAME_VALUE_TYPE,
     "PyArray_SearchsideConverter": _SEARCHSIDE_TYPE,
     "PyArray_SelectkindConverter": _SELECTKIND_TYPE,
     "PyArray_SortkindConverter": _SORTKIND_TYPE,
     "PyArray_ClipmodeConverter": _CLIPMODE_TYPE,
+    "PyArray_CorrelatemodeConverter": _CORRELATEMODE_TYPE,
+    "PyArray_CopyConverter": _COPY_MODE_TYPE,
+    "PyArray_AsTypeCopyConverter": RawType("bool"),
+    "PyArray_DeviceConverterOptional": _DEVICE_TYPE,
+    "PyArray_PythonPyIntFromInt": RawType("int"),
+    "PyArray_DTypeOrDescrConverterRequired": _DTYPE_LIKE_TYPE,
+    "PyArray_DTypeOrDescrConverterOptional": _DTYPE_LIKE_OR_NONE_TYPE,
+    "PyArray_DescrConverter": _DTYPE_LIKE_TYPE,
+    "PyArray_DescrConverter2": _DTYPE_LIKE_OR_NONE_TYPE,
+    "PyArray_WeekMaskConverter": _ARRAY_LIKE_TYPE,
+    "PyArray_HolidaysConverter": _ARRAY_LIKE_OR_NONE_TYPE,
+    "PyArray_BusDayRollConverter": _BUSDAY_ROLL_TYPE,
+    "device_converter": _DLPACK_DEVICE_TYPE,
+    "parse_control_character": _STR_OR_NONE_TYPE,
+    "NpyIter_GlobalFlagsConverter": _SEQUENCE_STR_TYPE,
+    "errmodeconverter": _ERRMODE_TYPE,
+    "trimmode_converter": _TRIMMODE_TYPE,
+    "pyscalar_mode_conv": _PYSCALAR_MODE_TYPE,
 }
 
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {}

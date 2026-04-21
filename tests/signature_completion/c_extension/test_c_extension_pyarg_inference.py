@@ -64,6 +64,10 @@ def _typing_literal(text: str) -> RawType:
     return RawType(f"typing.Literal[{text}]", imports=("typing",))
 
 
+def _numpy_typing_type(name: str) -> RawType:
+    return RawType(f"numpy.typing.{name}", imports=("numpy.typing",))
+
+
 def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
     count_decl = _var_decl("count", _int_literal("1"))
     label_decl = _var_decl("label", _identifier_node("Py_None"))
@@ -725,8 +729,22 @@ def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_err
             "tuple_converter_from_extent.c",
             "PyArg_ParseTuple(args, \"O&\", PyArray_IntpConverter, &value);",
             "PyArray_IntpConverter",
-            "tuple[int, ...]",
+            "int | tuple[int, ...]",
             set(),
+        ),
+        (
+            "dtype_like_converter_from_extent.c",
+            "PyArg_ParseTuple(args, \"O&\", PyArray_DescrConverter2, &value);",
+            "PyArray_DescrConverter2",
+            "numpy.typing.DTypeLike | None",
+            {"numpy.typing"},
+        ),
+        (
+            "sequence_converter_from_extent.c",
+            "PyArg_ParseTuple(args, \"O&\", NpyIter_GlobalFlagsConverter, &value);",
+            "NpyIter_GlobalFlagsConverter",
+            "collections.abc.Sequence[str]",
+            {"collections.abc"},
         ),
     ],
 )
@@ -766,6 +784,22 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
             UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType("None"))),
         ),
         ("PyArray_BoolConverter", RawType("bool")),
+        (
+            "PyArray_IntpConverter",
+            UnionType((RawType("int"), RawType("tuple[int, ...]"))),
+        ),
+        (
+            "PyArray_DescrConverter2",
+            UnionType((_numpy_typing_type("DTypeLike"), RawType("None"))),
+        ),
+        (
+            "PyArray_CopyConverter",
+            UnionType((RawType("bool"), _typing_literal("False, True, 2"), RawType("None"))),
+        ),
+        (
+            "NpyIter_GlobalFlagsConverter",
+            RawType("collections.abc.Sequence[str]", imports=("collections.abc",)),
+        ),
         (
             "PyArray_ClipmodeConverter",
             UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType("int"))),
@@ -814,6 +848,122 @@ def test_infer_argument_lists_maps_representative_numpy_type_object() -> None:
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("value", expected)]]
+
+
+def test_infer_argument_lists_maps_representative_numpy_dtype_meta_type_object() -> None:
+    expected = RawType("type[numpy.dtype]", imports=("numpy",))
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O!"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+                extent="&PyArrayDTypeMeta_Type",
+            ),
+            _address_of("value", referenced=value_decl),
+        )
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", expected)]]
+
+
+def test_infer_argument_lists_maps_numpy_business_day_converters_for_keywords() -> None:
+    kwlist_decl = _var_decl(
+        "kwlist",
+        _init_list(
+            _string_literal("roll"),
+            _string_literal("weekmask"),
+            _string_literal("holidays"),
+            _null_ptr_literal(),
+        ),
+    )
+    roll_decl = _var_decl("roll")
+    weekmask_decl = _var_decl("weekmask")
+    holidays_decl = _var_decl("holidays")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("|O&O&O&"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_BusDayRollConverter"),
+            _address_of("roll", referenced=roll_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_WeekMaskConverter"),
+            _address_of("weekmask", referenced=weekmask_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_HolidaysConverter"),
+            _address_of("holidays", referenced=holidays_decl),
+        )
+    )
+
+    inferred = _infer_varargs_keywords_arguments(cursor)
+
+    assert inferred == [[
+        _arg(
+            "roll",
+            _typing_literal('"raise", "nat", "forward", "following", "backward", "preceding", "modifiedfollowing", "modifiedpreceding"'),
+            default_value="...",
+        ),
+        _arg("weekmask", _numpy_typing_type("ArrayLike"), default_value="..."),
+        _arg(
+            "holidays",
+            UnionType((_numpy_typing_type("ArrayLike"), RawType("None"))),
+            default_value="...",
+        ),
+    ]]
+
+
+def test_infer_argument_lists_maps_numpy_internal_string_converters_for_keywords() -> None:
+    kwlist_decl = _var_decl(
+        "kwlist",
+        _init_list(
+            _string_literal("all"),
+            _string_literal("trim"),
+            _string_literal("pyscalars"),
+            _null_ptr_literal(),
+        ),
+    )
+    all_decl = _var_decl("all")
+    trim_decl = _var_decl("trim")
+    pyscalars_decl = _var_decl("pyscalars")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("|O&O&O&"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="errmodeconverter"),
+            _address_of("all", referenced=all_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="trimmode_converter"),
+            _address_of("trim", referenced=trim_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="pyscalar_mode_conv"),
+            _address_of("pyscalars", referenced=pyscalars_decl),
+        )
+    )
+
+    inferred = _infer_varargs_keywords_arguments(cursor)
+
+    assert inferred == [[
+        _arg(
+            "all",
+            RawType(
+                'typing.Literal["ignore", "warn", "raise", "call", "print", "log"] | None',
+                imports=("typing",),
+            ),
+            default_value="...",
+        ),
+        _arg("trim", _typing_literal('"k", ".", "0", "-"'), default_value="..."),
+        _arg(
+            "pyscalars",
+            _typing_literal('"convert", "preserve", "convert_if_no_array"'),
+            default_value="...",
+        ),
+    ]]
 
 def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
     tmp_path: Path,

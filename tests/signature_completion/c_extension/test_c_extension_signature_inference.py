@@ -444,7 +444,7 @@ def test_infer_signature_uses_npy_parse_arguments_with_macro_expanded_cache(
     assert inferred == [
         Signature(
             args=[
-                _arg("shape", "tuple[int, ...]"),
+                _arg("shape", UnionType((RawType("int"), RawType("tuple[int, ...]")))),
                 _arg("order", "bool", default_value="False"),
             ],
             return_type=RawType("int"),
@@ -556,6 +556,297 @@ def test_infer_signature_accepts_renamed_npy_parse_arguments_inputs() -> None:
     assert inferred == [
         Signature(
             args=[_arg("self"), _arg("value", "object")],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_maps_numpy_array_like_dtype_and_copy_converters() -> None:
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0)
+    prototype_decl = _var_decl("prototype")
+    dt_info_decl = _var_decl("dt_info", _init_list(_null_ptr_literal(), _null_ptr_literal()))
+    subok_decl = _var_decl("subok", _int_literal("0"))
+    subok_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    shape_decl = _var_decl("shape")
+    device_decl = _var_decl("device", _identifier_node("NPY_DEVICE_CPU"))
+    device_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("array"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _identifier_node("kwnames"),
+            _string_literal("prototype"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_Converter"),
+            _address_of("prototype", referenced=prototype_decl),
+            _string_literal("|dtype"),
+            _FakeNode(
+                kind=clang.cindex.CursorKind.DECL_REF_EXPR,
+                extent="PyArray_DTypeOrDescrConverterOptional",
+            ),
+            _address_of("dt_info", referenced=dt_info_decl),
+            _string_literal("|subok"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_PythonPyIntFromInt"),
+            _address_of("subok", referenced=subok_decl),
+            _string_literal("|shape"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_OptionalIntpConverter"),
+            _address_of("shape", referenced=shape_decl),
+            _string_literal("$device"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_DeviceConverterOptional"),
+            _address_of("device", referenced=device_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    try:
+        inferred = signature_rules_module.infer_signature(
+            cursor,
+            flags=METH_FASTCALL | METH_KEYWORDS,
+            is_method=False,
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("prototype", RawType("numpy.typing.ArrayLike", imports=("numpy.typing",))),
+                _arg(
+                    "dtype",
+                    UnionType((RawType("numpy.typing.DTypeLike", imports=("numpy.typing",)), RawType("None"))),
+                    default_value="...",
+                ),
+                _arg("subok", "int", default_value="0"),
+                _arg(
+                    "shape",
+                    UnionType((RawType("int"), RawType("tuple[int, ...]"), RawType("None"))),
+                    default_value="...",
+                ),
+                _arg(
+                    "device",
+                    RawType('typing.Literal["cpu"] | None', imports=("typing",)),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+            ],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_maps_numpy_copy_converter_and_int_defaults() -> None:
+    copy_decl = _var_decl("copy", _int_literal("1"))
+    copy_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    ndmin_decl = _var_decl("ndmin", _int_literal("0"))
+    ndmin_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    ndmax_decl = _var_decl("ndmax", _int_literal("64"))
+    ndmax_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("array"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _identifier_node("kwnames"),
+            _string_literal("$copy"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_CopyConverter"),
+            _address_of("copy", referenced=copy_decl),
+            _string_literal("$ndmin"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_PythonPyIntFromInt"),
+            _address_of("ndmin", referenced=ndmin_decl),
+            _string_literal("$ndmax"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_PythonPyIntFromInt"),
+            _address_of("ndmax", referenced=ndmax_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_FASTCALL | METH_KEYWORDS,
+        is_method=False,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg(
+                    "copy",
+                    UnionType((RawType("bool"), RawType('typing.Literal[False, True, 2]', imports=("typing",)), RawType("None"))),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+                _arg("ndmin", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
+                _arg("ndmax", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
+            ],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_maps_numpy_business_day_converters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0)
+    kwlist_decl = _var_decl(
+        "kwlist",
+        _init_list(
+            _string_literal("dates"),
+            _string_literal("offsets"),
+            _string_literal("roll"),
+            _string_literal("weekmask"),
+            _string_literal("holidays"),
+            _null_ptr_literal(),
+        ),
+    )
+    roll_decl = _var_decl("roll", _identifier_node("NPY_BUSDAY_RAISE"))
+    weekmask_decl = _var_decl("weekmask")
+    holidays_decl = _var_decl("holidays", _null_ptr_literal())
+    holidays_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("OO|O&O&O&:busday_offset"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _identifier_node("dates_in"),
+            _identifier_node("offsets_in"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_BusDayRollConverter"),
+            _address_of("roll", referenced=roll_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_WeekMaskConverter"),
+            _address_of("weekmask", referenced=weekmask_decl),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_HolidaysConverter"),
+            _address_of("holidays", referenced=holidays_decl),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_VARARGS | METH_KEYWORDS,
+        is_method=False,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("dates", "object"),
+                _arg("offsets", "object"),
+                _arg(
+                    "roll",
+                    RawType(
+                        'typing.Literal["raise", "nat", "forward", "following", "backward", "preceding", "modifiedfollowing", "modifiedpreceding"]',
+                        imports=("typing",),
+                    ),
+                    default_value="...",
+                ),
+                _arg("weekmask", RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), default_value="..."),
+                _arg(
+                    "holidays",
+                    UnionType((RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), RawType("None"))),
+                    default_value="...",
+                ),
+            ],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_maps_numpy_trim_converter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0)
+    trim_decl = _var_decl("trim")
+    trim_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("format_float_positional"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _identifier_node("kwnames"),
+            _string_literal("|trim"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="trimmode_converter"),
+            _address_of("trim", referenced=trim_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_FASTCALL | METH_KEYWORDS,
+        is_method=False,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg(
+                    "trim",
+                    RawType('typing.Literal["k", ".", "0", "-"]', imports=("typing",)),
+                    default_value="...",
+                ),
+            ],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_maps_numpy_errmode_converter() -> None:
+    all_mode_decl = _var_decl("all_mode", _int_literal("-1"))
+    all_mode_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("_seterrobj"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _identifier_node("kwnames"),
+            _string_literal("$all"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="errmodeconverter"),
+            _address_of("all_mode", referenced=all_mode_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_FASTCALL | METH_KEYWORDS,
+        is_method=False,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg(
+                    "all",
+                    RawType(
+                        'typing.Literal["ignore", "warn", "raise", "call", "print", "log"] | None',
+                        imports=("typing",),
+                    ),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+            ],
             return_type=RawType("int"),
         )
     ]
