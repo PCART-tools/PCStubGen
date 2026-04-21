@@ -75,6 +75,13 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_Arange": _NDARRAY_TYPE,
     "PyArray_SimpleNew": _NDARRAY_TYPE,
     "PyArray_FROMANY": _NDARRAY_TYPE,
+    "PyArray_Empty_int": _NDARRAY_TYPE,
+    "PyArray_FromBuffer": _NDARRAY_TYPE,
+    "PyArray_FromString": _NDARRAY_TYPE,
+    "PyArray_FromIter": _NDARRAY_TYPE,
+    "PyArray_Where": _NDARRAY_TYPE,
+    "PyArray_DescrNewByteorder": _DTYPE_TYPE,
+    "pylong_from_int128": RawType("int"),
     "PyArray_Return": UnionType(
         (
             RawType("numpy.ndarray", imports=("numpy",)),

@@ -41,7 +41,7 @@ FUNCTION_DECL_CONTEXT_KINDS = {
 }
 
 def to_str(cursor: Cursor) -> str:
-    return f"kind: {cursor.kind}, location: {cursor.location}"
+    return f"spelling: {cursor.spelling}, kind: {cursor.kind}, location: {cursor.location}"
 
 
 def unwrap_transparent(cursor: Cursor) -> Cursor:
@@ -108,11 +108,10 @@ def try_get_decl_initializer(cursor: Cursor) -> Cursor | None:
     return initializer
 
 
-def unwrap_addr_of(cursor: Cursor) -> Cursor:
-    """剥离透明包装和一层取地址节点，定位到底层目标。"""
+def unwrap_single_unary_op(cursor: Cursor) -> Cursor:
+    """剥离透明包装和一层UNARY_OPERATOR节点，定位到底层目标。"""
     cursor = unwrap_transparent(cursor)
-    tokens = list(cursor.get_tokens())
-    if cursor.kind == CursorKind.UNARY_OPERATOR and tokens and tokens[0].spelling == "&":
+    if cursor.kind == CursorKind.UNARY_OPERATOR:
         children = list(cursor.get_children())
         cursor = unwrap_transparent(children[0])
     return cursor

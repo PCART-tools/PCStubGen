@@ -50,6 +50,7 @@ ERROR_RETURN_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
 CALL_NAME_TO_TYPE: dict[str, Type] = {
     **ERROR_RETURN_FUNCTION_NAME_TO_TYPE,
     "PyCapsule_New": RawType("types.CapsuleType", imports=("types",)),
+    "Py_GenericAlias": RawType("types.GenericAlias", imports=("types",)),
     "PyBool_FromLong": RawType("bool"),
     "PyLong_FromLong": RawType("int"),
     "PyLong_FromUnsignedLong": RawType("int"),

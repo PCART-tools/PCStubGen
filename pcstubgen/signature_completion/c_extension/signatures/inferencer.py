@@ -227,29 +227,30 @@ class Inferencer:
             ),
         ).parse()
 
-    def _infer_expr_type(self, expr: Cursor) -> Type:
+    def _infer_expr_type(self, cursor: Cursor) -> Type:
         """对单个表达式做 Python 类型推断。"""
-        expr = unwrap_transparent(expr)
+        cursor = unwrap_transparent(cursor)
 
-        if expr.kind == CursorKind.CONDITIONAL_OPERATOR:
-            return self._infer_conditional_operator_type(expr)
+        if cursor.kind == CursorKind.CONDITIONAL_OPERATOR:
+            return self._infer_conditional_operator_type(cursor)
 
-        if expr.kind == CursorKind.CALL_EXPR:
-            return self._infer_call_expr_type(expr)
+        if cursor.kind == CursorKind.CALL_EXPR:
+            return self._infer_call_expr_type(cursor)
 
-        if expr.kind == CursorKind.DECL_REF_EXPR:
-            return self._infer_decl_ref_expr_type(expr)
+        if cursor.kind == CursorKind.DECL_REF_EXPR:
+            return self._infer_decl_ref_expr_type(cursor)
 
-        if expr.kind == CursorKind.UNARY_OPERATOR:
-            child = ast_utils.unwrap_addr_of(expr)
+        if cursor.kind == CursorKind.UNARY_OPERATOR:
+            """可能是取地址符&"""
+            child = ast_utils.unwrap_single_unary_op(cursor)
             if child.kind == CursorKind.DECL_REF_EXPR:
                 return self._infer_decl_ref_expr_type(child)
 
-        if is_nullptr_or_zero(expr):
+        if is_nullptr_or_zero(cursor):
             """return NULL异常返回分支 union后就不存在了"""
             return UnionType(())
 
-        raise RuntimeError(f"不支持的表达式类型: {expr.kind.name}, cursor: {expr.location}")
+        raise RuntimeError(f"不支持的表达式类型: {cursor.kind.name}, cursor: {ast_utils.to_str(cursor)}")
 
     def _infer_conditional_operator_type(self, op_cursor: Cursor) -> Type:
         """推断标准三元表达式 `cond ? a : b` 的结果类型。"""
@@ -261,32 +262,29 @@ class Inferencer:
             try:
                 branch_types.append(self._infer_expr_type(branch))
             except Exception as ex:
-                logger.warning(
-                    "跳过无法推断的条件分支表达式, reason: {!r}",
-                    ex,
-                )
+                logger.warning("跳过无法推断的条件分支表达式, reason: {!r}", ex)
         return UnionType(tuple(branch_types))
 
-    def _infer_decl_ref_expr_type(self, expr_cursor: Cursor) -> Type:
+    def _infer_decl_ref_expr_type(self, cursor: Cursor) -> Type:
         """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
-        assert expr_cursor.kind == CursorKind.DECL_REF_EXPR
+        assert cursor.kind == CursorKind.DECL_REF_EXPR
 
-        identifier_name = expr_cursor.spelling
+        identifier_name = cursor.spelling
         mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
         if mapped is not None:
             return mapped
         try:
-            return self._infer_decl_ref_expr_reaching_definition_type(expr_cursor)
+            return self._infer_decl_ref_expr_reaching_definition_type(cursor)
         except RuntimeError as ex:
             raise RuntimeError(
-                f"无法识别的对象返回标识符: {identifier_name}, cursor: {expr_cursor.location}"
+                f"无法识别的对象返回标识符: {identifier_name}, cursor: {ast_utils.to_str(cursor)}"
             ) from ex
 
-    def _infer_decl_ref_expr_reaching_definition_type(self, expr_cursor: Cursor) -> Type:
+    def _infer_decl_ref_expr_reaching_definition_type(self, cursor: Cursor) -> Type:
         """从函数内局部变量的定值表达式中推断 `DECL_REF_EXPR` 类型。"""
-        ret = self._get_decl_ref_expr_reaching_definition_cursor(expr_cursor)
+        ret = self._get_decl_ref_expr_reaching_definition_cursor(cursor)
         if is_nullptr_or_zero(ret):
-            raise RuntimeError(f"局部变量没有可用定值表达式: {expr_cursor.spelling}")
+            raise RuntimeError(f"局部变量没有可用定值表达式: {ast_utils.to_str(cursor)}")
         return self._infer_expr_type(ret).canonicalize()
 
     def _infer_call_expr_type(self, cursor: Cursor) -> Type:
@@ -305,7 +303,7 @@ class Inferencer:
         mapped = CALL_NAME_TO_TYPE.get(call_name)
         if mapped is None:
             raise RuntimeError(
-                f"无法识别的返回值工厂调用: {call_name}, cursor: {cursor.location}"
+                f"无法识别的返回值工厂调用: {call_name}, cursor: {ast_utils.to_str(cursor)}"
             )
         return mapped
 
@@ -330,7 +328,7 @@ class Inferencer:
         names: list[str] = []
         seen_names: set[str] = set()
         for arg in c_args:
-            arg = ast_utils.unwrap_addr_of(arg)
+            arg = ast_utils.unwrap_single_unary_op(arg)
             if arg.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
                 arg = unwrap_transparent(list(arg.get_children())[0])
             if arg.spelling in seen_names:
@@ -346,13 +344,13 @@ class Inferencer:
         match = IDENTIFIER_RE.search(source_text)
         if match is None:
             raise RuntimeError(
-                f"类型对象槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
+                f"类型对象槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
             )
         type_name = match.group(0)
         mapped = PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
         if mapped is None:
             raise RuntimeError(
-                f"无法识别的类型对象标识符: {type_name}, source_text: {source_text!r}, cursor: {cursor.location}"
+                f"无法识别的类型对象标识符: {type_name}, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
             )
         return mapped
 
@@ -362,13 +360,13 @@ class Inferencer:
         match = IDENTIFIER_RE.search(source_text)
         if match is None:
             raise RuntimeError(
-                f"converter 槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {cursor.location}"
+                f"converter 槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
             )
         converter_name = match.group(0)
         mapped = PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE.get(converter_name)
         if mapped is None:
             raise RuntimeError(
-                f"无法识别的 converter 标识符: {converter_name}, source_text: {source_text!r}, cursor: {cursor.location}"
+                f"无法识别的 converter 标识符: {converter_name}, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
             )
         return mapped
 
@@ -378,7 +376,7 @@ class Inferencer:
         expected_type: Type,
     ) -> str:
         """从参数接收槽位的 reaching definition 解析默认值文本。"""
-        cursor = ast_utils.unwrap_addr_of(cursor)
+        cursor = ast_utils.unwrap_single_unary_op(cursor)
         if cursor.kind == CursorKind.ARRAY_SUBSCRIPT_EXPR:
             array_decl, _ = ast_utils.extract_array_subscript(cursor)
             expr = self._get_array_subscript_expr_reaching_definition(cursor)
@@ -544,7 +542,7 @@ class Inferencer:
                 ret = right
 
         if ret is None:
-            raise RuntimeError(f"声明节点没有可用定值表达式: {target_decl.spelling}")
+            raise RuntimeError(f"声明节点没有可用定值表达式: {ast_utils.to_str(target_decl)}")
         return ret
 
     def _extract_kwlist(self, cursor: Cursor) -> list[str]:

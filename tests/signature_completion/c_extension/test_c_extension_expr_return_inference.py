@@ -190,6 +190,7 @@ def test_return_type_returns_any_for_preserved_macro_tokens(token_name: str) -> 
         ("PyFrozenSet_New", "frozenset"),
         ("PyList_AsTuple", "tuple"),
         ("PyDict_Items", "list"),
+        ("Py_GenericAlias", "types.GenericAlias"),
     ],
 )
 def test_return_type_detects_exact_factory_mappings(call_name: str, expected: str) -> None:
@@ -202,6 +203,22 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
     assert inferred is not None
     assert inferred.render() == expected
 
+def test_return_type_detects_generic_alias_factory_collects_types_import() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                "Py_GenericAlias",
+                _identifier_node("cls"),
+                _identifier_node("args"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("types.GenericAlias", imports=("types",))
+    assert inferred.collect_imports() == {"types"}
+
 @pytest.mark.parametrize(
     "call_name",
     [
@@ -209,6 +226,11 @@ def test_return_type_detects_exact_factory_mappings(call_name: str, expected: st
         "PyArray_Arange",
         "PyArray_SimpleNew",
         "PyArray_FROMANY",
+        "PyArray_Empty_int",
+        "PyArray_FromBuffer",
+        "PyArray_FromString",
+        "PyArray_FromIter",
+        "PyArray_Where",
     ],
 )
 def test_infer_expr_type_detects_numpy_ndarray_factories(call_name: str) -> None:
@@ -222,6 +244,32 @@ def test_infer_expr_type_detects_numpy_ndarray_factories(call_name: str) -> None
     )
 
     assert inferred.render() == "numpy.ndarray"
+
+def test_return_type_detects_numpy_dtype_factory() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                "PyArray_DescrNewByteorder",
+                _identifier_node("descr"),
+                _identifier_node("newendian"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "numpy.dtype"
+
+def test_return_type_detects_numpy_helper_int_factory() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("pylong_from_int128", _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == "int"
 
 def test_infer_expr_type_uses_call_start_token_for_function_like_macro_call() -> None:
     call_cursor = _call_expr(

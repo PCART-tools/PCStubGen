@@ -126,7 +126,7 @@ def patch_inference_clang_helpers(
         fake_get_call_expr_source_name,
     )
 
-    real_unwrap_addr_of = target_module.ast_utils.unwrap_addr_of
+    real_unwrap_addr_of = target_module.ast_utils.unwrap_single_unary_op
 
     def fake_unwrap_addr_of(cursor: object) -> object:
         if not isinstance(cursor, _FakeNode):
