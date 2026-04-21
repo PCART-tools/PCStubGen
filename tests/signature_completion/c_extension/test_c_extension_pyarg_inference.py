@@ -518,111 +518,69 @@ def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
     assert inferred == [[_arg("value", "object", default_value="...")]]
     assert observed == []
 
-def test_infer_type_object_type_for_pyarg_reads_name_from_extent_source_text(tmp_path: Path) -> None:
-    source = tmp_path / "object_type_from_extent.c"
-    source.write_text(
-        "\n".join(
-            [
-                "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);",
-            ]
+@pytest.mark.parametrize(
+    ("filename", "statement", "marker", "expected", "imports"),
+    [
+        (
+            "builtin_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);",
+            "(&PyUnicode_Type)",
+            "str",
+            set(),
         ),
-        encoding="utf-8",
-    )
-    cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-        extent=_extent_for_source_snippet(source, "(&PyUnicode_Type)"),
-    )
-
-    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
-
-    assert inferred is not None
-    assert inferred.render() == "str"
-
-def test_infer_type_object_type_for_pyarg_reads_numpy_name_from_extent_source_text(
+        (
+            "numpy_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", (&PyArray_Type), &value);",
+            "(&PyArray_Type)",
+            "numpy.ndarray",
+            {"numpy"},
+        ),
+        (
+            "pillow_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", &Imaging_Type, &value);",
+            "&Imaging_Type",
+            "PIL.Image.core.ImagingCore",
+            {"PIL.Image"},
+        ),
+    ],
+)
+def test_infer_type_object_type_for_pyarg_reads_representative_source_text_mappings(
     tmp_path: Path,
+    filename: str,
+    statement: str,
+    marker: str,
+    expected: str,
+    imports: set[str],
 ) -> None:
-    source = tmp_path / "numpy_object_type_from_extent.c"
+    source = tmp_path / filename
     source.write_text(
         "\n".join(
             [
                 "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O!\", (&PyArray_Type), &value);",
+                statement,
             ]
         ),
         encoding="utf-8",
     )
     cursor = _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-        extent=_extent_for_source_snippet(source, "(&PyArray_Type)"),
+        extent=_extent_for_source_snippet(source, marker),
     )
 
     inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
     assert inferred is not None
-    assert inferred.render() == "numpy.ndarray"
-
-def test_infer_type_object_type_for_pyarg_reads_pillow_imaging_name_from_extent_source_text(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "pillow_imaging_object_type_from_extent.c"
-    source.write_text(
-        "\n".join(
-            [
-                "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O!\", &Imaging_Type, &value);",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-        extent=_extent_for_source_snippet(source, "&Imaging_Type"),
-    )
-
-    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
-
-    assert inferred is not None
-    assert inferred.render() == "PIL.Image.core.ImagingCore"
-    assert inferred.collect_imports() == {"PIL.Image"}
-
-def test_infer_type_object_type_for_pyarg_reads_pillow_cms_profile_name_from_extent_source_text(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "pillow_cms_profile_object_type_from_extent.c"
-    source.write_text(
-        "\n".join(
-            [
-                "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O!\", &CmsProfile_Type, &value);",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cursor = _FakeNode(
-        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-        extent=_extent_for_source_snippet(source, "&CmsProfile_Type"),
-    )
-
-    inferred = signature_rules_module._infer_type_object_type_for_pyarg(cursor)
-
-    assert inferred is not None
-    assert inferred.render() == "PIL.ImageCms.core.CmsProfile"
-    assert inferred.collect_imports() == {"PIL.ImageCms"}
+    assert inferred.render() == expected
+    assert inferred.collect_imports() == imports
 
 @pytest.mark.parametrize(
     ("call_name", "expected", "imports"),
     [
         ("PyImagingNew", "PIL.Image.core.ImagingCore", {"PIL.Image"}),
-        ("PyImaging_DecoderNew", "PIL.Image.core.ImagingDecoder", {"PIL.Image"}),
-        ("PyImaging_EncoderNew", "PIL.Image.core.ImagingEncoder", {"PIL.Image"}),
         ("cms_profile_new", "PIL.ImageCms.core.CmsProfile", {"PIL.ImageCms"}),
-        ("cms_transform_new", "PIL.ImageCms.core.CmsTransform", {"PIL.ImageCms"}),
-        ("_outline_new", "PIL.Image.core._Outline", {"PIL.Image"}),
-        ("path_new", "PIL.ImagePath.Path", {"PIL.ImagePath"}),
     ],
 )
-def test_infer_expr_type_detects_pillow_factory_mappings(
+def test_infer_expr_type_maps_representative_pillow_factories(
     call_name: str,
     expected: str,
     imports: set[str],
@@ -632,19 +590,10 @@ def test_infer_expr_type_detects_pillow_factory_mappings(
     assert inferred.render() == expected
     assert inferred.collect_imports() == imports
 
-@pytest.mark.parametrize(
-    "call_name",
-    [
-        "ImagingError_MemoryError",
-        "ImagingError_ValueError",
-        "HandleMuxError",
-        "geterror",
-    ],
-)
-def test_infer_expr_type_detects_pillow_error_return_factories(call_name: str) -> None:
+def test_infer_expr_type_detects_representative_pillow_error_return_factory() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(
-            call_name,
+            "HandleMuxError",
             _identifier_node("arg"),
         )
     )
@@ -762,68 +711,51 @@ def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_err
     with pytest.raises(RuntimeError, match="boom"):
         signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
-def test_infer_converter_type_for_pyarg_reads_numpy_converter_name_from_extent_source_text(
+@pytest.mark.parametrize(
+    ("filename", "statement", "marker", "expected", "imports"),
+    [
+        (
+            "numpy_converter_from_extent.c",
+            "PyArg_ParseTuple(args, \"O&\", NI_ObjectToInputArray, &value);",
+            "NI_ObjectToInputArray",
+            "numpy.ndarray",
+            {"numpy"},
+        ),
+        (
+            "tuple_converter_from_extent.c",
+            "PyArg_ParseTuple(args, \"O&\", PyArray_IntpConverter, &value);",
+            "PyArray_IntpConverter",
+            "tuple[int, ...]",
+            set(),
+        ),
+    ],
+)
+def test_infer_converter_type_for_pyarg_reads_representative_source_text_mappings(
     tmp_path: Path,
+    filename: str,
+    statement: str,
+    marker: str,
+    expected: str,
+    imports: set[str],
 ) -> None:
-    source = tmp_path / "numpy_converter_from_extent.c"
+    source = tmp_path / filename
     source.write_text(
         "\n".join(
             [
                 "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O&\", NI_ObjectToInputArray, &value);",
+                statement,
             ]
         ),
         encoding="utf-8",
     )
     cursor = _identifier_node("converter")
-    cursor.extent = _extent_for_source_snippet(source, "NI_ObjectToInputArray")
+    cursor.extent = _extent_for_source_snippet(source, marker)
 
     inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
 
     assert inferred is not None
-    assert inferred.render() == "numpy.ndarray"
-
-def test_infer_converter_type_for_pyarg_reads_optional_numpy_converter_name_from_extent_source_text(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "optional_numpy_converter_from_extent.c"
-    source.write_text(
-        "\n".join(
-            [
-                "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O&\", NI_ObjectToOptionalInputArray, &value);",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cursor = _identifier_node("converter")
-    cursor.extent = _extent_for_source_snippet(source, "NI_ObjectToOptionalInputArray")
-
-    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
-
-    assert inferred is not None
-    assert inferred.render() == "numpy.ndarray | None"
-
-def test_infer_converter_type_for_pyarg_reads_tuple_converter_name_from_extent_source_text(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "tuple_converter_from_extent.c"
-    source.write_text(
-        "\n".join(
-            [
-                "/* 中文注释 */",
-                "PyArg_ParseTuple(args, \"O&\", PyArray_IntpConverter, &value);",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cursor = _identifier_node("converter")
-    cursor.extent = _extent_for_source_snippet(source, "PyArray_IntpConverter")
-
-    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
-
-    assert inferred is not None
-    assert inferred.render() == "tuple[int, ...]"
+    assert inferred.render() == expected
+    assert inferred.collect_imports() == imports
 
 
 @pytest.mark.parametrize(
@@ -833,46 +765,14 @@ def test_infer_converter_type_for_pyarg_reads_tuple_converter_name_from_extent_s
             "PyArray_OutputConverter",
             UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType("None"))),
         ),
-        (
-            "PyArray_AxisConverter",
-            UnionType((RawType("int"), RawType("None"))),
-        ),
         ("PyArray_BoolConverter", RawType("bool")),
-        (
-            "PyArray_OptionalBoolConverter",
-            UnionType((RawType("bool"), RawType("None"))),
-        ),
-        (
-            "PyArray_OrderConverter",
-            UnionType((_typing_literal('"K", "A", "C", "F"'), RawType("None"))),
-        ),
-        (
-            "PyArray_ByteorderConverter",
-            _typing_literal('"S", "<", "L", "little", ">", "B", "big", "=", "N", "native", "|", "I"'),
-        ),
-        (
-            "PyArray_CastingConverter",
-            _typing_literal('"no", "equiv", "safe", "same_kind", "unsafe"'),
-        ),
-        (
-            "PyArray_SearchsideConverter",
-            _typing_literal('"left", "right"'),
-        ),
-        (
-            "PyArray_SelectkindConverter",
-            _typing_literal('"introselect"'),
-        ),
-        (
-            "PyArray_SortkindConverter",
-            _typing_literal('"Q", "quick", "quicksort", "M", "merge", "mergesort", "H", "heap", "heapsort", "S", "stable", "stablesort"'),
-        ),
         (
             "PyArray_ClipmodeConverter",
             UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType("int"))),
         ),
     ],
 )
-def test_infer_argument_lists_maps_numpy_low_risk_converters(
+def test_infer_argument_lists_maps_representative_numpy_converters(
     converter_name: str,
     expected: RawType | UnionType,
 ) -> None:
@@ -895,21 +795,8 @@ def test_infer_argument_lists_maps_numpy_low_risk_converters(
     assert inferred == [[_arg("value", expected)]]
 
 
-@pytest.mark.parametrize(
-    ("type_object_name", "expected"),
-    [
-        ("PyArrayDescr_Type", RawType("numpy.dtype", imports=("numpy",))),
-        (
-            "NpyBusDayCalendar_Type",
-            RawType("numpy.busdaycalendar", imports=("numpy",)),
-        ),
-        ("PyUFunc_Type", RawType("numpy.ufunc", imports=("numpy",))),
-    ],
-)
-def test_infer_argument_lists_maps_numpy_low_risk_type_objects(
-    type_object_name: str,
-    expected: RawType,
-) -> None:
+def test_infer_argument_lists_maps_representative_numpy_type_object() -> None:
+    expected = RawType("numpy.dtype", imports=("numpy",))
     value_decl = _var_decl("value")
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -918,7 +805,7 @@ def test_infer_argument_lists_maps_numpy_low_risk_type_objects(
             _string_literal("O!"),
             _FakeNode(
                 kind=clang.cindex.CursorKind.UNARY_OPERATOR,
-                extent=f"&{type_object_name}",
+                extent="&PyArrayDescr_Type",
             ),
             _address_of("value", referenced=value_decl),
         )

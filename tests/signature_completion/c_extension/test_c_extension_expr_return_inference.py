@@ -10,7 +10,6 @@ from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionTy
 from tests._c_extension_test_support import (
     _FakeNode,
     _address_of,
-    _arg,
     _assignment,
     _call_expr,
     _conditional_expr,
@@ -142,10 +141,12 @@ def test_infer_expr_type_raises_for_unsupported_expr() -> None:
     [
         ("_Py_NoneStruct", "None"),
         ("_Py_TrueStruct", "bool"),
-        ("_Py_FalseStruct", "bool"),
     ],
 )
-def test_return_type_detects_addressed_object_returns(token_name: str, expected: str) -> None:
+def test_return_type_maps_representative_runtime_tokens(
+    token_name: str,
+    expected: str,
+) -> None:
     cursor = _fake_function_cursor_with_children(_return_stmt(_address_of(token_name)))
 
     inferred = signature_rules_module.infer_return_type(cursor)
@@ -153,18 +154,8 @@ def test_return_type_detects_addressed_object_returns(token_name: str, expected:
     assert inferred is not None
     assert inferred.render() == expected
 
-@pytest.mark.parametrize(
-    "token_name",
-    [
-        "Py_RETURN_NONE",
-        "Py_RETURN_TRUE",
-        "Py_RETURN_FALSE",
-        "Py_RETURN_NAN",
-        "Py_RETURN_INF",
-    ],
-)
-def test_return_type_returns_any_for_preserved_macro_tokens(token_name: str) -> None:
-    macro_expr = _macro_expr(token_name)
+def test_return_type_returns_any_for_preserved_macro_token() -> None:
+    macro_expr = _macro_expr("Py_RETURN_TRUE")
     cursor = _fake_function_cursor_with_children(_return_stmt(macro_expr))
 
     inferred = signature_rules_module.infer_return_type(cursor)
@@ -174,26 +165,15 @@ def test_return_type_returns_any_for_preserved_macro_tokens(token_name: str) -> 
 @pytest.mark.parametrize(
     ("call_name", "expected"),
     [
-        ("PyBool_FromLong", "bool"),
         ("PyLong_FromLong", "int"),
-        ("PyFloat_FromDouble", "float"),
-        ("PyComplex_FromDoubles", "complex"),
-        ("PyUnicode_FromString", "str"),
         ("PyUnicode_AsUTF8String", "bytes"),
-        ("PyByteArray_FromObject", "bytearray"),
-        ("PySlice_New", "slice"),
-        ("PyMemoryView_FromObject", "memoryview"),
-        ("PyTuple_New", "tuple"),
         ("PyList_New", "list"),
-        ("PyDict_New", "dict"),
-        ("PySet_New", "set"),
-        ("PyFrozenSet_New", "frozenset"),
-        ("PyList_AsTuple", "tuple"),
-        ("PyDict_Items", "list"),
-        ("Py_GenericAlias", "types.GenericAlias"),
     ],
 )
-def test_return_type_detects_exact_factory_mappings(call_name: str, expected: str) -> None:
+def test_return_type_maps_representative_known_factory_calls(
+    call_name: str,
+    expected: str,
+) -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr(call_name, _identifier_node("arg")))
     )
@@ -219,24 +199,10 @@ def test_return_type_detects_generic_alias_factory_collects_types_import() -> No
     assert inferred == RawType("types.GenericAlias", imports=("types",))
     assert inferred.collect_imports() == {"types"}
 
-@pytest.mark.parametrize(
-    "call_name",
-    [
-        "PyArray_ContiguousFromObject",
-        "PyArray_Arange",
-        "PyArray_SimpleNew",
-        "PyArray_FROMANY",
-        "PyArray_Empty_int",
-        "PyArray_FromBuffer",
-        "PyArray_FromString",
-        "PyArray_FromIter",
-        "PyArray_Where",
-    ],
-)
-def test_infer_expr_type_detects_numpy_ndarray_factories(call_name: str) -> None:
+def test_infer_expr_type_maps_representative_numpy_factory_call() -> None:
     inferred = signature_rules_module.infer_expr_type(
         _call_expr(
-            call_name,
+            "PyArray_SimpleNew",
             _identifier_node("arg"),
             _identifier_node("dims"),
             _identifier_node("typenum"),

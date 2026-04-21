@@ -126,11 +126,11 @@ def patch_inference_clang_helpers(
         fake_get_call_expr_source_name,
     )
 
-    real_unwrap_addr_of = target_module.ast_utils.unwrap_single_unary_op
+    real_unwrap_single_unary_op = target_module.ast_utils.unwrap_single_unary_op
 
-    def fake_unwrap_addr_of(cursor: object) -> object:
+    def fake_unwrap_single_unary_op(cursor: object) -> object:
         if not isinstance(cursor, _FakeNode):
-            return real_unwrap_addr_of(cast(clang.cindex.Cursor, cursor))
+            return real_unwrap_single_unary_op(cast(clang.cindex.Cursor, cursor))
 
         cursor = target_module.unwrap_transparent(cursor)
         tokens = list(cursor.get_tokens())
@@ -145,8 +145,8 @@ def patch_inference_clang_helpers(
 
     monkeypatch.setattr(
         target_module.ast_utils,
-        "unwrap_addr_of",
-        fake_unwrap_addr_of,
+        "unwrap_single_unary_op",
+        fake_unwrap_single_unary_op,
     )
     monkeypatch.setattr(
         target_module.ast_utils,
