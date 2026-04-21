@@ -227,6 +227,37 @@ def test_return_type_detects_numpy_dtype_factory() -> None:
     assert inferred is not None
     assert inferred.render() == "numpy.dtype"
 
+@pytest.mark.parametrize(
+    ("call_name", "expected", "expected_imports"),
+    [
+        ("PyArray_NewCopy", "numpy.ndarray", {"numpy"}),
+        ("PyArray_NewFromDescr", "numpy.ndarray", {"numpy"}),
+        ("PyArray_ToList", "list", set()),
+        ("PyArray_ToString", "bytes", set()),
+        ("PyArray_DescrFromType", "numpy.dtype", {"numpy"}),
+    ],
+)
+def test_return_type_detects_representative_new_numpy_factory_mappings(
+    call_name: str,
+    expected: str,
+    expected_imports: set[str],
+) -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                call_name,
+                _identifier_node("arg"),
+                _identifier_node("other"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == expected
+    assert inferred.collect_imports() == expected_imports
+
 def test_return_type_detects_numpy_helper_int_factory() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("pylong_from_int128", _identifier_node("value")))

@@ -7,6 +7,8 @@ _NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType("None")))
 _DTYPE_TYPE = RawType("numpy.dtype", imports=("numpy",))
 _BUSDAYCALENDAR_TYPE = RawType("numpy.busdaycalendar", imports=("numpy",))
 _UFUNC_TYPE = RawType("numpy.ufunc", imports=("numpy",))
+_LIST_TYPE = RawType("list")
+_BYTES_TYPE = RawType("bytes")
 _INT_OR_NONE_TYPE = UnionType((RawType("int"), RawType("None")))
 _BOOL_OR_NONE_TYPE = UnionType((RawType("bool"), RawType("None")))
 _ORDER_TYPE = RawType(
@@ -80,7 +82,18 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_FromString": _NDARRAY_TYPE,
     "PyArray_FromIter": _NDARRAY_TYPE,
     "PyArray_Where": _NDARRAY_TYPE,
+    "PyArray_NewCopy": _NDARRAY_TYPE,
+    "PyArray_View": _NDARRAY_TYPE,
+    "PyArray_NewFromDescr": _NDARRAY_TYPE,
+    "PyArray_NewFromDescrAndBase": _NDARRAY_TYPE,
+    "PyArray_Ravel": _NDARRAY_TYPE,
+    "PyArray_Flatten": _NDARRAY_TYPE,
+    "PyArray_SwapAxes": _NDARRAY_TYPE,
     "PyArray_DescrNewByteorder": _DTYPE_TYPE,
+    "PyArray_DescrFromType": _DTYPE_TYPE,
+    "PyArray_ToList": _LIST_TYPE,
+    "PyArray_ToString": _BYTES_TYPE,
+    "PyArray_Dumps": _BYTES_TYPE,
     "pylong_from_int128": RawType("int"),
     "PyArray_Return": UnionType(
         (
