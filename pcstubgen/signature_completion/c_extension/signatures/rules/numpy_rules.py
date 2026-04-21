@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from clang.cindex import Cursor
+from loguru import logger
+
+from .....models import Argument, ArgumentKind
 from .....type_models import RawType, Type, UnionType
+from ...libclang.ast_utils import get_string_literal, is_nullptr_or_zero, unwrap_transparent
 
 _NDARRAY_TYPE = RawType("numpy.ndarray", imports=("numpy",))
 _NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType("None")))
@@ -102,3 +109,112 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
         )
     ),
 }
+
+
+def infer_npy_parse_arguments(
+    call_expr: Cursor,
+    *,
+    infer_name_func: Callable[[list[Cursor]], str],
+    infer_converter_type_func: Callable[[Cursor], Type],
+    infer_default_value_func: Callable[[Cursor, Type], str],
+) -> list[Argument]:
+    """
+    将 `npy_parse_arguments` 调用解析成参数列表。
+
+    NumPy 源码里通常写成：
+    `npy_parse_arguments(funcname, args, len_args, kwnames, ...)`
+
+    但 libclang 在宏展开后看到的调用形态实际是：
+    `_npy_parse_arguments(funcname, &__argparse_cache, args, len_args, kwnames, ...)`
+
+    因此这里解析时，固定参数区按
+    `funcname, &__argparse_cache, args, len_args, kwnames`
+    处理，其后才是 `name, converter, &slot` 三元组序列。
+    """
+    args = list(call_expr.get_children())[1:]
+    _validate_npy_parse_arguments_shape(args)
+
+    arguments: list[Argument] = []
+    triplets = args[5:]
+    arg_index = 0
+    while arg_index < len(triplets):
+        name_cursor = unwrap_transparent(triplets[arg_index])
+        converter_cursor = unwrap_transparent(triplets[arg_index + 1])
+        slot_cursor = triplets[arg_index + 2]
+        arg_index += 3
+
+        if (
+            is_nullptr_or_zero(name_cursor)
+            and is_nullptr_or_zero(converter_cursor)
+            and is_nullptr_or_zero(unwrap_transparent(slot_cursor))
+        ):
+            if arg_index != len(triplets):
+                raise RuntimeError("npy_parse_arguments sentinel 后仍有多余参数。")
+            break
+
+        if is_nullptr_or_zero(name_cursor):
+            raise RuntimeError("npy_parse_arguments 参数名槽位不能为 NULL。")
+        if is_nullptr_or_zero(unwrap_transparent(slot_cursor)):
+            raise RuntimeError("npy_parse_arguments 输出槽位不能为 NULL。")
+
+        argument_name_spec = get_string_literal(name_cursor)
+        argument_name, kind, is_optional = _parse_npy_argument_name(argument_name_spec)
+        if argument_name == "":
+            argument_name = infer_name_func([slot_cursor])
+
+        argument_type = RawType("object")
+        if not is_nullptr_or_zero(converter_cursor):
+            try:
+                argument_type = infer_converter_type_func(converter_cursor)
+            except Exception as ex:
+                logger.warning(
+                    "npy_parse_arguments converter 类型推断失败，回退为 object, reason: {!r}",
+                    ex,
+                )
+
+        default_value = None
+        if is_optional:
+            try:
+                default_value = infer_default_value_func(slot_cursor, argument_type)
+            except Exception as ex:
+                logger.warning(
+                    "npy_parse_arguments 默认值推断失败，回退为 '...', reason: {!r}",
+                    ex,
+                )
+                default_value = "..."
+
+        arguments.append(
+            Argument(
+                name=argument_name,
+                type=argument_type,
+                default_value=default_value,
+                kind=kind,
+            )
+        )
+
+    return arguments
+
+
+def _validate_npy_parse_arguments_shape(args: list[Cursor]) -> None:
+    """校验宏展开后的 `npy_parse_arguments` 调用形态。"""
+    if len(args) < 7:
+        raise RuntimeError("npy_parse_arguments 参数数量不足。")
+
+    triplet_count = len(args) - 5
+    if triplet_count < 3 or triplet_count % 3 != 0:
+        raise RuntimeError("npy_parse_arguments 三元组序列长度不正确。")
+
+
+def _parse_npy_argument_name(argument_name_spec: str) -> tuple[str, ArgumentKind, bool]:
+    """解析 NumPy 参数名前缀语义。"""
+    if argument_name_spec.startswith("$"):
+        return argument_name_spec[1:], ArgumentKind.KEYWORD_ONLY, True
+    if argument_name_spec.startswith("|"):
+        argument_name = argument_name_spec[1:]
+        kind = ArgumentKind.POSITIONAL_ONLY
+        if argument_name != "":
+            kind = ArgumentKind.POSITIONAL_OR_KEYWORD
+        return argument_name, kind, True
+    if argument_name_spec == "":
+        return "", ArgumentKind.POSITIONAL_ONLY, False
+    return argument_name_spec, ArgumentKind.POSITIONAL_OR_KEYWORD, False

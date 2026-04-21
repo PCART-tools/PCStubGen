@@ -39,6 +39,7 @@ from .py_arg_parse.tuple_and_keywords_parser import (
 )
 from .py_arg_parse.tuple_parser import PyArgParseTupleTypeParser
 from .py_build_value.parser import PyBuildValueTypeParser
+from .rules import numpy_rules
 from .rules import (
     CALL_NAME_TO_TYPE,
     OBJECT_NAME_TO_TYPE,
@@ -90,6 +91,12 @@ class Inferencer:
                 )
             ]]
         if self._flags & METH_FASTCALL:
+            arguments_list = self._infer_arguments_for_call_name(
+                "npy_parse_arguments",
+                self._infer_npy_parse_arguments,
+            )
+            if arguments_list:
+                return arguments_list
             return [self._build_minimal_arguments()]
         if self._flags & METH_VARARGS:
             if self._flags & METH_KEYWORDS:
@@ -145,7 +152,7 @@ class Inferencer:
                 arguments_list.append(parser(call_expr))
             except Exception as ex:
                 logger.warning(
-                    "跳过无法推断的 PyArg 参数列表, func_name: {}, call_name: {}, reason: {!r}",
+                    "跳过无法推断的参数列表, func_name: {}, call_name: {}, reason: {!r}",
                     self._func_cursor.spelling,
                     call_name,
                     ex,
@@ -226,6 +233,15 @@ class Inferencer:
                 expected_type,
             ),
         ).parse()
+
+    def _infer_npy_parse_arguments(self, call_expr: Cursor) -> list[Argument]:
+        """调用 NumPy 专用 parser，解析 `npy_parse_arguments` 的 FASTCALL 参数列表。"""
+        return numpy_rules.infer_npy_parse_arguments(
+            call_expr,
+            infer_name_func=self._infer_argument_name,
+            infer_converter_type_func=self._infer_converter_type_for_pyarg,
+            infer_default_value_func=self._infer_default_value_for_pyarg,
+        )
 
     def _infer_expr_type(self, cursor: Cursor) -> Type:
         """对单个表达式做 Python 类型推断。"""
