@@ -56,7 +56,7 @@ _LIST_ANY_TYPE = ListType(AnyType())
 _DICT_ANY_TYPE = DictType(AnyType(), AnyType())
 _SET_ANY_TYPE = RawType("set[typing.Any]", imports=("typing",))
 
-CHECK_MACRO_NAME_TO_TYPE: dict[str, Type] = {
+OBJECT_USE_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyTuple_Check": _TUPLE_ANY_TYPE,
     "PyTuple_CheckExact": _TUPLE_ANY_TYPE,
     "PyList_Check": _LIST_ANY_TYPE,
@@ -74,6 +74,7 @@ CHECK_MACRO_NAME_TO_TYPE: dict[str, Type] = {
     "PyFloat_Check": RawType.float_,
     "PyFloat_CheckExact": RawType.float_,
     "PyBool_Check": RawType.bool_,
+    "PyObject_GetBuffer": RawType("collections.abc.Buffer", imports=("collections.abc",)),
 }
 
 CALL_NAME_TO_TYPE: dict[str, Type] = {

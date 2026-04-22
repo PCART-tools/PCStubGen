@@ -42,7 +42,7 @@ from .py_build_value.parser import PyBuildValueTypeParser
 from .rules import numpy_rules
 from .rules import (
     CALL_NAME_TO_TYPE,
-    CHECK_MACRO_NAME_TO_TYPE,
+    OBJECT_USE_FUNCTION_NAME_TO_TYPE,
     OBJECT_NAME_TO_TYPE,
     PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE,
     PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE,
@@ -282,7 +282,7 @@ class Inferencer:
         return cast(Cursor, param_cursors[1])
 
     def _infer_refined_object_type_for_cursor(self, cursor: Cursor) -> Type:
-        """扫描函数体中的 `Py*Check*` 宏调用，细化 `object` 参数类型。"""
+        """扫描函数体中的对象检查调用，细化 `object` 参数类型。"""
         target_decl = self._get_target_decl_for_cursor(cursor)
         if target_decl is None:
             return _OBJECT_TYPE
@@ -292,18 +292,34 @@ class Inferencer:
             if call_expr.kind != CursorKind.CALL_EXPR:
                 continue
 
-            macro_type = CHECK_MACRO_NAME_TO_TYPE.get(get_first_token_str(call_expr))
-            if macro_type is None:
+            matched_type = self._infer_object_type_from_call(
+                call_expr,
+                target_decl,
+            )
+            if matched_type is None:
                 continue
-
-            checked_decl = self._get_checked_decl_for_macro_call(call_expr)
-            if checked_decl != target_decl:
-                continue
-            matched_types.add(macro_type)
+            matched_types.add(matched_type)
 
         if not matched_types:
             return _OBJECT_TYPE
         return UnionType(tuple(matched_types)).canonicalize()
+
+    def _infer_object_type_from_call(
+        self,
+        call_expr: Cursor,
+        target_decl: Cursor,
+    ) -> Type | None:
+        """根据单个调用表达式，提取可用于对象细化的类型证据。"""
+        call_name = get_first_token_str(call_expr)
+
+        refined_type = OBJECT_USE_FUNCTION_NAME_TO_TYPE.get(call_name)
+        if refined_type is None:
+            return None
+
+        refined_decl = self._get_refined_decl_for_call(call_expr)
+        if refined_decl != target_decl:
+            return None
+        return refined_type
 
     def _get_target_decl_for_cursor(self, cursor: Cursor) -> Cursor | None:
         """把参数槽位或形参 cursor 规约为目标声明节点。"""
@@ -314,19 +330,19 @@ class Inferencer:
             return None
         return cast(Cursor | None, cursor.referenced)
 
-    def _get_checked_decl_for_macro_call(self, call_expr: Cursor) -> Cursor | None:
-        """提取 `Py*Check*` 调用正在检查的目标声明节点。"""
+    def _get_refined_decl_for_call(self, call_expr: Cursor) -> Cursor | None:
+        """提取对象细化函数调用作用到的目标声明节点。"""
         children = list(call_expr.get_children())
         if len(children) < 2:
             return None
 
-        checked_cursor = self._unwrap_checked_object_cursor(children[1])
-        if checked_cursor.kind != CursorKind.DECL_REF_EXPR:
+        refined_cursor = self._unwrap_refined_object_cursor(children[1])
+        if refined_cursor.kind != CursorKind.DECL_REF_EXPR:
             return None
-        return cast(Cursor | None, checked_cursor.referenced)
+        return cast(Cursor | None, refined_cursor.referenced)
 
-    def _unwrap_checked_object_cursor(self, cursor: Cursor) -> Cursor:
-        """剥离一层 `Py_TYPE(x)`，并返回真正被检查的对象表达式。"""
+    def _unwrap_refined_object_cursor(self, cursor: Cursor) -> Cursor:
+        """剥离一层 `Py_TYPE(x)`，并返回真正参与对象细化的表达式。"""
         cursor = unwrap_transparent(cursor)
         if cursor.kind == CursorKind.CALL_EXPR and cursor.spelling == "Py_TYPE":
             children = list(cursor.get_children())

@@ -144,7 +144,7 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
 
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {}
 
-CHECK_MACRO_NAME_TO_TYPE: dict[str, Type] = {
+OBJECT_USE_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_Check": _NDARRAY_TYPE,
     "PyArray_CheckExact": _NDARRAY_TYPE,
 }
