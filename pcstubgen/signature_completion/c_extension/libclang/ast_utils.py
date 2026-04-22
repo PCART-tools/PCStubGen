@@ -41,7 +41,7 @@ FUNCTION_DECL_CONTEXT_KINDS = {
 }
 
 def to_str(cursor: Cursor) -> str:
-    return f"spelling: {cursor.spelling}, kind: {cursor.kind}, location: {cursor.location}"
+    return f"kind={cursor.kind}, spelling={cursor.spelling}, first_token={get_first_token_str(cursor)}, location={cursor.location}"
 
 
 def unwrap_transparent(cursor: Cursor) -> Cursor:

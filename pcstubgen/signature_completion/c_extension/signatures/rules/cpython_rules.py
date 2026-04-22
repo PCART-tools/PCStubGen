@@ -17,6 +17,10 @@ PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyFrozenSet_Type": RawType("frozenset"),
     "PyType_Type": RawType("type"),
     "PyBaseObject_Type": RawType.object_,
+    "PyDateTimeAPI->DateType": RawType("datetime.date", imports=("datetime",)),
+    "PyDateTimeAPI->TimeType": RawType("datetime.time", imports=("datetime",)),
+    "PyDateTimeAPI->DateTimeType": RawType("datetime.datetime", imports=("datetime",)),
+    "PyDateTimeAPI->DeltaType": RawType("datetime.timedelta", imports=("datetime",)),
 }
 
 PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {}

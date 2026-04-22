@@ -431,14 +431,12 @@ class Inferencer:
         return "_".join(names)
 
     def _infer_type_object_type_for_pyarg(self, cursor: Cursor) -> Type:
-        """解析 `PyArg_*` 中 `O!` 类型对象槽位对应的 Python 类型名。"""
-        source_text = get_cursor_source_text(cursor)
-        match = IDENTIFIER_RE.search(source_text)
-        if match is None:
-            raise RuntimeError(
-                f"类型对象槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
-            )
-        type_name = match.group(0)
+        """
+        解析 `PyArg_*` 中 `O!` 类型对象地址槽位对应的 Python 类型名。
+        取源码是因为有宏，展开后可能是API[123]形式，失去名字
+        """
+        source_text = get_cursor_source_text(cursor).strip()
+        type_name = source_text[1:].strip() if source_text.startswith("&") else source_text
         mapped = PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
         if mapped is None:
             raise RuntimeError(

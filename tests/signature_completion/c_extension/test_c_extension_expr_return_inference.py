@@ -168,6 +168,10 @@ def test_return_type_returns_any_for_preserved_macro_token() -> None:
         ("PyLong_FromLong", "int"),
         ("PyUnicode_AsUTF8String", "bytes"),
         ("PyList_New", "list"),
+        ("PyInt_FromLong", "int"),
+        ("PyInt_FromSsize_t", "int"),
+        ("Bytes_FromString", "bytes"),
+        ("conn_text_from_chars", "str"),
     ],
 )
 def test_return_type_maps_representative_known_factory_calls(
@@ -182,6 +186,24 @@ def test_return_type_maps_representative_known_factory_calls(
 
     assert inferred is not None
     assert inferred.render() == expected
+
+@pytest.mark.parametrize(
+    "call_name",
+    [
+        "PyObject_Call",
+        "PyObject_CallFunction",
+        "PyObject_CallFunctionObjArgs",
+    ],
+)
+def test_infer_expr_type_keeps_pyobject_call_family_unmapped(call_name: str) -> None:
+    with pytest.raises(RuntimeError, match=rf"无法识别的返回值工厂调用: {call_name}"):
+        signature_rules_module.infer_expr_type(
+            _call_expr(
+                call_name,
+                _identifier_node("callable"),
+                _identifier_node("arg"),
+            )
+        )
 
 def test_return_type_detects_generic_alias_factory_collects_types_import() -> None:
     cursor = _fake_function_cursor_with_children(

@@ -705,15 +705,15 @@ def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
     [
         (
             "builtin_object_type_from_extent.c",
-            "PyArg_ParseTuple(args, \"O!\", (&PyUnicode_Type), &value);",
-            "(&PyUnicode_Type)",
+            "PyArg_ParseTuple(args, \"O!\", &PyUnicode_Type, &value);",
+            "&PyUnicode_Type",
             "str",
             set(),
         ),
         (
             "numpy_object_type_from_extent.c",
-            "PyArg_ParseTuple(args, \"O!\", (&PyArray_Type), &value);",
-            "(&PyArray_Type)",
+            "PyArg_ParseTuple(args, \"O!\", &PyArray_Type, &value);",
+            "&PyArray_Type",
             "numpy.ndarray",
             {"numpy"},
         ),
@@ -723,6 +723,55 @@ def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
             "&Imaging_Type",
             "PIL.Image.core.ImagingCore",
             {"PIL.Image"},
+        ),
+        (
+            "cpython_datetime_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", PyDateTimeAPI->DateType, &value);",
+            "PyDateTimeAPI->DateType",
+            "datetime.date",
+            {"datetime"},
+        ),
+        (
+            "cpython_time_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", PyDateTimeAPI->TimeType, &value);",
+            "PyDateTimeAPI->TimeType",
+            "datetime.time",
+            {"datetime"},
+        ),
+        (
+            "cpython_datetime_full_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", PyDateTimeAPI->DateTimeType, &value);",
+            "PyDateTimeAPI->DateTimeType",
+            "datetime.datetime",
+            {"datetime"},
+        ),
+        (
+            "cpython_timedelta_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", PyDateTimeAPI->DeltaType, &value);",
+            "PyDateTimeAPI->DeltaType",
+            "datetime.timedelta",
+            {"datetime"},
+        ),
+        (
+            "psycopg_connection_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", &connectionType, &value);",
+            "&connectionType",
+            "psycopg2.extensions.connection",
+            {"psycopg2.extensions"},
+        ),
+        (
+            "psycopg_typecast_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", &typecastType, &value);",
+            "&typecastType",
+            "psycopg2._psycopg.type",
+            {"psycopg2._psycopg"},
+        ),
+        (
+            "psycopg_text_type_object_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", &Text_Type, &value);",
+            "&Text_Type",
+            "str",
+            set(),
         ),
     ],
 )
@@ -754,6 +803,41 @@ def test_infer_type_object_type_for_pyarg_reads_representative_source_text_mappi
     assert inferred is not None
     assert inferred.render() == expected
     assert inferred.collect_imports() == imports
+
+@pytest.mark.parametrize(
+    ("filename", "statement", "marker", "expected_name"),
+    [
+        (
+            "unknown_psycopg_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", &unknownType, &value);",
+            "&unknownType",
+            "unknownType",
+        ),
+        (
+            "unknown_member_object_type_from_extent.c",
+            "PyArg_ParseTuple(args, \"O!\", UnknownAPI->DateType, &value);",
+            "UnknownAPI->DateType",
+            "UnknownAPI->DateType",
+        ),
+    ],
+)
+def test_infer_type_object_type_for_pyarg_keeps_unknown_expression_failures_explicit(
+    tmp_path: Path,
+    filename: str,
+    statement: str,
+    marker: str,
+    expected_name: str,
+) -> None:
+    source = tmp_path / filename
+    source.write_text(statement, encoding="utf-8")
+    cursor = _FakeNode(
+        kind=clang.cindex.CursorKind.UNARY_OPERATOR,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, marker.lstrip("&("))],
+        extent=_extent_for_source_snippet(source, marker),
+    )
+
+    with pytest.raises(RuntimeError, match=rf"无法识别的类型对象标识符: {re.escape(expected_name)}"):
+        signature_rules_module._infer_type_object_type_for_pyarg(cursor)
 
 @pytest.mark.parametrize(
     ("call_name", "expected", "imports"),
