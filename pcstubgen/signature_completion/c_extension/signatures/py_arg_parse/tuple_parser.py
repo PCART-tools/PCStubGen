@@ -14,7 +14,7 @@ from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
 _InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
-_OBJECT_TYPE = RawType("object")
+_OBJECT_TYPE = RawType.object_
 
 
 class PyArgParseTupleTypeParserError(ValueError):
@@ -260,7 +260,7 @@ class PyArgParseTupleTypeParser:
                 "PyArg_ParseTuple 类型对象推断失败，回退为 object, reason: {!r}",
                 ex,
             )
-            return RawType("object")
+            return RawType.object_
 
     def _infer_converter(self, cursor: Cursor) -> Type:
         """解析 `O&` converter 单元的 Python 类型，失败时回退为 `object`。"""
@@ -271,7 +271,7 @@ class PyArgParseTupleTypeParser:
                 "PyArg_ParseTuple converter 类型推断失败，回退为 object, reason: {!r}",
                 ex,
             )
-            return RawType("object")
+            return RawType.object_
 
     def _peek_char(self) -> str | None:
         """查看当前位置字符而不推进游标。"""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import ClassVar
 
 
 class Type(ABC):
@@ -22,6 +23,18 @@ class Type(ABC):
 
 @dataclass(frozen=True)
 class RawType(Type):
+    bool_: ClassVar[RawType]
+    int_: ClassVar[RawType]
+    float_: ClassVar[RawType]
+    str_: ClassVar[RawType]
+    bytes_: ClassVar[RawType]
+    object_: ClassVar[RawType]
+    none_: ClassVar[RawType]
+    complex_: ClassVar[RawType]
+    bytearray_: ClassVar[RawType]
+    memoryview_: ClassVar[RawType]
+    slice_: ClassVar[RawType]
+
     text: str
     imports: tuple[str, ...] = ()
 
@@ -33,6 +46,19 @@ class RawType(Type):
 
     def collect_imports(self) -> set[str]:
         return set(self.imports)
+
+
+RawType.bool_ = RawType("bool")
+RawType.int_ = RawType("int")
+RawType.float_ = RawType("float")
+RawType.str_ = RawType("str")
+RawType.bytes_ = RawType("bytes")
+RawType.object_ = RawType("object")
+RawType.none_ = RawType("None")
+RawType.complex_ = RawType("complex")
+RawType.bytearray_ = RawType("bytearray")
+RawType.memoryview_ = RawType("memoryview")
+RawType.slice_ = RawType("slice")
 
 
 @dataclass(frozen=True)

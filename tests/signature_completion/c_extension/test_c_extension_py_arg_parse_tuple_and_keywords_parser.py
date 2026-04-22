@@ -165,8 +165,8 @@ def test_parse_passes_p_unit_type_to_optional_and_keyword_only_default_inference
         ),
     ]
     assert observed == [
-        (optional_cursor, RawType("bool")),
-        (keyword_only_cursor, RawType("bool")),
+        (optional_cursor, RawType.bool_),
+        (keyword_only_cursor, RawType.bool_),
     ]
 
 

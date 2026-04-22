@@ -49,7 +49,7 @@ def test_signature_completer_returns_provider_result_and_updates_summary(
             signatures=[
                 _signature(
                     args=[_arg("value", "int")],
-                    return_type=RawType("bool"),
+                    return_type=RawType.bool_,
                 )
             ],
             doc="foo(value: int) -> bool",
@@ -64,7 +64,7 @@ def test_signature_completer_returns_provider_result_and_updates_summary(
         signatures=[
             _signature(
                 args=[_arg("value", "int")],
-                return_type=RawType("bool"),
+                return_type=RawType.bool_,
             )
         ],
         doc="foo(value: int) -> bool",

@@ -17,8 +17,8 @@ class _FormatUnitSpec:
     object_type_arg_offset: int | None = None
 
 
-_STR_OR_NONE_TYPE = UnionType((RawType("str"), RawType("None")))
-_BYTES_OR_NONE_TYPE = UnionType((RawType("bytes"), RawType("None")))
+_STR_OR_NONE_TYPE = UnionType((RawType.str_, RawType.none_))
+_BYTES_OR_NONE_TYPE = UnionType((RawType.bytes_, RawType.none_))
 
 _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
     _FormatUnitSpec("s#", 2, _STR_OR_NONE_TYPE),
@@ -32,22 +32,22 @@ _FORMAT_UNIT_SPECS: tuple[_FormatUnitSpec, ...] = (
     _FormatUnitSpec("z", 1, _STR_OR_NONE_TYPE),
     _FormatUnitSpec("u", 1, _STR_OR_NONE_TYPE),
     _FormatUnitSpec("U", 1, _STR_OR_NONE_TYPE),
-    _FormatUnitSpec("i", 1, RawType("int")),
-    _FormatUnitSpec("b", 1, RawType("int")),
-    _FormatUnitSpec("h", 1, RawType("int")),
-    _FormatUnitSpec("l", 1, RawType("int")),
-    _FormatUnitSpec("B", 1, RawType("int")),
-    _FormatUnitSpec("H", 1, RawType("int")),
-    _FormatUnitSpec("I", 1, RawType("int")),
-    _FormatUnitSpec("k", 1, RawType("int")),
-    _FormatUnitSpec("L", 1, RawType("int")),
-    _FormatUnitSpec("K", 1, RawType("int")),
-    _FormatUnitSpec("n", 1, RawType("int")),
-    _FormatUnitSpec("c", 1, RawType("bytes")),
-    _FormatUnitSpec("C", 1, RawType("str")),
-    _FormatUnitSpec("d", 1, RawType("float")),
-    _FormatUnitSpec("f", 1, RawType("float")),
-    _FormatUnitSpec("D", 1, RawType("complex")),
+    _FormatUnitSpec("i", 1, RawType.int_),
+    _FormatUnitSpec("b", 1, RawType.int_),
+    _FormatUnitSpec("h", 1, RawType.int_),
+    _FormatUnitSpec("l", 1, RawType.int_),
+    _FormatUnitSpec("B", 1, RawType.int_),
+    _FormatUnitSpec("H", 1, RawType.int_),
+    _FormatUnitSpec("I", 1, RawType.int_),
+    _FormatUnitSpec("k", 1, RawType.int_),
+    _FormatUnitSpec("L", 1, RawType.int_),
+    _FormatUnitSpec("K", 1, RawType.int_),
+    _FormatUnitSpec("n", 1, RawType.int_),
+    _FormatUnitSpec("c", 1, RawType.bytes_),
+    _FormatUnitSpec("C", 1, RawType.str_),
+    _FormatUnitSpec("d", 1, RawType.float_),
+    _FormatUnitSpec("f", 1, RawType.float_),
+    _FormatUnitSpec("D", 1, RawType.complex_),
     _FormatUnitSpec("O", 1, AnyType(), object_type_arg_offset=0),
     _FormatUnitSpec("S", 1, AnyType(), object_type_arg_offset=0),
     _FormatUnitSpec("N", 1, AnyType(), object_type_arg_offset=0),

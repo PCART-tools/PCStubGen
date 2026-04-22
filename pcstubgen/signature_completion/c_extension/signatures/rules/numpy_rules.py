@@ -10,28 +10,28 @@ from .....type_models import RawType, Type, UnionType
 from ...libclang.ast_utils import get_string_literal, is_nullptr_or_zero, unwrap_transparent
 
 _NDARRAY_TYPE = RawType("numpy.ndarray", imports=("numpy",))
-_NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType("None")))
+_NDARRAY_OR_NONE_TYPE = UnionType((_NDARRAY_TYPE, RawType.none_))
 _DTYPE_TYPE = RawType("numpy.dtype", imports=("numpy",))
 _DTYPE_META_TYPE = RawType("type[numpy.dtype]", imports=("numpy",))
 _DTYPE_LIKE_TYPE = RawType("numpy.typing.DTypeLike", imports=("numpy.typing",))
-_DTYPE_LIKE_OR_NONE_TYPE = UnionType((_DTYPE_LIKE_TYPE, RawType("None")))
+_DTYPE_LIKE_OR_NONE_TYPE = UnionType((_DTYPE_LIKE_TYPE, RawType.none_))
 _ARRAY_LIKE_TYPE = RawType("numpy.typing.ArrayLike", imports=("numpy.typing",))
-_ARRAY_LIKE_OR_NONE_TYPE = UnionType((_ARRAY_LIKE_TYPE, RawType("None")))
+_ARRAY_LIKE_OR_NONE_TYPE = UnionType((_ARRAY_LIKE_TYPE, RawType.none_))
 _BUSDAYCALENDAR_TYPE = RawType("numpy.busdaycalendar", imports=("numpy",))
 _UFUNC_TYPE = RawType("numpy.ufunc", imports=("numpy",))
 _LIST_TYPE = RawType("list")
-_BYTES_TYPE = RawType("bytes")
-_INT_OR_NONE_TYPE = UnionType((RawType("int"), RawType("None")))
-_BOOL_OR_NONE_TYPE = UnionType((RawType("bool"), RawType("None")))
-_INTP_TYPE = RawType("int")
+_BYTES_TYPE = RawType.bytes_
+_INT_OR_NONE_TYPE = UnionType((RawType.int_, RawType.none_))
+_BOOL_OR_NONE_TYPE = UnionType((RawType.bool_, RawType.none_))
+_INTP_TYPE = RawType.int_
 _INTP_OR_SHAPE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]")))
-_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]"), RawType("None")))
+_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]"), RawType.none_))
 _SEQUENCE_STR_TYPE = RawType("collections.abc.Sequence[str]", imports=("collections.abc",))
 _ORDER_TYPE = RawType(
     'typing.Literal["K", "A", "C", "F"]',
     imports=("typing",),
 )
-_ORDER_OR_NONE_TYPE = UnionType((_ORDER_TYPE, RawType("None")))
+_ORDER_OR_NONE_TYPE = UnionType((_ORDER_TYPE, RawType.none_))
 _BYTEORDER_TYPE = RawType(
     'typing.Literal["S", "<", "L", "little", ">", "B", "big", "=", "N", "native", "|", "I"]',
     imports=("typing",),
@@ -60,16 +60,16 @@ _CLIPMODE_STRING_TYPE = RawType(
     'typing.Literal["clip", "wrap", "raise"]',
     imports=("typing",),
 )
-_CLIPMODE_TYPE = UnionType((_CLIPMODE_STRING_TYPE, RawType("int")))
+_CLIPMODE_TYPE = UnionType((_CLIPMODE_STRING_TYPE, RawType.int_))
 _CORRELATEMODE_TYPE = RawType(
     'typing.Literal["valid", "same", "full"]',
     imports=("typing",),
 )
 _COPY_MODE_TYPE = UnionType(
     (
-        RawType("bool"),
+        RawType.bool_,
         RawType('typing.Literal[False, True, 2]', imports=("typing",)),
-        RawType("None"),
+        RawType.none_,
     )
 )
 _DEVICE_TYPE = RawType('typing.Literal["cpu"] | None', imports=("typing",))
@@ -90,7 +90,7 @@ _BUSDAY_ROLL_TYPE = RawType(
     imports=("typing",),
 )
 _DLPACK_DEVICE_TYPE = RawType("tuple[int, int] | None")
-_STR_OR_NONE_TYPE = UnionType((RawType("str"), RawType("None")))
+_STR_OR_NONE_TYPE = UnionType((RawType.str_, RawType.none_))
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_Type": _NDARRAY_TYPE,
@@ -112,7 +112,7 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_OutputConverter": _NDARRAY_OR_NONE_TYPE,
     "PyArray_Converter": _ARRAY_LIKE_TYPE,
     "PyArray_AxisConverter": _INT_OR_NONE_TYPE,
-    "PyArray_BoolConverter": RawType("bool"),
+    "PyArray_BoolConverter": RawType.bool_,
     "PyArray_OptionalBoolConverter": _BOOL_OR_NONE_TYPE,
     "PyArray_OrderConverter": _ORDER_OR_NONE_TYPE,
     "PyArray_ByteorderConverter": _BYTEORDER_TYPE,
@@ -124,9 +124,9 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_ClipmodeConverter": _CLIPMODE_TYPE,
     "PyArray_CorrelatemodeConverter": _CORRELATEMODE_TYPE,
     "PyArray_CopyConverter": _COPY_MODE_TYPE,
-    "PyArray_AsTypeCopyConverter": RawType("bool"),
+    "PyArray_AsTypeCopyConverter": RawType.bool_,
     "PyArray_DeviceConverterOptional": _DEVICE_TYPE,
-    "PyArray_PythonPyIntFromInt": RawType("int"),
+    "PyArray_PythonPyIntFromInt": RawType.int_,
     "PyArray_DTypeOrDescrConverterRequired": _DTYPE_LIKE_TYPE,
     "PyArray_DTypeOrDescrConverterOptional": _DTYPE_LIKE_OR_NONE_TYPE,
     "PyArray_DescrConverter": _DTYPE_LIKE_TYPE,
@@ -172,7 +172,7 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_ToList": _LIST_TYPE,
     "PyArray_ToString": _BYTES_TYPE,
     "PyArray_Dumps": _BYTES_TYPE,
-    "pylong_from_int128": RawType("int"),
+    "pylong_from_int128": RawType.int_,
     "PyArray_Return": UnionType(
         (
             RawType("numpy.ndarray", imports=("numpy",)),
@@ -234,7 +234,7 @@ def infer_npy_parse_arguments(
         if argument_name == "":
             argument_name = infer_name_func([slot_cursor])
 
-        argument_type = RawType("object")
+        argument_type = RawType.object_
         if not is_nullptr_or_zero(converter_cursor):
             try:
                 argument_type = infer_converter_type_func(converter_cursor)
@@ -243,7 +243,7 @@ def infer_npy_parse_arguments(
                     "npy_parse_arguments converter 类型推断失败，回退为 object, reason: {!r}",
                     ex,
                 )
-        if argument_type == RawType("object"):
+        if argument_type == RawType.object_:
             argument_type = infer_refined_object_type_func(slot_cursor)
 
         default_value = None

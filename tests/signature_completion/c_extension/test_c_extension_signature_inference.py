@@ -60,7 +60,7 @@ def test_infer_signature_does_not_parse_arguments_without_flags() -> None:
 
     inferred = signature_rules_module.infer_signature(cursor)
 
-    assert inferred == [Signature(args=[], return_type=RawType("int"))]
+    assert inferred == [Signature(args=[], return_type=RawType.int_)]
 
 
 def test_infer_signature_inserts_self_for_method_meth_noargs() -> None:
@@ -74,7 +74,7 @@ def test_infer_signature_inserts_self_for_method_meth_noargs() -> None:
         is_method=True,
     )
 
-    assert inferred == [Signature(args=[_arg("self")], return_type=RawType("int"))]
+    assert inferred == [Signature(args=[_arg("self")], return_type=RawType.int_)]
 
 
 def test_infer_signature_inserts_cls_for_classmethod_meth_noargs() -> None:
@@ -88,7 +88,7 @@ def test_infer_signature_inserts_cls_for_classmethod_meth_noargs() -> None:
         is_method=True,
     )
 
-    assert inferred == [Signature(args=[_arg("cls")], return_type=RawType("int"))]
+    assert inferred == [Signature(args=[_arg("cls")], return_type=RawType.int_)]
 
 
 def test_infer_signature_skips_receiver_for_staticmethod_meth_noargs() -> None:
@@ -102,7 +102,7 @@ def test_infer_signature_skips_receiver_for_staticmethod_meth_noargs() -> None:
         is_method=True,
     )
 
-    assert inferred == [Signature(args=[], return_type=RawType("int"))]
+    assert inferred == [Signature(args=[], return_type=RawType.int_)]
 
 
 def test_infer_signature_inserts_self_for_method_meth_o() -> None:
@@ -122,7 +122,7 @@ def test_infer_signature_inserts_self_for_method_meth_o() -> None:
                 _arg("self", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -144,7 +144,7 @@ def test_infer_signature_inserts_cls_for_classmethod_meth_o() -> None:
                 _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -163,7 +163,7 @@ def test_infer_signature_skips_receiver_for_staticmethod_meth_o() -> None:
     assert inferred == [
         Signature(
             args=[_arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY)],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -192,7 +192,7 @@ def test_infer_signature_ignores_body_parse_for_meth_o() -> None:
                 _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -226,7 +226,7 @@ def test_infer_signature_refines_meth_o_argument_from_type_check() -> None:
                     kind=ArgumentKind.POSITIONAL_ONLY,
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -252,7 +252,7 @@ def test_infer_signature_keeps_parse_tuple_result_for_meth_varargs_method() -> N
     assert inferred == [
         Signature(
             args=[_arg("self"), _arg("value", "int")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -312,7 +312,7 @@ def test_infer_signature_keeps_parse_tuple_and_keywords_result_for_classmethod()
     assert inferred == [
         Signature(
             args=[_arg("cls"), _arg("value", "int")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -364,7 +364,7 @@ def test_infer_signature_uses_fastcall_skeleton_with_receiver() -> None:
                 _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
                 _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -386,7 +386,7 @@ def test_infer_signature_uses_fastcall_skeleton_without_keywords() -> None:
                 _arg("self"),
                 _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -438,12 +438,12 @@ def test_infer_signature_uses_npy_parse_arguments_for_fastcall_keywords(
                 _arg("copy", "bool", default_value="False"),
                 _arg(
                     "out",
-                    UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType("None"))),
+                    UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType.none_)),
                     default_value="...",
                     kind=ArgumentKind.KEYWORD_ONLY,
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -485,10 +485,10 @@ def test_infer_signature_uses_npy_parse_arguments_with_macro_expanded_cache(
     assert inferred == [
         Signature(
             args=[
-                _arg("shape", UnionType((RawType("int"), RawType("tuple[int, ...]")))),
+                _arg("shape", UnionType((RawType.int_, RawType("tuple[int, ...]")))),
                 _arg("order", "bool", default_value="False"),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -529,7 +529,7 @@ def test_infer_signature_uses_npy_parse_arguments_empty_name_as_positional_only(
                 _arg("d1", "object", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("d2", "object", kind=ArgumentKind.POSITIONAL_ONLY),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -563,7 +563,7 @@ def test_infer_signature_uses_npy_parse_arguments_object_fallback_for_unknown_co
     assert inferred == [
         Signature(
             args=[_arg("axis", "object")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -597,7 +597,7 @@ def test_infer_signature_accepts_renamed_npy_parse_arguments_inputs() -> None:
     assert inferred == [
         Signature(
             args=[_arg("self"), _arg("value", "object")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -660,13 +660,13 @@ def test_infer_signature_maps_numpy_array_like_dtype_and_copy_converters() -> No
                 _arg("prototype", RawType("numpy.typing.ArrayLike", imports=("numpy.typing",))),
                 _arg(
                     "dtype",
-                    UnionType((RawType("numpy.typing.DTypeLike", imports=("numpy.typing",)), RawType("None"))),
+                    UnionType((RawType("numpy.typing.DTypeLike", imports=("numpy.typing",)), RawType.none_)),
                     default_value="...",
                 ),
                 _arg("subok", "int", default_value="0"),
                 _arg(
                     "shape",
-                    UnionType((RawType("int"), RawType("tuple[int, ...]"), RawType("None"))),
+                    UnionType((RawType.int_, RawType("tuple[int, ...]"), RawType.none_)),
                     default_value="...",
                 ),
                 _arg(
@@ -676,7 +676,7 @@ def test_infer_signature_maps_numpy_array_like_dtype_and_copy_converters() -> No
                     kind=ArgumentKind.KEYWORD_ONLY,
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -723,14 +723,14 @@ def test_infer_signature_maps_numpy_copy_converter_and_int_defaults() -> None:
             args=[
                 _arg(
                     "copy",
-                    UnionType((RawType("bool"), RawType('typing.Literal[False, True, 2]', imports=("typing",)), RawType("None"))),
+                    UnionType((RawType.bool_, RawType('typing.Literal[False, True, 2]', imports=("typing",)), RawType.none_)),
                     default_value="...",
                     kind=ArgumentKind.KEYWORD_ONLY,
                 ),
                 _arg("ndmin", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
                 _arg("ndmax", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -795,11 +795,11 @@ def test_infer_signature_maps_numpy_business_day_converters(
                 _arg("weekmask", RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), default_value="..."),
                 _arg(
                     "holidays",
-                    UnionType((RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), RawType("None"))),
+                    UnionType((RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), RawType.none_)),
                     default_value="...",
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -843,7 +843,7 @@ def test_infer_signature_maps_numpy_trim_converter(
                     default_value="...",
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -888,7 +888,7 @@ def test_infer_signature_maps_numpy_errmode_converter() -> None:
                     kind=ArgumentKind.KEYWORD_ONLY,
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]
 
@@ -937,11 +937,11 @@ def test_infer_signature_keeps_multiple_npy_parse_argument_lists() -> None:
     assert inferred == [
         Signature(
             args=[_arg("left", "object")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         ),
         Signature(
             args=[_arg("right", "object")],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         ),
     ]
 
@@ -1011,6 +1011,6 @@ def test_infer_signature_refines_meth_o_argument_for_pyarray_check_exact_macro(
                     kind=ArgumentKind.POSITIONAL_ONLY,
                 ),
             ],
-            return_type=RawType("int"),
+            return_type=RawType.int_,
         )
     ]

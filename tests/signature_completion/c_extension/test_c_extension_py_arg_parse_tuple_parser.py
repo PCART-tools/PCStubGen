@@ -159,7 +159,7 @@ def test_parse_passes_p_unit_type_to_optional_default_inference() -> None:
     )
 
     assert parsed == [_arg("predicate", "bool", default_value="False")]
-    assert observed == [(predicate_cursor, RawType("bool"))]
+    assert observed == [(predicate_cursor, RawType.bool_)]
 
 
 def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
@@ -246,8 +246,8 @@ def test_parse_passes_leaf_type_to_tuple_default_inference() -> None:
         _arg("payload", "tuple[int, bool]", default_value="(1, False)")
     ]
     assert observed == [
-        (count_cursor, RawType("int")),
-        (flag_cursor, RawType("bool")),
+        (count_cursor, RawType.int_),
+        (flag_cursor, RawType.bool_),
     ]
 
 

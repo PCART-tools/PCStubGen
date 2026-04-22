@@ -19,11 +19,11 @@ def _cursor(name: str) -> Cursor:
 
 
 _BUFFER_TYPE = RawType("collections.abc.Buffer", imports=("collections.abc",))
-_STR_OR_NONE_TYPE = UnionType((RawType("str"), RawType("None")))
-_STR_OR_BUFFER_TYPE = UnionType((RawType("str"), _BUFFER_TYPE))
-_STR_OR_BUFFER_OR_NONE_TYPE = UnionType((RawType("str"), _BUFFER_TYPE, RawType("None")))
+_STR_OR_NONE_TYPE = UnionType((RawType.str_, RawType.none_))
+_STR_OR_BUFFER_TYPE = UnionType((RawType.str_, _BUFFER_TYPE))
+_STR_OR_BUFFER_OR_NONE_TYPE = UnionType((RawType.str_, _BUFFER_TYPE, RawType.none_))
 _STR_OR_BYTES_OR_BYTEARRAY_TYPE = UnionType(
-    (RawType("str"), RawType("bytes"), RawType("bytearray"))
+    (RawType.str_, RawType.bytes_, RawType.bytearray_)
 )
 
 

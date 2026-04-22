@@ -18,8 +18,8 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
                 name="foo",
                 signatures=[
                     _signature(
-                        args=[Argument(name="value", type=RawType("int"))],
-                        return_type=RawType("bool"),
+                        args=[Argument(name="value", type=RawType.int_)],
+                        return_type=RawType.bool_,
                     )
                 ],
                 comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) { return value; }",
@@ -55,12 +55,12 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
                 name="foo",
                 signatures=[
                     _signature(
-                        args=[Argument(name="value", type=RawType("int"))],
-                        return_type=RawType("int"),
+                        args=[Argument(name="value", type=RawType.int_)],
+                        return_type=RawType.int_,
                     ),
                     _signature(
-                        args=[Argument(name="value", type=RawType("str"))],
-                        return_type=RawType("str"),
+                        args=[Argument(name="value", type=RawType.str_)],
+                        return_type=RawType.str_,
                     ),
                 ],
                 comment="src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
@@ -101,10 +101,10 @@ def test_toml_writer_renders_multi_argument_signature_on_multiple_lines(tmp_path
                 signatures=[
                     _signature(
                         args=[
-                            Argument(name="value", type=RawType("int")),
-                            Argument(name="flag", type=RawType("bool")),
+                            Argument(name="value", type=RawType.int_),
+                            Argument(name="flag", type=RawType.bool_),
                         ],
-                        return_type=RawType("str"),
+                        return_type=RawType.str_,
                     )
                 ],
             )
@@ -158,8 +158,8 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                         name="build",
                         signatures=[
                             _signature(
-                                args=[Argument(name="self"), Argument(name="value", type=RawType("int"))],
-                                return_type=RawType("int"),
+                                args=[Argument(name="self"), Argument(name="value", type=RawType.int_)],
+                                return_type=RawType.int_,
                             )
                         ],
                     )
@@ -170,7 +170,7 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                         methods=[
                             Function(
                                 name="build_inner",
-                                signatures=[_signature(args=[Argument(name="self")], return_type=RawType("int"))],
+                                signatures=[_signature(args=[Argument(name="self")], return_type=RawType.int_)],
                             )
                         ],
                     )
@@ -214,8 +214,8 @@ def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> No
                         name="build",
                         signatures=[
                             _signature(
-                                args=[Argument(name="cls"), Argument(name="value", type=RawType("int"))],
-                                return_type=RawType("int"),
+                                args=[Argument(name="cls"), Argument(name="value", type=RawType.int_)],
+                                return_type=RawType.int_,
                             )
                         ],
                         decorator="classmethod",
@@ -224,8 +224,8 @@ def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> No
                         name="make",
                         signatures=[
                             _signature(
-                                args=[Argument(name="value", type=RawType("str"))],
-                                return_type=RawType("str"),
+                                args=[Argument(name="value", type=RawType.str_)],
+                                return_type=RawType.str_,
                             )
                         ],
                         decorator="staticmethod",

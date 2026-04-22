@@ -63,7 +63,7 @@ def test_renderer_rejects_function_without_exportable_signature() -> None:
 def test_renderer_prints_function_doc_for_single_signature() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType.int_)])],
         doc="original docs",
     )
 
@@ -80,7 +80,7 @@ def test_renderer_prints_function_doc_for_single_signature() -> None:
 def test_renderer_renders_unknown_default_value_as_ellipsis() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"), default_value="...")])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType.int_, default_value="...")])],
     )
 
     lines = StubRenderer(include_docstrings=False).render_function(func)
@@ -105,8 +105,8 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
     func = _function(
         name="foo",
         signatures=[
-            _signature(args=[Argument(name="value", type=RawType("int"))], return_type=RawType("str")),
-            _signature(args=[Argument(name="value", type=RawType("str"))], return_type=RawType("int")),
+            _signature(args=[Argument(name="value", type=RawType.int_)], return_type=RawType.str_),
+            _signature(args=[Argument(name="value", type=RawType.str_)], return_type=RawType.int_),
         ],
         doc=doc,
     )
@@ -124,7 +124,7 @@ def test_renderer_repeats_original_function_doc_for_each_overload() -> None:
 def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))], return_type=RawType("bool"))],
+        signatures=[_signature(args=[Argument(name="value", type=RawType.int_)], return_type=RawType.bool_)],
         doc="foo(value: str) -> str\n\nparsed from docstring",
     )
 
@@ -138,7 +138,7 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
 def test_renderer_prints_comment_after_function() -> None:
     func = _function(
         name="foo",
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType.int_)])],
         comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) {\n    return value;\n}",
     )
 
@@ -163,7 +163,7 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
             Function(
                 name="foo",
                 signatures=[
-                    _signature(args=[Argument(name="x", type=RawType("int"))], return_type=RawType("int")),
+                    _signature(args=[Argument(name="x", type=RawType.int_)], return_type=RawType.int_),
                     _signature(
                         args=[Argument(name="x", type=RawType("typing.Optional[int]", imports=("typing",)))],
                         return_type=RawType("typing.Optional[int]", imports=("typing",)),
@@ -191,12 +191,12 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
         name="build",
         signatures=[
             _signature(
-                args=[Argument(name="cls"), Argument(name="x", type=RawType("int"))],
-                return_type=RawType("int"),
+                args=[Argument(name="cls"), Argument(name="x", type=RawType.int_)],
+                return_type=RawType.int_,
             ),
             _signature(
-                args=[Argument(name="cls"), Argument(name="x", type=RawType("str"))],
-                return_type=RawType("str"),
+                args=[Argument(name="cls"), Argument(name="x", type=RawType.str_)],
+                return_type=RawType.str_,
             ),
         ],
         decorator="classmethod",
@@ -225,7 +225,7 @@ def test_renderer_repeats_method_decorator_for_each_overload() -> None:
 def test_renderer_uses_instance_method_signature_as_is() -> None:
     method = Function(
         name="append",
-        signatures=[_signature(args=[Argument(name="self"), Argument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="self"), Argument(name="value", type=RawType.int_)])],
     )
 
     lines = StubRenderer(include_docstrings=False).render_method(method)
@@ -242,7 +242,7 @@ def test_renderer_uses_instance_method_signature_as_is() -> None:
 def test_renderer_does_not_insert_receiver_for_staticmethod_output() -> None:
     method = Function(
         name="build",
-        signatures=[_signature(args=[Argument(name="value", type=RawType("int"))])],
+        signatures=[_signature(args=[Argument(name="value", type=RawType.int_)])],
         decorator="staticmethod",
     )
 

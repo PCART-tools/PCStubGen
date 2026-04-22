@@ -49,11 +49,11 @@ def test_infer_expr_type_keeps_raw_py_buildvalue_container_union_shape() -> None
             (
                 UnionType(
                     (
-                        RawType("str"),
-                        RawType("None"),
+                        RawType.str_,
+                        RawType.none_,
                     )
                 ),
-                RawType("int"),
+                RawType.int_,
             )
         )
     )
@@ -67,7 +67,7 @@ def test_infer_expr_type_resolves_py_buildvalue_object_slots() -> None:
         )
     )
 
-    assert inferred == TupleType((RawType("int"),))
+    assert inferred == TupleType((RawType.int_,))
 
 def test_infer_expr_type_falls_back_to_any_when_py_buildvalue_object_slots_are_unknown() -> None:
     inferred = signature_rules_module.infer_expr_type(
@@ -454,7 +454,7 @@ def test_return_type_traces_local_assignment_without_tokens() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_uses_last_assignment_before_return_when_types_converge() -> None:
     value_decl = _var_decl("value", _null_ptr_literal())
@@ -475,7 +475,7 @@ def test_return_type_uses_last_assignment_before_return_when_types_converge() ->
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_uses_last_assignment_before_return_when_types_diverge() -> None:
     value_decl = _var_decl("value", _null_ptr_literal())
@@ -496,7 +496,7 @@ def test_return_type_uses_last_assignment_before_return_when_types_diverge() -> 
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("float")
+    assert inferred == RawType.float_
 
 def test_return_type_does_not_revisit_earlier_assignment_when_last_assignment_is_null() -> None:
     value_decl = _var_decl("value", _null_ptr_literal())
@@ -541,7 +541,7 @@ def test_return_type_traces_global_decl_ref_initializer() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_traces_static_local_decl_ref_initializer() -> None:
     value_decl = _var_decl(
@@ -556,7 +556,7 @@ def test_return_type_traces_static_local_decl_ref_initializer() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_parses_py_buildvalue() -> None:
     cursor = _fake_function_cursor_with_children(
@@ -656,7 +656,7 @@ def test_return_type_drops_error_return_factory_branch() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_drops_error_return_factory_conditional_branch() -> None:
     cursor = _fake_function_cursor_with_children(
@@ -671,7 +671,7 @@ def test_return_type_drops_error_return_factory_conditional_branch() -> None:
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_
 
 def test_return_type_returns_any_for_unsupported_returns() -> None:
     cursor = _fake_function_cursor_with_children(
@@ -698,4 +698,4 @@ def test_return_type_skips_failed_return_expr_and_keeps_successful_returns() -> 
 
     inferred = signature_rules_module.infer_return_type(cursor)
 
-    assert inferred == RawType("int")
+    assert inferred == RawType.int_

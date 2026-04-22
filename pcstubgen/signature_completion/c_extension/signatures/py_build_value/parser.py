@@ -44,7 +44,7 @@ class PyBuildValueTypeParser:
             )
 
         if not top_level_types:
-            return RawType("None")
+            return RawType.none_
         if len(top_level_types) == 1:
             return top_level_types[0]
         return TupleType(tuple(top_level_types))

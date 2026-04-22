@@ -53,9 +53,9 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_TrueStruct": "True",
     "_Py_FalseStruct": "False",
 }
-_OBJECT_TYPE = RawType("object")
-_BOOL_TYPE = RawType("bool")
-_FLOAT_TYPE = RawType("float")
+_OBJECT_TYPE = RawType.object_
+_BOOL_TYPE = RawType.bool_
+_FLOAT_TYPE = RawType.float_
 
 
 class Inferencer:
@@ -115,7 +115,7 @@ class Inferencer:
         arguments = [
             Argument(
                 name="args",
-                type=RawType("object"),
+                type=RawType.object_,
                 kind=ArgumentKind.VAR_POSITIONAL,
             )
         ]
@@ -123,7 +123,7 @@ class Inferencer:
             arguments.append(
                 Argument(
                     name="kwargs",
-                    type=RawType("object"),
+                    type=RawType.object_,
                     kind=ArgumentKind.VAR_KEYWORD,
                 )
             )

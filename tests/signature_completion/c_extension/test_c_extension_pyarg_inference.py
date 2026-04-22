@@ -95,7 +95,7 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
             _arg("count", "int"),
             _arg(
                 "label",
-                UnionType((RawType("str"), RawType("None"))),
+                UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
             ),
         ]
@@ -361,7 +361,7 @@ def test_infer_default_value_for_pyarg_renders_string_default_as_python_literal(
     assert (
         signature_rules_module._infer_default_value_for_pyarg(
             _address_of("value", referenced=value_decl),
-            RawType("str"),
+            RawType.str_,
         )
         == expected_default
     )
@@ -388,7 +388,7 @@ def test_infer_argument_lists_renders_char_pointer_null_default_as_unknown(
         [
             _arg(
                 "value",
-                UnionType((RawType("str"), RawType("None"))),
+                UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
             )
         ]
@@ -959,20 +959,20 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
     [
         (
             "PyArray_OutputConverter",
-            UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType("None"))),
+            UnionType((RawType("numpy.ndarray", imports=("numpy",)), RawType.none_)),
         ),
-        ("PyArray_BoolConverter", RawType("bool")),
+        ("PyArray_BoolConverter", RawType.bool_),
         (
             "PyArray_IntpConverter",
-            UnionType((RawType("int"), RawType("tuple[int, ...]"))),
+            UnionType((RawType.int_, RawType("tuple[int, ...]"))),
         ),
         (
             "PyArray_DescrConverter2",
-            UnionType((_numpy_typing_type("DTypeLike"), RawType("None"))),
+            UnionType((_numpy_typing_type("DTypeLike"), RawType.none_)),
         ),
         (
             "PyArray_CopyConverter",
-            UnionType((RawType("bool"), _typing_literal("False, True, 2"), RawType("None"))),
+            UnionType((RawType.bool_, _typing_literal("False, True, 2"), RawType.none_)),
         ),
         (
             "NpyIter_GlobalFlagsConverter",
@@ -980,7 +980,7 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
         ),
         (
             "PyArray_ClipmodeConverter",
-            UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType("int"))),
+            UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType.int_)),
         ),
     ],
 )
@@ -1089,7 +1089,7 @@ def test_infer_argument_lists_maps_numpy_business_day_converters_for_keywords() 
         _arg("weekmask", _numpy_typing_type("ArrayLike"), default_value="..."),
         _arg(
             "holidays",
-            UnionType((_numpy_typing_type("ArrayLike"), RawType("None"))),
+            UnionType((_numpy_typing_type("ArrayLike"), RawType.none_)),
             default_value="...",
         ),
     ]]
@@ -1223,7 +1223,7 @@ def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_p
         [
             _arg(
                 "label",
-                UnionType((RawType("str"), RawType("None"))),
+                UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
             )
         ]
@@ -1455,7 +1455,7 @@ def test_infer_default_value_for_pyarg_rejects_designated_array_initializer(
     with pytest.raises(RuntimeError, match="数组元素没有可用定值表达式"):
         signature_rules_module._infer_default_value_for_pyarg(
             _address_of_expr(_array_subscript("extent", index, referenced=extent_decl)),
-            RawType("int"),
+            RawType.int_,
         )
 
 def test_infer_argument_lists_falls_back_to_minimal_varargs_when_no_supported_pyarg_calls_exist() -> None:
@@ -1568,7 +1568,7 @@ def test_infer_default_value_for_pyarg_raises_with_cursor_location_for_unsupport
     ):
         signature_rules_module._infer_default_value_for_pyarg(
             _address_of("value", referenced=target_decl),
-            RawType("int"),
+            RawType.int_,
         )
 
 def test_infer_default_value_for_pyarg_uses_evaluated_float_result(
@@ -1589,7 +1589,7 @@ def test_infer_default_value_for_pyarg_uses_evaluated_float_result(
     assert (
         signature_rules_module._infer_default_value_for_pyarg(
             _address_of("value", referenced=target_decl),
-            RawType("float"),
+            RawType.float_,
         )
         == "1000000.0"
     )
