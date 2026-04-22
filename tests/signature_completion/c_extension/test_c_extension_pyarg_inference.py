@@ -92,11 +92,12 @@ def test_infer_argument_lists_parses_pyarg_parsetuple() -> None:
 
     assert inferred == [
         [
-            _arg("count", "int"),
+            _arg("count", "int", kind=ArgumentKind.POSITIONAL_ONLY),
             _arg(
                 "label",
                 UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
+                kind=ArgumentKind.POSITIONAL_ONLY,
             ),
         ]
     ]
@@ -114,7 +115,7 @@ def test_infer_argument_lists_maps_pyarg_p_unit_to_bool() -> None:
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("flag", "bool")]]
+    assert inferred == [[_arg("flag", "bool", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_refines_object_with_pytuple_check() -> None:
@@ -135,7 +136,11 @@ def test_infer_argument_lists_refines_object_with_pytuple_check() -> None:
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[
-        _arg("value", RawType("tuple[typing.Any, ...]", imports=("typing",)))
+        _arg(
+            "value",
+            RawType("tuple[typing.Any, ...]", imports=("typing",)),
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
     ]]
 
 
@@ -156,7 +161,7 @@ def test_infer_argument_lists_refines_object_with_cast_wrapped_pyfloat_check() -
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "float")]]
+    assert inferred == [[_arg("value", "float", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_refines_object_with_py_type_wrapped_check_exact() -> None:
@@ -180,7 +185,11 @@ def test_infer_argument_lists_refines_object_with_py_type_wrapped_check_exact() 
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[
-        _arg("value", RawType("numpy.ndarray", imports=("numpy",)))
+        _arg(
+            "value",
+            RawType("numpy.ndarray", imports=("numpy",)),
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
     ]]
 
 
@@ -214,6 +223,7 @@ def test_infer_argument_lists_combines_multiple_check_types_for_same_object() ->
                     ListType(AnyType()),
                 )
             ).canonicalize(),
+            kind=ArgumentKind.POSITIONAL_ONLY,
         )
     ]]
 
@@ -266,7 +276,7 @@ def test_infer_argument_lists_ignore_alias_check_for_object_refinement() -> None
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object")]]
+    assert inferred == [[_arg("value", "object", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_do_not_refine_non_object_type() -> None:
@@ -286,7 +296,7 @@ def test_infer_argument_lists_do_not_refine_non_object_type() -> None:
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "str")]]
+    assert inferred == [[_arg("value", "str", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 @pytest.mark.parametrize(
     ("struct_name", "expected_default"),
@@ -313,7 +323,14 @@ def test_infer_argument_lists_renders_python_singleton_default_values(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object", default_value=expected_default)]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "object",
+            default_value=expected_default,
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_renders_pointer_zero_default_as_unknown(
     monkeypatch: pytest.MonkeyPatch,
@@ -338,7 +355,14 @@ def test_infer_argument_lists_renders_pointer_zero_default_as_unknown(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object", default_value="...")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "object",
+            default_value="...",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 @pytest.mark.parametrize(
@@ -390,6 +414,7 @@ def test_infer_argument_lists_renders_char_pointer_null_default_as_unknown(
                 "value",
                 UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
+                kind=ArgumentKind.POSITIONAL_ONLY,
             )
         ]
     ]
@@ -417,7 +442,14 @@ def test_infer_argument_lists_keeps_non_pointer_zero_default_as_integer(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "int", default_value="0")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "int",
+            default_value="0",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 def test_infer_argument_lists_renders_default_from_assignment_before_parse(
@@ -440,7 +472,14 @@ def test_infer_argument_lists_renders_default_from_assignment_before_parse(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "int", default_value="12")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "int",
+            default_value="12",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_uses_last_assignment_before_parse_for_default(
     monkeypatch: pytest.MonkeyPatch,
@@ -463,7 +502,14 @@ def test_infer_argument_lists_uses_last_assignment_before_parse_for_default(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "int", default_value="2")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "int",
+            default_value="2",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_ignores_assignment_after_parse_for_default(
     monkeypatch: pytest.MonkeyPatch,
@@ -496,7 +542,14 @@ def test_infer_argument_lists_ignores_assignment_after_parse_for_default(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "int", default_value="1")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "int",
+            default_value="1",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 def test_infer_argument_lists_renders_integer_defaults_from_chained_assignment(
@@ -528,7 +581,14 @@ def test_infer_argument_lists_renders_integer_defaults_from_chained_assignment(
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
-        [_arg("left_right", "tuple[int, int]", default_value="(512, 512)")]
+        [
+            _arg(
+                "left_right",
+                "tuple[int, int]",
+                default_value="(512, 512)",
+                kind=ArgumentKind.POSITIONAL_ONLY,
+            )
+        ]
     ]
 
 def test_infer_argument_lists_renders_float_defaults_from_chained_assignment(
@@ -560,7 +620,14 @@ def test_infer_argument_lists_renders_float_defaults_from_chained_assignment(
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
-        [_arg("left_right", "tuple[float, float]", default_value="(-1.0, -1.0)")]
+        [
+            _arg(
+                "left_right",
+                "tuple[float, float]",
+                default_value="(-1.0, -1.0)",
+                kind=ArgumentKind.POSITIONAL_ONLY,
+            )
+        ]
     ]
 
 @pytest.mark.parametrize(
@@ -595,7 +662,14 @@ def test_infer_argument_lists_renders_integer_bool_default_values(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("flag", "bool", default_value=expected_default)]]
+    assert inferred == [[
+        _arg(
+            "flag",
+            "bool",
+            default_value=expected_default,
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 @pytest.mark.parametrize(
@@ -633,7 +707,14 @@ def test_infer_argument_lists_renders_cxx_bool_default_values(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
+    assert inferred == [[
+        _arg(
+            "value",
+            argument_type,
+            default_value=expected_default,
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 @pytest.mark.parametrize(
@@ -672,7 +753,14 @@ def test_infer_argument_lists_renders_numeric_unary_default_values(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", argument_type, default_value=expected_default)]]
+    assert inferred == [[
+        _arg(
+            "value",
+            argument_type,
+            default_value=expected_default,
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == [initializer]
 
 def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
@@ -697,7 +785,14 @@ def test_infer_argument_lists_keeps_pointer_unary_default_as_unknown(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object", default_value="...")]]
+    assert inferred == [[
+        _arg(
+            "value",
+            "object",
+            default_value="...",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
     assert observed == []
 
 @pytest.mark.parametrize(
@@ -1088,7 +1183,7 @@ def test_infer_argument_lists_maps_representative_numpy_converters(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", expected)]]
+    assert inferred == [[_arg("value", expected, kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_maps_representative_numpy_type_object() -> None:
@@ -1109,7 +1204,7 @@ def test_infer_argument_lists_maps_representative_numpy_type_object() -> None:
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", expected)]]
+    assert inferred == [[_arg("value", expected, kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_maps_representative_numpy_dtype_meta_type_object() -> None:
@@ -1130,7 +1225,7 @@ def test_infer_argument_lists_maps_representative_numpy_dtype_meta_type_object()
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", expected)]]
+    assert inferred == [[_arg("value", expected, kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
 def test_infer_argument_lists_maps_numpy_business_day_converters_for_keywords() -> None:
@@ -1256,7 +1351,7 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_bang_type(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object")]]
+    assert inferred == [[_arg("value", "object", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 def test_infer_argument_lists_falls_back_to_object_for_unknown_o_ampersand_converter(
     tmp_path: Path,
@@ -1287,7 +1382,7 @@ def test_infer_argument_lists_falls_back_to_object_for_unknown_o_ampersand_conve
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("value", "object")]]
+    assert inferred == [[_arg("value", "object", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_parse_fails() -> None:
     label_decl = _var_decl("label", _identifier_node("UNSUPPORTED_DEFAULT"))
@@ -1309,6 +1404,7 @@ def test_infer_argument_lists_falls_back_to_unknown_default_value_when_default_p
                 "label",
                 UnionType((RawType.str_, RawType.none_)),
                 default_value="...",
+                kind=ArgumentKind.POSITIONAL_ONLY,
             )
         ]
     ]
@@ -1328,7 +1424,13 @@ def test_infer_argument_lists_joins_decl_ref_names_for_tuple_arguments() -> None
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("left_right", "tuple[int, int]")]]
+    assert inferred == [[
+        _arg(
+            "left_right",
+            "tuple[int, int]",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_parses_array_subscript_tuple_slots_with_defaults(
     monkeypatch: pytest.MonkeyPatch,
@@ -1394,6 +1496,7 @@ def test_infer_argument_lists_parses_array_subscript_tuple_slots_with_defaults(
                 "extent",
                 "tuple[float, float, float, float]",
                 default_value="(-3.0, -2.5, 2.0, 2.5)",
+                kind=ArgumentKind.POSITIONAL_ONLY,
             )
         ]
     ]
@@ -1426,7 +1529,14 @@ def test_infer_argument_lists_marks_array_initializer_defaults_unknown(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("extent", "tuple[float, float]", default_value="...")]]
+    assert inferred == [[
+        _arg(
+            "extent",
+            "tuple[float, float]",
+            default_value="...",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_marks_missing_array_initializer_items_unknown(
     monkeypatch: pytest.MonkeyPatch,
@@ -1451,7 +1561,14 @@ def test_infer_argument_lists_marks_missing_array_initializer_items_unknown(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("extent", "int", default_value="...")]]
+    assert inferred == [[
+        _arg(
+            "extent",
+            "int",
+            default_value="...",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_array_assignment_overrides_initializer_default(
     monkeypatch: pytest.MonkeyPatch,
@@ -1485,7 +1602,14 @@ def test_infer_argument_lists_array_assignment_overrides_initializer_default(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("extent", "float", default_value="3.5")]]
+    assert inferred == [[
+        _arg(
+            "extent",
+            "float",
+            default_value="3.5",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_argument_lists_array_defaults_follow_chained_assignment(
     monkeypatch: pytest.MonkeyPatch,
@@ -1522,7 +1646,14 @@ def test_infer_argument_lists_array_defaults_follow_chained_assignment(
 
     inferred = _infer_varargs_arguments(cursor)
 
-    assert inferred == [[_arg("extent", "int", default_value="5")]]
+    assert inferred == [[
+        _arg(
+            "extent",
+            "int",
+            default_value="5",
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+    ]]
 
 def test_infer_default_value_for_pyarg_rejects_designated_array_initializer(
     monkeypatch: pytest.MonkeyPatch,
@@ -1700,6 +1831,6 @@ def test_infer_argument_lists_keeps_matching_pyarg_calls() -> None:
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [
-        [_arg("value", "int")],
-        [_arg("value", "int")],
+        [_arg("value", "int", kind=ArgumentKind.POSITIONAL_ONLY)],
+        [_arg("value", "int", kind=ArgumentKind.POSITIONAL_ONLY)],
     ]

@@ -94,17 +94,33 @@ class Inferencer:
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]
-        if self._flags & METH_VARARGS:
-            if self._flags & METH_KEYWORDS:
-                arguments_list = self._infer_arguments_for_call_name(
+        if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS:
+            arguments_list = self._infer_arguments_for_call_name(
+                "PyArg_ParseTuple",
+                self._infer_pyarg_parse_tuple_arguments,
+            )
+            for arguments in arguments_list:
+                arguments.append(
+                    Argument(
+                        name="kwargs",
+                        type=RawType.object_,
+                        kind=ArgumentKind.VAR_KEYWORD,
+                    )
+                )
+            arguments_list.extend(
+                self._infer_arguments_for_call_name(
                     "PyArg_ParseTupleAndKeywords",
                     self._infer_pyarg_parse_tuple_and_keywords_arguments,
                 )
-            else:
-                arguments_list = self._infer_arguments_for_call_name(
-                    "PyArg_ParseTuple",
-                    self._infer_pyarg_parse_tuple_arguments,
-                )
+            )
+            if arguments_list:
+                return arguments_list
+            return [self._build_minimal_arguments()]
+        if self._flags & METH_VARARGS:
+            arguments_list = self._infer_arguments_for_call_name(
+                "PyArg_ParseTuple",
+                self._infer_pyarg_parse_tuple_arguments,
+            )
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]

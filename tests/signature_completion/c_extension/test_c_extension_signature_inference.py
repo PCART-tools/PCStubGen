@@ -251,7 +251,10 @@ def test_infer_signature_keeps_parse_tuple_result_for_meth_varargs_method() -> N
 
     assert inferred == [
         Signature(
-            args=[_arg("self"), _arg("value", "int")],
+            args=[
+                _arg("self", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("value", "int", kind=ArgumentKind.POSITIONAL_ONLY),
+            ],
             return_type=RawType.int_,
         )
     ]
@@ -317,7 +320,7 @@ def test_infer_signature_keeps_parse_tuple_and_keywords_result_for_classmethod()
     ]
 
 
-def test_infer_signature_falls_back_to_varargs_and_keywords() -> None:
+def test_infer_signature_keeps_parse_tuple_result_and_appends_kwargs() -> None:
     value_decl = _var_decl("value", _int_literal("0"))
     cursor = _fake_function_cursor_with_children(
         _call_expr(
@@ -337,12 +340,56 @@ def test_infer_signature_falls_back_to_varargs_and_keywords() -> None:
     assert inferred == [
         Signature(
             args=[
-                _arg("cls"),
-                _arg("args", "object", kind=ArgumentKind.VAR_POSITIONAL),
+                _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("value", "int", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
             return_type=AnyType(),
         )
+    ]
+
+
+def test_infer_signature_keeps_parse_tuple_and_keywords_results_together() -> None:
+    tuple_value_decl = _var_decl("tuple_value", _int_literal("0"))
+    keywords_value_decl = _var_decl("keywords_value", _int_literal("0"))
+    kwlist_decl = _var_decl("kwlist", _init_list(_string_literal("value"), _null_ptr_literal()))
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("i"),
+            _address_of("tuple_value", referenced=tuple_value_decl),
+        ),
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("i"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _address_of("keywords_value", referenced=keywords_value_decl),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("tuple_value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_VARARGS | METH_KEYWORDS | METH_CLASS,
+        is_method=True,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("tuple_value", "int", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
+            ],
+            return_type=RawType.int_,
+        ),
+        Signature(
+            args=[_arg("cls"), _arg("value", "int")],
+            return_type=RawType.int_,
+        ),
     ]
 
 

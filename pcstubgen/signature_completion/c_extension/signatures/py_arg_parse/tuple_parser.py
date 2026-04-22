@@ -8,7 +8,7 @@ from typing import Callable
 from clang.cindex import Cursor
 from loguru import logger
 
-from .....models import Argument
+from .....models import Argument, ArgumentKind
 from .format_units import _FORMAT_UNIT_SPECS
 from .....type_models import RawType, Type
 
@@ -163,6 +163,7 @@ class PyArgParseTupleTypeParser:
             name=name,
             type=value.build_type(),
             default_value=default_value,
+            kind=ArgumentKind.POSITIONAL_ONLY,
         )
 
     def _parse_value(self) -> _ParsedValue:
