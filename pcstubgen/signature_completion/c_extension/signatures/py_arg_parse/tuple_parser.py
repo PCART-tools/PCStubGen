@@ -13,6 +13,8 @@ from .format_units import _FORMAT_UNIT_SPECS
 from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
+_InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
+_OBJECT_TYPE = RawType("object")
 
 
 class PyArgParseTupleTypeParserError(ValueError):
@@ -108,6 +110,7 @@ class PyArgParseTupleTypeParser:
         infer_name_func: Callable[[list[Cursor]], str],
         infer_type_object_func: Callable[[Cursor], Type],
         infer_converter_type_func: Callable[[Cursor], Type],
+        infer_refined_object_type_func: _InferRefinedObjectTypeFunc,
         infer_default_value_func: _InferDefaultValueFunc,
     ) -> None:
         """初始化格式串解析器。"""
@@ -116,6 +119,7 @@ class PyArgParseTupleTypeParser:
         self._infer_name_func = infer_name_func
         self._infer_type_object_func = infer_type_object_func
         self._infer_converter_type_func = infer_converter_type_func
+        self._infer_refined_object_type_func = infer_refined_object_type_func
         self._infer_default_value_func = infer_default_value_func
         self._char_index = 0
         self._arg_index = 0
@@ -223,6 +227,8 @@ class PyArgParseTupleTypeParser:
                         raw_c_args[spec.converter_arg_offset]
                     )
                 decl_ref_cursor = raw_c_args[spec.decl_ref_offset]
+                if value_type == _OBJECT_TYPE:
+                    value_type = self._infer_refined_object_type_func(decl_ref_cursor)
                 return _ScalarParsedValue(
                     type=value_type,
                     c_args=(decl_ref_cursor,),

@@ -42,6 +42,7 @@ from .py_build_value.parser import PyBuildValueTypeParser
 from .rules import numpy_rules
 from .rules import (
     CALL_NAME_TO_TYPE,
+    CHECK_MACRO_NAME_TO_TYPE,
     OBJECT_NAME_TO_TYPE,
     PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE,
     PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE,
@@ -52,6 +53,7 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_TrueStruct": "True",
     "_Py_FalseStruct": "False",
 }
+_OBJECT_TYPE = RawType("object")
 _BOOL_TYPE = RawType("bool")
 _FLOAT_TYPE = RawType("float")
 
@@ -83,13 +85,7 @@ class Inferencer:
         if self._flags & METH_NOARGS:
             return [[]]
         if self._flags & METH_O:
-            return [[
-                Argument(
-                    name="arg",
-                    type=RawType("object"),
-                    kind=ArgumentKind.POSITIONAL_ONLY,
-                )
-            ]]
+            return [[self._build_meth_o_argument()]]
         if self._flags & METH_FASTCALL:
             arguments_list = self._infer_arguments_for_call_name(
                 "npy_parse_arguments",
@@ -210,6 +206,7 @@ class Inferencer:
             infer_name_func=self._infer_argument_name,
             infer_type_object_func=self._infer_type_object_type_for_pyarg,
             infer_converter_type_func=self._infer_converter_type_for_pyarg,
+            infer_refined_object_type_func=self._infer_refined_object_type_for_cursor,
             infer_default_value_func=lambda cursor, expected_type: self._infer_default_value_for_pyarg(
                 cursor,
                 expected_type,
@@ -228,6 +225,7 @@ class Inferencer:
             args[4:],
             infer_type_object_func=self._infer_type_object_type_for_pyarg,
             infer_converter_type_func=self._infer_converter_type_for_pyarg,
+            infer_refined_object_type_func=self._infer_refined_object_type_for_cursor,
             infer_default_value_func=lambda cursor, expected_type: self._infer_default_value_for_pyarg(
                 cursor,
                 expected_type,
@@ -240,8 +238,86 @@ class Inferencer:
             call_expr,
             infer_name_func=self._infer_argument_name,
             infer_converter_type_func=self._infer_converter_type_for_pyarg,
+            infer_refined_object_type_func=self._infer_refined_object_type_for_cursor,
             infer_default_value_func=self._infer_default_value_for_pyarg,
         )
+
+    def _build_meth_o_argument(self) -> Argument:
+        """构造 `METH_O` 的单个业务参数，并在需要时细化为具体类型。"""
+        arg_type: Type = _OBJECT_TYPE
+        param_cursor = self._get_meth_o_argument_cursor()
+        if param_cursor is not None:
+            arg_type = self._infer_refined_object_type_for_cursor(param_cursor)
+        return Argument(
+            name="arg",
+            type=arg_type,
+            kind=ArgumentKind.POSITIONAL_ONLY,
+        )
+
+    def _get_meth_o_argument_cursor(self) -> Cursor | None:
+        """返回 `METH_O` 调用约定对应的真实对象形参。"""
+        param_cursors = [
+            child
+            for child in self._func_cursor.get_children()
+            if child.kind == CursorKind.PARM_DECL
+        ]
+        if len(param_cursors) < 2:
+            return None
+        return cast(Cursor, param_cursors[1])
+
+    def _infer_refined_object_type_for_cursor(self, cursor: Cursor) -> Type:
+        """扫描函数体中的 `Py*Check*` 宏调用，细化 `object` 参数类型。"""
+        target_decl = self._get_target_decl_for_cursor(cursor)
+        if target_decl is None:
+            return _OBJECT_TYPE
+
+        matched_types: set[Type] = set()
+        for call_expr in walk(self._func_cursor):
+            if call_expr.kind != CursorKind.CALL_EXPR:
+                continue
+
+            macro_type = CHECK_MACRO_NAME_TO_TYPE.get(get_first_token_str(call_expr))
+            if macro_type is None:
+                continue
+
+            checked_decl = self._get_checked_decl_for_macro_call(call_expr)
+            if checked_decl != target_decl:
+                continue
+            matched_types.add(macro_type)
+
+        if not matched_types:
+            return _OBJECT_TYPE
+        return UnionType(tuple(matched_types)).canonicalize()
+
+    def _get_target_decl_for_cursor(self, cursor: Cursor) -> Cursor | None:
+        """把参数槽位或形参 cursor 规约为目标声明节点。"""
+        cursor = ast_utils.unwrap_single_unary_op(cursor)
+        if cursor.kind in DECL_CURSOR_KINDS:
+            return cursor
+        if cursor.kind != CursorKind.DECL_REF_EXPR:
+            return None
+        return cast(Cursor | None, cursor.referenced)
+
+    def _get_checked_decl_for_macro_call(self, call_expr: Cursor) -> Cursor | None:
+        """提取 `Py*Check*` 调用正在检查的目标声明节点。"""
+        children = list(call_expr.get_children())
+        if len(children) < 2:
+            return None
+
+        checked_cursor = self._unwrap_checked_object_cursor(children[1])
+        if checked_cursor.kind != CursorKind.DECL_REF_EXPR:
+            return None
+        return cast(Cursor | None, checked_cursor.referenced)
+
+    def _unwrap_checked_object_cursor(self, cursor: Cursor) -> Cursor:
+        """剥离一层 `Py_TYPE(x)`，并返回真正被检查的对象表达式。"""
+        cursor = unwrap_transparent(cursor)
+        if cursor.kind == CursorKind.CALL_EXPR and cursor.spelling == "Py_TYPE":
+            children = list(cursor.get_children())
+            if len(children) < 2:
+                return cursor
+            return unwrap_transparent(children[1])
+        return cursor
 
     def _infer_expr_type(self, cursor: Cursor) -> Type:
         """对单个表达式做 Python 类型推断。"""

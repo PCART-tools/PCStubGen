@@ -13,6 +13,8 @@ from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
+_InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
+_OBJECT_TYPE = RawType("object")
 
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):
@@ -35,6 +37,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         args: list[Cursor],
         infer_type_object_func: Callable[[Cursor], Type],
         infer_converter_type_func: Callable[[Cursor], Type],
+        infer_refined_object_type_func: _InferRefinedObjectTypeFunc,
         infer_default_value_func: _InferDefaultValueFunc,
     ) -> None:
         """初始化格式串解析器。"""
@@ -43,6 +46,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._args = args
         self._infer_type_object_func = infer_type_object_func
         self._infer_converter_type_func = infer_converter_type_func
+        self._infer_refined_object_type_func = infer_refined_object_type_func
         self._infer_default_value_func = infer_default_value_func
         self._char_index = 0
         self._arg_index = 0
@@ -106,6 +110,8 @@ class PyArgParseTupleAndKeywordsTypeParser:
             arg_type = self._infer_type_object(c_args[spec.type_object_arg_offset])
         if spec.converter_arg_offset is not None:
             arg_type = self._infer_converter(c_args[spec.converter_arg_offset])
+        if arg_type == _OBJECT_TYPE:
+            arg_type = self._infer_refined_object_type_func(c_args[spec.decl_ref_offset])
 
         default_value: str | None = None
         if section is not _ArgumentSection.REQUIRED:

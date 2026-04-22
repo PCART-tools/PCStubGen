@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .....type_models import RawType, Type, UnionType
+from .....type_models import AnyType, DictType, ListType, RawType, Type, UnionType
 
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
@@ -45,6 +45,31 @@ ERROR_RETURN_FUNCTION_NAME_TO_TYPE: dict[str, Type] = {
     "PyErr_SetExcFromWindowsErrWithFilename": _ERROR_RETURN_TYPE,
     "PyErr_SetImportError": _ERROR_RETURN_TYPE,
     "PyErr_SetImportErrorSubclass": _ERROR_RETURN_TYPE,
+}
+
+_TUPLE_ANY_TYPE = RawType("tuple[typing.Any, ...]", imports=("typing",))
+_LIST_ANY_TYPE = ListType(AnyType())
+_DICT_ANY_TYPE = DictType(AnyType(), AnyType())
+_SET_ANY_TYPE = RawType("set[typing.Any]", imports=("typing",))
+
+CHECK_MACRO_NAME_TO_TYPE: dict[str, Type] = {
+    "PyTuple_Check": _TUPLE_ANY_TYPE,
+    "PyTuple_CheckExact": _TUPLE_ANY_TYPE,
+    "PyList_Check": _LIST_ANY_TYPE,
+    "PyList_CheckExact": _LIST_ANY_TYPE,
+    "PyUnicode_Check": RawType("str"),
+    "PyUnicode_CheckExact": RawType("str"),
+    "PyBytes_Check": RawType("bytes"),
+    "PyBytes_CheckExact": RawType("bytes"),
+    "PyDict_Check": _DICT_ANY_TYPE,
+    "PyDict_CheckExact": _DICT_ANY_TYPE,
+    "PySet_Check": _SET_ANY_TYPE,
+    "PySet_CheckExact": _SET_ANY_TYPE,
+    "PyLong_Check": RawType("int"),
+    "PyLong_CheckExact": RawType("int"),
+    "PyFloat_Check": RawType("float"),
+    "PyFloat_CheckExact": RawType("float"),
+    "PyBool_Check": RawType("bool"),
 }
 
 CALL_NAME_TO_TYPE: dict[str, Type] = {

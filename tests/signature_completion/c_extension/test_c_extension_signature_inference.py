@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import subprocess
+import sysconfig
+from pathlib import Path
+
 import clang.cindex
+import numpy
 import pytest
 
 from pcstubgen.models import ArgumentKind, Signature
+from pcstubgen.signature_completion.c_extension.libclang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_CLASS,
@@ -26,6 +32,7 @@ from tests._c_extension_test_support import (
     _identifier_node,
     _int_literal,
     _null_ptr_literal,
+    _param_decl,
     _return_stmt,
     _string_literal,
     _token_identifier_node,
@@ -184,6 +191,40 @@ def test_infer_signature_ignores_body_parse_for_meth_o() -> None:
             args=[
                 _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY),
+            ],
+            return_type=RawType("int"),
+        )
+    ]
+
+
+def test_infer_signature_refines_meth_o_argument_from_type_check() -> None:
+    self_decl = _param_decl("self")
+    value_decl = _param_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        self_decl,
+        value_decl,
+        _call_expr(
+            "PyTuple_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+        _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value"))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_O,
+        is_method=True,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("self", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg(
+                    "arg",
+                    RawType("tuple[typing.Any, ...]", imports=("typing",)),
+                    kind=ArgumentKind.POSITIONAL_ONLY,
+                ),
             ],
             return_type=RawType("int"),
         )
@@ -902,4 +943,74 @@ def test_infer_signature_keeps_multiple_npy_parse_argument_lists() -> None:
             args=[_arg("right", "object")],
             return_type=RawType("int"),
         ),
+    ]
+
+
+def _parse_function_cursor_with_python_headers(
+    source_path: Path,
+    *,
+    include_numpy: bool = False,
+) -> clang.cindex.Cursor:
+    resource_dir = subprocess.check_output(
+        ["clang", "-print-resource-dir"],
+        text=True,
+    ).strip()
+    parse_args = [
+        "-x",
+        "c",
+        "--std=c11",
+        "-I",
+        sysconfig.get_path("include"),
+        "-resource-dir",
+        resource_dir,
+    ]
+    if include_numpy:
+        parse_args.extend(["-I", numpy.get_include()])
+
+    translation_unit = clang.cindex.Index.create().parse(str(source_path), args=parse_args)
+    return ast_utils_module.get_func_cursor(translation_unit, "demo", None)
+
+
+@pytest.mark.libclang
+def test_infer_signature_refines_meth_o_argument_for_pyarray_check_exact_macro(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "macro_exact_signature.c"
+    source.write_text(
+        "\n".join(
+            [
+                "#include <Python.h>",
+                "#include <numpy/arrayobject.h>",
+                "PyObject *PyLong_FromLong(long);",
+                "PyObject *demo(PyObject *self, PyObject *arg) {",
+                "    if (PyArray_CheckExact(arg)) {",
+                "        return PyLong_FromLong(1);",
+                "    }",
+                "    return PyLong_FromLong(0);",
+                "}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    func_cursor = _parse_function_cursor_with_python_headers(source, include_numpy=True)
+
+    inferred = signature_rules_module.infer_signature(
+        func_cursor,
+        flags=METH_O,
+        is_method=True,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("self", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg(
+                    "arg",
+                    RawType("numpy.ndarray", imports=("numpy",)),
+                    kind=ArgumentKind.POSITIONAL_ONLY,
+                ),
+            ],
+            return_type=RawType("int"),
+        )
     ]

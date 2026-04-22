@@ -434,6 +434,13 @@ def _var_decl(
     )
 
 
+def _param_decl(name: str) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.PARM_DECL,
+        spelling=name,
+    )
+
+
 def _assignment(
     name: str,
     value: _FakeNode,
@@ -479,6 +486,13 @@ def _address_of_expr(expr: _FakeNode) -> _FakeNode:
     return _FakeNode(
         kind=clang.cindex.CursorKind.UNARY_OPERATOR,
         tokens=[_FakeToken(clang.cindex.TokenKind.PUNCTUATION, "&")],
+        children=[expr],
+    )
+
+
+def _c_style_cast_expr(expr: _FakeNode) -> _FakeNode:
+    return _FakeNode(
+        kind=clang.cindex.CursorKind.CSTYLE_CAST_EXPR,
         children=[expr],
     )
 

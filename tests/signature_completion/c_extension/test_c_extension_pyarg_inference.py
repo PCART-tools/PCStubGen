@@ -8,11 +8,12 @@ import pytest
 
 from pcstubgen.models import ArgumentKind
 from pcstubgen.signature_completion.c_extension.method_flags import (
+    METH_FASTCALL,
     METH_KEYWORDS,
     METH_VARARGS,
 )
 from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
-from pcstubgen.type_models import RawType, UnionType
+from pcstubgen.type_models import AnyType, ListType, RawType, UnionType
 from tests._c_extension_test_support import (
     _FakeCanonicalType,
     _FakeNode,
@@ -22,6 +23,7 @@ from tests._c_extension_test_support import (
     _arg,
     _array_subscript,
     _assignment,
+    _c_style_cast_expr,
     _call_expr,
     _conditional_expr,
     _cxx_bool_literal,
@@ -58,6 +60,10 @@ def _infer_varargs_keywords_arguments(cursor: clang.cindex.Cursor) -> list[list[
         cursor,
         flags=METH_VARARGS | METH_KEYWORDS,
     )
+
+
+def _infer_fastcall_arguments(cursor: clang.cindex.Cursor) -> list[list[object]]:
+    return signature_rules_module.infer_arguments_list(cursor, flags=METH_FASTCALL)
 
 
 def _typing_literal(text: str) -> RawType:
@@ -109,6 +115,178 @@ def test_infer_argument_lists_maps_pyarg_p_unit_to_bool() -> None:
     inferred = _infer_varargs_arguments(cursor)
 
     assert inferred == [[_arg("flag", "bool")]]
+
+
+def test_infer_argument_lists_refines_object_with_pytuple_check() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyTuple_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[
+        _arg("value", RawType("tuple[typing.Any, ...]", imports=("typing",)))
+    ]]
+
+
+def test_infer_argument_lists_refines_object_with_cast_wrapped_pyfloat_check() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyFloat_Check",
+            _c_style_cast_expr(_token_identifier_node("value", referenced=value_decl)),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", "float")]]
+
+
+def test_infer_argument_lists_refines_object_with_py_type_wrapped_check_exact() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyArray_CheckExact",
+            _call_expr(
+                "Py_TYPE",
+                _token_identifier_node("value", referenced=value_decl),
+            ),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[
+        _arg("value", RawType("numpy.ndarray", imports=("numpy",)))
+    ]]
+
+
+def test_infer_argument_lists_combines_multiple_check_types_for_same_object() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyTuple_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyList_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[
+        _arg(
+            "value",
+            UnionType(
+                (
+                    RawType("tuple[typing.Any, ...]", imports=("typing",)),
+                    ListType(AnyType()),
+                )
+            ).canonicalize(),
+        )
+    ]]
+
+
+def test_infer_argument_lists_refines_fastcall_object_with_pyarray_check() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("demo"),
+            _identifier_node("__argparse_cache"),
+            _identifier_node("args"),
+            _int_literal("1"),
+            _identifier_node("kwnames"),
+            _string_literal("value"),
+            _null_ptr_literal(),
+            _address_of("value", referenced=value_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _call_expr(
+            "PyArray_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+    )
+
+    inferred = _infer_fastcall_arguments(cursor)
+
+    assert inferred == [[
+        _arg("value", RawType("numpy.ndarray", imports=("numpy",)))
+    ]]
+
+
+def test_infer_argument_lists_ignore_alias_check_for_object_refinement() -> None:
+    value_decl = _var_decl("value")
+    alias_decl = _var_decl("tmp")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyTuple_Check",
+            _token_identifier_node("tmp", referenced=alias_decl),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", "object")]]
+
+
+def test_infer_argument_lists_do_not_refine_non_object_type() -> None:
+    value_decl = _var_decl("value")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("s"),
+            _address_of("value", referenced=value_decl),
+        ),
+        _call_expr(
+            "PyTuple_Check",
+            _token_identifier_node("value", referenced=value_decl),
+        ),
+    )
+
+    inferred = _infer_varargs_arguments(cursor)
+
+    assert inferred == [[_arg("value", "str")]]
 
 @pytest.mark.parametrize(
     ("struct_name", "expected_default"),

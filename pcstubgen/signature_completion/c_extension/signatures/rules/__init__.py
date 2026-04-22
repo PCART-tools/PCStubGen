@@ -21,6 +21,11 @@ OBJECT_NAME_TO_TYPE = {
     **pillow_rules.OBJECT_NAME_TO_TYPE,
 }
 
+CHECK_MACRO_NAME_TO_TYPE = {
+    **cpython_rules.CHECK_MACRO_NAME_TO_TYPE,
+    **numpy_rules.CHECK_MACRO_NAME_TO_TYPE,
+}
+
 CALL_NAME_TO_TYPE = {
     **cpython_rules.CALL_NAME_TO_TYPE,
     **numpy_rules.CALL_NAME_TO_TYPE,

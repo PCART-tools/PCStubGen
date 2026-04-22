@@ -144,6 +144,11 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
 
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {}
 
+CHECK_MACRO_NAME_TO_TYPE: dict[str, Type] = {
+    "PyArray_Check": _NDARRAY_TYPE,
+    "PyArray_CheckExact": _NDARRAY_TYPE,
+}
+
 
 CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_ContiguousFromObject": _NDARRAY_TYPE,
@@ -182,6 +187,7 @@ def infer_npy_parse_arguments(
     *,
     infer_name_func: Callable[[list[Cursor]], str],
     infer_converter_type_func: Callable[[Cursor], Type],
+    infer_refined_object_type_func: Callable[[Cursor], Type],
     infer_default_value_func: Callable[[Cursor, Type], str],
 ) -> list[Argument]:
     """
@@ -237,6 +243,8 @@ def infer_npy_parse_arguments(
                     "npy_parse_arguments converter 类型推断失败，回退为 object, reason: {!r}",
                     ex,
                 )
+        if argument_type == RawType("object"):
+            argument_type = infer_refined_object_type_func(slot_cursor)
 
         default_value = None
         if is_optional:
