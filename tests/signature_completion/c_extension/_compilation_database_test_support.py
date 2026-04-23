@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import functools
 from pathlib import Path
-from typing import cast
 
 from pcstubgen.signature_completion.c_extension.libclang import parser as parser_module
 
@@ -43,13 +43,14 @@ def compile_command_filename(command: FakeCompileCommand) -> Path:
     return file_path.resolve()
 
 
-def make_parser(
+def make_locator(
     *,
     database: FakeCompilationDatabase | None = None,
     index: object | None = None,
-) -> parser_module.ClangParser:
-    parser = object.__new__(parser_module.ClangParser)
-    parser._compilation_database = database if database is not None else FakeCompilationDatabase([])
-    parser._translation_units = {}
-    parser._index = index if index is not None else object()
-    return parser
+) -> parser_module.ClangFunctionLocator:
+    locator = object.__new__(parser_module.ClangFunctionLocator)
+    locator._compilation_database = database if database is not None else FakeCompilationDatabase([])
+    locator._index = index if index is not None else object()
+    locator._resource_dir = None
+    locator._get_parsed_source = functools.lru_cache(maxsize=8)(locator._build_parsed_source)
+    return locator

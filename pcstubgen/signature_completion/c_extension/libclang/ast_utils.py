@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 
-from clang.cindex import Cursor, CursorKind, SourceLocation, SourceRange, TranslationUnit
+from clang.cindex import Cursor, CursorKind, SourceLocation, SourceRange
 
 from .libclang_wrap import evaluate_cursor, get_file_contents, get_file_location
 
@@ -32,12 +32,6 @@ DECL_CURSOR_KINDS = {
     CursorKind.VAR_DECL,
     CursorKind.PARM_DECL,
     CursorKind.FIELD_DECL,
-}
-
-FUNCTION_DECL_CONTEXT_KINDS = {
-    CursorKind.TRANSLATION_UNIT,
-    CursorKind.NAMESPACE,
-    CursorKind.LINKAGE_SPEC,
 }
 
 def to_str(cursor: Cursor) -> str:
@@ -159,36 +153,3 @@ def get_string_literal(node: Cursor) -> str:
     if node.kind == CursorKind.STRING_LITERAL:
         return node.spelling.strip('"')
     raise RuntimeError(f"节点不是字符串字面量, cursor: {node.location}")
-
-
-def get_func_cursor(
-    translation_unit: TranslationUnit,
-    function_name: str,
-    linkage_name: str | None,
-) -> Cursor:
-    """按函数名和 linkage name 定位函数定义节点。"""
-    for cursor in _iter_function_definition_candidates(translation_unit.cursor):
-        if linkage_name is not None:
-            if cursor.mangled_name == linkage_name:
-                return cursor
-            continue
-        if cursor.spelling == function_name:
-            return cursor
-
-    raise RuntimeError(
-        "未在 translation unit 中定位到函数定义, "
-        f"translation_unit: {translation_unit.cursor.location}, "
-        f"function_name: {function_name}, "
-        f"linkage_name: {linkage_name}"
-    )
-
-
-def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
-    """仅在声明上下文中递归收集函数定义节点。"""
-    for child in node.get_children():
-        if child.kind == CursorKind.FUNCTION_DECL:
-            if child.is_definition():
-                yield child
-            continue
-        if child.kind in FUNCTION_DECL_CONTEXT_KINDS:
-            yield from _iter_function_definition_candidates(child)

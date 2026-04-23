@@ -16,7 +16,7 @@ from tests._c_extension_test_support import _arg, _signature
 
 def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.ClangParser",
+        "pcstubgen.signature_completion.c_extension.provider.ClangFunctionLocator",
         lambda compilation_database: object(),
     )
 

@@ -9,7 +9,6 @@ import numpy
 import pytest
 
 from pcstubgen.models import ArgumentKind, Signature
-from pcstubgen.signature_completion.c_extension.libclang import ast_utils as ast_utils_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_FASTCALL,
     METH_CLASS,
@@ -1015,7 +1014,11 @@ def _parse_function_cursor_with_python_headers(
         parse_args.extend(["-I", numpy.get_include()])
 
     translation_unit = clang.cindex.Index.create().parse(str(source_path), args=parse_args)
-    return ast_utils_module.get_func_cursor(translation_unit, "demo", None)
+    return next(
+        cursor
+        for cursor in translation_unit.cursor.get_children()
+        if cursor.kind == clang.cindex.CursorKind.FUNCTION_DECL and cursor.spelling == "demo"
+    )
 
 
 @pytest.mark.libclang

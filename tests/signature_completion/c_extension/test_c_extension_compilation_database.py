@@ -9,7 +9,7 @@ from tests.signature_completion.c_extension._compilation_database_test_support i
     FakeCompilationDatabase,
     FakeCompileCommand,
     compile_command_filename,
-    make_parser,
+    make_locator,
 )
 
 
@@ -48,8 +48,8 @@ def test_get_compile_command_returns_first_matching_command(tmp_path: Path) -> N
         ]
     )
 
-    parser = make_parser(database=database)
-    result = parser._get_compile_command(shared_source.resolve())
+    locator = make_locator(database=database)
+    result = locator._get_compile_command(shared_source.resolve())
 
     assert compile_command_filename(result) == shared_source.resolve()
     assert Path(str(result.directory)).resolve() == tmp_path.resolve()
@@ -61,7 +61,7 @@ def test_get_compile_command_raises_when_source_is_missing(tmp_path: Path) -> No
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("int demo(void) { return 0; }\n", encoding="utf-8")
 
-    parser = make_parser(database=FakeCompilationDatabase([]))
+    locator = make_locator(database=FakeCompilationDatabase([]))
 
     with pytest.raises(RuntimeError, match="未在编译数据库中定位到编译单元"):
-        parser._get_compile_command(source.resolve())
+        locator._get_compile_command(source.resolve())

@@ -15,7 +15,7 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.ClangParser",
+        "pcstubgen.signature_completion.c_extension.provider.ClangFunctionLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
@@ -69,7 +69,7 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.ClangParser",
+        "pcstubgen.signature_completion.c_extension.provider.ClangFunctionLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")

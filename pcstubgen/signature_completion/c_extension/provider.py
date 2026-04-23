@@ -7,7 +7,7 @@ from clang.cindex import Cursor
 from pcstubgen import runtime
 from . import dladdr, dwarfdump
 from .libclang import ast_utils
-from .libclang.parser import ClangParser
+from .libclang.parser import ClangFunctionLocator
 from .signatures.inferencer import Inferencer
 from ..completion_models import (
     SignatureCompletionContext,
@@ -20,7 +20,7 @@ class CExtensionProvider:
     """通过 C 扩展运行时信息补全签名。"""
 
     def __init__(self, compilation_database: Path) -> None:
-        self._clang_parser = ClangParser(compilation_database)
+        self._clang_function_locator = ClangFunctionLocator(compilation_database)
 
     @staticmethod
     def support(member: object, is_method: bool) -> bool:
@@ -38,9 +38,8 @@ class CExtensionProvider:
         runtime_info = runtime.read_c_extension_function_runtime_info(handle)
         binary_path, ra = dladdr.get_binary_and_ra(runtime_info.address)
         lookup_result = dwarfdump.lookup(binary_path, ra)
-        tu = self._clang_parser.get_translation_unit(lookup_result.compilation_unit_path)
-        func_cursor = ast_utils.get_func_cursor(
-            tu,
+        func_cursor = self._clang_function_locator.get_function_cursor(
+            lookup_result.compilation_unit_path,
             lookup_result.function_name,
             lookup_result.linkage_name,
         )
