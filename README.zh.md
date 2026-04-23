@@ -1,9 +1,8 @@
-# PCStubGen
+# PCStubGen - 从 C 源码生成 Python Stub
 
 [English](README.md)
 
-为 Python 模块生成 `.pyi` stub。
-PCStubGen 基于 docstring 解析支持 pybind11 扩展，基于 libclang C 源码解析支持 Python C 扩展。
+PCStubGen 基于 libclang 解析 C 源码支持 Python C 扩展，基于 docstring 解析支持 pybind11 扩展。
 
 ## 安装
 
@@ -35,6 +34,21 @@ sudo apt install llvm bear
    ```bash
    uv run pcstubgen gen <项目 Python 内名> --compilation-database ./build/compile_commands.json
    ```
+
+## 开发
+
+```bash
+sudo apt install llvm bear
+git clone https://github.com/PCART-tools/PCStubGen
+cd PCStubGen
+uv sync --no-build-isolation
+```
+
+## 兼容性
+
+PCStubGen 在 **Ubuntu 24.04.2 LTS**、**Python 3.12** 和 **LLVM 18** 环境下开发并测试。
+
+理论上可运行于 Linux 和 macOS。当前对 Windows 的支持较为有限，因为 PCStubGen 目前只支持 DWARF 符号，且在 Windows 上构建目标项目更具挑战。
 
 ## 样例项目
 
@@ -80,13 +94,4 @@ sudo apt-get install libpq-dev
 
 ```bash
 sudo apt install libomp-dev
-```
-
-## 开发
-
-```bash
-sudo apt install llvm bear
-git clone https://github.com/PCART-tools/PCStubGen
-cd PCStubGen
-uv sync --no-build-isolation
 ```

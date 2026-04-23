@@ -1,9 +1,8 @@
-# PCStubGen
+# PCStubGen - Generate Python Stubs from C Source Code
 
 [中文](README.zh.md)
 
-Generate `.pyi` stubs for Python modules.
-PCStubGen supports pybind11 extensions by parsing docstrings, and supports Python C extensions by parsing C sources with libclang.
+PCStubGen supports Python C extensions by parsing C sources with libclang, and supports pybind11 extensions by parsing docstrings.
 
 ## Installation
 
@@ -35,6 +34,21 @@ sudo apt install llvm bear
    ```bash
    uv run pcstubgen gen <python-module-name> --compilation-database ./build/compile_commands.json
    ```
+
+## Development
+
+```bash
+sudo apt install llvm bear
+git clone https://github.com/PCART-tools/PCStubGen
+cd PCStubGen
+uv sync --no-build-isolation
+```
+
+## Compatibility
+
+PCStubGen has been developed and tested on **Ubuntu 24.04.2 LTS** with **Python 3.12** and **LLVM 18**.
+
+It should work on Linux and macOS. Windows support is currently limited because PCStubGen only supports DWARF symbols, and building target projects on Windows is more challenging.
 
 ## Example Projects
 
@@ -80,13 +94,4 @@ Install build dependencies:
 
 ```bash
 sudo apt install libomp-dev
-```
-
-## Development
-
-```bash
-sudo apt install llvm bear
-git clone https://github.com/PCART-tools/PCStubGen
-cd PCStubGen
-uv sync --no-build-isolation
 ```
