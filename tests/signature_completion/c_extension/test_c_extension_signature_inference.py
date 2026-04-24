@@ -24,7 +24,9 @@ from tests._c_extension_test_support import (
     _FakeNode,
     _address_of,
     _arg,
+    _assignment,
     _call_expr,
+    _c_style_cast_expr,
     _fake_function_cursor_with_children,
     _init_list,
     _identifier_node,
@@ -75,6 +77,57 @@ def test_infer_signature_inserts_self_for_method_meth_noargs() -> None:
     assert inferred == [Signature(args=[_arg("self")], return_type=RawType.int_)]
 
 
+def test_infer_signature_returns_self_for_instance_receiver() -> None:
+    conn_decl = _param_decl("conn")
+    cursor = _fake_function_cursor_with_children(
+        conn_decl,
+        _return_stmt(_c_style_cast_expr(_token_identifier_node("conn", referenced=conn_decl))),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_NOARGS,
+        is_method=True,
+    )
+
+    assert inferred == [Signature(args=[_arg("self")], return_type=RawType.self_)]
+    assert inferred[0].return_type.collect_imports() == {"typing"}
+
+
+def test_infer_signature_returns_self_through_local_alias() -> None:
+    self_decl = _param_decl("self")
+    dummy_decl = _param_decl("dummy")
+    rv_decl = _var_decl("rv", _null_ptr_literal())
+    cursor = _fake_function_cursor_with_children(
+        self_decl,
+        dummy_decl,
+        rv_decl,
+        _call_expr("Py_INCREF", _token_identifier_node("self", referenced=self_decl)),
+        _assignment(
+            "rv",
+            _c_style_cast_expr(_token_identifier_node("self", referenced=self_decl)),
+            referenced=rv_decl,
+        ),
+        _return_stmt(_token_identifier_node("rv", referenced=rv_decl)),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_O,
+        is_method=True,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("self", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("arg", "object", kind=ArgumentKind.POSITIONAL_ONLY),
+            ],
+            return_type=RawType.self_,
+        )
+    ]
+
+
 def test_infer_signature_inserts_cls_for_classmethod_meth_noargs() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
@@ -89,6 +142,22 @@ def test_infer_signature_inserts_cls_for_classmethod_meth_noargs() -> None:
     assert inferred == [Signature(args=[_arg("cls")], return_type=RawType.int_)]
 
 
+def test_infer_signature_does_not_return_self_for_classmethod_receiver() -> None:
+    cls_decl = _param_decl("type")
+    cursor = _fake_function_cursor_with_children(
+        cls_decl,
+        _return_stmt(_token_identifier_node("type", referenced=cls_decl)),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_NOARGS | METH_CLASS,
+        is_method=True,
+    )
+
+    assert inferred == [Signature(args=[_arg("cls")], return_type=AnyType())]
+
+
 def test_infer_signature_skips_receiver_for_staticmethod_meth_noargs() -> None:
     cursor = _fake_function_cursor_with_children(
         _return_stmt(_call_expr("PyLong_FromLong", _identifier_node("value")))
@@ -101,6 +170,22 @@ def test_infer_signature_skips_receiver_for_staticmethod_meth_noargs() -> None:
     )
 
     assert inferred == [Signature(args=[], return_type=RawType.int_)]
+
+
+def test_infer_signature_does_not_return_self_for_staticmethod_first_param() -> None:
+    null_self_decl = _param_decl("self")
+    cursor = _fake_function_cursor_with_children(
+        null_self_decl,
+        _return_stmt(_token_identifier_node("self", referenced=null_self_decl)),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_NOARGS | METH_STATIC,
+        is_method=True,
+    )
+
+    assert inferred == [Signature(args=[], return_type=AnyType())]
 
 
 def test_infer_signature_inserts_self_for_method_meth_o() -> None:
@@ -340,7 +425,6 @@ def test_infer_signature_keeps_parse_tuple_result_and_appends_kwargs() -> None:
             args=[
                 _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("value", "int", kind=ArgumentKind.POSITIONAL_ONLY),
-                _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
             return_type=AnyType(),
         )
@@ -380,7 +464,6 @@ def test_infer_signature_keeps_parse_tuple_and_keywords_results_together() -> No
             args=[
                 _arg("cls", kind=ArgumentKind.POSITIONAL_ONLY),
                 _arg("tuple_value", "int", kind=ArgumentKind.POSITIONAL_ONLY),
-                _arg("kwargs", "object", kind=ArgumentKind.VAR_KEYWORD),
             ],
             return_type=RawType.int_,
         ),

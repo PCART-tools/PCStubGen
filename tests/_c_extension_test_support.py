@@ -568,6 +568,7 @@ def _fake_function_cursor_with_children(
     """构造带子节点的假函数游标。"""
     function_cursor = _FakeNode(
         kind=clang.cindex.CursorKind.FUNCTION_DECL,
+        tokens=[_FakeToken(clang.cindex.TokenKind.IDENTIFIER, name)],
         spelling=name,
         children=list(children),
     )

@@ -186,6 +186,37 @@ def test_renderer_adds_typing_import_for_overloads() -> None:
     ]
 
 
+def test_renderer_adds_typing_import_for_self_return() -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        classes=[
+            Class(
+                name="Connection",
+                methods=[
+                    Function(
+                        name="__enter__",
+                        signatures=[
+                            _signature(
+                                args=[Argument(name="self")],
+                                return_type=RawType.self_,
+                            )
+                        ],
+                    )
+                ],
+            )
+        ],
+    )
+
+    lines = StubRenderer(include_docstrings=False).render_module(module)
+
+    assert lines == [
+        "import typing",
+        "class Connection:",
+        "    def __enter__(self) -> typing.Self:",
+        "        ...",
+    ]
+
+
 def test_renderer_repeats_method_decorator_for_each_overload() -> None:
     method = Function(
         name="build",

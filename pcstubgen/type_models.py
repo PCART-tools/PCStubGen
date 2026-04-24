@@ -34,6 +34,7 @@ class RawType(Type):
     bytearray_: ClassVar[RawType]
     memoryview_: ClassVar[RawType]
     slice_: ClassVar[RawType]
+    self_: ClassVar[RawType]
 
     text: str
     imports: tuple[str, ...] = ()
@@ -59,6 +60,7 @@ RawType.complex_ = RawType("complex")
 RawType.bytearray_ = RawType("bytearray")
 RawType.memoryview_ = RawType("memoryview")
 RawType.slice_ = RawType("slice")
+RawType.self_ = RawType("typing.Self", imports=("typing",))
 
 
 @dataclass(frozen=True)

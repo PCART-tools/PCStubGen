@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import cast
 
 from ..libclang import ast_utils
 from clang.cindex import Cursor, CursorKind, StorageClass, TypeKind
@@ -61,6 +60,11 @@ class Inferencer:
         self._func_cursor = func_cursor
         self._flags = flags
         self._is_method = is_method
+        self._param_cursors = [
+            child
+            for child in self._func_cursor.get_children()
+            if child.kind == CursorKind.PARM_DECL
+        ]
 
     def run(self) -> list[Signature]:
         """汇合参数推断与返回值推断结果，直接生成签名。"""
@@ -113,6 +117,8 @@ class Inferencer:
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]
+
+        logger.error("不应该到达此处, func: {}", ast_utils.to_str(self._func_cursor))
         return [[]]
 
     def _build_minimal_arguments(self) -> list[Argument]:
@@ -250,25 +256,13 @@ class Inferencer:
     def _build_meth_o_argument(self) -> Argument:
         """构造 `METH_O` 的单个业务参数，并在需要时细化为具体类型。"""
         arg_type: Type = RawType.object_
-        param_cursor = self._get_meth_o_argument_cursor()
-        if param_cursor is not None:
-            arg_type = self._infer_refined_object_type_for_cursor(param_cursor)
+        if len(self._param_cursors) >= 2:
+            arg_type = self._infer_refined_object_type_for_cursor(self._param_cursors[1])
         return Argument(
             name="arg",
             type=arg_type,
             kind=ArgumentKind.POSITIONAL_ONLY,
         )
-
-    def _get_meth_o_argument_cursor(self) -> Cursor | None:
-        """返回 `METH_O` 调用约定对应的真实对象形参。"""
-        param_cursors = [
-            child
-            for child in self._func_cursor.get_children()
-            if child.kind == CursorKind.PARM_DECL
-        ]
-        if len(param_cursors) < 2:
-            return None
-        return cast(Cursor, param_cursors[1])
 
     def _infer_refined_object_type_for_cursor(self, cursor: Cursor) -> Type:
         """扫描函数体中的对象检查调用，细化 `object` 参数类型。"""
@@ -317,7 +311,7 @@ class Inferencer:
             return cursor
         if cursor.kind != CursorKind.DECL_REF_EXPR:
             return None
-        return cast(Cursor | None, cursor.referenced)
+        return cursor.referenced
 
     def _get_refined_decl_for_call(self, call_expr: Cursor) -> Cursor | None:
         """提取对象细化函数调用作用到的目标声明节点。"""
@@ -328,7 +322,7 @@ class Inferencer:
         refined_cursor = self._unwrap_refined_object_cursor(children[1])
         if refined_cursor.kind != CursorKind.DECL_REF_EXPR:
             return None
-        return cast(Cursor | None, refined_cursor.referenced)
+        return refined_cursor.referenced
 
     def _unwrap_refined_object_cursor(self, cursor: Cursor) -> Cursor:
         """剥离一层 `Py_TYPE(x)`，并返回真正参与对象细化的表达式。"""
@@ -382,6 +376,9 @@ class Inferencer:
         """识别 `DECL_REF_EXPR` 形式的直接对象类型。"""
         assert cursor.kind == CursorKind.DECL_REF_EXPR
 
+        if self._is_receiver_ref(cursor):
+            return RawType.self_
+
         identifier_name = cursor.spelling
         mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
         if mapped is not None:
@@ -392,6 +389,14 @@ class Inferencer:
             raise RuntimeError(
                 f"无法识别的对象返回标识符: {identifier_name}, cursor: {ast_utils.to_str(cursor)}"
             ) from ex
+
+    def _is_receiver_ref(self, cursor: Cursor) -> bool:
+        """判断 `DECL_REF_EXPR` 是否引用实例方法 receiver。"""
+        if not self._is_method:
+            return False
+        if self._flags & METH_STATIC or self._flags & METH_CLASS:
+            return False
+        return cursor.referenced == self._param_cursors[0]
 
     def _infer_decl_ref_expr_reaching_definition_type(self, cursor: Cursor) -> Type:
         """从函数内局部变量的定值表达式中推断 `DECL_REF_EXPR` 类型。"""
@@ -536,7 +541,7 @@ class Inferencer:
                 raise RuntimeError(
                     f"C++ bool 字面量求值结果不是 0 或 1: {evaluated!r}, cursor: {ast_utils.to_str(expr)}"
                 )
-            return self._render_number_default(cast(int, evaluated), expected_type)
+            return self._render_number_default(int(evaluated), expected_type)
 
         if (
             expr.kind == CursorKind.INTEGER_LITERAL
@@ -555,7 +560,7 @@ class Inferencer:
                 raise RuntimeError(
                     f"bool 默认值整数不是 0 或 1: {evaluated!r}, cursor: {ast_utils.to_str(expr)}"
                 )
-            return self._render_number_default(cast(int, evaluated), expected_type)
+            return self._render_number_default(int(evaluated), expected_type)
 
         if expr.kind == CursorKind.UNARY_OPERATOR:
             children = list(expr.get_children())
@@ -575,8 +580,10 @@ class Inferencer:
     def _evaluate_number_cursor(self, expr: Cursor) -> int | float:
         """求值 C 数字表达式，并拒绝非数字求值结果。"""
         evaluated = evaluate_cursor(expr)
-        if type(evaluated) in (int, float):
-            return cast(int | float, evaluated)
+        if isinstance(evaluated, int):
+            return evaluated
+        if isinstance(evaluated, float):
+            return evaluated
         raise RuntimeError(f"数字默认值求值结果不是数字: {evaluated!r}, cursor: {ast_utils.to_str(expr)}")
 
     def _render_number_default(self, value: int | float, expected_type: Type) -> str:
