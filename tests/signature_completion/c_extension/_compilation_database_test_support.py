@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from pathlib import Path
 
-from pcstubgen.signature_completion.c_extension.libclang import parser as parser_module
+from pcstubgen.signature_completion.c_extension.libclang import function_cursor_locator as parser_module
 
 
 class FakeCompileCommand:
@@ -47,10 +47,10 @@ def make_locator(
     *,
     database: FakeCompilationDatabase | None = None,
     index: object | None = None,
-) -> parser_module.ClangFunctionLocator:
-    locator = object.__new__(parser_module.ClangFunctionLocator)
+) -> parser_module.FunctionCursorLocator:
+    locator = object.__new__(parser_module.FunctionCursorLocator)
     locator._compilation_database = database if database is not None else FakeCompilationDatabase([])
     locator._index = index if index is not None else object()
     locator._resource_dir = None
-    locator._get_parsed_source = functools.lru_cache(maxsize=8)(locator._build_parsed_source)
+    locator._get_parsed_result_lru = functools.lru_cache(maxsize=8)(locator._get_parsed_result)
     return locator

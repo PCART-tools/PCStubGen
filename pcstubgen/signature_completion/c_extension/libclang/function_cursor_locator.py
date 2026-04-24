@@ -19,9 +19,9 @@ from clang.cindex import (
 )
 from loguru import logger
 
-from .libclang_wrap import parse_translation_unit_full_argv
+from . import libclang_wrap
 
-FUNCTION_DECL_CONTEXT_KINDS = {
+_FUNCTION_DECL_CONTEXT_KINDS = {
     CursorKind.TRANSLATION_UNIT,
     CursorKind.NAMESPACE,
     CursorKind.LINKAGE_SPEC,
@@ -29,22 +29,35 @@ FUNCTION_DECL_CONTEXT_KINDS = {
 
 
 @dataclass(slots=True)
-class _FunctionCursorIndex:
+class FunctionCursorIndex:
     """保存单个源码文件中可定位函数定义的索引。"""
 
-    cursor_by_linkage_name: dict[str, Cursor]
-    cursor_by_function_name: dict[str, Cursor]
+    mangled_name_to_cursor: dict[str, Cursor]
+    func_name_to_cursor: dict[str, Cursor]
+
+    @classmethod
+    def from_translation_unit(cls, translation_unit: TranslationUnit) -> FunctionCursorIndex:
+        """从 translation unit 中收集函数定义索引。"""
+        mangled_name_to_cursor: dict[str, Cursor] = {}
+        func_name_to_cursor: dict[str, Cursor] = {}
+
+        for cursor in _iter_function_definition(translation_unit.cursor):
+            if cursor.mangled_name:
+                mangled_name_to_cursor[cursor.mangled_name] = cursor
+            func_name_to_cursor.setdefault(cursor.spelling, cursor)
+
+        return cls(mangled_name_to_cursor, func_name_to_cursor)
 
 
 @dataclass(slots=True)
-class _ParsedSource:
+class ParsedResult:
     """保存 translation unit 及其派生索引。"""
 
     translation_unit: TranslationUnit
-    function_index: _FunctionCursorIndex
+    function_index: FunctionCursorIndex
 
 
-class ClangFunctionLocator:
+class FunctionCursorLocator:
     def __init__(
         self,
         compilation_database: Path,
@@ -53,7 +66,7 @@ class ClangFunctionLocator:
         self._compilation_database = _load_compilation_database(compilation_database)
         self._index = Index.create()
         self._resource_dir = try_get_clang_resource_dir()
-        self._get_parsed_source = functools.lru_cache(maxsize=8)(self._build_parsed_source)
+        self._get_parsed_result_lru = functools.lru_cache(maxsize=8)(self._get_parsed_result)
 
     def get_function_cursor(
         self,
@@ -63,15 +76,15 @@ class ClangFunctionLocator:
     ) -> Cursor:
         """按源码路径与函数身份定位函数定义 cursor。"""
         source_path = path.resolve()
-        parsed_source = self._get_parsed_source(source_path)
+        parsed_source = self._get_parsed_result_lru(source_path)
         function_index = parsed_source.function_index
 
         if linkage_name is not None:
-            matched = function_index.cursor_by_linkage_name.get(linkage_name)
+            matched = function_index.mangled_name_to_cursor.get(linkage_name)
             if matched is not None:
                 return matched
         else:
-            matched = function_index.cursor_by_function_name.get(function_name)
+            matched = function_index.func_name_to_cursor.get(function_name)
             if matched is not None:
                 return matched
 
@@ -83,13 +96,13 @@ class ClangFunctionLocator:
             f"linkage_name: {linkage_name}"
         )
 
-    def _build_parsed_source(self, source_path: Path) -> _ParsedSource:
+    def _get_parsed_result(self, source_path: Path) -> ParsedResult:
         """按源码路径解析 translation unit 并构建函数索引。"""
         compile_command = self._get_compile_command(source_path)
         compile_arguments = list(compile_command.arguments)
 
         try:
-            translation_unit = self._parse_translation_unit(compile_command)
+            tu = self._parse_translation_unit(compile_command)
         except clang.cindex.TranslationUnitLoadError as ex:
             raise RuntimeError(
                 "Parse失败, "
@@ -97,7 +110,7 @@ class ClangFunctionLocator:
                 f"解析参数: {' '.join(str(argument) for argument in compile_arguments)}"
             ) from ex
 
-        diagnostics = list(translation_unit.diagnostics)
+        diagnostics = list(tu.diagnostics)
         if has_error_diagnostics(diagnostics):
             logger.warning(
                 "Parse诊断, 文件路径: {}, 诊断: {}",
@@ -105,10 +118,9 @@ class ClangFunctionLocator:
                 "\n".join(diagnostic_to_str(diagnostic) for diagnostic in diagnostics),
             )
 
-        function_index = _build_function_cursor_index(translation_unit)
-        return _ParsedSource(
-            translation_unit=translation_unit,
-            function_index=function_index,
+        return ParsedResult(
+            translation_unit=tu,
+            function_index=FunctionCursorIndex.from_translation_unit(tu),
         )
 
     def _get_compile_command(self, source_path: Path) -> CompileCommand:
@@ -130,34 +142,18 @@ class ClangFunctionLocator:
             arguments.extend(["-resource-dir", str(self._resource_dir)])
 
         with contextlib.chdir(Path(str(compile_command.directory)).resolve()):
-            return parse_translation_unit_full_argv(self._index, arguments)
+            return libclang_wrap.parse_translation_unit_full_argv(self._index, arguments)
 
 
-def _build_function_cursor_index(translation_unit: TranslationUnit) -> _FunctionCursorIndex:
-    """从 translation unit 中收集函数定义索引。"""
-    cursor_by_linkage_name: dict[str, Cursor] = {}
-    cursor_by_function_name: dict[str, Cursor] = {}
-
-    for cursor in _iter_function_definition_candidates(translation_unit.cursor):
-        if cursor.mangled_name:
-            cursor_by_linkage_name[cursor.mangled_name] = cursor
-        cursor_by_function_name.setdefault(cursor.spelling, cursor)
-
-    return _FunctionCursorIndex(
-        cursor_by_linkage_name=cursor_by_linkage_name,
-        cursor_by_function_name=cursor_by_function_name,
-    )
-
-
-def _iter_function_definition_candidates(node: Cursor) -> Iterator[Cursor]:
+def _iter_function_definition(node: Cursor) -> Iterator[Cursor]:
     """仅在函数声明上下文中递归收集函数定义节点。"""
     for child in node.get_children():
         if child.kind == CursorKind.FUNCTION_DECL:
             if child.is_definition():
                 yield child
             continue
-        if child.kind in FUNCTION_DECL_CONTEXT_KINDS:
-            yield from _iter_function_definition_candidates(child)
+        if child.kind in _FUNCTION_DECL_CONTEXT_KINDS:
+            yield from _iter_function_definition(child)
 
 
 def try_get_clang_resource_dir() -> Path | None:

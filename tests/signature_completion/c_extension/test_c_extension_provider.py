@@ -47,7 +47,7 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     )
 
     provider = object.__new__(provider_module.CExtensionProvider)
-    provider._clang_function_locator = FakeClangFunctionLocator()
+    provider._function_cursor_locator = FakeClangFunctionLocator()
     provider._dwarf_manager = FakeDwarfManager()
 
     func_cursor, flags = provider.get_func_cursor_and_flags(object())

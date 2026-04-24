@@ -30,7 +30,7 @@ def test_gen_stubs_uses_collected_module_and_injected_writer(
     import pcstubgen.api as stubgen_module
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.ClangFunctionLocator",
+        "pcstubgen.signature_completion.c_extension.provider.FunctionCursorLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
