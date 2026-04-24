@@ -21,6 +21,7 @@ class CExtensionProvider:
 
     def __init__(self, compilation_database: Path) -> None:
         self._clang_function_locator = ClangFunctionLocator(compilation_database)
+        self._dwarf_manager = dwarfdump.DWARFManager()
 
     @staticmethod
     def support(member: object, is_method: bool) -> bool:
@@ -37,7 +38,7 @@ class CExtensionProvider:
         """根据运行时句柄反查函数 cursor 和调用 flags。"""
         runtime_info = runtime.read_c_extension_function_runtime_info(handle)
         binary_path, ra = dladdr.get_binary_and_ra(runtime_info.address)
-        lookup_result = dwarfdump.lookup(binary_path, ra)
+        lookup_result = self._dwarf_manager.lookup(binary_path, ra)
         func_cursor = self._clang_function_locator.get_function_cursor(
             lookup_result.compilation_unit_path,
             lookup_result.function_name,

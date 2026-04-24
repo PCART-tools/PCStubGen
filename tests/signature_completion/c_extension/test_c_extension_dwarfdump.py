@@ -185,24 +185,28 @@ def _run_llvm_dwarfdump_lookup(
     )
 
 
-def test_lookup_wraps_raw_result_and_normalizes_path(
+def test_dwarf_file_wraps_raw_result_and_normalizes_path(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     raw_path = tmp_path / "dir" / ".." / "sample.c"
+
+    class FakeNativeDWARFFile:
+        def __init__(self, binary_path: str) -> None:
+            """记录 native 层收到的二进制路径。"""
+            self.binary_path = binary_path
+
+        def lookup(self, relative_address: int) -> tuple[str, str, str]:
+            """返回固定的 native lookup 结果。"""
+            return str(raw_path), "foo_impl", "_Z8foo_implv"
+
     monkeypatch.setattr(
         dwarfdump,
         "_dwarfdump",
-        SimpleNamespace(
-            lookup=lambda binary_path, relative_address: (
-                str(raw_path),
-                "foo_impl",
-                "_Z8foo_implv",
-            )
-        ),
+        SimpleNamespace(DWARFFile=FakeNativeDWARFFile),
     )
 
-    result = dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
+    result = dwarfdump.DWARFFile(tmp_path / "sample.so").lookup(0x1234)
 
     assert result == dwarfdump.LookupResult(
         compilation_unit_path=(tmp_path / "sample.c").resolve(),
@@ -210,22 +214,58 @@ def test_lookup_wraps_raw_result_and_normalizes_path(
         linkage_name="_Z8foo_implv",
     )
 
-def test_lookup_propagates_runtime_error_from_native_extension(
+
+def test_dwarf_file_propagates_runtime_error_from_native_extension(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    class FakeNativeDWARFFile:
+        def __init__(self, binary_path: str) -> None:
+            """记录 native 层收到的二进制路径。"""
+            self.binary_path = binary_path
+
+        def lookup(self, relative_address: int) -> tuple[str, str, str | None]:
+            """模拟 native lookup 抛出的运行时错误。"""
+            raise RuntimeError("DWARF 中未找到地址所属编译单元: 0x1234")
+
     monkeypatch.setattr(
         dwarfdump,
         "_dwarfdump",
-        SimpleNamespace(
-            lookup=lambda binary_path, relative_address: (_ for _ in ()).throw(
-                RuntimeError("DWARF 中未找到地址所属编译单元: 0x1234")
-            )
-        ),
+        SimpleNamespace(DWARFFile=FakeNativeDWARFFile),
     )
 
     with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
-        dwarfdump.lookup(tmp_path / "sample.so", 0x1234)
+        dwarfdump.DWARFFile(tmp_path / "sample.so").lookup(0x1234)
+
+
+def test_dwarf_manager_reuses_file_for_same_binary_path(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    constructed_paths: list[Path] = []
+
+    class FakeDWARFFile:
+        def __init__(self, binary_path: Path) -> None:
+            """记录被 manager 打开的二进制路径。"""
+            constructed_paths.append(binary_path)
+
+        def lookup(self, relative_address: int) -> dwarfdump.LookupResult:
+            """返回可区分地址的查询结果。"""
+            return dwarfdump.LookupResult(
+                compilation_unit_path=tmp_path / "sample.c",
+                function_name=f"foo_{relative_address}",
+            )
+
+    monkeypatch.setattr(dwarfdump, "DWARFFile", FakeDWARFFile)
+    manager = dwarfdump.DWARFManager()
+    binary_path = tmp_path / "dir" / ".." / "sample.so"
+
+    first_result = manager.lookup(binary_path, 1)
+    second_result = manager.lookup(tmp_path / "sample.so", 2)
+
+    assert first_result.function_name == "foo_1"
+    assert second_result.function_name == "foo_2"
+    assert constructed_paths == [(tmp_path / "sample.so").resolve()]
 
 
 @pytest.mark.integration
@@ -245,7 +285,7 @@ def test_lookup_reads_compilation_unit_path_from_relative_dwarf_name(
     )
     relative_address = _find_symbol_value(binary_path, "foo_impl")
 
-    result = dwarfdump.lookup(binary_path, relative_address)
+    result = dwarfdump.DWARFFile(binary_path).lookup(relative_address)
 
     assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
@@ -272,7 +312,7 @@ def test_lookup_follows_specification_for_cpp_overload(
     linkage_name = "_ZN2ns3fooEi"
     relative_address = _find_symbol_value(binary_path, linkage_name)
 
-    result = dwarfdump.lookup(binary_path, relative_address)
+    result = dwarfdump.DWARFFile(binary_path).lookup(relative_address)
 
     assert result.compilation_unit_path == (tmp_path / "sample.cpp").resolve()
     assert result.function_name == "foo"
@@ -292,7 +332,7 @@ def test_lookup_matches_outer_subprogram_for_inner_address(
     )
     relative_address = _find_symbol_value(binary_path, "foo_impl") + 1
 
-    result = dwarfdump.lookup(binary_path, relative_address)
+    result = dwarfdump.DWARFFile(binary_path).lookup(relative_address)
 
     assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
@@ -313,7 +353,7 @@ def test_lookup_rejects_binary_without_dwarf(
     relative_address = _find_symbol_value(binary_path, "foo_impl")
 
     with pytest.raises(RuntimeError, match="缺少DWARF调试信息"):
-        dwarfdump.lookup(binary_path, relative_address)
+        dwarfdump.DWARFFile(binary_path).lookup(relative_address)
 
 
 @pytest.mark.integration
@@ -330,7 +370,7 @@ def test_lookup_uses_generated_aranges_when_debug_aranges_missing(
     no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
     relative_address = _find_symbol_value(no_aranges_binary_path, "foo_impl")
 
-    result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
+    result = dwarfdump.DWARFFile(no_aranges_binary_path).lookup(relative_address)
 
     assert result.compilation_unit_path == (tmp_path / "sample.c").resolve()
     assert result.function_name == "foo_impl"
@@ -352,14 +392,9 @@ def test_lookup_uses_generated_aranges_for_multi_cu_binary(
     )
     no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
 
-    first_result = dwarfdump.lookup(
-        no_aranges_binary_path,
-        _find_symbol_value(no_aranges_binary_path, "first_impl"),
-    )
-    second_result = dwarfdump.lookup(
-        no_aranges_binary_path,
-        _find_symbol_value(no_aranges_binary_path, "second_impl"),
-    )
+    dwarf_file = dwarfdump.DWARFFile(no_aranges_binary_path)
+    first_result = dwarf_file.lookup(_find_symbol_value(no_aranges_binary_path, "first_impl"))
+    second_result = dwarf_file.lookup(_find_symbol_value(no_aranges_binary_path, "second_impl"))
 
     assert first_result.compilation_unit_path == (tmp_path / "first.c").resolve()
     assert first_result.function_name == "first_impl"
@@ -383,7 +418,7 @@ def test_lookup_matches_llvm_dwarfdump_for_low_pc_high_pc(
     no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
     relative_address = _find_symbol_value(no_aranges_binary_path, "foo_impl")
 
-    result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
+    result = dwarfdump.DWARFFile(no_aranges_binary_path).lookup(relative_address)
     llvm_result = _run_llvm_dwarfdump_lookup(no_aranges_binary_path, relative_address)
 
     assert llvm_result is not None
@@ -405,7 +440,7 @@ def test_lookup_matches_llvm_dwarfdump_for_rnglists(
     no_aranges_binary_path = _copy_without_debug_aranges(binary_path)
     relative_address = _find_symbol_value(no_aranges_binary_path, "wrapper")
 
-    result = dwarfdump.lookup(no_aranges_binary_path, relative_address)
+    result = dwarfdump.DWARFFile(no_aranges_binary_path).lookup(relative_address)
     llvm_result = _run_llvm_dwarfdump_lookup(no_aranges_binary_path, relative_address)
 
     assert llvm_result is not None
@@ -430,4 +465,4 @@ def test_lookup_raises_when_llvm_dwarfdump_finds_no_match(
     assert _run_llvm_dwarfdump_lookup(binary_path, relative_address) is None
 
     with pytest.raises(RuntimeError, match="未找到地址所属编译单元"):
-        dwarfdump.lookup(binary_path, relative_address)
+        dwarfdump.DWARFFile(binary_path).lookup(relative_address)
