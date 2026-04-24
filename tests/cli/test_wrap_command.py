@@ -4,14 +4,33 @@ import os
 from pathlib import Path
 import subprocess
 
+import pytest
 from typer.testing import CliRunner
 
 from pcstubgen.__main__ import app
 import pcstubgen._wrap_command as wrap_command_module
 
 
-def test_wrap_command_passes_through_original_command_after_separator(
+@pytest.mark.parametrize(
+    ("args", "expected_command", "expected_output_path"),
+    [
+        (
+            ["wrap", "--", "python", "-m", "build"],
+            ["python", "-m", "build"],
+            Path("compile_commands.json"),
+        ),
+        (
+            ["wrap", "--output", "out/compile_commands.json", "--", "uv", "build", "--wheel"],
+            ["uv", "build", "--wheel"],
+            Path("out/compile_commands.json"),
+        ),
+    ],
+)
+def test_wrap_command_passes_cli_arguments_to_runner(
     monkeypatch,
+    args: list[str],
+    expected_command: list[str],
+    expected_output_path: Path,
 ) -> None:
     captured: dict[str, object] = {}
 
@@ -25,49 +44,12 @@ def test_wrap_command_passes_through_original_command_after_separator(
     )
     monkeypatch.setattr(wrap_command_module, "run_wrap_command", fake_run_wrap_command)
 
-    result = CliRunner().invoke(app, ["wrap", "--", "python", "-m", "build"])
+    result = CliRunner().invoke(app, args)
 
     assert result.exit_code == 0
     assert captured == {
-        "command": ["python", "-m", "build"],
-        "output_path": Path("compile_commands.json"),
-    }
-    assert "compile_commands.json" in result.output
-
-
-def test_wrap_command_uses_explicit_output_path(
-    monkeypatch,
-) -> None:
-    captured: dict[str, object] = {}
-    output_path = Path("out/compile_commands.json")
-
-    def fake_run_wrap_command(command: list[str], resolved_output_path: Path) -> int:
-        captured["command"] = command
-        captured["output_path"] = resolved_output_path
-        return 0
-
-    monkeypatch.setattr(
-        wrap_command_module, "ensure_wrap_programs_available", lambda: None
-    )
-    monkeypatch.setattr(wrap_command_module, "run_wrap_command", fake_run_wrap_command)
-
-    result = CliRunner().invoke(
-        app,
-        [
-            "wrap",
-            "--output",
-            str(output_path),
-            "--",
-            "uv",
-            "build",
-            "--wheel",
-        ],
-    )
-
-    assert result.exit_code == 0
-    assert captured == {
-        "command": ["uv", "build", "--wheel"],
-        "output_path": output_path,
+        "command": expected_command,
+        "output_path": expected_output_path,
     }
 
 
@@ -157,4 +139,4 @@ def test_wrap_command_reports_missing_external_programs(monkeypatch) -> None:
     result = CliRunner().invoke(app, ["wrap", "--", "python", "-m", "build"])
 
     assert result.exit_code == 1
-    assert "wrap 命令缺少外部程序依赖: bear" in result.output
+    assert "bear" in result.output

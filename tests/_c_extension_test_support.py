@@ -586,6 +586,3 @@ def _attach_fake_parent(node: _FakeNode, parent: _FakeNode) -> None:
     for child in node.get_children():
         if isinstance(child, _FakeNode):
             _attach_fake_parent(child, node)
-
-
-__all__ = [name for name in globals() if not name.startswith("__")]

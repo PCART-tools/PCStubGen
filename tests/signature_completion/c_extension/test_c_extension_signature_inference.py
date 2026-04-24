@@ -5,7 +5,6 @@ import sysconfig
 from pathlib import Path
 
 import clang.cindex
-import numpy
 import pytest
 
 from pcstubgen.models import ArgumentKind, Signature
@@ -994,8 +993,6 @@ def test_infer_signature_keeps_multiple_npy_parse_argument_lists() -> None:
 
 def _parse_function_cursor_with_python_headers(
     source_path: Path,
-    *,
-    include_numpy: bool = False,
 ) -> clang.cindex.Cursor:
     resource_dir = subprocess.check_output(
         ["clang", "-print-resource-dir"],
@@ -1010,8 +1007,6 @@ def _parse_function_cursor_with_python_headers(
         "-resource-dir",
         resource_dir,
     ]
-    if include_numpy:
-        parse_args.extend(["-I", numpy.get_include()])
 
     translation_unit = clang.cindex.Index.create().parse(str(source_path), args=parse_args)
     return next(
@@ -1030,7 +1025,8 @@ def test_infer_signature_refines_meth_o_argument_for_pyarray_check_exact_macro(
         "\n".join(
             [
                 "#include <Python.h>",
-                "#include <numpy/arrayobject.h>",
+                "int fake_pyarray_check_exact(PyObject *obj);",
+                "#define PyArray_CheckExact(obj) fake_pyarray_check_exact(obj)",
                 "PyObject *PyLong_FromLong(long);",
                 "PyObject *demo(PyObject *self, PyObject *arg) {",
                 "    if (PyArray_CheckExact(arg)) {",
@@ -1043,7 +1039,7 @@ def test_infer_signature_refines_meth_o_argument_for_pyarray_check_exact_macro(
         encoding="utf-8",
     )
 
-    func_cursor = _parse_function_cursor_with_python_headers(source, include_numpy=True)
+    func_cursor = _parse_function_cursor_with_python_headers(source)
 
     inferred = signature_rules_module.infer_signature(
         func_cursor,

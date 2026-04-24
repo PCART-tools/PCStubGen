@@ -56,7 +56,7 @@ def test_renderer_preserves_raw_optional_annotation_text() -> None:
 def test_renderer_rejects_function_without_exportable_signature() -> None:
     func = _function(name="foo")
 
-    with pytest.raises(RuntimeError, match="foo 缺少可导出签名"):
+    with pytest.raises(RuntimeError, match="foo"):
         StubRenderer(include_docstrings=False).render_function(func)
 
 

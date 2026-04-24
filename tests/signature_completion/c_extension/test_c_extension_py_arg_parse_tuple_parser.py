@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 from clang.cindex import Cursor
 
-from pcstubgen.models import Argument
+from pcstubgen.models import Argument, ArgumentKind
 from pcstubgen.type_models import RawType, Type
 from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser import (
     PyArgParseTupleTypeParser,
@@ -16,7 +16,7 @@ from tests.signature_completion.c_extension._py_arg_parse_test_support import (
     _STR_OR_BUFFER_OR_NONE_TYPE,
     _STR_OR_BUFFER_TYPE,
     _STR_OR_BYTES_OR_BYTEARRAY_TYPE,
-    _arg,
+    _arg as _base_arg,
     _cursor,
 )
 
@@ -28,6 +28,18 @@ def _default_infer_name(c_args: list[Cursor]) -> str:
     return cast(_FakeCursor, c_args[0]).name
 
 
+def _arg(
+    name: str,
+    type_text: str | Type,
+    *,
+    imports: tuple[str, ...] = (),
+    default_value: str | None = None,
+    kind: ArgumentKind = ArgumentKind.POSITIONAL_ONLY,
+) -> Argument:
+    """构造 ParseTuple 默认产生的位置参数。"""
+    return _base_arg(name, type_text, imports=imports, default_value=default_value, kind=kind)
+
+
 def _parse(
     format_string: str,
     args: list[Cursor],
@@ -35,6 +47,7 @@ def _parse(
     infer_name_func=None,
     infer_type_object_func=None,
     infer_converter_type_func=None,
+    infer_refined_object_type_func=None,
     infer_default_value_func=None,
 ) -> list[Argument]:
     return PyArgParseTupleTypeParser(
@@ -43,6 +56,7 @@ def _parse(
         infer_name_func=infer_name_func or _default_infer_name,
         infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
         infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
+        infer_refined_object_type_func=infer_refined_object_type_func or (lambda cursor: RawType.object_),
         infer_default_value_func=infer_default_value_func or (lambda cursor, expected_type: "None"),
     ).parse()
 
@@ -389,4 +403,3 @@ def test_parse_raises_for_c_argument_count_mismatch(
 ) -> None:
     with pytest.raises(PyArgParseTupleTypeParserError):
         _parse(format_string, args)
-

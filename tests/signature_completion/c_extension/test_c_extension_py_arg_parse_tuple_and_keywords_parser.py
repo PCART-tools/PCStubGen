@@ -24,6 +24,7 @@ def _parse(
     *,
     infer_type_object_func=None,
     infer_converter_type_func=None,
+    infer_refined_object_type_func=None,
     infer_default_value_func=None,
 ) -> list[Argument]:
     return PyArgParseTupleAndKeywordsTypeParser(
@@ -32,6 +33,7 @@ def _parse(
         args,
         infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
         infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
+        infer_refined_object_type_func=infer_refined_object_type_func or (lambda cursor: RawType.object_),
         infer_default_value_func=infer_default_value_func or (lambda cursor, expected_type: "None"),
     ).parse()
 

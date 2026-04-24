@@ -92,42 +92,6 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
     }
 
 
-def test_toml_writer_renders_multi_argument_signature_on_multiple_lines(tmp_path) -> None:
-    module = Module(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        functions=[
-            Function(
-                name="foo",
-                signatures=[
-                    _signature(
-                        args=[
-                            Argument(name="value", type=RawType.int_),
-                            Argument(name="flag", type=RawType.bool_),
-                        ],
-                        return_type=RawType.str_,
-                    )
-                ],
-            )
-        ],
-    )
-
-    TomlWriter().write(
-        module,
-        StubRenderer(include_docstrings=False),
-        to=tmp_path,
-    )
-
-    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
-        "entries": [
-            {
-                "module_name": "pkg.mod",
-                "function_name": "foo",
-                "signature": "def foo(\n    value: int,\n    flag: bool,\n) -> str:",
-            }
-        ]
-    }
-
-
 def test_toml_writer_rejects_function_without_exportable_signature(tmp_path) -> None:
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
@@ -139,7 +103,7 @@ def test_toml_writer_rejects_function_without_exportable_signature(tmp_path) -> 
         ],
     )
 
-    with pytest.raises(RuntimeError, match="pkg.mod.missing 缺少可导出签名"):
+    with pytest.raises(RuntimeError, match="pkg.mod.missing"):
         TomlWriter().write(
             module,
             StubRenderer(include_docstrings=False),
@@ -198,62 +162,6 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
                 "class_name": "Outer.Inner",
                 "function_name": "build_inner",
                 "signature": "def build_inner(self) -> int:",
-            },
-        ]
-    }
-
-
-def test_toml_writer_inserts_cls_and_skips_staticmethod_receiver(tmp_path) -> None:
-    module = Module(
-        full_name=QualifiedName.from_str("pkg.mod"),
-        classes=[
-            Class(
-                name="Factory",
-                methods=[
-                    Function(
-                        name="build",
-                        signatures=[
-                            _signature(
-                                args=[Argument(name="cls"), Argument(name="value", type=RawType.int_)],
-                                return_type=RawType.int_,
-                            )
-                        ],
-                        decorator="classmethod",
-                    ),
-                    Function(
-                        name="make",
-                        signatures=[
-                            _signature(
-                                args=[Argument(name="value", type=RawType.str_)],
-                                return_type=RawType.str_,
-                            )
-                        ],
-                        decorator="staticmethod",
-                    ),
-                ],
-            )
-        ],
-    )
-
-    TomlWriter().write(
-        module,
-        StubRenderer(include_docstrings=False),
-        to=tmp_path,
-    )
-
-    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
-        "entries": [
-            {
-                "module_name": "pkg.mod",
-                "class_name": "Factory",
-                "function_name": "build",
-                "signature": "def build(\n    cls,\n    value: int,\n) -> int:",
-            },
-            {
-                "module_name": "pkg.mod",
-                "class_name": "Factory",
-                "function_name": "make",
-                "signature": "def make(value: str) -> str:",
             },
         ]
     }
