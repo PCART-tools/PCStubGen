@@ -12,11 +12,11 @@ description = "Generate Python stubs for modules."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "build>=1.4.3",
+    "build>=1.4.4",
     "libclang>=18.1.1",
     "loguru>=0.7.3",
-    "toml-rs>=0.3.11",
-    "typer>=0.24.1",
+    "toml-rs>=0.3.12",
+    "typer>=0.24.2",
 ]
 
 [project.scripts]
@@ -25,9 +25,9 @@ pcstubgen = "pcstubgen.__main__:app"
 [dependency-groups]
 dev = [
     "meson-python>=0.19.0",
-    "mypy>=1.20.0",
+    "mypy>=1.20.2",
     "ninja>=1.13.0",
     "pybind11-stubgen>=2.5.5",
-    "pytest>=9.0.2",
+    "pytest>=9.0.3",
     "requests>=2.33.1",
 ]
