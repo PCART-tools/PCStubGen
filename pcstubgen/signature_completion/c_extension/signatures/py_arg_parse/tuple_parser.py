@@ -14,7 +14,6 @@ from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
 _InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
-_OBJECT_TYPE = RawType.object_
 
 
 class PyArgParseTupleTypeParserError(ValueError):
@@ -228,7 +227,7 @@ class PyArgParseTupleTypeParser:
                         raw_c_args[spec.converter_arg_offset]
                     )
                 decl_ref_cursor = raw_c_args[spec.decl_ref_offset]
-                if value_type == _OBJECT_TYPE:
+                if value_type == RawType.object_:
                     value_type = self._infer_refined_object_type_func(decl_ref_cursor)
                 return _ScalarParsedValue(
                     type=value_type,

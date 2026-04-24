@@ -53,9 +53,6 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
     "_Py_TrueStruct": "True",
     "_Py_FalseStruct": "False",
 }
-_OBJECT_TYPE = RawType.object_
-_BOOL_TYPE = RawType.bool_
-_FLOAT_TYPE = RawType.float_
 
 
 class Inferencer:
@@ -99,14 +96,6 @@ class Inferencer:
                 "PyArg_ParseTuple",
                 self._infer_pyarg_parse_tuple_arguments,
             )
-            for arguments in arguments_list:
-                arguments.append(
-                    Argument(
-                        name="kwargs",
-                        type=RawType.object_,
-                        kind=ArgumentKind.VAR_KEYWORD,
-                    )
-                )
             arguments_list.extend(
                 self._infer_arguments_for_call_name(
                     "PyArg_ParseTupleAndKeywords",
@@ -116,7 +105,7 @@ class Inferencer:
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]
-        if self._flags & METH_VARARGS:
+        if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS == 0:
             arguments_list = self._infer_arguments_for_call_name(
                 "PyArg_ParseTuple",
                 self._infer_pyarg_parse_tuple_arguments,
@@ -260,7 +249,7 @@ class Inferencer:
 
     def _build_meth_o_argument(self) -> Argument:
         """构造 `METH_O` 的单个业务参数，并在需要时细化为具体类型。"""
-        arg_type: Type = _OBJECT_TYPE
+        arg_type: Type = RawType.object_
         param_cursor = self._get_meth_o_argument_cursor()
         if param_cursor is not None:
             arg_type = self._infer_refined_object_type_for_cursor(param_cursor)
@@ -285,7 +274,7 @@ class Inferencer:
         """扫描函数体中的对象检查调用，细化 `object` 参数类型。"""
         target_decl = self._get_target_decl_for_cursor(cursor)
         if target_decl is None:
-            return _OBJECT_TYPE
+            return RawType.object_
 
         matched_types: set[Type] = set()
         for call_expr in walk(self._func_cursor):
@@ -301,7 +290,7 @@ class Inferencer:
             matched_types.add(matched_type)
 
         if not matched_types:
-            return _OBJECT_TYPE
+            return RawType.object_
         return UnionType(tuple(matched_types)).canonicalize()
 
     def _infer_object_type_from_call(
@@ -539,7 +528,7 @@ class Inferencer:
                 raise RuntimeError(
                     f"C++ bool 字面量求值结果不是整数: {evaluated!r}, cursor: {ast_utils.to_str(expr)}"
                 )
-            if expected_type == _BOOL_TYPE:
+            if expected_type == RawType.bool_:
                 if evaluated == 0:
                     return "False"
                 if evaluated == 1:
@@ -558,7 +547,7 @@ class Inferencer:
                 raise RuntimeError(
                     f"整数默认值求值结果不是整数: {evaluated!r}, cursor: {ast_utils.to_str(expr)}"
                 )
-            if expected_type == _BOOL_TYPE:
+            if expected_type == RawType.bool_:
                 if evaluated == 0:
                     return "False"
                 if evaluated == 1:
@@ -592,7 +581,7 @@ class Inferencer:
 
     def _render_number_default(self, value: int | float, expected_type: Type) -> str:
         """将已求值的 C 数字默认值渲染为 Python 字面量。"""
-        if expected_type == _FLOAT_TYPE:
+        if expected_type == RawType.float_:
             return str(float(value))
         return str(value)
 

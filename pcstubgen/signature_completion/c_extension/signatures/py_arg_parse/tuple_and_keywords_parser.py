@@ -14,7 +14,6 @@ from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
 _InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
-_OBJECT_TYPE = RawType.object_
 
 
 class PyArgParseTupleAndKeywordsTypeParserError(ValueError):
@@ -110,7 +109,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
             arg_type = self._infer_type_object(c_args[spec.type_object_arg_offset])
         if spec.converter_arg_offset is not None:
             arg_type = self._infer_converter(c_args[spec.converter_arg_offset])
-        if arg_type == _OBJECT_TYPE:
+        if arg_type == RawType.object_:
             arg_type = self._infer_refined_object_type_func(c_args[spec.decl_ref_offset])
 
         default_value: str | None = None

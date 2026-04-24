@@ -20,12 +20,10 @@ _ARRAY_LIKE_OR_NONE_TYPE = UnionType((_ARRAY_LIKE_TYPE, RawType.none_))
 _BUSDAYCALENDAR_TYPE = RawType("numpy.busdaycalendar", imports=("numpy",))
 _UFUNC_TYPE = RawType("numpy.ufunc", imports=("numpy",))
 _LIST_TYPE = RawType("list")
-_BYTES_TYPE = RawType.bytes_
 _INT_OR_NONE_TYPE = UnionType((RawType.int_, RawType.none_))
 _BOOL_OR_NONE_TYPE = UnionType((RawType.bool_, RawType.none_))
-_INTP_TYPE = RawType.int_
-_INTP_OR_SHAPE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]")))
-_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((_INTP_TYPE, RawType("tuple[int, ...]"), RawType.none_))
+_INTP_OR_SHAPE_TYPE = UnionType((RawType.int_, RawType("tuple[int, ...]")))
+_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((RawType.int_, RawType("tuple[int, ...]"), RawType.none_))
 _SEQUENCE_STR_TYPE = RawType("collections.abc.Sequence[str]", imports=("collections.abc",))
 _ORDER_TYPE = RawType(
     'typing.Literal["K", "A", "C", "F"]',
@@ -107,7 +105,7 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
     "NI_ObjectToOptionalInputArray": _NDARRAY_OR_NONE_TYPE,
     "NI_ObjectToOptionalOutputArray": _NDARRAY_OR_NONE_TYPE,
     "PyArray_IntpConverter": _INTP_OR_SHAPE_TYPE,
-    "PyArray_IntpFromPyIntConverter": _INTP_TYPE,
+    "PyArray_IntpFromPyIntConverter": RawType.int_,
     "PyArray_OptionalIntpConverter": _INTP_OR_SHAPE_OR_NONE_TYPE,
     "PyArray_OutputConverter": _NDARRAY_OR_NONE_TYPE,
     "PyArray_Converter": _ARRAY_LIKE_TYPE,
@@ -170,8 +168,8 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_DescrNewByteorder": _DTYPE_TYPE,
     "PyArray_DescrFromType": _DTYPE_TYPE,
     "PyArray_ToList": _LIST_TYPE,
-    "PyArray_ToString": _BYTES_TYPE,
-    "PyArray_Dumps": _BYTES_TYPE,
+    "PyArray_ToString": RawType.bytes_,
+    "PyArray_Dumps": RawType.bytes_,
     "pylong_from_int128": RawType.int_,
     "PyArray_Return": UnionType(
         (
