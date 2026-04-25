@@ -49,7 +49,7 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if self._signature_completer.support(member, False):
+            if self._signature_completer.support(member):
                 module_node.functions.append(self._collect_function(member_path, member))
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
@@ -87,8 +87,8 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
-            if self._signature_completer.support(member, True):
-                class_node.methods.append(self._collect_method(member_path, member))
+            if self._signature_completer.support(member, class_):
+                class_node.methods.append(self._collect_method(member_path, member, class_))
             elif inspect.isclass(member) and member.__qualname__.startswith(
                 class_.__qualname__ + "."
             ):
@@ -117,13 +117,14 @@ class ModuleCollector:
         self,
         path: QualifiedName,
         method: Any,
+        owner_class: type,
     ) -> Function:
         """收集类方法节点。"""
         context = SignatureCompletionContext(
             module_name=path.parent,
             func_name=path.name,
             member=method,
-            is_method=True,
+            owner_class=owner_class,
         )
         result = self._signature_completer.complete(context)
 

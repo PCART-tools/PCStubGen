@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import enum
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -55,3 +56,18 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     assert func_cursor is expected_cursor
     assert flags == 8
     assert calls == [(binary_path, 0x234)]
+
+
+def test_support_rejects_method_descriptor_owned_by_another_class() -> None:
+    class Sample(enum.IntEnum):
+        VALUE = 1
+
+    method = Sample.__dict__["__format__"]
+
+    assert provider_module.CExtensionProvider.support(method, Sample) is False
+
+
+def test_support_accepts_method_descriptor_owned_by_current_class() -> None:
+    method = dict.__dict__["get"]
+
+    assert provider_module.CExtensionProvider.support(method, dict) is True

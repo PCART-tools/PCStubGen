@@ -21,12 +21,11 @@ def _patch_compilation_database_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _context(*, func_name: str, member: object, is_method: bool = False) -> SignatureCompletionContext:
+def _context(*, func_name: str, member: object) -> SignatureCompletionContext:
     return SignatureCompletionContext(
         module_name=QualifiedName.from_str("pkg.mod"),
         func_name=func_name,
         member=member,
-        is_method=is_method,
     )
 
 
@@ -37,11 +36,11 @@ def test_signature_completer_returns_provider_result_and_updates_summary(
     _patch_compilation_database_loader(monkeypatch)
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
-        staticmethod(lambda member, is_method: not is_method),
+        staticmethod(lambda member, owner_class=None: owner_class is None),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
-        staticmethod(lambda member, is_method: False),
+        staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
@@ -83,11 +82,11 @@ def test_signature_completer_falls_back_to_minimal_signature_on_provider_failure
     _patch_compilation_database_loader(monkeypatch)
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
-        staticmethod(lambda member, is_method: True),
+        staticmethod(lambda member, owner_class=None: True),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
-        staticmethod(lambda member, is_method: False),
+        staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
         "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",

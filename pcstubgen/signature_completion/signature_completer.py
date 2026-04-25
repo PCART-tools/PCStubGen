@@ -27,11 +27,15 @@ class SignatureCompleter:
         """重置本轮补全统计。"""
         self.summary = SignatureCompletionSummary()
 
-    def support(self, member: object, is_method: bool) -> bool:
+    def support(
+        self,
+        member: object,
+        owner_class: type | None = None,
+    ) -> bool:
         """判断运行时对象是否属于受支持的补全来源。"""
         return (
-            self._c_extension_provider.support(member, is_method)
-            or self._pybind11_provider.support(member, is_method)
+            self._c_extension_provider.support(member, owner_class)
+            or self._pybind11_provider.support(member, owner_class)
         )
 
     def complete(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
@@ -40,14 +44,14 @@ class SignatureCompleter:
         provider = "minimal"
         reason = "函数不属于受支持的签名补全来源。"
         try:
-            if self._c_extension_provider.support(context.member, context.is_method):
+            if self._c_extension_provider.support(context.member, context.owner_class):
                 provider = "c_extension"
                 result = self._c_extension_provider.get(context)
                 self.summary.c_extension += 1
                 _log_success(context, provider)
                 return result
 
-            if self._pybind11_provider.support(context.member, context.is_method):
+            if self._pybind11_provider.support(context.member, context.owner_class):
                 provider = "pybind11"
                 result = self._pybind11_provider.get(context)
                 self.summary.pybind11 += 1
@@ -64,19 +68,19 @@ class SignatureCompleter:
 
 def _log_success(context: SignatureCompletionContext, provider: str) -> None:
     logger.info(
-        "补全成功, provider: {}, module: {}, func: {}, is_method: {}",
+        "补全成功, provider: {}, module: {}, func: {}, owner_class: {}",
         provider,
         context.module_name,
         context.func_name,
-        context.is_method,
+        context.owner_class,
     )
 
 def _log_failure(context: SignatureCompletionContext, provider: str, reason: str) -> None:
     logger.warning(
-        "补全失败, provider: {}, module: {}, func: {}, is_method: {}, reason: {}",
+        "补全失败, provider: {}, module: {}, func: {}, owner_class: {}, reason: {}",
         provider,
         context.module_name,
         context.func_name,
-        context.is_method,
+        context.owner_class,
         reason,
     )

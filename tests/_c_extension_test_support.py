@@ -177,51 +177,51 @@ def patch_inference_clang_helpers(
         cursor: clang.cindex.Cursor,
         *,
         flags: int = 0,
-        is_method: bool = False,
+        owner_class: type | None = None,
     ) -> Type:
-        inferencer = target_module.Inferencer(_find_function_cursor(cursor), flags, is_method)
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), flags, owner_class)
         return inferencer._infer_expr_type(cursor)
 
     def infer_return_type(
         cursor: clang.cindex.Cursor,
         *,
         flags: int = 0,
-        is_method: bool = False,
+        owner_class: type | None = None,
     ) -> Type:
-        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        inferencer = target_module.Inferencer(cursor, flags, owner_class)
         return inferencer._infer_return_type()
 
     def infer_arguments_list(
         cursor: clang.cindex.Cursor,
         *,
         flags: int = 0,
-        is_method: bool = False,
+        owner_class: type | None = None,
     ) -> list[list[Argument]]:
-        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        inferencer = target_module.Inferencer(cursor, flags, owner_class)
         return inferencer._infer_arguments_list()
 
     def infer_signature(
         cursor: clang.cindex.Cursor,
         *,
         flags: int = 0,
-        is_method: bool = False,
+        owner_class: type | None = None,
     ) -> list[Signature]:
-        inferencer = target_module.Inferencer(cursor, flags, is_method)
+        inferencer = target_module.Inferencer(cursor, flags, owner_class)
         return inferencer.run()
 
     def infer_type_object_type_for_pyarg(cursor: clang.cindex.Cursor) -> Type:
-        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, None)
         return inferencer._infer_type_object_type_for_pyarg(cursor)
 
     def infer_converter_type_for_pyarg(cursor: clang.cindex.Cursor) -> Type:
-        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, None)
         return inferencer._infer_converter_type_for_pyarg(cursor)
 
     def infer_default_value_for_pyarg(
         cursor: clang.cindex.Cursor,
         expected_type: Type,
     ) -> str:
-        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, False)
+        inferencer = target_module.Inferencer(_find_function_cursor(cursor), 0, None)
         return inferencer._infer_default_value_for_pyarg(cursor, expected_type)
 
     monkeypatch.setattr(target_module, "infer_expr_type", infer_expr_type, raising=False)

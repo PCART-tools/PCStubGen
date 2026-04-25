@@ -17,8 +17,8 @@ class Pybind11Provider:
     """从 pybind11 docstring 生产最终可导出的结果。"""
 
     @staticmethod
-    def support(member: object, is_method: bool) -> bool:
-        if is_method:
+    def support(member: object, owner_class: type | None = None) -> bool:
+        if owner_class is not None:
             is_pybind11 = (
                 runtime.is_pybind11_instance_method(member)
                 or runtime.is_pybind11_static_method(member)

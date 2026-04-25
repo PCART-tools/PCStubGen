@@ -71,7 +71,7 @@ def test_infer_signature_inserts_self_for_method_meth_noargs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[_arg("self")], return_type=RawType.int_)]
@@ -87,7 +87,7 @@ def test_infer_signature_returns_self_for_instance_receiver() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[_arg("self")], return_type=RawType.self_)]
@@ -114,7 +114,7 @@ def test_infer_signature_returns_self_through_local_alias() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -136,7 +136,7 @@ def test_infer_signature_inserts_cls_for_classmethod_meth_noargs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[_arg("cls")], return_type=RawType.int_)]
@@ -152,7 +152,7 @@ def test_infer_signature_does_not_return_self_for_classmethod_receiver() -> None
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[_arg("cls")], return_type=AnyType())]
@@ -166,7 +166,7 @@ def test_infer_signature_skips_receiver_for_staticmethod_meth_noargs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS | METH_STATIC,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[], return_type=RawType.int_)]
@@ -182,7 +182,7 @@ def test_infer_signature_does_not_return_self_for_staticmethod_first_param() -> 
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_NOARGS | METH_STATIC,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [Signature(args=[], return_type=AnyType())]
@@ -196,7 +196,7 @@ def test_infer_signature_inserts_self_for_method_meth_o() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -218,7 +218,7 @@ def test_infer_signature_inserts_cls_for_classmethod_meth_o() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -240,7 +240,7 @@ def test_infer_signature_skips_receiver_for_staticmethod_meth_o() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O | METH_STATIC,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -266,7 +266,7 @@ def test_infer_signature_ignores_body_parse_for_meth_o() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -296,7 +296,7 @@ def test_infer_signature_refines_meth_o_argument_from_type_check() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_O,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -329,7 +329,7 @@ def test_infer_signature_keeps_parse_tuple_result_for_meth_varargs_method() -> N
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -360,7 +360,7 @@ def test_infer_signature_falls_back_to_varargs_for_meth_varargs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -392,7 +392,7 @@ def test_infer_signature_keeps_parse_tuple_and_keywords_result_for_classmethod()
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS | METH_KEYWORDS | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -417,7 +417,7 @@ def test_infer_signature_keeps_parse_tuple_result_and_appends_kwargs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS | METH_KEYWORDS | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -456,7 +456,7 @@ def test_infer_signature_keeps_parse_tuple_and_keywords_results_together() -> No
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS | METH_KEYWORDS | METH_CLASS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -482,7 +482,7 @@ def test_infer_signature_uses_fastcall_skeleton_with_receiver() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -505,7 +505,7 @@ def test_infer_signature_uses_fastcall_skeleton_without_keywords() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -555,7 +555,7 @@ def test_infer_signature_uses_npy_parse_arguments_for_fastcall_keywords(
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -607,7 +607,7 @@ def test_infer_signature_uses_npy_parse_arguments_with_macro_expanded_cache(
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -648,7 +648,7 @@ def test_infer_signature_uses_npy_parse_arguments_empty_name_as_positional_only(
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -685,7 +685,7 @@ def test_infer_signature_uses_npy_parse_arguments_object_fallback_for_unknown_co
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -719,7 +719,7 @@ def test_infer_signature_accepts_renamed_npy_parse_arguments_inputs() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [
@@ -777,7 +777,7 @@ def test_infer_signature_maps_numpy_array_like_dtype_and_copy_converters() -> No
         inferred = signature_rules_module.infer_signature(
             cursor,
             flags=METH_FASTCALL | METH_KEYWORDS,
-            is_method=False,
+            owner_class=None,
         )
     finally:
         monkeypatch.undo()
@@ -843,7 +843,7 @@ def test_infer_signature_maps_numpy_copy_converter_and_int_defaults() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -904,7 +904,7 @@ def test_infer_signature_maps_numpy_business_day_converters(
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_VARARGS | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -959,7 +959,7 @@ def test_infer_signature_maps_numpy_trim_converter(
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -1000,7 +1000,7 @@ def test_infer_signature_maps_numpy_errmode_converter() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -1059,7 +1059,7 @@ def test_infer_signature_keeps_multiple_npy_parse_argument_lists() -> None:
     inferred = signature_rules_module.infer_signature(
         cursor,
         flags=METH_FASTCALL | METH_KEYWORDS,
-        is_method=False,
+        owner_class=None,
     )
 
     assert inferred == [
@@ -1127,7 +1127,7 @@ def test_infer_signature_refines_meth_o_argument_for_pyarray_check_exact_macro(
     inferred = signature_rules_module.infer_signature(
         func_cursor,
         flags=METH_O,
-        is_method=True,
+        owner_class=object,
     )
 
     assert inferred == [

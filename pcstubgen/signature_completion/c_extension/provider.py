@@ -24,14 +24,20 @@ class CExtensionProvider:
         self._dwarf_manager = dwarfdump.DWARFManager()
 
     @staticmethod
-    def support(member: object, is_method: bool) -> bool:
+    def support(
+        member: object,
+        owner_class: type | None = None,
+    ) -> bool:
         """判断运行时对象是否属于 CPython C 扩展函数或方法。"""
-        if is_method:
-            return (
+        if owner_class is not None:
+            if (
                 runtime.is_c_extension_instance_method(member)
-                or runtime.is_c_extension_static_method(member)
                 or runtime.is_c_extension_class_method(member)
-            )
+            ):
+                return not _is_foreign_method_descriptor(member, owner_class)
+            if runtime.is_c_extension_static_method(member):
+                return True
+            return False
         return runtime.is_c_extension_module_function(member)
 
     def get_func_cursor_and_flags(self, handle: object) -> tuple[Cursor, int]:
@@ -52,7 +58,7 @@ class CExtensionProvider:
         func_cursor, flags = self.get_func_cursor_and_flags(runtime_handle)
         source_text = ast_utils.get_cursor_source_text(func_cursor)
         comment = f"{func_cursor.location}\n{source_text}"
-        signatures = Inferencer(func_cursor, flags, context.is_method).run()
+        signatures = Inferencer(func_cursor, flags, context.owner_class).run()
 
         return SignatureCompletionResult(
             signatures=signatures,
@@ -85,3 +91,14 @@ def _get_doc(obj: object) -> str | None:
     if isinstance(doc, str) and doc and not doc.isspace():
         return doc
     return None
+
+
+def _is_foreign_method_descriptor(member: object, owner_class: type) -> bool:
+    """
+    判断已确认的 C method descriptor 是否归属于其他类。
+
+    过滤这个噪音是为了避免 `EnumMeta` 等元类把外部 descriptor 复制到
+    类字典后被误认为当前扩展类方法，例如 `IntEnum` 子类中的 `int.__format__
+    IntEnum子类会被注入int的__format__，实现在Python内，后续DWARF没有调试符号`。
+    """
+    return getattr(member, "__objclass__", None) is not owner_class

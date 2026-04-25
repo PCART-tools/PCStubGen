@@ -55,11 +55,11 @@ _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
 
 
 class Inferencer:
-    def __init__(self, func_cursor: Cursor, flags: int, is_method: bool):
+    def __init__(self, func_cursor: Cursor, flags: int, owner_class: type | None):
         """保存当前待推断函数的上下文。"""
         self._func_cursor = func_cursor
         self._flags = flags
-        self._is_method = is_method
+        self._owner_class = owner_class
         self._param_cursors = [
             child
             for child in self._func_cursor.get_children()
@@ -179,7 +179,7 @@ class Inferencer:
 
     def _try_add_receiver(self, arguments: list[Argument]) -> list[Argument]:
         """按方法绑定类型在参数列表头部原地插入 receiver。"""
-        if self._is_method and self._flags & METH_STATIC == 0:
+        if self._owner_class is not None and self._flags & METH_STATIC == 0:
             if self._flags & METH_CLASS:
                 arg_name = "cls"
             else:
@@ -399,7 +399,7 @@ class Inferencer:
 
     def _is_receiver_ref(self, cursor: Cursor) -> bool:
         """判断 `DECL_REF_EXPR` 是否引用实例方法 receiver。"""
-        if not self._is_method:
+        if self._owner_class is None:
             return False
         if self._flags & METH_STATIC or self._flags & METH_CLASS:
             return False

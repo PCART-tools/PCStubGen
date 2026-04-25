@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import enum
 import importlib
 import inspect
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -24,10 +26,16 @@ class _DummySignatureCompleter:
         self._signatures = [Signature()] if signatures is None else signatures
         self._member_results = member_results or {}
 
-    def support(self, member: object, is_method: bool) -> bool:
+    def support(
+        self,
+        member: object,
+        owner_class: type | None = None,
+    ) -> bool:
         return (
             id(member) in self._member_results
-            or self._support_result and not is_method and inspect.isroutine(member)
+            or self._support_result
+            and owner_class is None
+            and inspect.isroutine(member)
         )
 
     def reset_summary(self) -> None:
@@ -303,6 +311,34 @@ def test_module_collector_collects_configured_staticmethod_result() -> None:
     member = next(method for method in class_node.methods if method.name == "member")
     assert member.decorator == "staticmethod"
     assert member.doc == "build(value: int) -> int"
+
+
+def test_module_collector_passes_owner_class_when_collecting_methods() -> None:
+    class Sample(enum.IntEnum):
+        VALUE = 1
+
+    observed_owner_classes: list[type | None] = []
+
+    class OwnerAwareCompleter(_DummySignatureCompleter):
+        def support(
+            self,
+            member: object,
+            owner_class: type | None = None,
+        ) -> bool:
+            """只收集真实归属于当前类的方法描述符。"""
+            if owner_class is None or not isinstance(member, types.MethodDescriptorType):
+                return False
+            if getattr(member, "__qualname__", None) == "int.__format__":
+                observed_owner_classes.append(owner_class)
+            return getattr(member, "__objclass__", None) is owner_class
+
+    class_node = ModuleCollector(OwnerAwareCompleter())._collect_class(
+        QualifiedName.from_str("pkg.Sample"),
+        Sample,
+    )
+
+    assert "__format__" not in [method.name for method in class_node.methods]
+    assert observed_owner_classes == [Sample]
 
 
 def _get_member_doc(member: object) -> str | None:

@@ -27,12 +27,17 @@ class _FakeBuiltinFunction:
         _ = args, kwargs
 
 
-def _make_context(member: object, *, func_name: str, is_method: bool = False) -> SignatureCompletionContext:
+def _make_context(
+    member: object,
+    *,
+    func_name: str,
+    owner_class: type | None = None,
+) -> SignatureCompletionContext:
     return SignatureCompletionContext(
         module_name=QualifiedName.from_str("pkg.mod"),
         func_name=func_name,
         member=member,
-        is_method=is_method,
+        owner_class=owner_class,
     )
 
 
@@ -44,17 +49,17 @@ def _make_pybind11_instance_method(doc: str) -> object:
 
 
 @pytest.mark.parametrize(
-    ("case_name", "is_method", "expected"),
+    ("case_name", "owner_class", "expected"),
     [
-        ("module", False, True),
-        ("instance", True, True),
-        ("conduit", True, False),
-        ("plain", False, False),
+        ("module", None, True),
+        ("instance", object, True),
+        ("conduit", object, False),
+        ("plain", None, False),
     ],
 )
 def test_pybind11_provider_support_filters_members(
     case_name: str,
-    is_method: bool,
+    owner_class: type | None,
     expected: bool,
 ) -> None:
     provider = Pybind11Provider()
@@ -84,16 +89,16 @@ def test_pybind11_provider_support_filters_members(
             lambda handle: False,
         )
 
-        assert provider.support(member, is_method) is expected
+        assert provider.support(member, owner_class) is expected
 
 
 @pytest.mark.parametrize(
-    ("member_factory", "func_name", "is_method", "expected_doc", "expected_decorator", "expected_args"),
+    ("member_factory", "func_name", "owner_class", "expected_doc", "expected_decorator", "expected_args"),
     [
         (
             lambda: _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int"),
             "build",
-            True,
+            object,
             "build(self: pkg.Sample, value: int) -> int",
             None,
             ["self", "value"],
@@ -101,7 +106,7 @@ def test_pybind11_provider_support_filters_members(
         (
             lambda: staticmethod(_FakeBuiltinFunction("build(value: int) -> int")),
             "build",
-            True,
+            object,
             "build(value: int) -> int",
             "staticmethod",
             ["value"],
@@ -111,7 +116,7 @@ def test_pybind11_provider_support_filters_members(
 def test_pybind11_provider_get_returns_observable_result(
     member_factory,
     func_name: str,
-    is_method: bool,
+    owner_class: type | None,
     expected_doc: str,
     expected_decorator: str | None,
     expected_args: list[str],
@@ -132,7 +137,9 @@ def test_pybind11_provider_get_returns_observable_result(
             "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
             lambda handle: handle is member and isinstance(member, staticmethod),
         )
-        result = provider.get(_make_context(member, func_name=func_name, is_method=is_method))
+        result = provider.get(
+            _make_context(member, func_name=func_name, owner_class=owner_class)
+        )
 
     assert result.decorator == expected_decorator
     assert result.doc == expected_doc

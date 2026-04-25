@@ -12,7 +12,7 @@ class SignatureCompletionContext:
     module_name: QualifiedName
     func_name: str
     member: object
-    is_method: bool = False
+    owner_class: type | None = None
 
 
 @dataclass(frozen=True)
