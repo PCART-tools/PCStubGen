@@ -11,29 +11,32 @@ import pytest
 
 from pcstubgen.module_collector import ModuleCollector
 from pcstubgen.models import QualifiedName, Signature
-from pcstubgen.signature_completion.completion_models import SignatureCompletionResult
+from pcstubgen.signature_completion.completion_models import (
+    SignatureCompletionResult,
+    UnsupportedSignatureCompletion,
+)
 
 
 class _DummySignatureCompleter:
     def __init__(
         self,
         *,
-        support_result: bool = False,
+        match_result: bool = False,
         signatures: list[Signature] | None = None,
         member_results: dict[int, SignatureCompletionResult] | None = None,
     ) -> None:
-        self._support_result = support_result
+        self._match_result = match_result
         self._signatures = [Signature()] if signatures is None else signatures
         self._member_results = member_results or {}
 
-    def support(
+    def match(
         self,
         member: object,
         owner_class: type | None = None,
     ) -> bool:
         return (
             id(member) in self._member_results
-            or self._support_result
+            or self._match_result
             and owner_class is None
             and inspect.isroutine(member)
         )
@@ -254,12 +257,40 @@ def test_module_collector_completes_signatures_when_collecting_module_functions(
     )
 
     _prepare_module_import("signedpkg", tmp_path, monkeypatch)
-    completer = _DummySignatureCompleter(support_result=True, signatures=[Signature()])
+    completer = _DummySignatureCompleter(match_result=True, signatures=[Signature()])
 
     module_node = ModuleCollector(completer).run("signedpkg")
 
     assert [function.name for function in module_node.functions] == ["foo"]
     assert module_node.functions[0].signatures == [Signature()]
+
+
+def test_module_collector_silently_skips_unsupported_completion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_package_file(
+        tmp_path / "skippkg" / "__init__.py",
+        "def generated_noise():\n    return None\n",
+    )
+
+    class SkipCompleter(_DummySignatureCompleter):
+        def match(
+            self,
+            member: object,
+            owner_class: type | None = None,
+        ) -> bool:
+            """模拟 provider 粗匹配成功。"""
+            return owner_class is None and inspect.isroutine(member)
+
+        def complete(self, context) -> SignatureCompletionResult:
+            """模拟 provider 在内部识别为不支持目标。"""
+            raise UnsupportedSignatureCompletion("skip")
+
+    _prepare_module_import("skippkg", tmp_path, monkeypatch)
+    module_node = ModuleCollector(SkipCompleter()).run("skippkg")
+
+    assert module_node.functions == []
 
 
 def test_module_collector_collects_configured_instance_method_result() -> None:
@@ -320,7 +351,7 @@ def test_module_collector_passes_owner_class_when_collecting_methods() -> None:
     observed_owner_classes: list[type | None] = []
 
     class OwnerAwareCompleter(_DummySignatureCompleter):
-        def support(
+        def match(
             self,
             member: object,
             owner_class: type | None = None,

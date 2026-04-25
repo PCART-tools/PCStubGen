@@ -14,8 +14,11 @@ from .models import (
     Module,
     QualifiedName,
 )
-from .signature_completion import SignatureCompleter, SignatureCompletionSummary
-from .signature_completion.completion_models import SignatureCompletionContext
+from .signature_completion import SignatureCompleter
+from .signature_completion.completion_models import (
+    SignatureCompletionContext,
+    UnsupportedSignatureCompletion,
+)
 
 __all__ = ["ModuleCollector"]
 
@@ -49,8 +52,11 @@ class ModuleCollector:
             if self._is_imported_member(member_path, member, module):
                 continue
 
-            if self._signature_completer.support(member):
-                module_node.functions.append(self._collect_function(member_path, member))
+            if self._signature_completer.match(member):
+                try:
+                    module_node.functions.append(self._collect_function(member_path, member))
+                except UnsupportedSignatureCompletion:
+                    continue
             elif inspect.isclass(member):
                 module_node.classes.append(self._collect_class(member_path, member))
 
@@ -87,8 +93,13 @@ class ModuleCollector:
 
         for name, member in class_.__dict__.items():
             member_path = path.concat(name)
-            if self._signature_completer.support(member, class_):
-                class_node.methods.append(self._collect_method(member_path, member, class_))
+            if self._signature_completer.match(member, class_):
+                try:
+                    class_node.methods.append(
+                        self._collect_method(member_path, member, class_)
+                    )
+                except UnsupportedSignatureCompletion:
+                    continue
             elif inspect.isclass(member) and member.__qualname__.startswith(
                 class_.__qualname__ + "."
             ):

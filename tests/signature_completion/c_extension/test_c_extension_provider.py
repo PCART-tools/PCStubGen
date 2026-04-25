@@ -4,8 +4,15 @@ import enum
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
+from pcstubgen.models import QualifiedName
 from pcstubgen.signature_completion.c_extension import provider as provider_module
 from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
+from pcstubgen.signature_completion.completion_models import (
+    SignatureCompletionContext,
+    UnsupportedSignatureCompletion,
+)
 
 
 def test_get_func_cursor_and_flags_uses_dwarf_manager(
@@ -58,16 +65,66 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     assert calls == [(binary_path, 0x234)]
 
 
-def test_support_rejects_method_descriptor_owned_by_another_class() -> None:
+def test_match_rejects_method_descriptor_owned_by_another_class() -> None:
     class Sample(enum.IntEnum):
         VALUE = 1
 
     method = Sample.__dict__["__format__"]
 
-    assert provider_module.CExtensionProvider.support(method, Sample) is False
+    assert provider_module.CExtensionProvider.match(method, Sample) is False
 
 
-def test_support_accepts_method_descriptor_owned_by_current_class() -> None:
+def test_match_accepts_method_descriptor_owned_by_current_class() -> None:
     method = dict.__dict__["get"]
 
-    assert provider_module.CExtensionProvider.support(method, dict) is True
+    assert provider_module.CExtensionProvider.match(method, dict) is True
+
+
+def test_match_rejects_cython_pickle_method_descriptor(monkeypatch) -> None:
+    class Sample:
+        """用于模拟 Cython 扩展类。"""
+
+    method = SimpleNamespace(__name__="__reduce_cython__", __objclass__=Sample)
+    monkeypatch.setattr(
+        provider_module.runtime,
+        "is_c_extension_instance_method",
+        lambda member: member is method,
+    )
+    monkeypatch.setattr(
+        provider_module.runtime,
+        "is_c_extension_class_method",
+        lambda member: False,
+    )
+    monkeypatch.setattr(
+        provider_module.runtime,
+        "is_c_extension_static_method",
+        lambda member: False,
+    )
+
+    assert provider_module.CExtensionProvider.match(method, Sample) is False
+
+
+def test_get_rejects_pythran_wrapall_cursor(monkeypatch) -> None:
+    provider = object.__new__(provider_module.CExtensionProvider)
+    runtime_handle = object()
+    func_cursor = SimpleNamespace(spelling="__pythran_wrapall_group_dense")
+
+    monkeypatch.setattr(
+        provider,
+        "_analyze_member",
+        lambda member: (runtime_handle, None, None),
+    )
+    monkeypatch.setattr(
+        provider,
+        "get_func_cursor_and_flags",
+        lambda handle: (func_cursor, 0),
+    )
+
+    context = SignatureCompletionContext(
+        module_name=QualifiedName.from_str("pkg.mod"),
+        func_name="group_dense",
+        member=object(),
+    )
+
+    with pytest.raises(UnsupportedSignatureCompletion):
+        provider.get(context)

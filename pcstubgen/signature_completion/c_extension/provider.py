@@ -12,6 +12,7 @@ from .signatures.inferencer import Inferencer
 from ..completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
+    UnsupportedSignatureCompletion,
 )
 from ...models import Decorator
 
@@ -24,17 +25,20 @@ class CExtensionProvider:
         self._dwarf_manager = dwarfdump.DWARFManager()
 
     @staticmethod
-    def support(
+    def match(
         member: object,
         owner_class: type | None = None,
     ) -> bool:
-        """判断运行时对象是否属于 CPython C 扩展函数或方法。"""
+        """判断运行时对象是否匹配 CPython C 扩展 provider。"""
         if owner_class is not None:
             if (
                 runtime.is_c_extension_instance_method(member)
                 or runtime.is_c_extension_class_method(member)
             ):
-                return not _is_foreign_method_descriptor(member, owner_class)
+                return not (
+                    _is_foreign_method_descriptor(member, owner_class)
+                    or _is_cython_pickle_method_descriptor(member, owner_class)
+                )
             if runtime.is_c_extension_static_method(member):
                 return True
             return False
@@ -56,6 +60,10 @@ class CExtensionProvider:
         """为单个函数执行 C 源码签名推断。"""
         runtime_handle, decorator, doc = self._analyze_member(context.member)
         func_cursor, flags = self.get_func_cursor_and_flags(runtime_handle)
+        if _is_pythran_wrapall_cursor(func_cursor):
+            raise UnsupportedSignatureCompletion(
+                f"跳过 Pythran wrapall 分派函数: {func_cursor.spelling}"
+            )
         source_text = ast_utils.get_cursor_source_text(func_cursor)
         comment = f"{func_cursor.location}\n{source_text}"
         signatures = Inferencer(func_cursor, flags, context.owner_class).run()
@@ -102,3 +110,17 @@ def _is_foreign_method_descriptor(member: object, owner_class: type) -> bool:
     IntEnum子类会被注入int的__format__，实现在Python内，后续DWARF没有调试符号`。
     """
     return getattr(member, "__objclass__", None) is not owner_class
+
+
+def _is_cython_pickle_method_descriptor(member: object, owner_class: type) -> bool:
+    """判断方法描述符是否为 Cython 自动生成的 pickle 辅助方法。"""
+    return (
+        getattr(member, "__objclass__", None) is owner_class
+        and getattr(member, "__name__", None)
+        in {"__reduce_cython__", "__setstate_cython__"}
+    )
+
+
+def _is_pythran_wrapall_cursor(func_cursor: Cursor) -> bool:
+    """判断函数 cursor 是否为 Pythran 生成的 wrapall 分派入口。"""
+    return func_cursor.spelling.startswith("__pythran_wrapall")

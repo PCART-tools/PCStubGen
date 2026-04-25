@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from ..models import Decorator, QualifiedName, Signature
 
 
+class UnsupportedSignatureCompletion(Exception):
+    """表示候选对象不应生成签名补全结果。"""
+
+
 @dataclass(frozen=True)
 class SignatureCompletionContext:
     """单函数签名补全所需的收集上下文。"""

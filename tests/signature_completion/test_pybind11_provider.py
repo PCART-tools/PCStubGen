@@ -57,7 +57,7 @@ def _make_pybind11_instance_method(doc: str) -> object:
         ("plain", None, False),
     ],
 )
-def test_pybind11_provider_support_filters_members(
+def test_pybind11_provider_match_filters_members(
     case_name: str,
     owner_class: type | None,
     expected: bool,
@@ -89,7 +89,7 @@ def test_pybind11_provider_support_filters_members(
             lambda handle: False,
         )
 
-        assert provider.support(member, owner_class) is expected
+        assert provider.match(member, owner_class) is expected
 
 
 @pytest.mark.parametrize(

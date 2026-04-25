@@ -9,6 +9,7 @@ from pcstubgen.signature_completion import SignatureCompleter
 from pcstubgen.signature_completion.completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
+    UnsupportedSignatureCompletion,
 )
 from pcstubgen.type_models import RawType
 from tests._c_extension_test_support import _arg, _signature
@@ -35,11 +36,11 @@ def test_signature_completer_returns_provider_result_and_updates_summary(
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
+        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.match",
         staticmethod(lambda member, owner_class=None: owner_class is None),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
+        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
         staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
@@ -81,11 +82,11 @@ def test_signature_completer_falls_back_to_minimal_signature_on_provider_failure
 ) -> None:
     _patch_compilation_database_loader(monkeypatch)
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.support",
+        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.match",
         staticmethod(lambda member, owner_class=None: True),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.support",
+        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
         staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
@@ -103,3 +104,34 @@ def test_signature_completer_falls_back_to_minimal_signature_on_provider_failure
     assert completer.summary.c_extension == 0
     assert completer.summary.pybind11 == 0
     assert completer.summary.failed == 1
+
+
+def test_signature_completer_does_not_fallback_for_unsupported_target(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _patch_compilation_database_loader(monkeypatch)
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.match",
+        staticmethod(lambda member, owner_class=None: True),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
+        staticmethod(lambda member, owner_class=None: False),
+    )
+    monkeypatch.setattr(
+        "pcstubgen.signature_completion.c_extension.provider.CExtensionProvider.get",
+        lambda self, context: (_ for _ in ()).throw(
+            UnsupportedSignatureCompletion("skip")
+        ),
+    )
+
+    completer = SignatureCompleter(tmp_path / "compile_commands.json")
+
+    with pytest.raises(UnsupportedSignatureCompletion):
+        completer.complete(_context(func_name="skip_me", member=object()))
+
+    assert completer.summary.total == 0
+    assert completer.summary.c_extension == 0
+    assert completer.summary.pybind11 == 0
+    assert completer.summary.failed == 0

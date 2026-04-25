@@ -9,6 +9,7 @@ from .completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
     SignatureCompletionSummary,
+    UnsupportedSignatureCompletion,
 )
 from .minimal_provider import MinimalProvider
 from .pybind11_provider import Pybind11Provider
@@ -27,40 +28,68 @@ class SignatureCompleter:
         """重置本轮补全统计。"""
         self.summary = SignatureCompletionSummary()
 
-    def support(
+    def match(
         self,
         member: object,
         owner_class: type | None = None,
     ) -> bool:
-        """判断运行时对象是否属于受支持的补全来源。"""
+        """判断运行时对象是否匹配任一签名补全 provider。"""
         return (
-            self._c_extension_provider.support(member, owner_class)
-            or self._pybind11_provider.support(member, owner_class)
+            self._c_extension_provider.match(member, owner_class)
+            or self._pybind11_provider.match(member, owner_class)
         )
 
     def complete(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         """补全单个 callable。"""
-        self.summary.total += 1
-        provider = "minimal"
         reason = "函数不属于受支持的签名补全来源。"
-        try:
-            if self._c_extension_provider.support(context.member, context.owner_class):
-                provider = "c_extension"
+
+        if self._c_extension_provider.match(context.member, context.owner_class):
+            provider = "c_extension"
+            try:
                 result = self._c_extension_provider.get(context)
-                self.summary.c_extension += 1
-                _log_success(context, provider)
-                return result
+            except UnsupportedSignatureCompletion as ex:
+                reason = f"{ex!r}"
+            except Exception as ex:
+                return self._fallback_to_minimal(context, provider, f"{ex!r}")
+            else:
+                return self._complete_success(context, provider, result)
 
-            if self._pybind11_provider.support(context.member, context.owner_class):
-                provider = "pybind11"
+        if self._pybind11_provider.match(context.member, context.owner_class):
+            provider = "pybind11"
+            try:
                 result = self._pybind11_provider.get(context)
-                self.summary.pybind11 += 1
-                _log_success(context, provider)
-                return result
+            except UnsupportedSignatureCompletion as ex:
+                reason = f"{ex!r}"
+            except Exception as ex:
+                return self._fallback_to_minimal(context, provider, f"{ex!r}")
+            else:
+                return self._complete_success(context, provider, result)
 
-        except Exception as ex:
-            reason = f"{ex!r}"
+        raise UnsupportedSignatureCompletion(reason)
 
+    def _complete_success(
+        self,
+        context: SignatureCompletionContext,
+        provider: str,
+        result: SignatureCompletionResult,
+    ) -> SignatureCompletionResult:
+        """记录 provider 成功补全结果。"""
+        self.summary.total += 1
+        if provider == "c_extension":
+            self.summary.c_extension += 1
+        elif provider == "pybind11":
+            self.summary.pybind11 += 1
+        _log_success(context, provider)
+        return result
+
+    def _fallback_to_minimal(
+        self,
+        context: SignatureCompletionContext,
+        provider: str,
+        reason: str,
+    ) -> SignatureCompletionResult:
+        """在 provider 真实失败时回退到最小签名。"""
+        self.summary.total += 1
         self.summary.failed += 1
         result = self._minimal_provider.get(context)
         _log_failure(context, provider, reason)
