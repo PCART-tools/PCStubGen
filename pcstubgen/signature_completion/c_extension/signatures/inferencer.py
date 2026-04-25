@@ -38,7 +38,7 @@ from .py_arg_parse.tuple_and_keywords_parser import (
 )
 from .py_arg_parse.tuple_parser import PyArgParseTupleTypeParser
 from .py_build_value.parser import PyBuildValueTypeParser
-from .rules import numpy_rules
+from .rules import numpy_rules, pytorch_rules
 from .rules import (
     CALL_NAME_TO_TYPE,
     OBJECT_USE_FUNCTION_NAME_TO_TYPE,
@@ -83,10 +83,13 @@ class Inferencer:
 
     def _infer_arguments_list(self) -> list[list[Argument]]:
         """按 flags 决定业务参数骨架，并在允许时读取 `PyArg_*` 细化。"""
+
         if self._flags & METH_NOARGS:
             return [[]]
+
         if self._flags & METH_O:
             return [[self._build_meth_o_argument()]]
+
         if self._flags & METH_FASTCALL:
             arguments_list = self._infer_arguments_for_call_name(
                 "npy_parse_arguments",
@@ -95,6 +98,7 @@ class Inferencer:
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]
+
         if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS:
             arguments_list = self._infer_arguments_for_call_name(
                 "PyArg_ParseTuple",
@@ -106,14 +110,17 @@ class Inferencer:
                     self._infer_pyarg_parse_tuple_and_keywords_arguments,
                 )
             )
+            arguments_list.extend(pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor))
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]
+
         if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS == 0:
             arguments_list = self._infer_arguments_for_call_name(
                 "PyArg_ParseTuple",
                 self._infer_pyarg_parse_tuple_arguments,
             )
+            arguments_list.extend(pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor))
             if arguments_list:
                 return arguments_list
             return [self._build_minimal_arguments()]

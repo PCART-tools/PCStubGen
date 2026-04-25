@@ -10,6 +10,7 @@ from .completion_models import (
 )
 from .docstring_source import parse_docstring_signature_text
 from ..models import Decorator
+from loguru import logger
 
 
 class Pybind11Provider:
@@ -17,14 +18,14 @@ class Pybind11Provider:
 
     @staticmethod
     def support(member: object, is_method: bool) -> bool:
-        if _is_internal_pybind11_member(member):
-            return False
         if is_method:
-            return (
+            is_pybind11 = (
                 runtime.is_pybind11_instance_method(member)
                 or runtime.is_pybind11_static_method(member)
             )
-        return runtime.is_pybind11_module_function(member)
+        else:
+            is_pybind11 = runtime.is_pybind11_module_function(member)
+        return is_pybind11 and not _is_internal_pybind11_member(member)
 
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
@@ -62,4 +63,8 @@ def _get_doc(obj: object) -> str | None:
 
 def _is_internal_pybind11_member(member: object) -> bool:
     """判断成员是否为不应导出的 pybind11 内部符号。不是用户代码导出的，是pybind11的内部互操作函数"""
-    return getattr(member, "__name__", None) == "_pybind11_conduit_v1_"
+    try:
+        return getattr(member, "__name__", None) == "_pybind11_conduit_v1_"
+    except Exception as ex:
+        logger.exception(ex)
+        return False
