@@ -160,7 +160,8 @@ class Inferencer:
                 continue
 
             call_name = ast_utils.get_first_token_str(call_expr)
-            if call_name != expected_call_name:
+            spelling = call_expr.spelling
+            if call_name != expected_call_name and spelling != expected_call_name:
                 continue
             try:
                 arguments_list.append(parser(call_expr))
@@ -420,10 +421,11 @@ class Inferencer:
         """
         assert cursor.kind == CursorKind.CALL_EXPR
         call_name = get_first_token_str(cursor)
+        spelling = cursor.spelling
 
-        if call_name == "Py_BuildValue":
+        if call_name == "Py_BuildValue" or spelling == "Py_BuildValue":
             return self._infer_py_build_value_type(cursor)
-        if call_name == "PyObject_New":
+        if call_name == "PyObject_New" or spelling == "PyObject_New":
             return self._infer_pyobject_new_type(cursor)
         mapped = CALL_NAME_TO_TYPE.get(call_name)
         if mapped is None:
