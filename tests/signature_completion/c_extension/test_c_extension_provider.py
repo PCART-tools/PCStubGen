@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -23,6 +24,7 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     source_path = tmp_path / "sample.c"
     expected_cursor = object()
     calls: list[tuple[Path, int]] = []
+    binary_path.write_bytes(b"")
 
     class FakeDwarfManager:
         def lookup(self, binary_path_arg: Path, relative_address: int) -> LookupResult:
@@ -65,13 +67,13 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     assert calls == [(binary_path, 0x234)]
 
 
-def test_match_rejects_method_descriptor_owned_by_another_class() -> None:
+def test_match_accepts_current_interpreter_method_descriptor_candidate() -> None:
     class Sample(enum.IntEnum):
         VALUE = 1
 
     method = Sample.__dict__["__format__"]
 
-    assert provider_module.CExtensionProvider.match(method, Sample) is False
+    assert provider_module.CExtensionProvider.match(method, Sample) is True
 
 
 def test_match_accepts_method_descriptor_owned_by_current_class() -> None:
@@ -128,3 +130,25 @@ def test_get_rejects_pythran_wrapall_cursor(monkeypatch) -> None:
 
     with pytest.raises(UnsupportedSignatureCompletion):
         provider.get(context)
+
+
+def test_get_func_cursor_and_flags_rejects_current_interpreter_method_descriptor(
+    monkeypatch,
+) -> None:
+    provider = object.__new__(provider_module.CExtensionProvider)
+    provider._function_cursor_locator = object()
+    provider._dwarf_manager = object()
+
+    monkeypatch.setattr(
+        provider_module.runtime,
+        "read_c_extension_function_runtime_info",
+        lambda handle: SimpleNamespace(address=0x1234, flags=8),
+    )
+    monkeypatch.setattr(
+        provider_module.dladdr,
+        "get_binary_and_ra",
+        lambda address: (Path(sys.executable), 0x234),
+    )
+
+    with pytest.raises(UnsupportedSignatureCompletion):
+        provider.get_func_cursor_and_flags(SimpleNamespace(__name__="__format__"))
