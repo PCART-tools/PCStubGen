@@ -308,6 +308,8 @@ class Inferencer:
             return None
 
         refined_decl = self._get_refined_decl_for_call(call_expr)
+        if refined_decl is None:
+            return None
         if refined_decl != target_decl:
             return None
         return refined_type

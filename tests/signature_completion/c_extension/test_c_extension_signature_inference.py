@@ -23,6 +23,7 @@ from tests._c_extension_test_support import (
     _FakeCanonicalType,
     _FakeNode,
     _address_of,
+    _array_subscript,
     _arg,
     _assignment,
     _call_expr,
@@ -1071,6 +1072,244 @@ def test_infer_signature_keeps_multiple_npy_parse_argument_lists() -> None:
             args=[_arg("right", "object")],
             return_type=RawType.int_,
         ),
+    ]
+
+
+def test_infer_object_type_from_call_ignores_non_decl_ref_refined_cursor() -> None:
+    args_decl = _var_decl("args")
+    target_decl = _var_decl("value")
+    call_expr = _call_expr(
+        "PyTuple_Check",
+        _array_subscript("args", _int_literal("0"), referenced=args_decl),
+    )
+    inferencer = signature_rules_module.Inferencer(
+        _fake_function_cursor_with_children(call_expr),
+        0,
+        None,
+    )
+
+    inferred = inferencer._infer_object_type_from_call(call_expr, target_decl)
+
+    assert inferred is None
+
+
+def test_infer_object_type_from_call_ignores_different_target_decl() -> None:
+    value_decl = _var_decl("value")
+    other_decl = _var_decl("other")
+    call_expr = _call_expr(
+        "PyUnicode_Check",
+        _token_identifier_node("value", referenced=value_decl),
+    )
+    inferencer = signature_rules_module.Inferencer(
+        _fake_function_cursor_with_children(call_expr),
+        0,
+        None,
+    )
+
+    inferred = inferencer._infer_object_type_from_call(call_expr, other_decl)
+
+    assert inferred is None
+
+
+def test_infer_signature_keeps_pyarg_tuple_lists_with_unrelated_array_subscript_check() -> None:
+    args_decl = _var_decl("args")
+    left_decl = _var_decl("left")
+    right_decl = _var_decl("right")
+    only_decl = _var_decl("only")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyTuple_Check",
+            _array_subscript("args", _int_literal("0"), referenced=args_decl),
+        ),
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("(OO)"),
+            _address_of("left", referenced=left_decl),
+            _address_of("right", referenced=right_decl),
+        ),
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("(O)"),
+            _address_of("only", referenced=only_decl),
+        ),
+        _return_stmt(_token_identifier_node("_Py_NoneStruct")),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_VARARGS,
+        owner_class=None,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg(
+                    "left_right",
+                    RawType("tuple[object, object]"),
+                    kind=ArgumentKind.POSITIONAL_ONLY,
+                )
+            ],
+            return_type=RawType.none_,
+        ),
+        Signature(
+            args=[
+                _arg(
+                    "only",
+                    RawType("tuple[object,]"),
+                    kind=ArgumentKind.POSITIONAL_ONLY,
+                )
+            ],
+            return_type=RawType.none_,
+        ),
+    ]
+
+
+def test_infer_signature_keeps_npy_parse_keyword_arguments_with_unrelated_array_subscript_check() -> None:
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(signature_rules_module, "evaluate_cursor", lambda _: 0)
+    args_decl = _var_decl("args")
+    out_obj_decl = _var_decl("out_obj", _null_ptr_literal())
+    out_obj_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    order_decl = _var_decl("order", _identifier_node("NPY_KEEPORDER"))
+    order_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    casting_decl = _var_decl("casting", _identifier_node("NPY_SAFE_CASTING"))
+    casting_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.INT)
+    dtype_decl = _var_decl("dtype", _null_ptr_literal())
+    dtype_decl.type = _FakeCanonicalType(clang.cindex.TypeKind.POINTER)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyBytes_Check",
+            _array_subscript("args", _int_literal("0"), referenced=args_decl),
+        ),
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("einsum"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _identifier_node("kwnames"),
+            _string_literal("$out"),
+            _null_ptr_literal(),
+            _address_of("out_obj", referenced=out_obj_decl),
+            _string_literal("$order"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_OrderConverter"),
+            _address_of("order", referenced=order_decl),
+            _string_literal("$casting"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_CastingConverter"),
+            _address_of("casting", referenced=casting_decl),
+            _string_literal("$dtype"),
+            _FakeNode(kind=clang.cindex.CursorKind.DECL_REF_EXPR, extent="PyArray_DescrConverter2"),
+            _address_of("dtype", referenced=dtype_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _call_expr(
+            "PyArray_Check",
+            _token_identifier_node("out_obj", referenced=out_obj_decl),
+        ),
+        _return_stmt(_token_identifier_node("_Py_NoneStruct")),
+    )
+
+    try:
+        inferred = signature_rules_module.infer_signature(
+            cursor,
+            flags=METH_FASTCALL | METH_KEYWORDS,
+            owner_class=None,
+        )
+    finally:
+        monkeypatch.undo()
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg(
+                    "out",
+                    RawType("numpy.ndarray", imports=("numpy",)),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+                _arg(
+                    "order",
+                    UnionType((
+                        RawType('typing.Literal["K", "A", "C", "F"]', imports=("typing",)),
+                        RawType.none_,
+                    )),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+                _arg(
+                    "casting",
+                    RawType(
+                        'typing.Literal["no", "equiv", "safe", "same_kind", "unsafe"]',
+                        imports=("typing",),
+                    ),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+                _arg(
+                    "dtype",
+                    UnionType((RawType("numpy.typing.DTypeLike", imports=("numpy.typing",)), RawType.none_)),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+            ],
+            return_type=RawType.none_,
+        )
+    ]
+
+
+def test_infer_signature_keeps_npy_parse_arguments_with_unrelated_member_ref_check() -> None:
+    obj_decl = _var_decl("obj")
+    str_decl = _var_decl("str")
+    member_ref = _FakeNode(
+        kind=clang.cindex.CursorKind.MEMBER_REF_EXPR,
+        spelling="tp_dict",
+        tokens=[],
+    )
+    cursor = _fake_function_cursor_with_children(
+        _call_expr("PyDict_CheckExact", member_ref),
+        _call_expr(
+            "npy_parse_arguments",
+            _string_literal("add_docstring"),
+            _address_of("__argparse_cache"),
+            _identifier_node("args"),
+            _identifier_node("len_args"),
+            _null_ptr_literal(),
+            _string_literal(""),
+            _null_ptr_literal(),
+            _address_of("obj", referenced=obj_decl),
+            _string_literal(""),
+            _null_ptr_literal(),
+            _address_of("str", referenced=str_decl),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+            _null_ptr_literal(),
+        ),
+        _call_expr(
+            "PyUnicode_Check",
+            _token_identifier_node("str", referenced=str_decl),
+        ),
+        _return_stmt(_token_identifier_node("_Py_NoneStruct")),
+    )
+
+    inferred = signature_rules_module.infer_signature(
+        cursor,
+        flags=METH_FASTCALL,
+        owner_class=None,
+    )
+
+    assert inferred == [
+        Signature(
+            args=[
+                _arg("obj", "object", kind=ArgumentKind.POSITIONAL_ONLY),
+                _arg("str", "str", kind=ArgumentKind.POSITIONAL_ONLY),
+            ],
+            return_type=RawType.none_,
+        )
     ]
 
 
