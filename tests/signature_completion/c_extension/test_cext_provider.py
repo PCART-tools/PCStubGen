@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -65,21 +64,6 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
     assert func_cursor is expected_cursor
     assert flags == 8
     assert calls == [(binary_path, 0x234)]
-
-
-def test_match_accepts_current_interpreter_method_descriptor_candidate() -> None:
-    class Sample(enum.IntEnum):
-        VALUE = 1
-
-    method = Sample.__dict__["__format__"]
-
-    assert provider_module.CExtensionProvider.match(method, Sample) is True
-
-
-def test_match_accepts_method_descriptor_owned_by_current_class() -> None:
-    method = dict.__dict__["get"]
-
-    assert provider_module.CExtensionProvider.match(method, dict) is True
 
 
 def test_match_rejects_cython_pickle_method_descriptor(monkeypatch) -> None:

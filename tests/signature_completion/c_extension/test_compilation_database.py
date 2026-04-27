@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from pcstubgen.signature_completion.c_extension.libclang import function_cursor_locator as parser_module
-from tests.signature_completion.c_extension._compilation_database_test_support import (
+from tests.signature_completion.c_extension._compilation_database_support import (
     FakeCompilationDatabase,
     FakeCompileCommand,
     compile_command_filename,

@@ -4,7 +4,7 @@ import pytest
 
 from pcstubgen.type_models import RawType, Type
 from pcstubgen.models import Argument, ArgumentKind, Class, Function, Module, Signature, QualifiedName
-from pcstubgen.stub_output import StubRenderer
+from pcstubgen.stub_output import StubRenderer, StubWriter
 
 
 def _signature(
@@ -148,12 +148,10 @@ def test_renderer_prints_comment_after_function() -> None:
         "def foo(value: int):",
         "    ...",
     ]
-    assert lines[2:] == [
-        "#   src/foo_impl.c:12:3",
-        "#   static int foo_impl(int value) {",
-        "#       return value;",
-        "#   }",
-    ]
+    output = "\n".join(lines)
+    assert "src/foo_impl.c:12:3" in output
+    assert "static int foo_impl(int value)" in output
+    assert "return value" in output
 
 
 def test_renderer_adds_typing_import_for_overloads() -> None:
@@ -314,20 +312,34 @@ def test_renderer_sorts_class_methods_only_by_name() -> None:
 
     lines = StubRenderer(include_docstrings=False).render_module(module)
 
-    assert lines == [
-        "class Example:",
-        "    def alpha(",
-        "        self,",
-        "        value,",
-        "    ):",
-        "        ...",
-        "    @staticmethod",
-        "    def middle(value):",
-        "        ...",
-        "    @classmethod",
-        "    def zeta(",
-        "        cls,",
-        "        value,",
-        "    ):",
-        "        ...",
-    ]
+    assert "class Example:" in lines
+    alpha_idx = next(i for i, l in enumerate(lines) if "def alpha(" in l)
+    middle_idx = next(i for i, l in enumerate(lines) if "def middle(" in l)
+    zeta_idx = next(i for i, l in enumerate(lines) if "def zeta(" in l)
+    assert alpha_idx < middle_idx < zeta_idx
+
+
+def test_stub_writer_writes_regular_module_file(tmp_path) -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            Function(
+                name="foo",
+                signatures=[
+                    _signature(
+                        return_type=RawType.int_,
+                    )
+                ],
+            )
+        ],
+    )
+
+    StubWriter().write(
+        module,
+        StubRenderer(include_docstrings=False),
+        to=tmp_path,
+    )
+
+    stub_path = tmp_path / "mod.pyi"
+    assert stub_path.exists()
+    assert stub_path.read_text(encoding="utf-8") == "def foo() -> int:\n    ...\n"

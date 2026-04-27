@@ -8,7 +8,7 @@ import pytest
 from clang.cindex import CompileCommand, TranslationUnitLoadError
 
 from tests._c_extension_test_support import _FakeNode
-from tests.signature_completion.c_extension._compilation_database_test_support import (
+from tests.signature_completion.c_extension._compilation_database_support import (
     FakeCompilationDatabase,
     FakeCompileCommand,
     make_locator,

@@ -11,7 +11,7 @@ from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_pa
     PyArgParseTupleTypeParser,
     PyArgParseTupleTypeParserError,
 )
-from tests.signature_completion.c_extension._py_arg_parse_test_support import (
+from tests.signature_completion.c_extension._py_arg_parse_support import (
     _FakeCursor,
     _STR_OR_BUFFER_OR_NONE_TYPE,
     _STR_OR_BUFFER_TYPE,

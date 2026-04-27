@@ -9,7 +9,7 @@ from pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_an
     PyArgParseTupleAndKeywordsTypeParser,
     PyArgParseTupleAndKeywordsTypeParserError,
 )
-from tests.signature_completion.c_extension._py_arg_parse_test_support import (
+from tests.signature_completion.c_extension._py_arg_parse_support import (
     _STR_OR_BUFFER_TYPE,
     _STR_OR_NONE_TYPE,
     _arg,
