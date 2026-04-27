@@ -5,7 +5,7 @@ import re
 import clang.cindex
 import pytest
 
-from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
+from pcstubgen.signature_completion.c_extension import inferencer as signature_rules_module
 from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
     _FakeCanonicalType,

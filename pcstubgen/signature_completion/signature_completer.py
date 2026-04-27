@@ -12,7 +12,7 @@ from .completion_models import (
     UnsupportedSignatureCompletion,
 )
 from .minimal_provider import MinimalProvider
-from .pybind11_provider import Pybind11Provider
+from .pybind11.provider import Pybind11Provider
 
 
 class SignatureCompleter:

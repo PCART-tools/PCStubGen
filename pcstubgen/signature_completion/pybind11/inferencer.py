@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from ..models import Argument, ArgumentKind, Signature
-from ..type_models import RawType, Type
+from ...models import Argument, ArgumentKind, Signature
+from ...type_models import RawType, Type
 
 
 class _ArgsParseState(Enum):

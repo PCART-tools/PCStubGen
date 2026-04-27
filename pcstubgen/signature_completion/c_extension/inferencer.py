@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..libclang import ast_utils
 from clang.cindex import Cursor, CursorKind, StorageClass, TypeKind
 from loguru import logger
 
-from ....models import Argument, ArgumentKind, Signature
-from ....type_models import AnyType, RawType, Type, UnionType
-from ..libclang.ast_utils import (
+from ...models import Argument, ArgumentKind, Signature
+from ...type_models import AnyType, RawType, Type, UnionType
+from .libclang import ast_utils
+from .libclang.ast_utils import (
     DECL_CURSOR_KINDS,
     IDENTIFIER_RE,
     get_first_token_str,
@@ -19,12 +19,12 @@ from ..libclang.ast_utils import (
     var_decl_to_init_list_expr,
     walk,
 )
-from ..libclang.libclang_wrap import (
+from .libclang.libclang_wrap import (
     CX_BINARY_OPERATOR_ASSIGN,
     evaluate_cursor,
     get_cursor_binary_operator_kind,
 )
-from ..method_flags import (
+from .method_flags import (
     METH_FASTCALL,
     METH_CLASS,
     METH_KEYWORDS,
@@ -33,13 +33,13 @@ from ..method_flags import (
     METH_STATIC,
     METH_VARARGS,
 )
-from .py_arg_parse.tuple_and_keywords_parser import (
+from .signatures.py_arg_parse.tuple_and_keywords_parser import (
     PyArgParseTupleAndKeywordsTypeParser,
 )
-from .py_arg_parse.tuple_parser import PyArgParseTupleTypeParser
-from .py_build_value.parser import PyBuildValueTypeParser
-from .rules import numpy_rules, pytorch_rules
-from .rules import (
+from .signatures.py_arg_parse.tuple_parser import PyArgParseTupleTypeParser
+from .signatures.py_build_value.parser import PyBuildValueTypeParser
+from .signatures.rules import numpy_rules, pytorch_rules
+from .signatures.rules import (
     CALL_NAME_TO_TYPE,
     OBJECT_USE_FUNCTION_NAME_TO_TYPE,
     OBJECT_NAME_TO_TYPE,

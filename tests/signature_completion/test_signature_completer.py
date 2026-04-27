@@ -40,7 +40,7 @@ def test_signature_completer_returns_provider_result_and_updates_summary(
         staticmethod(lambda member, owner_class=None: owner_class is None),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
+        "pcstubgen.signature_completion.pybind11.provider.Pybind11Provider.match",
         staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
@@ -86,7 +86,7 @@ def test_signature_completer_falls_back_to_minimal_signature_on_provider_failure
         staticmethod(lambda member, owner_class=None: True),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
+        "pcstubgen.signature_completion.pybind11.provider.Pybind11Provider.match",
         staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(
@@ -116,7 +116,7 @@ def test_signature_completer_does_not_fallback_for_unsupported_target(
         staticmethod(lambda member, owner_class=None: True),
     )
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.pybind11_provider.Pybind11Provider.match",
+        "pcstubgen.signature_completion.pybind11.provider.Pybind11Provider.match",
         staticmethod(lambda member, owner_class=None: False),
     )
     monkeypatch.setattr(

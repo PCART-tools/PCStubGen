@@ -7,9 +7,9 @@ from pathlib import Path
 from clang.cindex import Cursor
 from pcstubgen import runtime
 from . import dladdr, dwarfdump
+from .inferencer import Inferencer
 from .libclang import ast_utils
 from .libclang.function_cursor_locator import FunctionCursorLocator
-from .signatures.inferencer import Inferencer
 from ..completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,

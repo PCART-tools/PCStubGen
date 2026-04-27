@@ -3,14 +3,14 @@ from __future__ import annotations
 import typing
 
 from pcstubgen import runtime
+from loguru import logger
 
-from .completion_models import (
+from ..completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
 )
-from .pybind11_inferencer import infer
-from ..models import Decorator
-from loguru import logger
+from .inferencer import infer
+from ...models import Decorator
 
 
 class Pybind11Provider:

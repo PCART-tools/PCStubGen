@@ -8,7 +8,7 @@ import clang.cindex
 from clang.cindex import LinkageKind, StorageClass
 import pytest
 
-from pcstubgen.signature_completion.c_extension.signatures import (
+from pcstubgen.signature_completion.c_extension import (
     inferencer as signature_rules_module,
 )
 from pcstubgen.signature_completion.c_extension.libclang.libclang_wrap import (

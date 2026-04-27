@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pcstubgen.signature_completion.pybind11_inferencer import (
+from pcstubgen.signature_completion.pybind11.inferencer import (
     infer,
     parse_args_str,
 )

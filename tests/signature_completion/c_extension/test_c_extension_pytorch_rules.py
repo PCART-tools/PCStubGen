@@ -5,7 +5,7 @@ import pytest
 
 from pcstubgen.models import ArgumentKind
 from pcstubgen.signature_completion.c_extension.method_flags import METH_KEYWORDS, METH_VARARGS
-from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
+from pcstubgen.signature_completion.c_extension import inferencer as signature_rules_module
 from pcstubgen.signature_completion.c_extension.signatures.rules import pytorch_rules
 from pcstubgen.type_models import RawType, UnionType
 from tests._c_extension_test_support import (
