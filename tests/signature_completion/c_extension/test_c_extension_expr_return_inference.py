@@ -8,6 +8,7 @@ import pytest
 from pcstubgen.signature_completion.c_extension.signatures import inferencer as signature_rules_module
 from pcstubgen.type_models import AnyType, ListType, RawType, TupleType, UnionType
 from tests._c_extension_test_support import (
+    _FakeCanonicalType,
     _FakeNode,
     _address_of,
     _assignment,
@@ -186,6 +187,84 @@ def test_return_type_maps_representative_known_factory_calls(
 
     assert inferred is not None
     assert inferred.render() == expected
+
+
+def test_return_type_maps_torch_variable_wrap() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("THPVariable_Wrap", _identifier_node("tensor")))
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == RawType("torch.Tensor", imports=("torch",))
+
+
+def test_return_type_maps_torch_variable_wrap_with_type() -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(
+            _call_expr(
+                "THPVariable_WrapWithType",
+                _identifier_node("tensor"),
+                _identifier_node("cls"),
+            )
+        )
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred == UnionType((RawType.none_, RawType("torch.Tensor", imports=("torch",)))).canonicalize()
+
+
+@pytest.mark.parametrize(
+    ("call_name", "expected"),
+    [
+        ("THPVariable_is_nonzero", "bool"),
+        ("THPUtils_packInt64", "int"),
+        ("THPUtils_packDoubleAsInt", "int"),
+    ],
+)
+def test_return_type_maps_torch_direct_helpers(call_name: str, expected: str) -> None:
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr(call_name, _identifier_node("value")))
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == expected
+
+
+@pytest.mark.parametrize(
+    ("cpp_type_spelling", "expected", "expected_imports"),
+    [
+        ("at::Tensor", "torch.Tensor", {"torch"}),
+        ("bool", "bool", set()),
+        ("int64_t", "int", set()),
+        ("double", "float", set()),
+        ("at::Stream", "torch.Stream", {"torch"}),
+        ("c10::ScalarType", "torch.dtype", {"torch"}),
+        ("c10::Layout", "torch.layout", {"torch"}),
+        ("c10::QScheme", "torch.qscheme", {"torch"}),
+        ("c10::ArrayRef<at::Tensor>", "tuple[torch.Tensor, ...]", {"torch"}),
+        ("c10::ArrayRef<long>", "tuple[int, ...]", set()),
+    ],
+)
+def test_return_type_maps_torch_wrap_overloads(
+    cpp_type_spelling: str,
+    expected: str,
+    expected_imports: set[str],
+) -> None:
+    value = _identifier_node("value")
+    value.type = _FakeCanonicalType(None, cpp_type_spelling)
+    cursor = _fake_function_cursor_with_children(
+        _return_stmt(_call_expr("wrap", value))
+    )
+
+    inferred = signature_rules_module.infer_return_type(cursor)
+
+    assert inferred is not None
+    assert inferred.render() == expected
+    assert inferred.collect_imports() == expected_imports
 
 @pytest.mark.parametrize(
     "call_name",

@@ -45,6 +45,7 @@ from .rules import (
     OBJECT_NAME_TO_TYPE,
     PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE,
     PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE,
+    get_name_to_type,
 )
 
 _PYTHON_SINGLETON_DEFAULT_NAME_TO_VALUE = {
@@ -303,7 +304,7 @@ class Inferencer:
         """根据单个调用表达式，提取可用于对象细化的类型证据。"""
         call_name = get_first_token_str(call_expr)
 
-        refined_type = OBJECT_USE_FUNCTION_NAME_TO_TYPE.get(call_name)
+        refined_type = get_name_to_type(OBJECT_USE_FUNCTION_NAME_TO_TYPE, call_name, call_expr)
         if refined_type is None:
             return None
 
@@ -390,7 +391,7 @@ class Inferencer:
             return RawType.self_
 
         identifier_name = cursor.spelling
-        mapped = OBJECT_NAME_TO_TYPE.get(identifier_name)
+        mapped = get_name_to_type(OBJECT_NAME_TO_TYPE, identifier_name, cursor)
         if mapped is not None:
             return mapped
         try:
@@ -429,7 +430,7 @@ class Inferencer:
             return self._infer_py_build_value_type(cursor)
         if call_name == "PyObject_New" or spelling == "PyObject_New":
             return self._infer_pyobject_new_type(cursor)
-        mapped = CALL_NAME_TO_TYPE.get(call_name)
+        mapped = get_name_to_type(CALL_NAME_TO_TYPE, call_name, cursor)
         if mapped is None:
             raise RuntimeError(
                 f"无法识别的返回值工厂调用: {call_name}, cursor: {ast_utils.to_str(cursor)}"
@@ -474,7 +475,7 @@ class Inferencer:
         """
         source_text = get_cursor_source_text(cursor).strip()
         type_name = source_text[1:].strip() if source_text.startswith("&") else source_text
-        mapped = PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE.get(type_name)
+        mapped = get_name_to_type(PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE, type_name, cursor)
         if mapped is None:
             raise RuntimeError(
                 f"无法识别的类型对象标识符: {type_name}, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
@@ -490,7 +491,7 @@ class Inferencer:
                 f"converter 槽位源码中未找到标识符, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"
             )
         converter_name = match.group(0)
-        mapped = PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE.get(converter_name)
+        mapped = get_name_to_type(PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE, converter_name, cursor)
         if mapped is None:
             raise RuntimeError(
                 f"无法识别的 converter 标识符: {converter_name}, source_text: {source_text!r}, cursor: {ast_utils.to_str(cursor)}"

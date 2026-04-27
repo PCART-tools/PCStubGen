@@ -57,8 +57,9 @@ def _arg(
 
 
 class _FakeCanonicalType:
-    def __init__(self, kind: object) -> None:
+    def __init__(self, kind: object | None, spelling: str = "") -> None:
         self.kind = kind
+        self.spelling = spelling
 
     def get_canonical(self) -> "_FakeCanonicalType":
         return self
