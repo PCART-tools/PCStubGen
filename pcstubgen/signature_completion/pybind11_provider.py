@@ -8,7 +8,7 @@ from .completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
 )
-from .docstring_source import parse_docstring_signature_text
+from .pybind11_inferencer import infer
 from ..models import Decorator
 from loguru import logger
 
@@ -30,9 +30,7 @@ class Pybind11Provider:
 
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
-        signatures = parse_docstring_signature_text(context.func_name, doc)
-
-        _ = runtime_handle
+        signatures = infer(runtime_handle.__name__, doc)
         return SignatureCompletionResult(
             signatures=signatures,
             doc=doc,

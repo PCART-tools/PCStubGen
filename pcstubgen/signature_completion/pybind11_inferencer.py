@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from enum import Enum, auto
 
-from ..models import Argument, ArgumentKind, Function, Module, Signature
+from ..models import Argument, ArgumentKind, Signature
 from ..type_models import RawType, Type
 
 
@@ -14,17 +14,8 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-def parse_docstring_signatures(
-    module: Module | None,
-    function: Function,
-) -> list[Signature]:
-    """从函数 docstring 中解析签名，失败时抛出 RuntimeError。"""
-    _ = module
-    return parse_docstring_signature_text(function.name, function.doc)
-
-
-def parse_docstring_signature_text(
-    func_name: str,
+def infer(
+    runtime_name: str,
     doc: str | None,
 ) -> list[Signature]:
     """从 docstring 文本中解析签名，失败时抛出 RuntimeError。"""
@@ -33,7 +24,7 @@ def parse_docstring_signature_text(
 
     doc_lines = doc.splitlines()
     top_signature_regex = re.compile(
-        rf"^{re.escape(func_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
+        rf"^{re.escape(runtime_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
     )
     match = top_signature_regex.match(doc_lines[0])
     if match is None:
@@ -44,7 +35,8 @@ def parse_docstring_signature_text(
             args = parse_args_str(match.group("args"))
         except ValueError as ex:
             raise RuntimeError(f"docstring签名参数解析失败: {ex}") from ex
-        returns = parse_annotation_str((match.group("returns") or "").strip('"'))
+        returns_text = (match.group("returns") or "").strip('"').strip()
+        returns = RawType(returns_text) if returns_text else None
         return [
             Signature(
                 args=args,
@@ -54,7 +46,7 @@ def parse_docstring_signature_text(
 
     overload_signature_regex = re.compile(
         rf"^(\s*(?P<overload_number>\d+).\s*)"
-        rf"{re.escape(func_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
+        rf"{re.escape(runtime_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
     )
 
     overloads: list[Signature] = []
@@ -66,9 +58,7 @@ def parse_docstring_signature_text(
 
         match = overload_signature_regex.match(line)
         if match is None:
-            raise RuntimeError(
-                f"重载签名第{expected_overload_number}项格式非法: {line}"
-            )
+            continue
 
         overload_number = int(match.group("overload_number"))
         if overload_number != expected_overload_number:
@@ -82,10 +72,11 @@ def parse_docstring_signature_text(
             raise RuntimeError(
                 f"重载签名第{expected_overload_number}项参数解析失败: {ex}"
             ) from ex
+        returns_text = match.group("returns").strip()
         overloads.append(
             Signature(
                 args=args,
-                return_type=parse_annotation_str(match.group("returns")),
+                return_type=RawType(returns_text) if returns_text else None,
             )
         )
         expected_overload_number += 1
@@ -188,14 +179,8 @@ def parse_args_str(args_str: str) -> list[Argument]:
     return result
 
 
-def parse_annotation_str(annotation_str: str) -> Type | None:
-    text = annotation_str.strip()
-    if not text:
-        return None
-    return RawType(text)
-
-
 def _split_args_str(args_str: str) -> list[tuple[str, Type | None, str | None]]:
+    """拆分参数列表文本为名称、注解和默认值。"""
     if not args_str.strip():
         return []
 
@@ -213,17 +198,16 @@ def _split_args_str(args_str: str) -> list[tuple[str, Type | None, str | None]]:
         name_and_type = name_and_default[0]
         default = name_and_default[1].strip() if len(name_and_default) == 2 else None
 
-        name_type_parts = _split_top_level(name_and_type, ":")
-        if len(name_type_parts) > 2:
-            raise ValueError("参数注解声明中包含多个 ':'。")
-
-        name = name_type_parts[0].strip()
-        type_ = (
-            parse_annotation_str(name_type_parts[1])
-            if len(name_type_parts) == 2
-            else None
+        name, separator, annotation_text = name_and_type.partition(":")
+        annotation_text = annotation_text.strip()
+        type_ = RawType(annotation_text) if separator and annotation_text else None
+        result.append(
+            (
+                name.strip(),
+                type_,
+                default,
+            )
         )
-        result.append((name, type_, default))
 
     return result
 

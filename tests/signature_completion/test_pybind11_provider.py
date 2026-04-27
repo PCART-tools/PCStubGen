@@ -19,9 +19,10 @@ _FakeInstanceMethod.__module__ = "builtins"
 
 
 class _FakeBuiltinFunction:
-    def __init__(self, doc: str) -> None:
+    def __init__(self, doc: str, name: str = "build") -> None:
         self.__self__ = _PybindRecord()
         self.__doc__ = doc
+        self.__name__ = name
 
     def __call__(self, *args: object, **kwargs: object) -> None:
         _ = args, kwargs
@@ -45,6 +46,7 @@ def _make_pybind11_instance_method(doc: str) -> object:
     member = _FakeInstanceMethod()
     member.__self__ = _PybindRecord()
     member.__doc__ = doc
+    member.__name__ = "build"
     return member
 
 
@@ -144,3 +146,30 @@ def test_pybind11_provider_get_returns_observable_result(
     assert result.decorator == expected_decorator
     assert result.doc == expected_doc
     assert [arg.name for arg in result.signatures[0].args] == expected_args
+
+
+def test_pybind11_provider_get_uses_runtime_name_for_doc_matching() -> None:
+    provider = Pybind11Provider()
+    member = _make_pybind11_instance_method("_mtia_exchangeDevice(arg0: typing.SupportsInt) -> int")
+    setattr(member, "__name__", "_mtia_exchangeDevice")
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_module_function",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_instance_method",
+            lambda handle: handle is member,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11_provider.runtime.is_pybind11_static_method",
+            lambda handle: False,
+        )
+        result = provider.get(
+            _make_context(member, func_name="exchange_device", owner_class=object)
+        )
+
+    assert [arg.name for arg in result.signatures[0].args] == ["arg0"]
+    assert result.signatures[0].return_type is not None
+    assert result.signatures[0].return_type.render() == "int"
