@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -9,9 +10,9 @@ from build.env import DefaultIsolatedEnv
 
 
 class PersistentIsolatedEnv(DefaultIsolatedEnv):
-    """在项目目录下维护可复用的持久隔离构建环境。"""
+    """在项目目录下维护固定路径、每次重建的隔离构建环境。"""
 
-    BUILD_ENV_DIRNAME = ".pcstubgen-build-venv"
+    BUILD_ENV_DIRNAME = ".pcstubgen-build-env"
 
     def __init__(
         self,
@@ -19,42 +20,39 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
         *,
         installer: build_env.Installer = "pip",
     ) -> None:
+        """初始化与项目目录绑定的隔离构建环境。"""
         super().__init__(installer=installer)
         self._srcdir = srcdir
 
     @staticmethod
     def get_build_env_path(srcdir: Path) -> Path:
+        """返回项目内固定的构建环境目录。"""
         return srcdir / PersistentIsolatedEnv.BUILD_ENV_DIRNAME
 
     def __enter__(self) -> PersistentIsolatedEnv:
+        """删除旧环境后，在固定路径创建新的隔离构建环境。"""
         try:
             path = self.get_build_env_path(self._srcdir).resolve()
-            # 与 DefaultIsolatedEnv 保持一致，统一真实路径表示。
             self._path = os.path.realpath(path)
 
             self._env_backend: build_env._EnvBackend
-
             if self.installer == "uv":
                 self._env_backend = build_env._UvBackend()
             else:
                 self._env_backend = build_env._PipBackend()
 
             if os.path.exists(self._path):
-                try:
-                    python_executable, scripts_dir, _ = (
-                        build_env._find_executable_and_scripts(self._path)
-                    )
-                except Exception as ex:
+                if os.path.islink(self._path) or not os.path.isdir(self._path):
                     raise RuntimeError(
-                        f"无效持久构建环境: {self._path}。可使用 --clean-env 重新创建。"
-                    ) from ex
-                self._env_backend.python_executable = python_executable
-                self._env_backend.scripts_dir = scripts_dir
-            else:
-                build_env._ctx.log(
-                    f"Creating isolated environment: {self._env_backend.display_name}..."
-                )
-                self._env_backend.create(self._path)
+                        f"构建环境路径存在但不是可清理目录: {self._path}"
+                    )
+                shutil.rmtree(self._path)
+
+            build_env._ctx.log(
+                f"Creating isolated environment: {self._env_backend.display_name}...",
+                kind=("step",),
+            )
+            self._env_backend.create(self._path)
         except Exception:
             self.__exit__(*sys.exc_info())
             raise
@@ -62,4 +60,5 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
         return self
 
     def __exit__(self, *args: object) -> None:
+        """退出时保留环境目录，供后续排查使用。"""
         _ = args

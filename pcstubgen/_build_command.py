@@ -11,7 +11,7 @@ from build import ProjectBuilder
 from build._types import ConfigSettings, SubprocessRunner
 import typer
 
-from ._persistent_build_env import PersistentIsolatedEnv
+from ._persistent_isolated_env import PersistentIsolatedEnv
 
 BUILD_COMMAND_HELP = (
     "构建 Python 项目，并为 stub 工作流提供可用的 compile_commands.json。"
@@ -136,9 +136,7 @@ def build_wheel(
     runner: SubprocessRunner,
     config_settings: ConfigSettings,
 ) -> Path:
-    """
-    在源目录中通过 build API 构建 wheel，并返回产物绝对路径。
-    """
+    """在源目录中通过 build API 构建 wheel，并返回产物绝对路径。"""
     output_directory = srcdir / "dist"
     output_directory.mkdir(parents=True, exist_ok=True)
     env = PersistentIsolatedEnv(srcdir)
@@ -153,26 +151,20 @@ def build_wheel(
                     builder.build("wheel", str(output_directory), config_settings)
                 )
         except Exception as ex:
-            raise RuntimeError(f"持久构建环境失败 [{env.path}]: {ex}") from ex
+            raise RuntimeError(f"构建环境失败 [{env.path}]: {ex}") from ex
 
     return wheel_path.resolve()
 
 
 def _build_command(
     srcdir: Path = typer.Argument(
-        ...,
-        metavar="SRCDIR",
+        Path("."),
         help="待构建的项目根目录。",
         exists=True,
         file_okay=False,
         dir_okay=True,
         readable=True,
         resolve_path=True,
-    ),
-    clean_env: bool = typer.Option(
-        False,
-        "--clean-env",
-        help="构建前删除已有的持久构建环境。",
     ),
     clean_build: bool = typer.Option(
         False,
@@ -181,16 +173,13 @@ def _build_command(
     ),
 ) -> None:
     build_dir = srcdir / "build"
-    env_dir = PersistentIsolatedEnv.get_build_env_path(srcdir)
+    build_env_dir = PersistentIsolatedEnv.get_build_env_path(srcdir)
     try:
         ensure_build_programs_available()
 
-        if env_dir.exists():
-            if env_dir.is_symlink() or not env_dir.is_dir():
-                raise RuntimeError(f"持久构建环境路径存在但不是可清理目录: {env_dir}")
-            if clean_env:
-                shutil.rmtree(env_dir)
-                print(f"- 已清理持久构建环境: {env_dir}")
+        if build_env_dir.exists():
+            if build_env_dir.is_symlink() or not build_env_dir.is_dir():
+                raise RuntimeError(f"构建环境路径存在但不是可清理目录: {build_env_dir}")
         if build_dir.exists():
             if not build_dir.is_dir():
                 raise RuntimeError(f"构建路径存在但不是目录: {build_dir}")
@@ -212,6 +201,6 @@ def _build_command(
 
     print("构建完成")
     print(f"- build-backend: {build_context.build_backend}")
-    print(f"- 持久构建环境: {env_dir}")
+    print(f"- 构建环境: {build_env_dir}")
     print(f"- wheel 文件: {wheel_path}")
     print(f"- compile_commands.json: {find_compile_commands_path(srcdir)}")
