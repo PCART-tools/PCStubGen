@@ -16,7 +16,6 @@ from ._persistent_isolated_env import PersistentIsolatedEnv
 BUILD_COMMAND_HELP = (
     "构建 Python 项目，并为 stub 工作流提供可用的 compile_commands.json。"
 )
-LEGACY_SETUPTOOLS_BACKEND = "setuptools.build_meta:__legacy__"
 
 
 @dataclass(frozen=True)
