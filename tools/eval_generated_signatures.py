@@ -21,6 +21,13 @@ from pathlib import Path
 
 import typer
 from openai import AsyncOpenAI
+from openai.types import ReasoningEffort
+from openai.types.chat import (
+    ChatCompletionMessageParam,
+    ChatCompletionSystemMessageParam,
+    ChatCompletionUserMessageParam,
+)
+from openai.types.shared_params.response_format_json_object import ResponseFormatJSONObject
 from rich.progress import (
     BarColumn,
     Progress,
@@ -31,19 +38,21 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-
 BASE_URL = "https://api.deepseek.com"
 MODEL = "deepseek-v4-pro"
-REASONING_EFFORT = "max"
+REASONING_EFFORT: ReasoningEffort = "max"
+RESPONSE_FORMAT_JSON_OBJECT: ResponseFormatJSONObject = {"type": "json_object"}
+EXTRA_BODY = {"thinking": {"type": "enabled"}}
 DEFAULT_CONCURRENCY = 16
 DEFAULT_MAX_ATTEMPTS = 3
 EXIT_ERROR = 1
 
-VALID_REASON_CODES = {
+VALID_FAIL_REASON_CODES = {
     "parameter_mismatch",
     "return_mismatch",
     "overload_mismatch",
 }
+PASS_REASON_CODE = "pass_match"
 
 CSV_HEADERS = [
     "module_name",
@@ -409,7 +418,7 @@ def _build_error_row(
     )
 
 
-def _build_messages(prepared: PreparedEvaluation) -> list[dict[str, str]]:
+def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageParam]:
     """为单条签名评估组装 DeepSeek 对话消息。"""
     entry = prepared.entry
     reference_instructions = (
@@ -424,7 +433,7 @@ def _build_messages(prepared: PreparedEvaluation) -> list[dict[str, str]]:
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
         'JSON 结构固定为 {"verdict": "...", "reason_code": "...", "reason": "..."}。'
         'verdict 只允许是 "pass" 或 "fail"。'
-        '如果 verdict 是 "pass"，reason_code 和 reason 必须都是空字符串。'
+        f'如果 verdict 是 "pass"，reason_code 必须是 "{PASS_REASON_CODE}"，'
         '如果 verdict 是 "fail"，reason_code 只允许是 "parameter_mismatch"、"return_mismatch"、"overload_mismatch" 之一，'
         "reason 必须是一句简短中文说明。"
         "按语义一致判断，不要求字面完全一致。"
@@ -440,9 +449,17 @@ def _build_messages(prepared: PreparedEvaluation) -> list[dict[str, str]]:
         f"参考材料:\n{prepared.reference_payload}\n"
     )
 
+    system_message: ChatCompletionSystemMessageParam = {
+        "role": "system",
+        "content": system_prompt,
+    }
+    user_message: ChatCompletionUserMessageParam = {
+        "role": "user",
+        "content": user_prompt,
+    }
     return [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
+        system_message,
+        user_message,
     ]
 
 
@@ -538,8 +555,9 @@ async def _request_completion(
                 model=MODEL,
                 messages=messages,
                 reasoning_effort=REASONING_EFFORT,
-                response_format={"type": "json_object"},
-                extra_body={"thinking": {"type": "enabled"}},
+                response_format=RESPONSE_FORMAT_JSON_OBJECT,
+                stream=False,
+                extra_body=EXTRA_BODY,
             )
             content = completion.choices[0].message.content
             if not isinstance(content, str) or not content.strip():
@@ -579,24 +597,30 @@ def _parse_llm_response(response_text: str) -> dict[str, str]:
     if not isinstance(reason, str):
         raise RuntimeError("模型返回的 reason 不是字符串。")
 
+    normalized_reason = reason.strip()
+
     if verdict == "pass":
-        if reason_code or reason:
-            raise RuntimeError("verdict=pass 时 reason_code 和 reason 必须为空字符串。")
+        if reason_code != PASS_REASON_CODE:
+            raise RuntimeError(
+                f'verdict=pass 时 reason_code 必须是 {PASS_REASON_CODE!r}，实际为 {reason_code!r}。'
+            )
+        if not normalized_reason:
+            raise RuntimeError("verdict=pass 时 reason 不能为空。")
         return {
             "verdict": "pass",
-            "reason_code": "",
-            "reason": "",
+            "reason_code": PASS_REASON_CODE,
+            "reason": normalized_reason,
         }
 
-    if reason_code not in VALID_REASON_CODES:
+    if reason_code not in VALID_FAIL_REASON_CODES:
         raise RuntimeError(f"模型返回了非法 reason_code: {reason_code!r}")
-    if not reason.strip():
+    if not normalized_reason:
         raise RuntimeError("verdict=fail 时 reason 不能为空。")
 
     return {
         "verdict": "fail",
         "reason_code": reason_code,
-        "reason": reason.strip(),
+        "reason": normalized_reason,
     }
 
 
@@ -677,18 +701,16 @@ def run(
 def command(
     generated_toml: Path = typer.Argument(
         ...,
-        metavar="GENERATED_TOML",
         help="由 `pcstubgen gen --toml` 生成的 TOML 文件。",
     ),
     output_csv: Path = typer.Argument(
         ...,
-        metavar="OUTPUT_CSV",
         help="评估结果 CSV 输出路径。",
     ),
     manual_stub_root: Path | None = typer.Option(
         None,
         "--manual-stub-root",
-        help="可选的人工 stub 根目录。",
+        help="人工 stub 根目录。",
     ),
     concurrency: int = typer.Option(
         DEFAULT_CONCURRENCY,
