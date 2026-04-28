@@ -149,7 +149,11 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
         to=tmp_path,
     )
 
-    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+    entries = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["entries"]
+
+    assert [*entries[0].keys()] == ["module_name", "class_name", "function_name", "signature"]
+    assert [*entries[1].keys()] == ["module_name", "class_name", "function_name", "signature"]
+    assert {"entries": entries} == {
         "entries": [
             {
                 "module_name": "pkg.mod",
