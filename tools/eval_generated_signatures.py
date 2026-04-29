@@ -48,25 +48,24 @@ DEFAULT_CONCURRENCY = 16
 DEFAULT_MAX_ATTEMPTS = 3
 EXIT_ERROR = 1
 
-VALID_FAIL_REASON_CODES = {
-    "parameter_mismatch",
-    "return_mismatch",
-    "overload_mismatch",
+VALID_LLM_RESULT_CODES = {
+    "qualified",
+    "unqualified_parameter",
+    "unqualified_return",
+    "unqualified_parameter_and_return",
 }
-PASS_REASON_CODE = "pass_match"
+MISSING_REFERENCE_CODE = "missing_reference"
+LLM_ERROR_CODE = "llm_error"
 
 CSV_HEADERS = [
     "module_name",
     "class_name",
     "function_name",
     "generated_signature",
-    "status",
-    "llm_verdict",
-    "reason_code",
+    "code",
     "reason",
     "reference_kind",
-    "reference_path",
-    "reference_line",
+    "reference",
 ]
 
 app = typer.Typer(add_completion=False)
@@ -115,9 +114,7 @@ class PreparedEvaluation:
 
     entry: GeneratedSignatureEntry
     reference_kind: str
-    reference_payload: str
-    reference_path: str
-    reference_line: str
+    reference: str
 
 
 @dataclass(frozen=True)
@@ -128,13 +125,10 @@ class EvaluationRow:
     class_name: str
     function_name: str
     generated_signature: str
-    status: str
-    llm_verdict: str
-    reason_code: str
+    code: str
     reason: str
     reference_kind: str
-    reference_path: str
-    reference_line: str
+    reference: str
 
     def to_csv_row(self) -> dict[str, str]:
         """将结果行转换为 CSV writer 可接受的字典。"""
@@ -143,13 +137,10 @@ class EvaluationRow:
             "class_name": self.class_name,
             "function_name": self.function_name,
             "generated_signature": self.generated_signature,
-            "status": self.status,
-            "llm_verdict": self.llm_verdict,
-            "reason_code": self.reason_code,
+            "code": self.code,
             "reason": self.reason,
             "reference_kind": self.reference_kind,
-            "reference_path": self.reference_path,
-            "reference_line": self.reference_line,
+            "reference": self.reference,
         }
 
 
@@ -330,40 +321,35 @@ def _prepare_evaluations(
                 PreparedEvaluation(
                     entry=entry,
                     reference_kind="manual_stub",
-                    reference_payload=_render_manual_stub_payload(manual_reference),
-                    reference_path=str(manual_reference.path),
-                    reference_line=str(manual_reference.signatures[0].line),
+                    reference=_render_manual_stub_reference(manual_reference),
                 )
             )
             continue
 
         if entry.comment is not None:
-            comment_path, comment_line = _extract_comment_location(entry.comment)
             pending.append(
                 PreparedEvaluation(
                     entry=entry,
                     reference_kind="comment",
-                    reference_payload=entry.comment,
-                    reference_path=comment_path,
-                    reference_line=comment_line,
+                    reference=entry.comment,
                 )
             )
             continue
 
         immediate_rows.append(
-            _build_error_row(
+            _build_local_row(
                 entry=entry,
-                reference_kind="comment",
-                reference_path="",
-                reference_line="",
+                code=MISSING_REFERENCE_CODE,
                 reason="缺少人工 stub 参考，且 comment 证据为空。",
+                reference_kind="",
+                reference="",
             )
         )
 
     return pending, immediate_rows
 
 
-def _render_manual_stub_payload(reference: ManualStubReference) -> str:
+def _render_manual_stub_reference(reference: ManualStubReference) -> str:
     """将人工 stub 参考渲染为紧凑 JSON 文本，便于直接放入提示词。"""
     payload = [
         {
@@ -375,47 +361,24 @@ def _render_manual_stub_payload(reference: ManualStubReference) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _extract_comment_location(comment: str) -> tuple[str, str]:
-    """从 comment 首部尝试提取文件路径与行号。"""
-    first_line = comment.splitlines()[0].strip() if comment.splitlines() else ""
-    if not first_line:
-        return "", ""
-
-    source_location_match = re.match(
-        r"^<SourceLocation file '([^']+)', line (\d+), column \d+>$",
-        first_line,
-    )
-    if source_location_match is not None:
-        return source_location_match.group(1), source_location_match.group(2)
-
-    simple_location_match = re.match(r"^(.+?):(\d+):\d+$", first_line)
-    if simple_location_match is not None:
-        return simple_location_match.group(1), simple_location_match.group(2)
-
-    return "", ""
-
-
-def _build_error_row(
+def _build_local_row(
     *,
     entry: GeneratedSignatureEntry,
-    reference_kind: str,
-    reference_path: str,
-    reference_line: str,
+    code: str,
     reason: str,
+    reference_kind: str,
+    reference: str,
 ) -> EvaluationRow:
-    """构造一条流程级错误结果。"""
+    """构造一条无需 LLM 的本地结果。"""
     return EvaluationRow(
         module_name=entry.module_name,
         class_name=entry.class_name or "",
         function_name=entry.function_name,
         generated_signature=entry.generated_signature,
-        status="error",
-        llm_verdict="",
-        reason_code="",
+        code=code,
         reason=reason,
         reference_kind=reference_kind,
-        reference_path=reference_path,
-        reference_line=reference_line,
+        reference=reference,
     )
 
 
@@ -423,7 +386,7 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
     """为单条签名评估组装 DeepSeek 对话消息。"""
     entry = prepared.entry
     reference_instructions = (
-        "参考材料是人工维护 stub 提取出的可信参考签名列表。只要生成签名与其中任意一条语义一致，就应该判定为 pass。"
+        "参考材料是人工维护 stub 提取出的可信参考签名列表。只要生成签名与其中任意一条语义一致，就应该判定为 qualified。"
         if prepared.reference_kind == "manual_stub"
         else "参考材料是原始证据 comment，请直接根据原始证据判断生成签名是否成立。"
     )
@@ -432,10 +395,9 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         "你是 Python 签名评估器。"
         "请判断一条生成签名是否与参考材料语义一致。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
-        'JSON 结构固定为 {"verdict": "...", "reason_code": "...", "reason": "..."}。'
-        'verdict 只允许是 "pass" 或 "fail"。'
-        f'如果 verdict 是 "pass"，reason_code 必须是 "{PASS_REASON_CODE}"，'
-        '如果 verdict 是 "fail"，reason_code 只允许是 "parameter_mismatch"、"return_mismatch"、"overload_mismatch" 之一，'
+        'JSON 结构固定为 {"code": "...", "reason": "..."}。'
+        'code 只允许是 "qualified"、"unqualified_parameter"、"unqualified_return"、'
+        '"unqualified_parameter_and_return"。'
         "reason 为中文说明。"
         "按语义一致判断，不要求字面完全一致。"
     )
@@ -447,7 +409,7 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         f"生成签名:\n{entry.generated_signature}\n\n"
         f"参考类型: {prepared.reference_kind}\n"
         f"参考说明: {reference_instructions}\n"
-        f"参考材料:\n{prepared.reference_payload}\n"
+        f"参考材料:\n{prepared.reference}\n"
     )
 
     system_message: ChatCompletionSystemMessageParam = {
@@ -532,12 +494,12 @@ async def _evaluate_one(
             parsed = _parse_llm_response(response)
             return _build_llm_row(prepared, parsed)
         except Exception as ex:
-            return _build_error_row(
+            return _build_local_row(
                 entry=prepared.entry,
-                reference_kind=prepared.reference_kind,
-                reference_path=prepared.reference_path,
-                reference_line=prepared.reference_line,
+                code=LLM_ERROR_CODE,
                 reason=_format_exception_message(ex),
+                reference_kind=prepared.reference_kind,
+                reference=prepared.reference,
             )
 
 
@@ -587,40 +549,24 @@ def _parse_llm_response(response_text: str) -> dict[str, str]:
     if not isinstance(payload, dict):
         raise RuntimeError("模型返回的 JSON 顶层不是对象。")
 
-    verdict = payload.get("verdict")
-    reason_code = payload.get("reason_code", "")
+    code = payload.get("code")
     reason = payload.get("reason", "")
 
-    if verdict not in {"pass", "fail"}:
-        raise RuntimeError(f"模型返回了非法 verdict: {verdict!r}")
-    if not isinstance(reason_code, str):
-        raise RuntimeError("模型返回的 reason_code 不是字符串。")
+    if not isinstance(code, str):
+        raise RuntimeError("模型返回的 code 不是字符串。")
     if not isinstance(reason, str):
         raise RuntimeError("模型返回的 reason 不是字符串。")
 
+    normalized_code = code.strip()
     normalized_reason = reason.strip()
 
-    if verdict == "pass":
-        if reason_code != PASS_REASON_CODE:
-            raise RuntimeError(
-                f'verdict=pass 时 reason_code 必须是 {PASS_REASON_CODE!r}，实际为 {reason_code!r}。'
-            )
-        if not normalized_reason:
-            raise RuntimeError("verdict=pass 时 reason 不能为空。")
-        return {
-            "verdict": "pass",
-            "reason_code": PASS_REASON_CODE,
-            "reason": normalized_reason,
-        }
-
-    if reason_code not in VALID_FAIL_REASON_CODES:
-        raise RuntimeError(f"模型返回了非法 reason_code: {reason_code!r}")
+    if normalized_code not in VALID_LLM_RESULT_CODES:
+        raise RuntimeError(f"模型返回了非法 code: {code!r}")
     if not normalized_reason:
-        raise RuntimeError("verdict=fail 时 reason 不能为空。")
+        raise RuntimeError("模型返回的 reason 不能为空。")
 
     return {
-        "verdict": "fail",
-        "reason_code": reason_code,
+        "code": normalized_code,
         "reason": normalized_reason,
     }
 
@@ -630,19 +576,15 @@ def _build_llm_row(
     parsed_response: dict[str, str],
 ) -> EvaluationRow:
     """将 LLM 结果映射为最终 CSV 行。"""
-    verdict = parsed_response["verdict"]
     return EvaluationRow(
         module_name=prepared.entry.module_name,
         class_name=prepared.entry.class_name or "",
         function_name=prepared.entry.function_name,
         generated_signature=prepared.entry.generated_signature,
-        status=verdict,
-        llm_verdict=verdict,
-        reason_code=parsed_response["reason_code"],
+        code=parsed_response["code"],
         reason=parsed_response["reason"],
         reference_kind=prepared.reference_kind,
-        reference_path=prepared.reference_path,
-        reference_line=prepared.reference_line,
+        reference=prepared.reference,
     )
 
 
@@ -670,7 +612,7 @@ def run(
     typer.echo(f"读取 TOML: {generated_toml}")
     typer.echo(f"- 生成签名条数: {len(entries)}")
     pending, immediate_rows = _prepare_evaluations(entries, manual_stub_root)
-    typer.echo(f"- 直接记为 error 的条数: {len(immediate_rows)}")
+    typer.echo(f"- 直接产出本地结果的条数: {len(immediate_rows)}")
     typer.echo(f"- 进入 LLM 评估的条数: {len(pending)}")
     if manual_stub_root is not None:
         typer.echo(f"- 人工 stub 根目录: {manual_stub_root}")
