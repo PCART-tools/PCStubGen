@@ -45,25 +45,27 @@ REASONING_EFFORT: ReasoningEffort = "high"
 RESPONSE_FORMAT_JSON_OBJECT: ResponseFormatJSONObject = {"type": "json_object"}
 EXTRA_BODY = {"thinking": {"type": "enabled"}}
 DEFAULT_CONCURRENCY = 16
-DEFAULT_MAX_ATTEMPTS = 3
+DEFAULT_MAX_ATTEMPTS = 4
 EXIT_ERROR = 1
 
 VALID_LLM_RESULT_CODES = {
     "qualified",
-    "unqualified_parameter",
-    "unqualified_return",
-    "unqualified_parameter_and_return",
+    "unqualified",
 }
-MISSING_REFERENCE_CODE = "missing_reference"
-LLM_ERROR_CODE = "llm_error"
+STATUS_OK = "ok"
+MISSING_REFERENCE_STATUS = "missing_reference"
+LLM_ERROR_STATUS = "llm_error"
 
 CSV_HEADERS = [
     "module_name",
     "class_name",
     "function_name",
     "generated_signature",
-    "code",
-    "reason",
+    "llm_parameter_code",
+    "llm_return_code",
+    "llm_reason",
+    "status",
+    "status_reason",
     "reference_kind",
     "reference",
 ]
@@ -125,8 +127,11 @@ class EvaluationRow:
     class_name: str
     function_name: str
     generated_signature: str
-    code: str
-    reason: str
+    llm_parameter_code: str
+    llm_return_code: str
+    llm_reason: str
+    status: str
+    status_reason: str
     reference_kind: str
     reference: str
 
@@ -137,8 +142,11 @@ class EvaluationRow:
             "class_name": self.class_name,
             "function_name": self.function_name,
             "generated_signature": self.generated_signature,
-            "code": self.code,
-            "reason": self.reason,
+            "llm_parameter_code": self.llm_parameter_code,
+            "llm_return_code": self.llm_return_code,
+            "llm_reason": self.llm_reason,
+            "status": self.status,
+            "status_reason": self.status_reason,
             "reference_kind": self.reference_kind,
             "reference": self.reference,
         }
@@ -337,10 +345,10 @@ def _prepare_evaluations(
             continue
 
         immediate_rows.append(
-            _build_local_row(
+            _build_status_row(
                 entry=entry,
-                code=MISSING_REFERENCE_CODE,
-                reason="缺少人工 stub 参考，且 comment 证据为空。",
+                status=MISSING_REFERENCE_STATUS,
+                status_reason="缺少人工 stub 参考，且 comment 证据为空。",
                 reference_kind="",
                 reference="",
             )
@@ -361,22 +369,25 @@ def _render_manual_stub_reference(reference: ManualStubReference) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _build_local_row(
+def _build_status_row(
     *,
     entry: GeneratedSignatureEntry,
-    code: str,
-    reason: str,
+    status: str,
+    status_reason: str,
     reference_kind: str,
     reference: str,
 ) -> EvaluationRow:
-    """构造一条无需 LLM 的本地结果。"""
+    """构造一条带状态信息的结果。"""
     return EvaluationRow(
         module_name=entry.module_name,
         class_name=entry.class_name or "",
         function_name=entry.function_name,
         generated_signature=entry.generated_signature,
-        code=code,
-        reason=reason,
+        llm_parameter_code="",
+        llm_return_code="",
+        llm_reason="",
+        status=status,
+        status_reason=status_reason,
         reference_kind=reference_kind,
         reference=reference,
     )
@@ -386,19 +397,19 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
     """为单条签名评估组装 DeepSeek 对话消息。"""
     entry = prepared.entry
     reference_instructions = (
-        "参考材料是人工维护 stub 提取出的可信参考签名列表。只要生成签名与其中任意一条语义一致，就应该判定为 qualified。"
+        "参考材料是人工维护 stub 提取出的可信参考签名列表。"
         if prepared.reference_kind == "manual_stub"
-        else "参考材料是原始证据 comment，请直接根据原始证据判断生成签名是否成立。"
+        else "参考材料是签名生成的来源，c_extension的源代码或pybind11的__doc__。"
     )
 
     system_prompt = (
         "你是 Python 签名评估器。"
-        "请判断一条生成签名是否与参考材料语义一致。"
+        "请分别判断一条生成签名的参数部分与返回值部分是否合格。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
-        'JSON 结构固定为 {"code": "...", "reason": "..."}。'
-        'code 只允许是 "qualified"、"unqualified_parameter"、"unqualified_return"、'
-        '"unqualified_parameter_and_return"。'
-        "reason 为中文说明。"
+        'JSON 结构固定为 {"parameter_code": "...", "return_code": "...", "reason": "..."}。'
+        'parameter_code 和 return_code 只允许是 "qualified" 或 "unqualified"。'
+        "reason 为一段中文说明，需要同时说明参数结论和返回值结论。"
+        "要评估的生成签名为单条，参考材料可能有多条重载。评估的生成签名参数和返回值都必须对应到同一条参考签名，基于同一条参考签名判断。"
         "按语义一致判断，不要求字面完全一致。"
     )
 
@@ -494,10 +505,10 @@ async def _evaluate_one(
             parsed = _parse_llm_response(response)
             return _build_llm_row(prepared, parsed)
         except Exception as ex:
-            return _build_local_row(
+            return _build_status_row(
                 entry=prepared.entry,
-                code=LLM_ERROR_CODE,
-                reason=_format_exception_message(ex),
+                status=LLM_ERROR_STATUS,
+                status_reason=_format_exception_message(ex),
                 reference_kind=prepared.reference_kind,
                 reference=prepared.reference,
             )
@@ -549,24 +560,31 @@ def _parse_llm_response(response_text: str) -> dict[str, str]:
     if not isinstance(payload, dict):
         raise RuntimeError("模型返回的 JSON 顶层不是对象。")
 
-    code = payload.get("code")
+    parameter_code = payload.get("parameter_code")
+    return_code = payload.get("return_code")
     reason = payload.get("reason", "")
 
-    if not isinstance(code, str):
-        raise RuntimeError("模型返回的 code 不是字符串。")
+    if not isinstance(parameter_code, str):
+        raise RuntimeError("模型返回的 parameter_code 不是字符串。")
+    if not isinstance(return_code, str):
+        raise RuntimeError("模型返回的 return_code 不是字符串。")
     if not isinstance(reason, str):
         raise RuntimeError("模型返回的 reason 不是字符串。")
 
-    normalized_code = code.strip()
+    normalized_parameter_code = parameter_code.strip()
+    normalized_return_code = return_code.strip()
     normalized_reason = reason.strip()
 
-    if normalized_code not in VALID_LLM_RESULT_CODES:
-        raise RuntimeError(f"模型返回了非法 code: {code!r}")
+    if normalized_parameter_code not in VALID_LLM_RESULT_CODES:
+        raise RuntimeError(f"模型返回了非法 parameter_code: {parameter_code!r}")
+    if normalized_return_code not in VALID_LLM_RESULT_CODES:
+        raise RuntimeError(f"模型返回了非法 return_code: {return_code!r}")
     if not normalized_reason:
         raise RuntimeError("模型返回的 reason 不能为空。")
 
     return {
-        "code": normalized_code,
+        "parameter_code": normalized_parameter_code,
+        "return_code": normalized_return_code,
         "reason": normalized_reason,
     }
 
@@ -581,8 +599,11 @@ def _build_llm_row(
         class_name=prepared.entry.class_name or "",
         function_name=prepared.entry.function_name,
         generated_signature=prepared.entry.generated_signature,
-        code=parsed_response["code"],
-        reason=parsed_response["reason"],
+        llm_parameter_code=parsed_response["parameter_code"],
+        llm_return_code=parsed_response["return_code"],
+        llm_reason=parsed_response["reason"],
+        status=STATUS_OK,
+        status_reason="",
         reference_kind=prepared.reference_kind,
         reference=prepared.reference,
     )
