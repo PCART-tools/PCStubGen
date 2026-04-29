@@ -171,12 +171,7 @@ CALL_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_ToString": RawType.bytes_,
     "PyArray_Dumps": RawType.bytes_,
     "pylong_from_int128": RawType.int_,
-    "PyArray_Return": UnionType(
-        (
-            RawType("numpy.ndarray", imports=("numpy",)),
-            RawType("numpy.generic", imports=("numpy",)),
-        )
-    ),
+    "PyArray_Return": _NDARRAY_TYPE,
 }
 
 
