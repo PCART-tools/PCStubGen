@@ -13,7 +13,6 @@ import asyncio
 import csv
 import json
 import os
-import re
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -44,7 +43,7 @@ MODEL = "deepseek-v4-pro"
 REASONING_EFFORT: ReasoningEffort = "high"
 RESPONSE_FORMAT_JSON_OBJECT: ResponseFormatJSONObject = {"type": "json_object"}
 EXTRA_BODY = {"thinking": {"type": "enabled"}}
-DEFAULT_CONCURRENCY = 16
+DEFAULT_CONCURRENCY = 32
 DEFAULT_MAX_ATTEMPTS = 4
 EXIT_ERROR = 1
 
@@ -53,8 +52,8 @@ VALID_LLM_RESULT_CODES = {
     "unqualified",
 }
 STATUS_OK = "ok"
-MISSING_REFERENCE_STATUS = "missing_reference"
-LLM_ERROR_STATUS = "llm_error"
+STATUS_MISSING_REFERENCE = "missing_reference"
+STATUS_LLM_ERROR = "llm_error"
 
 CSV_HEADERS = [
     "module_name",
@@ -347,7 +346,7 @@ def _prepare_evaluations(
         immediate_rows.append(
             _build_status_row(
                 entry=entry,
-                status=MISSING_REFERENCE_STATUS,
+                status=STATUS_MISSING_REFERENCE,
                 status_reason="缺少人工 stub 参考，且 comment 证据为空。",
                 reference_kind="",
                 reference="",
@@ -505,10 +504,15 @@ async def _evaluate_one(
             parsed = _parse_llm_response(response)
             return _build_llm_row(prepared, parsed)
         except Exception as ex:
+            typer.echo(f"评估错误, "
+                       f"module_name={prepared.entry.module_name}, "
+                       f"class_name={prepared.entry.class_name}, "
+                       f"function_name={prepared.entry.function_name}, "
+                       f"ex={ex!r}")
             return _build_status_row(
                 entry=prepared.entry,
-                status=LLM_ERROR_STATUS,
-                status_reason=_format_exception_message(ex),
+                status=STATUS_LLM_ERROR,
+                status_reason=f"{ex!r}",
                 reference_kind=prepared.reference_kind,
                 reference=prepared.reference,
             )
@@ -519,7 +523,6 @@ async def _request_completion(
     prepared: PreparedEvaluation,
 ) -> str:
     """带简单重试地请求 DeepSeek 评估结果。"""
-    last_error: Exception | None = None
     delay_seconds = 1.0
     messages = _build_messages(prepared)
 
@@ -538,23 +541,18 @@ async def _request_completion(
                 raise RuntimeError("模型返回的 content 为空。")
             return content
         except Exception as ex:
-            last_error = ex
+            typer.echo(f"请求错误, {ex!r}")
             if attempt >= DEFAULT_MAX_ATTEMPTS:
-                break
+                raise ex
             await asyncio.sleep(delay_seconds)
             delay_seconds *= 2
 
-    assert last_error is not None
-    raise last_error
+    raise RuntimeError("Should not go here")
 
 
 def _parse_llm_response(response_text: str) -> dict[str, str]:
     """解析并校验模型返回的严格 JSON。"""
     normalized_text = response_text.strip()
-    if normalized_text.startswith("```"):
-        normalized_text = re.sub(r"^```(?:json)?\s*", "", normalized_text)
-        normalized_text = re.sub(r"\s*```$", "", normalized_text)
-        normalized_text = normalized_text.strip()
 
     payload = json.loads(normalized_text)
     if not isinstance(payload, dict):
@@ -607,14 +605,6 @@ def _build_llm_row(
         reference_kind=prepared.reference_kind,
         reference=prepared.reference,
     )
-
-
-def _format_exception_message(ex: Exception) -> str:
-    """将异常格式化为适合写入 CSV 的短文本。"""
-    message = str(ex).strip()
-    if message:
-        return f"{type(ex).__name__}: {message}"
-    return type(ex).__name__
 
 
 def run(
