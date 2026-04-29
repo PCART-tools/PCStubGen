@@ -2,8 +2,8 @@
 工具：批量评估已生成 TOML 中的签名是否合格。
 
 示例:
-    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml out/pcstubgen/psycopg2_eval.csv
-    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml out/pcstubgen/psycopg2_eval.csv --manual-stub-root ./stubs
+    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml
+    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml --manual-stub-root ./stubs
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ import re
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 import typer
@@ -40,7 +41,7 @@ from rich.progress import (
 
 BASE_URL = "https://api.deepseek.com"
 MODEL = "deepseek-v4-pro"
-REASONING_EFFORT: ReasoningEffort = "max"
+REASONING_EFFORT: ReasoningEffort = "high"
 RESPONSE_FORMAT_JSON_OBJECT: ResponseFormatJSONObject = {"type": "json_object"}
 EXTRA_BODY = {"thinking": {"type": "enabled"}}
 DEFAULT_CONCURRENCY = 16
@@ -435,7 +436,7 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         'verdict 只允许是 "pass" 或 "fail"。'
         f'如果 verdict 是 "pass"，reason_code 必须是 "{PASS_REASON_CODE}"，'
         '如果 verdict 是 "fail"，reason_code 只允许是 "parameter_mismatch"、"return_mismatch"、"overload_mismatch" 之一，'
-        "reason 必须是一句简短中文说明。"
+        "reason 为中文说明。"
         "按语义一致判断，不要求字面完全一致。"
     )
 
@@ -655,16 +656,15 @@ def _format_exception_message(ex: Exception) -> str:
 
 def run(
     generated_toml: Path,
-    output_csv: Path,
     *,
     manual_stub_root: Path | None,
     concurrency: int,
 ) -> int:
     """执行完整的签名评估批处理流程。"""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_csv = generated_toml.parent / f"{generated_toml.stem}_eval_{timestamp}.csv"
     if output_csv.exists():
         raise RuntimeError(f"输出 CSV 已存在: {output_csv}")
-    if manual_stub_root is not None and not manual_stub_root.is_dir():
-        raise RuntimeError(f"人工 stub 根目录不存在或不是目录: {manual_stub_root}")
 
     entries = _load_generated_entries(generated_toml)
     typer.echo(f"读取 TOML: {generated_toml}")
@@ -697,19 +697,23 @@ def run(
     return 0
 
 
-@app.command(help="批量评估生成 TOML 中的函数签名，并输出 CSV 报告。")
+@app.command(help="批量评估生成 TOML 中的函数签名，并在源文件目录输出 CSV 报告。")
 def command(
     generated_toml: Path = typer.Argument(
         ...,
-        help="由 `pcstubgen gen --toml` 生成的 TOML 文件。",
-    ),
-    output_csv: Path = typer.Argument(
-        ...,
-        help="评估结果 CSV 输出路径。",
+        exists=True,
+        file_okay=True,
+        dir_okay=False,
+        readable=True,
+        help="由 `pcstubgen gen --toml` 生成的 TOML 文件，输出 CSV 会自动写到同目录。",
     ),
     manual_stub_root: Path | None = typer.Option(
         None,
         "--manual-stub-root",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        readable=True,
         help="人工 stub 根目录。",
     ),
     concurrency: int = typer.Option(
@@ -721,7 +725,6 @@ def command(
 ) -> None:
     exit_code = run(
         generated_toml=generated_toml,
-        output_csv=output_csv,
         manual_stub_root=manual_stub_root,
         concurrency=concurrency,
     )
