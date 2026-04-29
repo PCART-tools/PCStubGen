@@ -13,6 +13,7 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
     """在项目目录下维护固定路径、每次重建的隔离构建环境。"""
 
     BUILD_ENV_DIRNAME = ".pcstubgen-build-env"
+    BUILD_ENV_GITIGNORE_CONTENT = "*\n"
 
     def __init__(
         self,
@@ -28,6 +29,15 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
     def get_build_env_path(srcdir: Path) -> Path:
         """返回项目内固定的构建环境目录。"""
         return srcdir / PersistentIsolatedEnv.BUILD_ENV_DIRNAME
+
+    @staticmethod
+    def write_gitignore(build_env_path: Path) -> None:
+        """写入构建环境目录的 Git 忽略规则。"""
+        gitignore_path = build_env_path / ".gitignore"
+        gitignore_path.write_text(
+            PersistentIsolatedEnv.BUILD_ENV_GITIGNORE_CONTENT,
+            encoding="utf-8",
+        )
 
     def __enter__(self) -> PersistentIsolatedEnv:
         """删除旧环境后，在固定路径创建新的隔离构建环境。"""
@@ -53,6 +63,7 @@ class PersistentIsolatedEnv(DefaultIsolatedEnv):
                 kind=("step",),
             )
             self._env_backend.create(self._path)
+            self.write_gitignore(path)
         except Exception:
             self.__exit__(*sys.exc_info())
             raise

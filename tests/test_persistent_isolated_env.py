@@ -28,6 +28,7 @@ def test_persistent_isolated_env_recreates_existing_directory(
     tmp_path: Path,
 ) -> None:
     build_env_path = PersistentIsolatedEnv.get_build_env_path(tmp_path)
+    gitignore_path = build_env_path / ".gitignore"
     build_env_path.mkdir()
     stale_file = build_env_path / "stale.txt"
     stale_file.write_text("stale", encoding="utf-8")
@@ -49,6 +50,7 @@ def test_persistent_isolated_env_recreates_existing_directory(
         assert env.path == os.path.realpath(build_env_path.resolve())
 
     assert created_paths == [os.path.realpath(build_env_path.resolve())]
+    assert gitignore_path.read_text(encoding="utf-8") == "*\n"
     assert not stale_file.exists()
     assert logged_messages == [
         ("Creating isolated environment: fake-backend...", ("step",))

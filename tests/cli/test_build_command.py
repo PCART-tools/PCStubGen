@@ -58,6 +58,15 @@ def test_build_command_fails_when_build_env_path_is_not_directory(
     monkeypatch.setattr(
         build_command_module, "ensure_build_programs_available", lambda: None
     )
+    monkeypatch.setattr(
+        build_command_module,
+        "get_build_context",
+        lambda srcdir: BuildContext(
+            build_backend="mesonpy",
+            runner=build_command_module.default_runner,
+            config_settings={},
+        ),
+    )
 
     result = CliRunner().invoke(app, ["build", str(tmp_path)])
 

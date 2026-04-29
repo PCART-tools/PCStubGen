@@ -176,9 +176,6 @@ def _build_command(
     try:
         ensure_build_programs_available()
 
-        if build_env_dir.exists():
-            if build_env_dir.is_symlink() or not build_env_dir.is_dir():
-                raise RuntimeError(f"构建环境路径存在但不是可清理目录: {build_env_dir}")
         if build_dir.exists():
             if not build_dir.is_dir():
                 raise RuntimeError(f"构建路径存在但不是目录: {build_dir}")
