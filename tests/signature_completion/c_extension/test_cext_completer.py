@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from pcstubgen.models import QualifiedName
-from pcstubgen.signature_completion.c_extension import provider as provider_module
+from pcstubgen.signature_completion.c_extension import completer as completer_module
 from pcstubgen.signature_completion.c_extension.dwarfdump import LookupResult
 from pcstubgen.signature_completion.completion_models import (
     SignatureCompletionContext,
@@ -27,7 +27,7 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
 
     class FakeDwarfManager:
         def lookup(self, binary_path_arg: Path, relative_address: int) -> LookupResult:
-            """记录 provider 发起的 DWARF 查询。"""
+            """记录 completer 发起的 DWARF 查询。"""
             calls.append((binary_path_arg, relative_address))
             return LookupResult(source_path, "foo_impl", "foo_linkage")
 
@@ -45,21 +45,21 @@ def test_get_func_cursor_and_flags_uses_dwarf_manager(
             return expected_cursor
 
     monkeypatch.setattr(
-        provider_module.runtime,
+        completer_module.runtime,
         "read_c_extension_function_runtime_info",
         lambda handle: SimpleNamespace(address=0x1234, flags=8),
     )
     monkeypatch.setattr(
-        provider_module.dladdr,
+        completer_module.dladdr,
         "get_binary_and_ra",
         lambda address: (binary_path, 0x234),
     )
 
-    provider = object.__new__(provider_module.CExtensionProvider)
-    provider._function_cursor_locator = FakeClangFunctionLocator()
-    provider._dwarf_manager = FakeDwarfManager()
+    completer = object.__new__(completer_module.CExtensionCompleter)
+    completer._function_cursor_locator = FakeClangFunctionLocator()
+    completer._dwarf_manager = FakeDwarfManager()
 
-    func_cursor, flags = provider.get_func_cursor_and_flags(object())
+    func_cursor, flags = completer.get_func_cursor_and_flags(object())
 
     assert func_cursor is expected_cursor
     assert flags == 8
@@ -72,36 +72,36 @@ def test_match_rejects_cython_pickle_method_descriptor(monkeypatch) -> None:
 
     method = SimpleNamespace(__name__="__reduce_cython__", __objclass__=Sample)
     monkeypatch.setattr(
-        provider_module.runtime,
+        completer_module.runtime,
         "is_c_extension_instance_method",
         lambda member: member is method,
     )
     monkeypatch.setattr(
-        provider_module.runtime,
+        completer_module.runtime,
         "is_c_extension_class_method",
         lambda member: False,
     )
     monkeypatch.setattr(
-        provider_module.runtime,
+        completer_module.runtime,
         "is_c_extension_static_method",
         lambda member: False,
     )
 
-    assert provider_module.CExtensionProvider.match(method, Sample) is False
+    assert completer_module.CExtensionCompleter.match(method, Sample) is False
 
 
 def test_get_rejects_pythran_wrapall_cursor(monkeypatch) -> None:
-    provider = object.__new__(provider_module.CExtensionProvider)
+    completer = object.__new__(completer_module.CExtensionCompleter)
     runtime_handle = object()
     func_cursor = SimpleNamespace(spelling="__pythran_wrapall_group_dense")
 
     monkeypatch.setattr(
-        provider,
+        completer,
         "_analyze_member",
         lambda member: (runtime_handle, None, None),
     )
     monkeypatch.setattr(
-        provider,
+        completer,
         "get_func_cursor_and_flags",
         lambda handle: (func_cursor, 0),
     )
@@ -113,26 +113,26 @@ def test_get_rejects_pythran_wrapall_cursor(monkeypatch) -> None:
     )
 
     with pytest.raises(UnsupportedSignatureCompletion):
-        provider.get(context)
+        completer.get(context)
 
 
 def test_get_func_cursor_and_flags_rejects_current_interpreter_method_descriptor(
     monkeypatch,
 ) -> None:
-    provider = object.__new__(provider_module.CExtensionProvider)
-    provider._function_cursor_locator = object()
-    provider._dwarf_manager = object()
+    completer = object.__new__(completer_module.CExtensionCompleter)
+    completer._function_cursor_locator = object()
+    completer._dwarf_manager = object()
 
     monkeypatch.setattr(
-        provider_module.runtime,
+        completer_module.runtime,
         "read_c_extension_function_runtime_info",
         lambda handle: SimpleNamespace(address=0x1234, flags=8),
     )
     monkeypatch.setattr(
-        provider_module.dladdr,
+        completer_module.dladdr,
         "get_binary_and_ra",
         lambda address: (Path(sys.executable), 0x234),
     )
 
     with pytest.raises(UnsupportedSignatureCompletion):
-        provider.get_func_cursor_and_flags(SimpleNamespace(__name__="__format__"))
+        completer.get_func_cursor_and_flags(SimpleNamespace(__name__="__format__"))

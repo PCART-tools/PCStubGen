@@ -4,7 +4,7 @@ import pytest
 
 from pcstubgen.models import QualifiedName
 from pcstubgen.signature_completion.completion_models import SignatureCompletionContext
-from pcstubgen.signature_completion.pybind11.provider import Pybind11Provider
+from pcstubgen.signature_completion.pybind11.completer import Pybind11Completer
 
 
 _PybindRecord = type("pybind_record", (), {})
@@ -59,12 +59,12 @@ def _make_pybind11_instance_method(doc: str) -> object:
         ("plain", None, False),
     ],
 )
-def test_pybind11_provider_match_filters_members(
+def test_pybind11_completer_match_filters_members(
     case_name: str,
     owner_class: type | None,
     expected: bool,
 ) -> None:
-    provider = Pybind11Provider()
+    completer = Pybind11Completer()
     module_member = object()
     instance_member = _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int")
     setattr(instance_member, "__name__", "build")
@@ -79,19 +79,19 @@ def test_pybind11_provider_match_filters_members(
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_module_function",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_module_function",
             lambda handle: handle is module_member,
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_instance_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_instance_method",
             lambda handle: handle is instance_member or handle is conduit_member,
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_static_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
             lambda handle: False,
         )
 
-        assert provider.match(member, owner_class) is expected
+        assert completer.match(member, owner_class) is expected
 
 
 @pytest.mark.parametrize(
@@ -115,7 +115,7 @@ def test_pybind11_provider_match_filters_members(
         ),
     ],
 )
-def test_pybind11_provider_get_returns_observable_result(
+def test_pybind11_completer_get_returns_observable_result(
     member_factory,
     func_name: str,
     owner_class: type | None,
@@ -123,23 +123,23 @@ def test_pybind11_provider_get_returns_observable_result(
     expected_decorator: str | None,
     expected_args: list[str],
 ) -> None:
-    provider = Pybind11Provider()
+    completer = Pybind11Completer()
     member = member_factory()
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_module_function",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_module_function",
             lambda handle: False,
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_instance_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_instance_method",
             lambda handle: handle is member and not isinstance(member, staticmethod),
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_static_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
             lambda handle: handle is member and isinstance(member, staticmethod),
         )
-        result = provider.get(
+        result = completer.get(
             _make_context(member, func_name=func_name, owner_class=owner_class)
         )
 
@@ -148,25 +148,25 @@ def test_pybind11_provider_get_returns_observable_result(
     assert [arg.name for arg in result.signatures[0].args] == expected_args
 
 
-def test_pybind11_provider_get_uses_runtime_name_for_doc_matching() -> None:
-    provider = Pybind11Provider()
+def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
+    completer = Pybind11Completer()
     member = _make_pybind11_instance_method("_mtia_exchangeDevice(arg0: typing.SupportsInt) -> int")
     setattr(member, "__name__", "_mtia_exchangeDevice")
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_module_function",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_module_function",
             lambda handle: False,
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_instance_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_instance_method",
             lambda handle: handle is member,
         )
         monkeypatch.setattr(
-            "pcstubgen.signature_completion.pybind11.provider.runtime.is_pybind11_static_method",
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
             lambda handle: False,
         )
-        result = provider.get(
+        result = completer.get(
             _make_context(member, func_name="exchange_device", owner_class=object)
         )
 

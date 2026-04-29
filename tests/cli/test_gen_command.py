@@ -17,7 +17,7 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.FunctionCursorLocator",
+        "pcstubgen.signature_completion.c_extension.completer.FunctionCursorLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
@@ -64,7 +64,7 @@ def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
     tmp_path,
 ) -> None:
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.FunctionCursorLocator",
+        "pcstubgen.signature_completion.c_extension.completer.FunctionCursorLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")
@@ -128,7 +128,7 @@ def test_gen_stubs_uses_collected_module_and_injected_writer(
     import pcstubgen.api as stubgen_module
 
     monkeypatch.setattr(
-        "pcstubgen.signature_completion.c_extension.provider.FunctionCursorLocator",
+        "pcstubgen.signature_completion.c_extension.completer.FunctionCursorLocator",
         lambda compilation_database: object(),
     )
     (tmp_path / "compile_commands.json").write_text("[]", encoding="utf-8")

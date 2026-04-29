@@ -280,11 +280,11 @@ def test_module_collector_silently_skips_unsupported_completion(
             member: object,
             owner_class: type | None = None,
         ) -> bool:
-            """模拟 provider 粗匹配成功。"""
+            """模拟 completer 粗匹配成功。"""
             return owner_class is None and inspect.isroutine(member)
 
         def complete(self, context) -> SignatureCompletionResult:
-            """模拟 provider 在内部识别为不支持目标。"""
+            """模拟 completer 在内部识别为不支持目标。"""
             raise UnsupportedSignatureCompletion("skip")
 
     _prepare_module_import("skippkg", tmp_path, monkeypatch)

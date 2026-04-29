@@ -18,7 +18,7 @@ from ..completion_models import (
 from ...models import Decorator
 
 
-class CExtensionProvider:
+class CExtensionCompleter:
     """通过 C 扩展运行时信息补全签名。"""
 
     def __init__(self, compilation_database: Path) -> None:
@@ -30,7 +30,7 @@ class CExtensionProvider:
         member: object,
         owner_class: type | None = None,
     ) -> bool:
-        """判断运行时对象是否匹配 CPython C 扩展 provider。"""
+        """判断运行时对象是否匹配 CPython C 扩展 completer。"""
         if owner_class is not None:
             if (
                 runtime.is_c_extension_instance_method(member)

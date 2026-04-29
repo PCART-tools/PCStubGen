@@ -4,7 +4,7 @@ from .completion_models import SignatureCompletionContext, SignatureCompletionRe
 from ..models import Argument, ArgumentKind, Signature
 
 
-class MinimalProvider:
+class MinimalCompleter:
     """生成最小签名。"""
 
     @staticmethod

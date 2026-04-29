@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from .inferencer import infer, parse_args_str
-from .provider import Pybind11Provider
+from .completer import Pybind11Completer
 
 __all__ = [
-    "Pybind11Provider",
+    "Pybind11Completer",
     "infer",
     "parse_args_str",
 ]

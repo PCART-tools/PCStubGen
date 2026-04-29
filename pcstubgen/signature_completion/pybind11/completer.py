@@ -13,12 +13,12 @@ from .inferencer import infer
 from ...models import Decorator
 
 
-class Pybind11Provider:
+class Pybind11Completer:
     """从 pybind11 docstring 生产最终可导出的结果。"""
 
     @staticmethod
     def match(member: object, owner_class: type | None = None) -> bool:
-        """判断运行时对象是否匹配 pybind11 provider。"""
+        """判断运行时对象是否匹配 pybind11 completer。"""
         if owner_class is not None:
             is_pybind11 = (
                 runtime.is_pybind11_instance_method(member)
