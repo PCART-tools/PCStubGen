@@ -499,55 +499,59 @@ async def _evaluate_one(
 ) -> EvaluationRow:
     """执行单条签名的 LLM 评估。"""
     async with semaphore:
-        try:
-            response = await _request_completion(client, prepared)
-            parsed = _parse_llm_response(response)
-            return _build_llm_row(prepared, parsed)
-        except Exception as ex:
-            typer.echo(f"评估错误, "
-                       f"module_name={prepared.entry.module_name}, "
-                       f"class_name={prepared.entry.class_name}, "
-                       f"function_name={prepared.entry.function_name}, "
-                       f"ex={ex!r}")
-            return _build_status_row(
-                entry=prepared.entry,
-                status=STATUS_LLM_ERROR,
-                status_reason=f"{ex!r}",
-                reference_kind=prepared.reference_kind,
-                reference=prepared.reference,
-            )
+        delay_seconds = 1.0
+        messages = _build_messages(prepared)
+        last_exception: Exception | None = None
+
+        for attempt in range(1, DEFAULT_MAX_ATTEMPTS + 1):
+            try:
+                response = await _request_completion(client, messages)
+                parsed = _parse_llm_response(response)
+                return _build_llm_row(prepared, parsed)
+            except Exception as ex:
+                last_exception = ex
+                typer.echo(
+                    f"\n评估尝试失败, "
+                    f"attempt={attempt}/{DEFAULT_MAX_ATTEMPTS}, "
+                    f"module_name={prepared.entry.module_name}, "
+                    f"class_name={prepared.entry.class_name}, "
+                    f"function_name={prepared.entry.function_name}, "
+                    f"ex={ex!r}"
+                )
+                if attempt >= DEFAULT_MAX_ATTEMPTS:
+                    break
+                await asyncio.sleep(delay_seconds)
+                delay_seconds *= 2
+
+        if last_exception is None:
+            raise RuntimeError("单条评估未产生结果，且没有捕获到异常。")
+
+        return _build_status_row(
+            entry=prepared.entry,
+            status=STATUS_LLM_ERROR,
+            status_reason=f"{last_exception!r}",
+            reference_kind=prepared.reference_kind,
+            reference=prepared.reference,
+        )
 
 
 async def _request_completion(
     client: AsyncOpenAI,
-    prepared: PreparedEvaluation,
+    messages: list[ChatCompletionMessageParam],
 ) -> str:
-    """带简单重试地请求 DeepSeek 评估结果。"""
-    delay_seconds = 1.0
-    messages = _build_messages(prepared)
-
-    for attempt in range(1, DEFAULT_MAX_ATTEMPTS + 1):
-        try:
-            completion = await client.chat.completions.create(
-                model=MODEL,
-                messages=messages,
-                reasoning_effort=REASONING_EFFORT,
-                response_format=RESPONSE_FORMAT_JSON_OBJECT,
-                stream=False,
-                extra_body=EXTRA_BODY,
-            )
-            content = completion.choices[0].message.content
-            if not isinstance(content, str) or not content.strip():
-                raise RuntimeError("模型返回的 content 为空。")
-            return content
-        except Exception as ex:
-            typer.echo(f"请求错误, {ex!r}")
-            if attempt >= DEFAULT_MAX_ATTEMPTS:
-                raise ex
-            await asyncio.sleep(delay_seconds)
-            delay_seconds *= 2
-
-    raise RuntimeError("Should not go here")
+    """请求一次 DeepSeek 评估结果。"""
+    completion = await client.chat.completions.create(
+        model=MODEL,
+        messages=messages,
+        reasoning_effort=REASONING_EFFORT,
+        response_format=RESPONSE_FORMAT_JSON_OBJECT,
+        stream=False,
+        extra_body=EXTRA_BODY,
+    )
+    content = completion.choices[0].message.content
+    if not isinstance(content, str) or not content.strip():
+        raise RuntimeError("模型返回的 content 为空。")
+    return content
 
 
 def _parse_llm_response(response_text: str) -> dict[str, str]:
