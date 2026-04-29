@@ -71,7 +71,7 @@ class CExtensionCompleter:
                 f"跳过 Pythran wrapall 分派函数: {func_cursor.spelling}"
             )
         source_text = ast_utils.get_cursor_source_text(func_cursor)
-        comment = f"{func_cursor.location}\n{source_text}"
+        comment = f"c_extension\n{func_cursor.location}\n{source_text}"
         signatures = Inferencer(func_cursor, flags, context.owner_class).run()
 
         return SignatureCompletionResult(

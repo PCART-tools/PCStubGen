@@ -31,10 +31,12 @@ class Pybind11Completer:
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
         signatures = infer(runtime_handle.__name__, doc)
+        comment = f"pybind11\n{doc}"
         return SignatureCompletionResult(
             signatures=signatures,
             doc=doc,
             decorator=decorator,
+            comment=comment,
         )
 
     def _analyze_member(
