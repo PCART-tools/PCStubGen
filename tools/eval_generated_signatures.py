@@ -50,6 +50,7 @@ EXIT_ERROR = 1
 VALID_LLM_RESULT_CODES = {
     "qualified",
     "unqualified",
+    "uncertain",
 }
 STATUS_OK = "ok"
 STATUS_MISSING_REFERENCE = "missing_reference"
@@ -395,21 +396,30 @@ def _build_status_row(
 def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageParam]:
     """为单条签名评估组装 DeepSeek 对话消息。"""
     entry = prepared.entry
-    reference_instructions = (
-        "参考材料是人工维护 stub 提取出的可信参考签名列表。"
-        if prepared.reference_kind == "manual_stub"
-        else "参考材料是签名生成的来源，c_extension的源代码或pybind11的__doc__。"
-    )
+    if prepared.reference_kind == "manual_stub":
+        reference_instructions = (
+            "参考材料是人工维护 stub 提取出的可信参考签名列表，属于高优先级事实依据。"
+            "如果它与你已知的 API 语义冲突，以人工 stub 为准。"
+        )
+    else:
+        reference_instructions = (
+            "参考材料是签名生成的来源，可能是 c_extension 源代码或 pybind11 的 __doc__。"
+            "你应先使用这些参考材料判断；如果它们不足以确定函数真实语义，再结合你已知的 API 知识补充判断。"
+        )
 
     system_prompt = (
         "你是 Python 签名评估器。"
-        "请分别判断一条生成签名的参数部分与返回值部分是否合格。"
+        "请分别判断一条生成签名的参数部分与返回值部分，是否符合函数真实接受的参数语义和真实返回语义。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
         'JSON 结构固定为 {"parameter_code": "...", "return_code": "...", "reason": "..."}。'
-        'parameter_code 和 return_code 只允许是 "qualified" 或 "unqualified"。'
+        'parameter_code 和 return_code 只允许是 "qualified"、"unqualified" 或 "uncertain"。'
         "reason 为一段中文说明，需要同时说明参数结论和返回值结论。"
-        "要评估的生成签名为单条，参考材料可能有多条重载。评估的生成签名参数和返回值都必须对应到同一条参考签名，基于同一条参考签名判断。"
-        "按语义一致判断，不要求字面完全一致。"
+        "当参考材料足以确定真实语义时，应优先基于参考材料判断。"
+        "当参考材料不足以确定真实语义时，可以结合你已知的该模块、类、函数的 API 语义补充判断。"
+        "如果结合参考材料与已有知识后，仍无法较有把握地确定真实语义，就输出 uncertain，不要强行判 qualified 或 unqualified。"
+        "如果某一部分输出 uncertain，reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
+        "要评估的生成签名为单条，参考材料可能有多条重载。若可判定为 qualified，则参数和返回值都必须能对应到同一条真实语义或同一条参考签名。"
+        "按语义一致判断，不要求字面完全一致。不要仅因为给定参考片段本身比较宽泛，就把宽泛签名视为合格。"
     )
 
     user_prompt = (
