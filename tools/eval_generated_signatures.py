@@ -61,9 +61,12 @@ CSV_HEADERS = [
     "class_name",
     "function_name",
     "generated_signature",
-    "llm_parameter_code",
-    "llm_return_code",
-    "llm_reason",
+    "llm_parameter_structure_code",
+    "llm_parameter_structure_reason",
+    "llm_parameter_type_code",
+    "llm_parameter_type_reason",
+    "llm_return_type_code",
+    "llm_return_type_reason",
     "status",
     "status_reason",
     "reference_kind",
@@ -127,9 +130,12 @@ class EvaluationRow:
     class_name: str
     function_name: str
     generated_signature: str
-    llm_parameter_code: str
-    llm_return_code: str
-    llm_reason: str
+    llm_parameter_structure_code: str
+    llm_parameter_structure_reason: str
+    llm_parameter_type_code: str
+    llm_parameter_type_reason: str
+    llm_return_type_code: str
+    llm_return_type_reason: str
     status: str
     status_reason: str
     reference_kind: str
@@ -142,9 +148,12 @@ class EvaluationRow:
             "class_name": self.class_name,
             "function_name": self.function_name,
             "generated_signature": self.generated_signature,
-            "llm_parameter_code": self.llm_parameter_code,
-            "llm_return_code": self.llm_return_code,
-            "llm_reason": self.llm_reason,
+            "llm_parameter_structure_code": self.llm_parameter_structure_code,
+            "llm_parameter_structure_reason": self.llm_parameter_structure_reason,
+            "llm_parameter_type_code": self.llm_parameter_type_code,
+            "llm_parameter_type_reason": self.llm_parameter_type_reason,
+            "llm_return_type_code": self.llm_return_type_code,
+            "llm_return_type_reason": self.llm_return_type_reason,
             "status": self.status,
             "status_reason": self.status_reason,
             "reference_kind": self.reference_kind,
@@ -383,9 +392,12 @@ def _build_status_row(
         class_name=entry.class_name or "",
         function_name=entry.function_name,
         generated_signature=entry.generated_signature,
-        llm_parameter_code="",
-        llm_return_code="",
-        llm_reason="",
+        llm_parameter_structure_code="",
+        llm_parameter_structure_reason="",
+        llm_parameter_type_code="",
+        llm_parameter_type_reason="",
+        llm_return_type_code="",
+        llm_return_type_reason="",
         status=status,
         status_reason=status_reason,
         reference_kind=reference_kind,
@@ -408,17 +420,19 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         )
 
     system_prompt = (
-        "你是 Python 签名评估器。"
-        "请分别判断一条生成签名的参数部分与返回值部分，是否符合函数真实接受的参数语义和真实返回语义。"
+        "你是 Python 签名评估专家。"
+        "请分别判断一条生成签名的参数结构、参数类型与返回类型，是否符合函数真实语义。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
-        'JSON 结构固定为 {"parameter_code": "...", "return_code": "...", "reason": "..."}。'
-        'parameter_code 和 return_code 只允许是 "qualified"、"unqualified" 或 "uncertain"。'
-        "reason 为一段中文说明，需要同时说明参数结论和返回值结论。"
+        'JSON 结构固定为 {"parameter_structure_code": "...", "parameter_structure_reason": "...", '
+        '"parameter_type_code": "...", "parameter_type_reason": "...", '
+        '"return_type_code": "...", "return_type_reason": "..."}。'
+        '三个 *_code 只允许是 "qualified"、"unqualified" 或 "uncertain"。'
+        "三个 *_reason 都必须是中文说明，分别解释对应维度的结论。"
         "当参考材料足以确定真实语义时，应优先基于参考材料判断。"
         "当参考材料不足以确定真实语义时，可以结合你已知的该模块、类、函数的 API 语义补充判断。"
         "如果结合参考材料与已有知识后，仍无法较有把握地确定真实语义，就输出 uncertain，不要强行判 qualified 或 unqualified。"
-        "如果某一部分输出 uncertain，reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
-        "要评估的生成签名为单条，参考材料可能有多条重载。若可判定为 qualified，则参数和返回值都必须能对应到同一条真实语义或同一条参考签名。"
+        "如果某一维度输出 uncertain，对应的 *_reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
+        "要评估的生成签名为单条，参考材料可能包含多条重载语义。若可判定为 qualified，则三个维度都必须能对应到同一条真实语义或同一条参考签名。"
         "按语义一致判断，不要求字面完全一致。不要仅因为给定参考片段本身比较宽泛，就把宽泛签名视为合格。"
     )
 
@@ -572,33 +586,37 @@ def _parse_llm_response(response_text: str) -> dict[str, str]:
     if not isinstance(payload, dict):
         raise RuntimeError("模型返回的 JSON 顶层不是对象。")
 
-    parameter_code = payload.get("parameter_code")
-    return_code = payload.get("return_code")
-    reason = payload.get("reason", "")
+    normalized_response = {}
+    for field_name in (
+        "parameter_structure_code",
+        "parameter_structure_reason",
+        "parameter_type_code",
+        "parameter_type_reason",
+        "return_type_code",
+        "return_type_reason",
+    ):
+        field_value = payload.get(field_name)
+        if not isinstance(field_value, str):
+            raise RuntimeError(f"模型返回的 {field_name} 不是字符串。")
+        normalized_response[field_name] = field_value.strip()
 
-    if not isinstance(parameter_code, str):
-        raise RuntimeError("模型返回的 parameter_code 不是字符串。")
-    if not isinstance(return_code, str):
-        raise RuntimeError("模型返回的 return_code 不是字符串。")
-    if not isinstance(reason, str):
-        raise RuntimeError("模型返回的 reason 不是字符串。")
+    for field_name in (
+        "parameter_structure_code",
+        "parameter_type_code",
+        "return_type_code",
+    ):
+        if normalized_response[field_name] not in VALID_LLM_RESULT_CODES:
+            raise RuntimeError(f"模型返回了非法 {field_name}: {payload.get(field_name)!r}")
 
-    normalized_parameter_code = parameter_code.strip()
-    normalized_return_code = return_code.strip()
-    normalized_reason = reason.strip()
+    for field_name in (
+        "parameter_structure_reason",
+        "parameter_type_reason",
+        "return_type_reason",
+    ):
+        if not normalized_response[field_name]:
+            raise RuntimeError(f"模型返回的 {field_name} 不能为空。")
 
-    if normalized_parameter_code not in VALID_LLM_RESULT_CODES:
-        raise RuntimeError(f"模型返回了非法 parameter_code: {parameter_code!r}")
-    if normalized_return_code not in VALID_LLM_RESULT_CODES:
-        raise RuntimeError(f"模型返回了非法 return_code: {return_code!r}")
-    if not normalized_reason:
-        raise RuntimeError("模型返回的 reason 不能为空。")
-
-    return {
-        "parameter_code": normalized_parameter_code,
-        "return_code": normalized_return_code,
-        "reason": normalized_reason,
-    }
+    return normalized_response
 
 
 def _build_llm_row(
@@ -611,9 +629,12 @@ def _build_llm_row(
         class_name=prepared.entry.class_name or "",
         function_name=prepared.entry.function_name,
         generated_signature=prepared.entry.generated_signature,
-        llm_parameter_code=parsed_response["parameter_code"],
-        llm_return_code=parsed_response["return_code"],
-        llm_reason=parsed_response["reason"],
+        llm_parameter_structure_code=parsed_response["parameter_structure_code"],
+        llm_parameter_structure_reason=parsed_response["parameter_structure_reason"],
+        llm_parameter_type_code=parsed_response["parameter_type_code"],
+        llm_parameter_type_reason=parsed_response["parameter_type_reason"],
+        llm_return_type_code=parsed_response["return_type_code"],
+        llm_return_type_reason=parsed_response["return_type_reason"],
         status=STATUS_OK,
         status_reason="",
         reference_kind=prepared.reference_kind,
