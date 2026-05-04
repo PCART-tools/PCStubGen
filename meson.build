@@ -22,6 +22,13 @@ py.extension_module(
   install : true,
 )
 
+py.extension_module(
+  '_pybind11_runtime',
+  ['pcstubgen/native/pybind11_runtime_module.cpp'],
+  subdir : 'pcstubgen/signature_completion/pybind11',
+  install : true,
+)
+
 install_subdir(
   'pcstubgen',
   install_dir : py.get_install_dir(pure : false),

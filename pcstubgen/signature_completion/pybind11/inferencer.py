@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from enum import Enum, auto
 
 from ...models import Argument, ArgumentKind, Signature
@@ -14,80 +13,30 @@ class _ArgsParseState(Enum):
     FINISHED = auto()
 
 
-def infer(
-    runtime_name: str,
-    doc: str | None,
-) -> list[Signature]:
-    """从 docstring 文本中解析签名，失败时抛出 RuntimeError。"""
-    if not doc:
-        raise RuntimeError("docstring为空或缺失，无法解析签名。")
+def parse_pybind11_signature(signature_text: str) -> Signature:
+    """解析一条 pybind11 `function_record::signature`。"""
+    text = signature_text.strip()
+    if not text.startswith("("):
+        raise RuntimeError("pybind11 单签名必须以 '(' 开始。")
 
-    doc_lines = doc.splitlines()
-    top_signature_regex = re.compile(
-        rf"^{re.escape(runtime_name)}\((?P<args>.*)\)\s*(->\s*(?P<returns>.+))?$"
+    closing_index = _find_closing_paren(text)
+    remainder = text[closing_index + 1 :].strip()
+    if not remainder.startswith("->"):
+        raise RuntimeError("pybind11 单签名缺少返回值箭头。")
+
+    return_text = remainder[2:].strip()
+    if not return_text:
+        raise RuntimeError("pybind11 单签名缺少返回值类型。")
+
+    args = parse_args_str(text[1:closing_index])
+    return Signature(
+        args=args,
+        return_type=RawType(return_text),
     )
-    match = top_signature_regex.match(doc_lines[0])
-    if match is None:
-        raise RuntimeError("docstring首行不是目标函数签名声明。")
-
-    if len(doc_lines) < 2 or doc_lines[1].strip() != "Overloaded function.":
-        try:
-            args = parse_args_str(match.group("args"))
-        except ValueError as ex:
-            raise RuntimeError(f"docstring签名参数解析失败: {ex}") from ex
-        returns_text = (match.group("returns") or "").strip('"').strip()
-        returns = RawType(returns_text) if returns_text else None
-        return [
-            Signature(
-                args=args,
-                return_type=returns,
-            )
-        ]
-
-    overload_signature_regex = re.compile(
-        rf"^(\s*(?P<overload_number>\d+).\s*)"
-        rf"{re.escape(runtime_name)}\((?P<args>.*)\)\s*->\s*(?P<returns>.+)$"
-    )
-
-    overloads: list[Signature] = []
-    expected_overload_number = 1
-
-    for line in doc_lines[2:]:
-        if not line.strip():
-            continue
-
-        match = overload_signature_regex.match(line)
-        if match is None:
-            continue
-
-        overload_number = int(match.group("overload_number"))
-        if overload_number != expected_overload_number:
-            raise RuntimeError(
-                f"重载签名序号不连续，期望 {expected_overload_number}，实际 {overload_number}。"
-            )
-
-        try:
-            args = parse_args_str(match.group("args"))
-        except ValueError as ex:
-            raise RuntimeError(
-                f"重载签名第{expected_overload_number}项参数解析失败: {ex}"
-            ) from ex
-        returns_text = match.group("returns").strip()
-        overloads.append(
-            Signature(
-                args=args,
-                return_type=RawType(returns_text) if returns_text else None,
-            )
-        )
-        expected_overload_number += 1
-
-    if not overloads:
-        raise RuntimeError("Overloaded function. 之后未找到有效重载签名。")
-
-    return overloads
 
 
 def parse_args_str(args_str: str) -> list[Argument]:
+    """解析 pybind11 单签名中的参数列表。"""
     split_args = _split_args_str(args_str)
 
     result: list[Argument] = []
@@ -162,6 +111,9 @@ def parse_args_str(args_str: str) -> list[Argument]:
             if not name:
                 raise ValueError("参数名不能为空。")
 
+            if annotation is None:
+                raise ValueError(f"普通参数缺少类型注解: {name}")
+
             if state is _ArgsParseState.KEYWORD_ONLY:
                 kind = ArgumentKind.KEYWORD_ONLY
             else:
@@ -191,51 +143,105 @@ def _split_args_str(args_str: str) -> list[tuple[str, Type | None, str | None]]:
         if not arg_block.strip():
             raise ValueError("参数列表中存在空参数块。")
 
-        name_and_default = _split_top_level(arg_block, "=")
-        if len(name_and_default) > 2:
+        if arg_block.strip() in {"/", "*"}:
+            result.append((arg_block.strip(), None, None))
+            continue
+
+        default_index = _find_top_level_char(arg_block, "=")
+        extra_default_index = (
+            _find_top_level_char(arg_block[default_index + 1 :], "=")
+            if default_index != -1
+            else -1
+        )
+        if extra_default_index != -1:
             raise ValueError("参数默认值声明中包含多个 '='。")
 
-        name_and_type = name_and_default[0]
-        default = name_and_default[1].strip() if len(name_and_default) == 2 else None
+        name_and_type = arg_block if default_index == -1 else arg_block[:default_index]
+        default = arg_block[default_index + 1 :].strip() if default_index != -1 else None
 
-        name, separator, annotation_text = name_and_type.partition(":")
-        annotation_text = annotation_text.strip()
-        type_ = RawType(annotation_text) if separator and annotation_text else None
-        result.append(
-            (
-                name.strip(),
-                type_,
-                default,
-            )
-        )
+        annotation_index = _find_top_level_char(name_and_type, ":")
+        if annotation_index == -1:
+            name = name_and_type.strip()
+            annotation = None
+        else:
+            name = name_and_type[:annotation_index].strip()
+            annotation_text = name_and_type[annotation_index + 1 :].strip()
+            if not annotation_text:
+                raise ValueError(f"参数类型注解为空: {name or name_and_type.strip()}")
+            annotation = RawType(annotation_text)
+
+        result.append((name, annotation, default))
 
     return result
+
+
+def _find_closing_paren(text: str) -> int:
+    """查找起始 '(' 对应的闭合位置。"""
+    stack = [")"]
+    index = 1
+
+    while index < len(text):
+        ch = text[index]
+        if ch in "\"'":
+            index = _find_str_end(text, index) + 1
+            continue
+
+        if ch == "(":
+            stack.append(")")
+        elif ch == ")":
+            if not stack:
+                raise RuntimeError("pybind11 单签名括号不匹配。")
+            stack.pop()
+            if not stack:
+                return index
+        elif ch == "[":
+            stack.append("]")
+        elif ch == "]":
+            _pop_expected(stack, "]")
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "}":
+            _pop_expected(stack, "}")
+        elif ch == "<":
+            stack.append(">")
+        elif ch == ">":
+            _pop_expected(stack, ">")
+        index += 1
+
+    raise RuntimeError("pybind11 单签名缺少闭合 ')'.")
 
 
 def _split_top_level(text: str, delim: str) -> list[str]:
     if len(delim) != 1:
         raise ValueError("delim must be a single character")
 
-    left_to_right = {"(": ")", "{": "}", "[": "]"}
-    rights = left_to_right.values()
-    stack: list[str] = []
     parts: list[str] = []
     start = 0
     index = 0
+    stack: list[str] = []
 
     while index < len(text):
         ch = text[index]
         if ch in "\"'":
-            str_end = _find_str_end(text, index)
-            index = str_end + 1
+            index = _find_str_end(text, index) + 1
             continue
 
-        if ch in left_to_right:
-            stack.append(left_to_right[ch])
-        elif ch in rights:
-            if not stack or ch != stack[-1]:
-                raise ValueError("括号不匹配。")
-            stack.pop()
+        if ch == "(":
+            stack.append(")")
+        elif ch == ")":
+            _pop_expected(stack, ")")
+        elif ch == "[":
+            stack.append("]")
+        elif ch == "]":
+            _pop_expected(stack, "]")
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "}":
+            _pop_expected(stack, "}")
+        elif ch == "<":
+            stack.append(">")
+        elif ch == ">":
+            _pop_expected(stack, ">")
         elif not stack and ch == delim:
             parts.append(text[start:index])
             start = index + 1
@@ -246,6 +252,48 @@ def _split_top_level(text: str, delim: str) -> list[str]:
 
     parts.append(text[start:])
     return parts
+
+
+def _find_top_level_char(text: str, target: str) -> int:
+    """查找最外层字符位置，找不到返回 -1。"""
+    index = 0
+    stack: list[str] = []
+
+    while index < len(text):
+        ch = text[index]
+        if ch in "\"'":
+            index = _find_str_end(text, index) + 1
+            continue
+
+        if ch == "(":
+            stack.append(")")
+        elif ch == ")":
+            _pop_expected(stack, ")")
+        elif ch == "[":
+            stack.append("]")
+        elif ch == "]":
+            _pop_expected(stack, "]")
+        elif ch == "{":
+            stack.append("}")
+        elif ch == "}":
+            _pop_expected(stack, "}")
+        elif ch == "<":
+            stack.append(">")
+        elif ch == ">":
+            _pop_expected(stack, ">")
+        elif not stack and ch == target:
+            return index
+        index += 1
+
+    if stack:
+        raise ValueError("存在未闭合的括号。")
+    return -1
+
+
+def _pop_expected(stack: list[str], expected: str) -> None:
+    if not stack or stack[-1] != expected:
+        raise ValueError("括号不匹配。")
+    stack.pop()
 
 
 def _find_str_end(text: str, start: int) -> int:

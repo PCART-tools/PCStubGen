@@ -54,6 +54,7 @@ class Signature:
 
     args: list[Argument] = field(default_factory=list)
     return_type: Type | None = None
+    comment: str | None = None
 
 
 @dataclass

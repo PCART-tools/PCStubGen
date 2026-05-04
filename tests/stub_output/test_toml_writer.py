@@ -92,6 +92,53 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
     }
 
 
+def test_toml_writer_prefers_signature_comment_over_function_comment(tmp_path) -> None:
+    module = Module(
+        full_name=QualifiedName.from_str("pkg.mod"),
+        functions=[
+            Function(
+                name="foo",
+                signatures=[
+                    _signature(
+                        args=[Argument(name="value", type=RawType.int_)],
+                        return_type=RawType.int_,
+                        comment="pybind11\n(value: int) -> int",
+                    ),
+                    _signature(
+                        args=[Argument(name="value", type=RawType.str_)],
+                        return_type=RawType.str_,
+                        comment="pybind11\n(value: str) -> str",
+                    ),
+                ],
+                comment="legacy function comment",
+            )
+        ],
+    )
+
+    TomlWriter().write(
+        module,
+        StubRenderer(include_docstrings=False),
+        to=tmp_path,
+    )
+
+    assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
+        "entries": [
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: int) -> int:",
+                "comment": "pybind11\n(value: int) -> int",
+            },
+            {
+                "module_name": "pkg.mod",
+                "function_name": "foo",
+                "signature": "def foo(value: str) -> str:",
+                "comment": "pybind11\n(value: str) -> str",
+            },
+        ]
+    }
+
+
 def test_toml_writer_rejects_function_without_exportable_signature(tmp_path) -> None:
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),

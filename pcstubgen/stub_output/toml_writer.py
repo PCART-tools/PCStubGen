@@ -106,7 +106,7 @@ def _build_entries(
                     signature=signature,
                 )
             ),
-            comment=func.comment,
+            comment=signature.comment or func.comment,
         )
         for signature in func.signatures
     ]

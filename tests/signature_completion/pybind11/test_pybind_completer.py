@@ -139,6 +139,12 @@ def test_pybind11_completer_get_returns_observable_result(
             "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
             lambda handle: handle is member and isinstance(member, staticmethod),
         )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.extract_pybind11_signatures",
+            lambda handle: ["(self: pkg.Sample, value: int) -> int"]
+            if expected_decorator is None
+            else ["(value: int) -> int"],
+        )
         result = completer.get(
             _make_context(member, func_name=func_name, owner_class=owner_class)
         )
@@ -146,6 +152,9 @@ def test_pybind11_completer_get_returns_observable_result(
     assert result.decorator == expected_decorator
     assert result.doc == expected_doc
     assert [arg.name for arg in result.signatures[0].args] == expected_args
+    assert result.signatures[0].comment is not None
+    assert "pybind11" in result.signatures[0].comment
+    assert expected_doc not in (result.comment or "")
 
 
 def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
@@ -166,6 +175,10 @@ def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
             "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
             lambda handle: False,
         )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.extract_pybind11_signatures",
+            lambda handle: ["(arg0: typing.SupportsInt) -> int"],
+        )
         result = completer.get(
             _make_context(member, func_name="exchange_device", owner_class=object)
         )
@@ -173,3 +186,72 @@ def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
     assert [arg.name for arg in result.signatures[0].args] == ["arg0"]
     assert result.signatures[0].return_type is not None
     assert result.signatures[0].return_type.render() == "int"
+
+
+def test_pybind11_completer_get_keeps_successful_overloads_when_one_parse_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completer = Pybind11Completer()
+    member = _make_pybind11_instance_method("build(self: pkg.Sample, value: int) -> int")
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_module_function",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_instance_method",
+            lambda handle: handle is member,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.extract_pybind11_signatures",
+            lambda handle: [
+                "(self: pkg.Sample, value: int) -> int",
+                "broken",
+                "(self: pkg.Sample, value: str) -> str",
+            ],
+        )
+        result = completer.get(
+            _make_context(member, func_name="build", owner_class=object)
+        )
+
+    assert [signature.return_type.render() for signature in result.signatures if signature.return_type is not None] == [
+        "int",
+        "str",
+    ]
+
+
+def test_pybind11_completer_get_does_not_parse_full_docstring(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    completer = Pybind11Completer()
+    member = _make_pybind11_instance_method(
+        "build(*args, **kwargs)\nOverloaded function.\n1. build(value: int) -> int"
+    )
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_module_function",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_instance_method",
+            lambda handle: handle is member,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.runtime.is_pybind11_static_method",
+            lambda handle: False,
+        )
+        monkeypatch.setattr(
+            "pcstubgen.signature_completion.pybind11.completer.extract_pybind11_signatures",
+            lambda handle: ["(value: int) -> int"],
+        )
+        result = completer.get(
+            _make_context(member, func_name="build", owner_class=object)
+        )
+
+    assert [arg.name for arg in result.signatures[0].args] == ["value"]

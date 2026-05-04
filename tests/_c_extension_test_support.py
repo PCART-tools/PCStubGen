@@ -26,11 +26,13 @@ def _signature(
     *,
     args: list[Argument] | None = None,
     return_type: Type | None = None,
+    comment: str | None = None,
 ) -> Signature:
     """构造测试用签名。"""
     return Signature(
         args=list(args or ()),
         return_type=return_type,
+        comment=comment,
     )
 
 

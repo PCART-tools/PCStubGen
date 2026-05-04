@@ -9,12 +9,13 @@ from ..completion_models import (
     SignatureCompletionContext,
     SignatureCompletionResult,
 )
-from .inferencer import infer
-from ...models import Decorator
+from .inferencer import parse_pybind11_signature
+from .runtime_introspection import extract_pybind11_signatures
+from ...models import Decorator, Signature
 
 
 class Pybind11Completer:
-    """从 pybind11 docstring 生产最终可导出的结果。"""
+    """从 pybind11 runtime overload chain 生产最终可导出的结果。"""
 
     @staticmethod
     def match(member: object, owner_class: type | None = None) -> bool:
@@ -30,14 +31,36 @@ class Pybind11Completer:
 
     def get(self, context: SignatureCompletionContext) -> SignatureCompletionResult:
         runtime_handle, decorator, doc = self._analyze_member(context.member)
-        signatures = infer(runtime_handle.__name__, doc)
-        comment = f"pybind11\n{doc}"
+        raw_signatures = extract_pybind11_signatures(runtime_handle)
+
+        signatures = self._parse_signatures(raw_signatures)
+        if not signatures:
+            raise RuntimeError("pybind11 单签名解析全部失败。")
+
         return SignatureCompletionResult(
             signatures=signatures,
             doc=doc,
             decorator=decorator,
-            comment=comment,
         )
+
+    def _parse_signatures(self, raw_signatures: list[str]) -> list[Signature]:
+        signatures: list[Signature] = []
+        for index, raw_signature in enumerate(raw_signatures, start=1):
+            try:
+                signature = parse_pybind11_signature(raw_signature)
+            except Exception as ex:
+                logger.warning(
+                    "pybind11 单签名解析失败, overload: {}, raw_signature: {!r}, reason: {!r}",
+                    index,
+                    raw_signature,
+                    ex,
+                )
+                continue
+
+            signature.comment = _build_signature_comment(raw_signature)
+            signatures.append(signature)
+
+        return signatures
 
     def _analyze_member(
         self,
@@ -69,3 +92,8 @@ def _is_internal_pybind11_member(member: object) -> bool:
     except Exception as ex:
         logger.exception(ex)
         return False
+
+
+def _build_signature_comment(raw_signature: str) -> str:
+    """为单条 pybind11 overload 构建调试注释。"""
+    return f"pybind11\n{raw_signature}"

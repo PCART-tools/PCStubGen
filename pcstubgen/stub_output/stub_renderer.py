@@ -266,6 +266,12 @@ class StubRenderer:
                     decorator=func.decorator,
                 )
             )
+        if func.comment is not None:
+            result.extend(
+                render_comment(
+                    comment_text=func.comment,
+                )
+            )
         return result
 
     def render_function(self, func: Function) -> list[str]:
@@ -315,4 +321,10 @@ class StubRenderer:
             body = ["..."]
 
         result.extend(indent_lines(body))
+        if signature.comment is not None:
+            result.extend(
+                render_comment(
+                    comment_text=signature.comment,
+                )
+            )
         return result
