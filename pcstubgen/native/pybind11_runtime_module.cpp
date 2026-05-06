@@ -9,9 +9,13 @@
 namespace {
 
 constexpr const char *pybind11_v2_capsule_name = "pybind11_function_record_capsule";
-constexpr const char *pybind11_v3_tp_name_prefix = "pybind11_detail_function_record_v1_";
-constexpr std::size_t pybind11_v3_tp_name_prefix_len
+constexpr const char *pybind11_v3_tp_plain_prefix = "pybind11_detail_function_record_v1_";
+constexpr std::size_t pybind11_v3_tp_plain_prefix_len
     = sizeof("pybind11_detail_function_record_v1_") - 1;
+constexpr const char *pybind11_v3_tp_qualified_prefix
+    = "pybind11_builtins.pybind11_detail_function_record_v1_";
+constexpr std::size_t pybind11_v3_tp_qualified_prefix_len
+    = sizeof("pybind11_builtins.pybind11_detail_function_record_v1_") - 1;
 constexpr int max_overloads = 256;
 
 struct function_call;
@@ -80,11 +84,17 @@ function_record *read_v3_function_record(PyObject *self) {
     if (type == nullptr || type->tp_name == nullptr) {
         return nullptr;
     }
-    if (std::strncmp(
-            type->tp_name,
-            pybind11_v3_tp_name_prefix,
-            pybind11_v3_tp_name_prefix_len)
-        != 0) {
+    const bool matches_plain = std::strncmp(
+                                   type->tp_name,
+                                   pybind11_v3_tp_plain_prefix,
+                                   pybind11_v3_tp_plain_prefix_len)
+                               == 0;
+    const bool matches_qualified = std::strncmp(
+                                       type->tp_name,
+                                       pybind11_v3_tp_qualified_prefix,
+                                       pybind11_v3_tp_qualified_prefix_len)
+                                   == 0;
+    if (!matches_plain && !matches_qualified) {
         return nullptr;
     }
 
@@ -102,6 +112,14 @@ function_record *read_function_record(PyObject *self) {
     }
 
     return nullptr;
+}
+
+PyObject *is_pybind11_self(PyObject *, PyObject *self) {
+    if (read_function_record(self) != nullptr) {
+        Py_RETURN_TRUE;
+    }
+
+    Py_RETURN_FALSE;
 }
 
 PyObject *extract_signatures(PyObject *, PyObject *obj) {
@@ -169,6 +187,12 @@ PyObject *extract_signatures(PyObject *, PyObject *obj) {
 }
 
 PyMethodDef methods[] = {
+    {
+        "is_pybind11_self",
+        reinterpret_cast<PyCFunction>(is_pybind11_self),
+        METH_O,
+        "判断 self 对象是否为 pybind11 function_record 运行时承载对象。",
+    },
     {
         "extract_signatures",
         reinterpret_cast<PyCFunction>(extract_signatures),

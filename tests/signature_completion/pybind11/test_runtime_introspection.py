@@ -48,3 +48,23 @@ def test_runtime_introspection_returns_native_result(
     assert runtime_introspection.extract_pybind11_signatures(object()) == [
         "(value: int) -> int"
     ]
+
+
+@pytest.mark.parametrize("self_obj", [object(), len.__self__])
+def test_runtime_introspection_identifies_non_pybind11_self_as_false(
+    self_obj: object,
+) -> None:
+    assert _pybind11_runtime.is_pybind11_self(self_obj) is False
+
+
+def test_runtime_introspection_supports_real_scipy_pybind11_function() -> None:
+    scipy = pytest.importorskip("scipy")
+    _ = scipy
+    pocketfft = pytest.importorskip("scipy.fft._pocketfft.pypocketfft")
+
+    assert _pybind11_runtime.is_pybind11_self(pocketfft.c2c.__self__) is True
+    signatures = runtime_introspection.extract_pybind11_signatures(pocketfft.c2c)
+
+    assert signatures
+    assert signatures[0].startswith("(")
+    assert "->" in signatures[0]

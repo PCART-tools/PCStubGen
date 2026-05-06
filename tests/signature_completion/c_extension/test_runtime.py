@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import builtins
+
 import pytest
 
 from pcstubgen import runtime as runtime_module
 from pcstubgen.signature_completion.c_extension.method_flags import (
     METH_CLASS,
     METH_O,
-    METH_STATIC,
 )
 
 
@@ -72,18 +73,23 @@ def test_runtime_recognizes_pybind11_handle_kinds(monkeypatch: pytest.MonkeyPatc
     pybind_record_type = type("pybind_record", (), {})
     pybind_record_type.__module__ = "pybind11_builtins"
 
+    fake_func_type = type("_FakeBuiltinFunction", (), {})
+    fake_func = fake_func_type()
+    fake_func.__self__ = pybind_record_type()
+
     fake_instance_method_type = type("instancemethod", (), {})
     fake_instance_method_type.__module__ = "builtins"
 
     fake_instance_method = fake_instance_method_type()
-    fake_instance_method.__self__ = pybind_record_type()
+    fake_instance_method.__func__ = fake_func
+    fake_instance_method.__self__ = object()
 
     fake_builtin = len
     fake_staticmethod = staticmethod(fake_builtin)
     monkeypatch.setattr(
         runtime_module,
-        "is_pybind11_bound",
-        lambda handle: handle is fake_builtin or handle is fake_instance_method,
+        "is_pybind11_module_function",
+        lambda handle: handle is fake_builtin or handle is fake_func,
     )
 
     assert runtime_module.is_pybind11_module_function(fake_builtin) is True
@@ -92,3 +98,58 @@ def test_runtime_recognizes_pybind11_handle_kinds(monkeypatch: pytest.MonkeyPatc
     assert runtime_module.is_pybind11_module_function(object()) is False
     assert runtime_module.is_pybind11_instance_method(object()) is False
     assert runtime_module.is_pybind11_static_method(object()) is False
+
+
+@pytest.mark.parametrize(
+    ("handle", "expected_self"),
+    [
+        (
+            len,
+            builtins,
+        ),
+    ],
+)
+def test_runtime_passes_builtin_self_object_to_pybind11_detector(
+    monkeypatch: pytest.MonkeyPatch,
+    handle: object,
+    expected_self: object,
+) -> None:
+    recorded: list[object] = []
+
+    monkeypatch.setattr(
+        runtime_module._pybind11_runtime,
+        "is_pybind11_self",
+        lambda self_obj: recorded.append(self_obj) or self_obj is expected_self,
+    )
+
+    assert runtime_module.is_pybind11_bound(handle) is True
+    assert recorded == [expected_self]
+
+
+def test_runtime_rejects_pybind11_bound_for_plain_object() -> None:
+    assert runtime_module.is_pybind11_bound(object()) is False
+
+
+def test_runtime_passes_inner_func_to_pybind11_detector_for_instance_method(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded: list[object] = []
+    handle = _make_fake_instance_method(inner_func=len, outer_self=object())
+
+    monkeypatch.setattr(
+        runtime_module,
+        "is_pybind11_module_function",
+        lambda builtin_handle: recorded.append(builtin_handle) or builtin_handle is len,
+    )
+
+    assert runtime_module.is_pybind11_instance_method(handle) is True
+    assert recorded == [len]
+
+
+def _make_fake_instance_method(*, inner_func: object, outer_self: object) -> object:
+    handle_type = type("instancemethod", (), {})
+    handle_type.__module__ = "builtins"
+    handle = handle_type()
+    handle.__func__ = inner_func
+    handle.__self__ = outer_self
+    return handle

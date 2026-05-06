@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import ctypes
+import importlib
 import types
+import typing
 from dataclasses import dataclass
+
+_pybind11_runtime = importlib.import_module(
+    "pcstubgen.signature_completion.pybind11._pybind11_runtime"
+)
 
 
 @dataclass(frozen=True)
@@ -63,7 +69,11 @@ def is_pybind11_module_function(handle: object) -> bool:
     return isinstance(handle, types.BuiltinFunctionType) and is_pybind11_bound(handle)
 
 def is_pybind11_instance_method(handle: object) -> bool:
-    return type(handle).__module__ == "builtins" and type(handle).__name__ == "instancemethod" and is_pybind11_bound(handle)
+    return (
+        type(handle).__module__ == "builtins"
+        and type(handle).__name__ == "instancemethod"
+        and is_pybind11_module_function(typing.cast(typing.Any, handle).__func__)
+    )
 
 def is_pybind11_static_method(handle: object) -> bool:
     return isinstance(handle, staticmethod) and is_pybind11_module_function(handle.__func__)
@@ -71,10 +81,9 @@ def is_pybind11_static_method(handle: object) -> bool:
 
 def is_pybind11_bound(handle: object) -> bool:
     """判断 builtin function 是否绑定到 pybind11 对象。"""
-    self_obj = getattr(handle, "__self__", None)
-    if self_obj is not None and type(self_obj).__module__ == "pybind11_builtins":
-        return True
-    return False
+    if not isinstance(handle, types.BuiltinFunctionType):
+        return False
+    return bool(_pybind11_runtime.is_pybind11_self(handle.__self__))
 
 
 def read_c_extension_function_runtime_info(handle: object) -> CExtensionFunctionRuntimeInfo:
