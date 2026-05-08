@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import json_repair
 import typer
 from openai import AsyncOpenAI
 from openai.types import ReasoningEffort
@@ -579,10 +580,8 @@ async def _request_completion(
 
 
 def _parse_llm_response(response_text: str) -> dict[str, str]:
-    """解析并校验模型返回的严格 JSON。"""
-    normalized_text = response_text.strip()
-
-    payload = json.loads(normalized_text)
+    """解析并校验模型返回的 JSON 响应。"""
+    payload = json_repair.loads(response_text)
     if not isinstance(payload, dict):
         raise RuntimeError("模型返回的 JSON 顶层不是对象。")
 
