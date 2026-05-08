@@ -1,8 +1,9 @@
-# PCStubGen - Generate Python Stubs from C Source Code
+# PCStubGen - Generate Python Stubs for C Extension APIs
 
 [中文](README.zh.md)
 
-PCStubGen supports Python C extensions by parsing C sources with libclang, and supports pybind11 extensions by parsing docstrings.
+- Supports extensions based on the Python/C API through libclang source AST analysis
+- Supports extensions based on pybind11 through signature string parsing
 
 ## Installation
 

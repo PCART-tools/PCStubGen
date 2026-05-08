@@ -1,8 +1,9 @@
-# PCStubGen - 从 C 源码生成 Python Stub
+# PCStubGen - 为 C 扩展 API 生成 Python Stub
 
 [English](README.md)
 
-PCStubGen 基于 libclang 解析 C 源码支持 Python C 扩展，基于 docstring 解析支持 pybind11 扩展。
+- 基于 libclang 源码 AST 分析支持基于 Python/C API 的扩展API
+- 基于签名字符串解析支持基于 pybind11 的扩展 API
 
 ## 安装
 
