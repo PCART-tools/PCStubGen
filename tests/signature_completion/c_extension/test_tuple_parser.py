@@ -61,14 +61,14 @@ def _parse(
     ).parse()
 
 
-def test_parse_returns_required_and_optional_scalars_with_trailer_and_separators() -> None:
+def test_parse_returns_required_and_optional_scalars_with_trailer() -> None:
     count_cursor = _cursor("count")
     payload_cursor = _cursor("payload")
     payload_len_cursor = _cursor("payload_len")
     maybe_cursor = _cursor("maybe")
 
     parsed = _parse(
-        " \ti, s# | z* :ignored",
+        "is#|z*:ignored",
         [count_cursor, payload_cursor, payload_len_cursor, maybe_cursor],
         infer_default_value_func=lambda cursor, expected_type: {maybe_cursor: "None"}[cursor],
     )
@@ -192,7 +192,7 @@ def test_parse_keeps_top_level_tuple_units_as_single_arguments() -> None:
         }[tuple(names)]
 
     parsed = _parse(
-        "(i), (s#, (O!y))",
+        "(i)(s#(O!y))",
         [one_cursor, text_cursor, text_len_cursor, type_cursor, value_cursor, buffer_cursor],
         infer_name_func=infer_name,
         infer_type_object_func=lambda cursor: {type_cursor: RawType("Point")}[cursor],
@@ -221,7 +221,7 @@ def test_parse_builds_tuple_default_values_from_leaf_defaults() -> None:
         }[cursor]
 
     parsed = _parse(
-        "|(i, (s#))",
+        "|(i(s#))",
         [count_cursor, label_cursor, label_len_cursor],
         infer_name_func=lambda c_args: "payload",
         infer_default_value_func=infer_default_value,
@@ -250,7 +250,7 @@ def test_parse_passes_leaf_type_to_tuple_default_inference() -> None:
         }[cursor]
 
     parsed = _parse(
-        "|(i, p)",
+        "|(ip)",
         [count_cursor, flag_cursor],
         infer_name_func=lambda c_args: "payload",
         infer_default_value_func=infer_default_value,
@@ -345,7 +345,7 @@ def test_parse_marks_tuple_default_as_unknown_when_any_leaf_default_inference_ra
         raise RuntimeError("boom")
 
     parsed = _parse(
-        "|(i, (s#))",
+        "|(i(s#))",
         [count_cursor, label_cursor, label_len_cursor],
         infer_name_func=lambda c_args: "payload",
         infer_default_value_func=infer_default_value,
@@ -373,11 +373,11 @@ def test_parse_marks_tuple_default_as_unknown_when_any_leaf_default_inference_ra
         ("(i", [_cursor("value")]),
         ("(())", []),
         ("i)", [_cursor("value")]),
-        ("(i, ())", [_cursor("value")]),
+        ("(i())", [_cursor("value")]),
         ("(i|i)", [_cursor("left"), _cursor("right")]),
         ("(i$i)", [_cursor("left"), _cursor("right")]),
         ("|()", []),
-        ("|(i, ())", [_cursor("value")]),
+        ("|(i())", [_cursor("value")]),
         ("[i]", [_cursor("value")]),
     ],
 )

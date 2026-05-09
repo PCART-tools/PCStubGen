@@ -132,7 +132,6 @@ class PyArgParseTupleTypeParser:
         in_optional_section = False
 
         while True:
-            self._skip_separators()
             current = self._peek_char()
 
             if current is None or current in ":;":
@@ -181,7 +180,6 @@ class PyArgParseTupleTypeParser:
         当前的结构而不是将叶子参数拍平。
         """
         self._consume_char("(")
-        self._skip_separators()
         current = self._peek_char()
         if current is None:
             raise PyArgParseTupleTypeParserError(
@@ -193,7 +191,6 @@ class PyArgParseTupleTypeParser:
         items: list[_ParsedValue] = []
         while True:
             items.append(self._parse_value())
-            self._skip_separators()
             current = self._peek_char()
 
             if current is None:
@@ -302,14 +299,6 @@ class PyArgParseTupleTypeParser:
             raise PyArgParseTupleTypeParserError(
                 f"期望在索引 {self._char_index - 1} 处找到 {expected!r}，实际为 {found}。"
             )
-
-    def _skip_separators(self) -> None:
-        """跳过格式串中的空白与逗号分隔符。"""
-        while True:
-            current = self._peek_char()
-            if current is None or current not in " \t,":
-                return
-            self._char_index += 1
 
     def _advance_c_args_required(self, count: int) -> tuple[Cursor, ...]:
         """消费指定数量的 C 参数槽位。"""

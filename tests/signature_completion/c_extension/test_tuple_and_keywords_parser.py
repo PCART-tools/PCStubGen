@@ -66,13 +66,13 @@ def test_parse_returns_required_optional_and_keyword_only_arguments() -> None:
 
 
 @pytest.mark.parametrize("trailer", [":func_name", ";custom message"])
-def test_parse_ignores_trailer_and_separators(trailer: str) -> None:
+def test_parse_ignores_trailer(trailer: str) -> None:
     count_cursor = _cursor("count")
     payload_cursor = _cursor("payload")
     payload_len_cursor = _cursor("payload_len")
 
     parsed = _parse(
-        f" \ti, s# {trailer}",
+        f"is#{trailer}",
         ["count", "payload"],
         [count_cursor, payload_cursor, payload_len_cursor],
     )

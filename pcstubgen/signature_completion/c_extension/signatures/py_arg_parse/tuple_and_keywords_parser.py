@@ -61,7 +61,6 @@ class PyArgParseTupleAndKeywordsTypeParser:
         section = _ArgumentSection.REQUIRED
 
         while True:
-            self._skip_separators()
             current = self._peek_char()
 
             if current is None or current in ":;":
@@ -178,14 +177,6 @@ class PyArgParseTupleAndKeywordsTypeParser:
             return None
         self._char_index += 1
         return current
-
-    def _skip_separators(self) -> None:
-        """跳过格式串中的空白与逗号分隔符。"""
-        while True:
-            current = self._peek_char()
-            if current is None or current not in " \t,":
-                return
-            self._char_index += 1
 
     def _advance_keyword_name_required(self) -> str:
         """消费一个 Python 关键字参数名。"""
