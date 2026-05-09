@@ -13,6 +13,7 @@ from .format_units import _FORMAT_UNIT_SPECS, _FormatUnitSpec
 from .....type_models import RawType, Type
 
 _InferDefaultValueFunc = Callable[[Cursor, Type], str]
+_InferNameFunc = Callable[[list[Cursor]], str]
 _InferRefinedObjectTypeFunc = Callable[[Cursor], Type]
 
 
@@ -34,6 +35,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
         fmt: str,
         kwlist: list[str],
         args: list[Cursor],
+        infer_name_func: _InferNameFunc,
         infer_type_object_func: Callable[[Cursor], Type],
         infer_converter_type_func: Callable[[Cursor], Type],
         infer_refined_object_type_func: _InferRefinedObjectTypeFunc,
@@ -43,10 +45,12 @@ class PyArgParseTupleAndKeywordsTypeParser:
         self._format = fmt
         self._kwlist = kwlist
         self._args = args
+        self._infer_name_func = infer_name_func
         self._infer_type_object_func = infer_type_object_func
         self._infer_converter_type_func = infer_converter_type_func
         self._infer_refined_object_type_func = infer_refined_object_type_func
         self._infer_default_value_func = infer_default_value_func
+        self._positional_only_count = self._count_positional_only_keywords()
         self._char_index = 0
         self._arg_index = 0
         self._python_arg_index = 0
@@ -80,6 +84,10 @@ class PyArgParseTupleAndKeywordsTypeParser:
                 continue
 
             if current == "$":
+                if self._python_arg_index < self._positional_only_count:
+                    raise PyArgParseTupleAndKeywordsTypeParserError(
+                        "format string 中在 positional-only 参数结束前出现了 '$'。"
+                    )
                 if section is _ArgumentSection.REQUIRED:
                     raise PyArgParseTupleAndKeywordsTypeParserError(
                         "format string 中在 '|' 之前出现了 '$'。"
@@ -99,6 +107,7 @@ class PyArgParseTupleAndKeywordsTypeParser:
 
     def _parse_argument(self, section: _ArgumentSection) -> Argument:
         """解析一个格式单元并产出单个 Python 参数。"""
+        keyword_index = self._python_arg_index
         name = self._advance_keyword_name_required()
         spec = self._advance_format_unit_required()
         c_args = self._advance_c_args_required(spec.c_arg_count)
@@ -118,9 +127,9 @@ class PyArgParseTupleAndKeywordsTypeParser:
                 arg_type,
             )
 
-        kind = ArgumentKind.POSITIONAL_OR_KEYWORD
-        if section is _ArgumentSection.KEYWORD_ONLY:
-            kind = ArgumentKind.KEYWORD_ONLY
+        if keyword_index < self._positional_only_count:
+            name = self._infer_name(c_args[spec.decl_ref_offset])
+        kind = self._infer_argument_kind(section, keyword_index)
 
         return Argument(
             name=name,
@@ -128,6 +137,34 @@ class PyArgParseTupleAndKeywordsTypeParser:
             default_value=default_value,
             kind=kind,
         )
+
+    def _count_positional_only_keywords(self) -> int:
+        """统计开头连续空 keyword 名，并拒绝非开头位置的空名。"""
+        count = 0
+        for keyword_name in self._kwlist:
+            if keyword_name != "":
+                break
+            count += 1
+
+        for keyword_name in self._kwlist[count:]:
+            if keyword_name == "":
+                raise PyArgParseTupleAndKeywordsTypeParserError(
+                    "空 keyword name 只能位于 kwlist 开头。"
+                )
+
+        return count
+
+    def _infer_argument_kind(
+        self,
+        section: _ArgumentSection,
+        keyword_index: int,
+    ) -> ArgumentKind:
+        """根据 kwlist 空名区和格式串 section 推断参数种类。"""
+        if keyword_index < self._positional_only_count:
+            return ArgumentKind.POSITIONAL_ONLY
+        if section is _ArgumentSection.KEYWORD_ONLY:
+            return ArgumentKind.KEYWORD_ONLY
+        return ArgumentKind.POSITIONAL_OR_KEYWORD
 
     def _validate_counts(self) -> None:
         """在解析结束后统一校验 Python 参数和 C 槽位计数。"""
@@ -188,6 +225,10 @@ class PyArgParseTupleAndKeywordsTypeParser:
         name = self._kwlist[self._python_arg_index]
         self._python_arg_index += 1
         return name
+
+    def _infer_name(self, cursor: Cursor) -> str:
+        """从 C 输出槽位变量推断空 keyword 名对应的 Python 参数名。"""
+        return self._infer_name_func([cursor])
 
     def _advance_c_args_required(self, count: int) -> list[Cursor]:
         """消费指定数量的 C 参数槽位。"""

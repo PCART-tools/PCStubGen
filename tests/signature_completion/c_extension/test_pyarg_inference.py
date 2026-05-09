@@ -118,6 +118,41 @@ def test_infer_argument_lists_maps_pyarg_p_unit_to_bool() -> None:
     assert inferred == [[_arg("flag", "bool", kind=ArgumentKind.POSITIONAL_ONLY)]]
 
 
+def test_infer_argument_lists_uses_empty_keyword_name_as_positional_only() -> None:
+    kwlist_decl = _var_decl(
+        "kwlist",
+        _init_list(
+            _string_literal(""),
+            _string_literal("nin"),
+            _string_literal("nout"),
+            _null_ptr_literal(),
+        ),
+    )
+    function_decl = _var_decl("function")
+    nin_decl = _var_decl("nin")
+    nout_decl = _var_decl("nout")
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTupleAndKeywords",
+            _identifier_node("args"),
+            _identifier_node("kwds"),
+            _string_literal("Oii"),
+            _token_identifier_node("kwlist", referenced=kwlist_decl),
+            _address_of("function", referenced=function_decl),
+            _address_of("nin", referenced=nin_decl),
+            _address_of("nout", referenced=nout_decl),
+        )
+    )
+
+    inferred = _infer_varargs_keywords_arguments(cursor)
+
+    assert inferred == [[
+        _arg("function", "object", kind=ArgumentKind.POSITIONAL_ONLY),
+        _arg("nin", "int"),
+        _arg("nout", "int"),
+    ]]
+
+
 def test_infer_argument_lists_refines_object_with_pytuple_check() -> None:
     value_decl = _var_decl("value")
     cursor = _fake_function_cursor_with_children(

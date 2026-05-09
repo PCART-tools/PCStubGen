@@ -22,6 +22,7 @@ def _parse(
     kwlist: list[str],
     args: list[Cursor],
     *,
+    infer_name_func=None,
     infer_type_object_func=None,
     infer_converter_type_func=None,
     infer_refined_object_type_func=None,
@@ -31,6 +32,7 @@ def _parse(
         format_string,
         kwlist,
         args,
+        infer_name_func=infer_name_func or (lambda cursors: "inferred_name"),
         infer_type_object_func=infer_type_object_func or (lambda cursor: RawType("ResolvedTypeObject")),
         infer_converter_type_func=infer_converter_type_func or (lambda cursor: RawType("ResolvedConverter")),
         infer_refined_object_type_func=infer_refined_object_type_func or (lambda cursor: RawType.object_),
@@ -138,6 +140,27 @@ def test_parse_allows_empty_optional_section_before_keyword_only_arguments() -> 
     ]
 
 
+def test_parse_infers_leading_empty_keyword_names_as_positional_only() -> None:
+    function_cursor = _cursor("function")
+    nin_cursor = _cursor("nin")
+    nout_cursor = _cursor("nout")
+    identity_cursor = _cursor("identity")
+
+    parsed = _parse(
+        "Oii|$O",
+        ["", "nin", "nout", "identity"],
+        [function_cursor, nin_cursor, nout_cursor, identity_cursor],
+        infer_name_func=lambda cursors: {function_cursor: "function"}[cursors[0]],
+    )
+
+    assert parsed == [
+        _arg("function", "object", kind=ArgumentKind.POSITIONAL_ONLY),
+        _arg("nin", "int"),
+        _arg("nout", "int"),
+        _arg("identity", "object", default_value="None", kind=ArgumentKind.KEYWORD_ONLY),
+    ]
+
+
 def test_parse_passes_p_unit_type_to_optional_and_keyword_only_default_inference() -> None:
     optional_cursor = _cursor("optional")
     keyword_only_cursor = _cursor("keyword_only")
@@ -170,6 +193,22 @@ def test_parse_passes_p_unit_type_to_optional_and_keyword_only_default_inference
         (optional_cursor, RawType.bool_),
         (keyword_only_cursor, RawType.bool_),
     ]
+
+
+@pytest.mark.parametrize(
+    ("format_string", "kwlist", "args"),
+    [
+        ("ii", ["value", ""], [_cursor("value"), _cursor("other")]),
+        ("O|$O", ["", ""], [_cursor("value"), _cursor("other")]),
+    ],
+)
+def test_parse_raises_for_invalid_empty_keyword_name_position(
+    format_string: str,
+    kwlist: list[str],
+    args: list[Cursor],
+) -> None:
+    with pytest.raises(PyArgParseTupleAndKeywordsTypeParserError):
+        _parse(format_string, kwlist, args)
 
 
 @pytest.mark.parametrize(

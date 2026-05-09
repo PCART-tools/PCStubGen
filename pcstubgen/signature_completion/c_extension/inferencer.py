@@ -243,6 +243,7 @@ class Inferencer:
             format_string,
             kwlist,
             args[4:],
+            infer_name_func=self._infer_argument_name,
             infer_type_object_func=self._infer_type_object_type_for_pyarg,
             infer_converter_type_func=self._infer_converter_type_for_pyarg,
             infer_refined_object_type_func=self._infer_refined_object_type_for_cursor,
