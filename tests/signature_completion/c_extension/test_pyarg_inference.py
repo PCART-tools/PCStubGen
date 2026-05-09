@@ -1114,15 +1114,15 @@ def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_err
             "numpy_converter_from_extent.c",
             "PyArg_ParseTuple(args, \"O&\", NI_ObjectToInputArray, &value);",
             "NI_ObjectToInputArray",
-            "numpy.ndarray",
-            {"numpy"},
+            "numpy.typing.ArrayLike",
+            {"numpy.typing"},
         ),
         (
             "tuple_converter_from_extent.c",
             "PyArg_ParseTuple(args, \"O&\", PyArray_IntpConverter, &value);",
             "PyArray_IntpConverter",
-            "int | tuple[int, ...]",
-            set(),
+            "typing.SupportsIndex | collections.abc.Sequence[typing.SupportsIndex]",
+            {"collections.abc", "typing"},
         ),
         (
             "dtype_like_converter_from_extent.c",
@@ -1135,12 +1135,19 @@ def test_infer_type_object_type_for_pyarg_propagates_extent_source_text_read_err
             "sequence_converter_from_extent.c",
             "PyArg_ParseTuple(args, \"O&\", NpyIter_GlobalFlagsConverter, &value);",
             "NpyIter_GlobalFlagsConverter",
-            "collections.abc.Sequence[str]",
-            {"collections.abc"},
+            "list[str | bytes] | tuple[str | bytes, ...] | None",
+            set(),
+        ),
+        (
+            "fs_converter_from_extent.c",
+            "PyArg_ParseTuple(args, \"O&\", PyUnicode_FSConverter, &value);",
+            "PyUnicode_FSConverter",
+            "str | bytes | os.PathLike[str] | os.PathLike[bytes]",
+            {"os"},
         ),
     ],
 )
-def test_infer_converter_type_for_pyarg_reads_representative_source_text_mappings(
+def test_infer_argument_lists_reads_representative_converter_source_text_mappings(
     tmp_path: Path,
     filename: str,
     statement: str,
@@ -1158,14 +1165,25 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
         ),
         encoding="utf-8",
     )
-    cursor = _identifier_node("converter")
-    cursor.extent = _extent_for_source_snippet(source, marker)
+    value_decl = _var_decl("value")
+    converter = _identifier_node("converter")
+    converter.extent = _extent_for_source_snippet(source, marker)
+    cursor = _fake_function_cursor_with_children(
+        _call_expr(
+            "PyArg_ParseTuple",
+            _identifier_node("args"),
+            _string_literal("O&"),
+            converter,
+            _address_of("value", referenced=value_decl),
+        )
+    )
 
-    inferred = signature_rules_module._infer_converter_type_for_pyarg(cursor)
+    inferred = _infer_varargs_arguments(cursor)
+    argument_type = inferred[0][0].type
 
-    assert inferred is not None
-    assert inferred.render() == expected
-    assert inferred.collect_imports() == imports
+    assert argument_type is not None
+    assert argument_type.render() == expected
+    assert argument_type.collect_imports() == imports
 
 
 @pytest.mark.parametrize(
@@ -1178,7 +1196,13 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
         ("PyArray_BoolConverter", RawType.bool_),
         (
             "PyArray_IntpConverter",
-            UnionType((RawType.int_, RawType("tuple[int, ...]"))),
+            UnionType((
+                RawType("typing.SupportsIndex", imports=("typing",)),
+                RawType(
+                    "collections.abc.Sequence[typing.SupportsIndex]",
+                    imports=("collections.abc", "typing"),
+                ),
+            )),
         ),
         (
             "PyArray_DescrConverter2",
@@ -1186,15 +1210,28 @@ def test_infer_converter_type_for_pyarg_reads_representative_source_text_mapping
         ),
         (
             "PyArray_CopyConverter",
-            UnionType((RawType.bool_, _typing_literal("False, True, 2"), RawType.none_)),
+            UnionType((RawType.bool_, RawType.none_)),
         ),
         (
             "NpyIter_GlobalFlagsConverter",
-            RawType("collections.abc.Sequence[str]", imports=("collections.abc",)),
+            UnionType((RawType("list[str | bytes]"), RawType("tuple[str | bytes, ...]"), RawType.none_)),
         ),
         (
             "PyArray_ClipmodeConverter",
-            UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType.int_)),
+            UnionType((_typing_literal('"clip", "wrap", "raise"'), RawType.int_, RawType.none_)),
+        ),
+        (
+            "PyArray_HolidaysConverter",
+            _numpy_typing_type("ArrayLike"),
+        ),
+        (
+            "PyUnicode_FSConverter",
+            UnionType((
+                RawType.str_,
+                RawType.bytes_,
+                RawType("os.PathLike[str]", imports=("os",)),
+                RawType("os.PathLike[bytes]", imports=("os",)),
+            )),
         ),
     ],
 )
@@ -1300,10 +1337,14 @@ def test_infer_argument_lists_maps_numpy_business_day_converters_for_keywords() 
             _typing_literal('"raise", "nat", "forward", "following", "backward", "preceding", "modifiedfollowing", "modifiedpreceding"'),
             default_value="...",
         ),
-        _arg("weekmask", _numpy_typing_type("ArrayLike"), default_value="..."),
+        _arg(
+            "weekmask",
+            UnionType((RawType.str_, RawType.bytes_, _numpy_typing_type("ArrayLike"))),
+            default_value="...",
+        ),
         _arg(
             "holidays",
-            UnionType((_numpy_typing_type("ArrayLike"), RawType.none_)),
+            _numpy_typing_type("ArrayLike"),
             default_value="...",
         ),
     ]]

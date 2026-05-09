@@ -20,13 +20,24 @@ _ARRAY_LIKE_OR_NONE_TYPE = UnionType((_ARRAY_LIKE_TYPE, RawType.none_))
 _BUSDAYCALENDAR_TYPE = RawType("numpy.busdaycalendar", imports=("numpy",))
 _UFUNC_TYPE = RawType("numpy.ufunc", imports=("numpy",))
 _LIST_TYPE = RawType("list")
+_SUPPORTS_INDEX_TYPE = RawType("typing.SupportsIndex", imports=("typing",))
+_SEQUENCE_SUPPORTS_INDEX_TYPE = RawType(
+    "collections.abc.Sequence[typing.SupportsIndex]",
+    imports=("collections.abc", "typing"),
+)
 _INT_OR_NONE_TYPE = UnionType((RawType.int_, RawType.none_))
 _BOOL_OR_NONE_TYPE = UnionType((RawType.bool_, RawType.none_))
-_INTP_OR_SHAPE_TYPE = UnionType((RawType.int_, RawType("tuple[int, ...]")))
-_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((RawType.int_, RawType("tuple[int, ...]"), RawType.none_))
-_SEQUENCE_STR_TYPE = RawType("collections.abc.Sequence[str]", imports=("collections.abc",))
+_INTP_OR_SHAPE_TYPE = UnionType((_SUPPORTS_INDEX_TYPE, _SEQUENCE_SUPPORTS_INDEX_TYPE))
+_INTP_OR_SHAPE_OR_NONE_TYPE = UnionType((_SUPPORTS_INDEX_TYPE, _SEQUENCE_SUPPORTS_INDEX_TYPE, RawType.none_))
+_ITER_GLOBAL_FLAGS_TYPE = UnionType(
+    (
+        RawType("list[str | bytes]"),
+        RawType("tuple[str | bytes, ...]"),
+        RawType.none_,
+    )
+)
 _ORDER_TYPE = RawType(
-    'typing.Literal["K", "A", "C", "F"]',
+    'typing.Literal["K", "A", "C", "F", "k", "a", "c", "f"]',
     imports=("typing",),
 )
 _ORDER_OR_NONE_TYPE = UnionType((_ORDER_TYPE, RawType.none_))
@@ -54,22 +65,18 @@ _SORTKIND_TYPE = RawType(
     'typing.Literal["Q", "quick", "quicksort", "M", "merge", "mergesort", "H", "heap", "heapsort", "S", "stable", "stablesort"]',
     imports=("typing",),
 )
+_SORTKIND_OR_NONE_TYPE = UnionType((_SORTKIND_TYPE, RawType.none_))
 _CLIPMODE_STRING_TYPE = RawType(
     'typing.Literal["clip", "wrap", "raise"]',
     imports=("typing",),
 )
-_CLIPMODE_TYPE = UnionType((_CLIPMODE_STRING_TYPE, RawType.int_))
+_CLIPMODE_TYPE = UnionType((_CLIPMODE_STRING_TYPE, RawType.int_, RawType.none_))
 _CORRELATEMODE_TYPE = RawType(
     'typing.Literal["valid", "same", "full"]',
     imports=("typing",),
 )
-_COPY_MODE_TYPE = UnionType(
-    (
-        RawType.bool_,
-        RawType('typing.Literal[False, True, 2]', imports=("typing",)),
-        RawType.none_,
-    )
-)
+_CORRELATEMODE_OR_INT_TYPE = UnionType((_CORRELATEMODE_TYPE, RawType.int_))
+_COPY_MODE_TYPE = UnionType((RawType.bool_, RawType.none_))
 _DEVICE_TYPE = RawType('typing.Literal["cpu"] | None', imports=("typing",))
 _ERRMODE_TYPE = RawType(
     'typing.Literal["ignore", "warn", "raise", "call", "print", "log"] | None',
@@ -89,6 +96,7 @@ _BUSDAY_ROLL_TYPE = RawType(
 )
 _DLPACK_DEVICE_TYPE = RawType("tuple[int, int] | None")
 _STR_OR_NONE_TYPE = UnionType((RawType.str_, RawType.none_))
+_WEEKMASK_TYPE = UnionType((RawType.str_, RawType.bytes_, _ARRAY_LIKE_TYPE))
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_Type": _NDARRAY_TYPE,
@@ -99,13 +107,13 @@ PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
 }
 
 PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
-    "NI_ObjectToInputArray": _NDARRAY_TYPE,
-    "NI_ObjectToOutputArray": _NDARRAY_TYPE,
-    "NI_ObjectToInputOutputArray": _NDARRAY_TYPE,
-    "NI_ObjectToOptionalInputArray": _NDARRAY_OR_NONE_TYPE,
-    "NI_ObjectToOptionalOutputArray": _NDARRAY_OR_NONE_TYPE,
+    "NI_ObjectToInputArray": _ARRAY_LIKE_TYPE,
+    "NI_ObjectToOutputArray": _ARRAY_LIKE_TYPE,
+    "NI_ObjectToInputOutputArray": _ARRAY_LIKE_TYPE,
+    "NI_ObjectToOptionalInputArray": _ARRAY_LIKE_OR_NONE_TYPE,
+    "NI_ObjectToOptionalOutputArray": _ARRAY_LIKE_OR_NONE_TYPE,
     "PyArray_IntpConverter": _INTP_OR_SHAPE_TYPE,
-    "PyArray_IntpFromPyIntConverter": RawType.int_,
+    "PyArray_IntpFromPyIntConverter": _SUPPORTS_INDEX_TYPE,
     "PyArray_OptionalIntpConverter": _INTP_OR_SHAPE_OR_NONE_TYPE,
     "PyArray_OutputConverter": _NDARRAY_OR_NONE_TYPE,
     "PyArray_Converter": _ARRAY_LIKE_TYPE,
@@ -118,23 +126,23 @@ PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
     "PyArray_CastingConverterSameValue": _CASTING_WITH_SAME_VALUE_TYPE,
     "PyArray_SearchsideConverter": _SEARCHSIDE_TYPE,
     "PyArray_SelectkindConverter": _SELECTKIND_TYPE,
-    "PyArray_SortkindConverter": _SORTKIND_TYPE,
+    "PyArray_SortkindConverter": _SORTKIND_OR_NONE_TYPE,
     "PyArray_ClipmodeConverter": _CLIPMODE_TYPE,
-    "PyArray_CorrelatemodeConverter": _CORRELATEMODE_TYPE,
+    "PyArray_CorrelatemodeConverter": _CORRELATEMODE_OR_INT_TYPE,
     "PyArray_CopyConverter": _COPY_MODE_TYPE,
     "PyArray_AsTypeCopyConverter": RawType.bool_,
     "PyArray_DeviceConverterOptional": _DEVICE_TYPE,
-    "PyArray_PythonPyIntFromInt": RawType.int_,
+    "PyArray_PythonPyIntFromInt": _SUPPORTS_INDEX_TYPE,
     "PyArray_DTypeOrDescrConverterRequired": _DTYPE_LIKE_TYPE,
     "PyArray_DTypeOrDescrConverterOptional": _DTYPE_LIKE_OR_NONE_TYPE,
     "PyArray_DescrConverter": _DTYPE_LIKE_TYPE,
     "PyArray_DescrConverter2": _DTYPE_LIKE_OR_NONE_TYPE,
-    "PyArray_WeekMaskConverter": _ARRAY_LIKE_TYPE,
-    "PyArray_HolidaysConverter": _ARRAY_LIKE_OR_NONE_TYPE,
+    "PyArray_WeekMaskConverter": _WEEKMASK_TYPE,
+    "PyArray_HolidaysConverter": _ARRAY_LIKE_TYPE,
     "PyArray_BusDayRollConverter": _BUSDAY_ROLL_TYPE,
     "device_converter": _DLPACK_DEVICE_TYPE,
     "parse_control_character": _STR_OR_NONE_TYPE,
-    "NpyIter_GlobalFlagsConverter": _SEQUENCE_STR_TYPE,
+    "NpyIter_GlobalFlagsConverter": _ITER_GLOBAL_FLAGS_TYPE,
     "errmodeconverter": _ERRMODE_TYPE,
     "trimmode_converter": _TRIMMODE_TYPE,
     "pyscalar_mode_conv": _PYSCALAR_MODE_TYPE,

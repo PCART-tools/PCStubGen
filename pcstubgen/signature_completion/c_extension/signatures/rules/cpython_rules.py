@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from .....type_models import AnyType, DictType, ListType, RawType, Type, UnionType
 
+_FS_PATH_TYPE = UnionType(
+    (
+        RawType.str_,
+        RawType.bytes_,
+        RawType("os.PathLike[str]", imports=("os",)),
+        RawType("os.PathLike[bytes]", imports=("os",)),
+    )
+)
 
 PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyList_Type": RawType("list"),
@@ -23,7 +31,10 @@ PY_ARG_PARSE_TYPE_OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "PyDateTimeAPI->DeltaType": RawType("datetime.timedelta", imports=("datetime",)),
 }
 
-PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {}
+PY_ARG_PARSE_CONVERTER_NAME_TO_TYPE: dict[str, Type] = {
+    "PyUnicode_FSConverter": _FS_PATH_TYPE,
+    "PyUnicode_FSDecoder": _FS_PATH_TYPE,
+}
 
 OBJECT_NAME_TO_TYPE: dict[str, Type] = {
     "_Py_NoneStruct": RawType.none_,

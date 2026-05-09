@@ -614,7 +614,16 @@ def test_infer_signature_uses_npy_parse_arguments_with_macro_expanded_cache(
     assert inferred == [
         Signature(
             args=[
-                _arg("shape", UnionType((RawType.int_, RawType("tuple[int, ...]")))),
+                _arg(
+                    "shape",
+                    UnionType((
+                        RawType("typing.SupportsIndex", imports=("typing",)),
+                        RawType(
+                            "collections.abc.Sequence[typing.SupportsIndex]",
+                            imports=("collections.abc", "typing"),
+                        ),
+                    )),
+                ),
                 _arg("order", "bool", default_value="False"),
             ],
             return_type=RawType.int_,
@@ -792,10 +801,17 @@ def test_infer_signature_maps_numpy_array_like_dtype_and_copy_converters() -> No
                     UnionType((RawType("numpy.typing.DTypeLike", imports=("numpy.typing",)), RawType.none_)),
                     default_value="...",
                 ),
-                _arg("subok", "int", default_value="0"),
+                _arg("subok", RawType("typing.SupportsIndex", imports=("typing",)), default_value="0"),
                 _arg(
                     "shape",
-                    UnionType((RawType.int_, RawType("tuple[int, ...]"), RawType.none_)),
+                    UnionType((
+                        RawType("typing.SupportsIndex", imports=("typing",)),
+                        RawType(
+                            "collections.abc.Sequence[typing.SupportsIndex]",
+                            imports=("collections.abc", "typing"),
+                        ),
+                        RawType.none_,
+                    )),
                     default_value="...",
                 ),
                 _arg(
@@ -852,12 +868,22 @@ def test_infer_signature_maps_numpy_copy_converter_and_int_defaults() -> None:
             args=[
                 _arg(
                     "copy",
-                    UnionType((RawType.bool_, RawType('typing.Literal[False, True, 2]', imports=("typing",)), RawType.none_)),
+                    UnionType((RawType.bool_, RawType.none_)),
                     default_value="...",
                     kind=ArgumentKind.KEYWORD_ONLY,
                 ),
-                _arg("ndmin", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
-                _arg("ndmax", "int", default_value="...", kind=ArgumentKind.KEYWORD_ONLY),
+                _arg(
+                    "ndmin",
+                    RawType("typing.SupportsIndex", imports=("typing",)),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
+                _arg(
+                    "ndmax",
+                    RawType("typing.SupportsIndex", imports=("typing",)),
+                    default_value="...",
+                    kind=ArgumentKind.KEYWORD_ONLY,
+                ),
             ],
             return_type=RawType.int_,
         )
@@ -921,10 +947,18 @@ def test_infer_signature_maps_numpy_business_day_converters(
                     ),
                     default_value="...",
                 ),
-                _arg("weekmask", RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), default_value="..."),
+                _arg(
+                    "weekmask",
+                    UnionType((
+                        RawType.str_,
+                        RawType.bytes_,
+                        RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)),
+                    )),
+                    default_value="...",
+                ),
                 _arg(
                     "holidays",
-                    UnionType((RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)), RawType.none_)),
+                    RawType("numpy.typing.ArrayLike", imports=("numpy.typing",)),
                     default_value="...",
                 ),
             ],
@@ -1235,7 +1269,7 @@ def test_infer_signature_keeps_npy_parse_keyword_arguments_with_unrelated_array_
                 _arg(
                     "order",
                     UnionType((
-                        RawType('typing.Literal["K", "A", "C", "F"]', imports=("typing",)),
+                        RawType('typing.Literal["K", "A", "C", "F", "k", "a", "c", "f"]', imports=("typing",)),
                         RawType.none_,
                     )),
                     default_value="...",
