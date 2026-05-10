@@ -101,6 +101,23 @@ def test_parse_pybind11_signature_supports_var_args_and_var_kwargs() -> None:
     ]
 
 
+def test_parse_pybind11_signature_extracts_outer_signature_with_arrow_in_default() -> None:
+    parsed = parse_pybind11_signature(
+        '(text: str = ") -> inside", value: tuple[int, int] = (1, 2)) -> str'
+    )
+
+    assert [arg.name for arg in parsed.args] == ["text", "value"]
+    assert [_render_type(arg.type) for arg in parsed.args] == [
+        "str",
+        "tuple[int, int]",
+    ]
+    assert [arg.default_value for arg in parsed.args] == [
+        '") -> inside"',
+        "(1, 2)",
+    ]
+    assert _render_type(parsed.return_type) == "str"
+
+
 def test_parse_args_str_supports_angle_brackets() -> None:
     parsed = parse_args_str(
         "value: std::vector<int>, mapping: dict[str, std::pair<int, int>]"
@@ -113,7 +130,7 @@ def test_parse_args_str_supports_angle_brackets() -> None:
 
 
 def test_parse_pybind11_signature_rejects_full_docstring_format() -> None:
-    with pytest.raises(RuntimeError, match="必须以 '\\(' 开始"):
+    with pytest.raises(ValueError, match="pybind11 单签名格式非法"):
         parse_pybind11_signature(
             "foo(*args, **kwargs)\nOverloaded function.\n1. foo(value: int) -> int"
         )
@@ -125,5 +142,10 @@ def test_parse_pybind11_signature_rejects_missing_annotation_for_normal_argument
 
 
 def test_parse_pybind11_signature_rejects_missing_return_arrow() -> None:
-    with pytest.raises(RuntimeError, match="缺少返回值箭头"):
+    with pytest.raises(ValueError, match="pybind11 单签名格式非法"):
         parse_pybind11_signature("(value: int)")
+
+
+def test_parse_pybind11_signature_rejects_missing_return_type() -> None:
+    with pytest.raises(ValueError, match="pybind11 单签名格式非法"):
+        parse_pybind11_signature("(value: int) ->")

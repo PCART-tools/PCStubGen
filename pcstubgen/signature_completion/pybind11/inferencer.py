@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import re
 from enum import Enum, auto
 
 from ...models import Argument, ArgumentKind, Signature
 from ...type_models import RawType, Type
+
+_PYBIND11_SIGNATURE_RE = re.compile(
+    r"^\((?P<args>.*)\)\s*->\s*(?P<return_type>.+)$",
+    re.DOTALL,
+)
 
 
 class _ArgsParseState(Enum):
@@ -15,24 +21,21 @@ class _ArgsParseState(Enum):
 
 def parse_pybind11_signature(signature_text: str) -> Signature:
     """解析一条 pybind11 `function_record::signature`。"""
-    text = signature_text.strip()
-    if not text.startswith("("):
-        raise RuntimeError("pybind11 单签名必须以 '(' 开始。")
-
-    closing_index = _find_closing_paren(text)
-    remainder = text[closing_index + 1 :].strip()
-    if not remainder.startswith("->"):
-        raise RuntimeError("pybind11 单签名缺少返回值箭头。")
-
-    return_text = remainder[2:].strip()
-    if not return_text:
-        raise RuntimeError("pybind11 单签名缺少返回值类型。")
-
-    args = parse_args_str(text[1:closing_index])
+    args_text, return_text = _extract_signature_outer(signature_text)
+    args = parse_args_str(args_text)
     return Signature(
         args=args,
         return_type=RawType(return_text),
     )
+
+
+def _extract_signature_outer(text: str) -> tuple[str, str]:
+    """提取 pybind11 单签名最外层参数列表和返回值类型文本。"""
+    match = _PYBIND11_SIGNATURE_RE.fullmatch(text.strip())
+    if match is None:
+        raise ValueError("pybind11 单签名格式非法。")
+
+    return match.group("args"), match.group("return_type").strip()
 
 
 def parse_args_str(args_str: str) -> list[Argument]:
@@ -173,43 +176,6 @@ def _split_args_str(args_str: str) -> list[tuple[str, Type | None, str | None]]:
         result.append((name, annotation, default))
 
     return result
-
-
-def _find_closing_paren(text: str) -> int:
-    """查找起始 '(' 对应的闭合位置。"""
-    stack = [")"]
-    index = 1
-
-    while index < len(text):
-        ch = text[index]
-        if ch in "\"'":
-            index = _find_str_end(text, index) + 1
-            continue
-
-        if ch == "(":
-            stack.append(")")
-        elif ch == ")":
-            if not stack:
-                raise RuntimeError("pybind11 单签名括号不匹配。")
-            stack.pop()
-            if not stack:
-                return index
-        elif ch == "[":
-            stack.append("]")
-        elif ch == "]":
-            _pop_expected(stack, "]")
-        elif ch == "{":
-            stack.append("}")
-        elif ch == "}":
-            _pop_expected(stack, "}")
-        elif ch == "<":
-            stack.append(">")
-        elif ch == ">":
-            _pop_expected(stack, ">")
-        index += 1
-
-    raise RuntimeError("pybind11 单签名缺少闭合 ')'.")
-
 
 def _split_top_level(text: str, delim: str) -> list[str]:
     if len(delim) != 1:
