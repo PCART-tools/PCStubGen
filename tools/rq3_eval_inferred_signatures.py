@@ -48,6 +48,7 @@ EXTRA_BODY = {"thinking": {"type": "enabled"}}
 DEFAULT_CONCURRENCY = 32
 DEFAULT_MAX_ATTEMPTS = 4
 EXIT_ERROR = 1
+ARG_RST_PATH = Path(__file__).with_name("arg.rst")
 
 VALID_LLM_RESULT_CODES = {
     "qualified",
@@ -577,9 +578,22 @@ def _build_status_row(
     )
 
 
+_ARG_RST_DOCUMENT: str | None = None
+
+
+def _load_arg_rst_document() -> str:
+    """读取并缓存 `arg.rst` 全文，用于构造评估提示词。"""
+    global _ARG_RST_DOCUMENT
+
+    if _ARG_RST_DOCUMENT is None:
+        _ARG_RST_DOCUMENT = ARG_RST_PATH.read_text(encoding="utf-8")
+    return _ARG_RST_DOCUMENT
+
+
 def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageParam]:
     """为单条签名评估组装 DeepSeek 对话消息。"""
     entry = prepared.entry
+    arg_rst_document = _load_arg_rst_document()
     if prepared.reference_kind == "manual_stub":
         reference_instructions = (
             "参考材料是人工维护 stub 提取出的可信参考签名列表，属于高优先级事实依据。"
@@ -594,6 +608,8 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
     system_prompt = (
         "你是 Python Stub 函数签名评估专家。"
         "请分别判断一条从扩展API签名推断来源推断出的 Python 层函数签名的参数结构、参数类型与返回类型，是否符合函数在Python层的真实语义。"
+        "推断的签名面向的Python版本为3.12+。"
+        "按语义一致判断，不要求字面完全一致。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
         'JSON 结构固定为 {"parameter_structure_code": "...", "parameter_structure_reason": "...", '
         '"parameter_type_code": "...", "parameter_type_reason": "...", '
@@ -604,14 +620,16 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         "当参考材料不足以确定真实语义时，可以结合你已知的该模块、类、函数的 API 语义补充判断。"
         "如果结合参考材料与已有知识后，仍无法较有把握地确定真实语义，就输出 uncertain，不要强行判 qualified 或 unqualified。"
         "如果某一维度输出 uncertain，对应的 *_reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
-        "要评估的推断签名为单条，参考材料可能包含多条重载语义。"
-        "若可判定为 qualified，则三个维度都必须能对应到同一条真实语义或同一条参考签名。"
-        "按语义一致判断，不要求字面完全一致。"
-        "理解 PyArg_ParseTuple 或 PyArg_ParseTupleAndKeywords 的格式串时，参考以下 Python 官方文档原文："
-        "(items) (tuple) [matching-items] "
-        "对象必须是 Python 序列，它的长度是 items 中格式单元的数量。"
-        "C 参数必须对应 items 中每一个独立的格式单元。"
-        "序列中的格式单元可能有嵌套。"
+        "参考材料可能包含多条重载语义，我们每次只会提供其中的一条推断签名进行评估，请不要因为单条签名无法同时表示多条重载语义而判不合格。"
+        "若可判定为 qualified，则三个维度都必须能对应到同一条真实语义。"
+        "若参考材料中的 C 扩展函数通过多个互斥分支分别调用 PyArg_ParseTuple、PyArg_ParseTupleAndKeywords，"
+        "应将这些分支视为多条签名重载。"
+        "PyArg_ParseTuple、PyArg_ParseTupleAndKeywords 格式字符串中的(...)应该被视为一个元组，而不是多个独立参数，"
+        "例如\"D(ff)\"推断解析要求参数类型为complex和tuple[float, float]。"
+        "对 Py_BuildValue 格式字符串，顶层有0个单元，得到None，顶层有1个单元，得到该单元，顶层有2个或更多单元，得到顶层单元组成的外层tuple，"
+        "例如\"(ii)d\"推断得到对象的类型为tuple[tuple[int, int], float]。"
+        "理解 PyArg_ParseTuple、 PyArg_ParseTupleAndKeywords、Py_BuildValue 时，参考以下 Python 3.12.13 官方文档 `arg.rst` 全文：\n\n"
+        f"{arg_rst_document}"
     )
 
     user_prompt = (
