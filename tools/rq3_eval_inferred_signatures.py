@@ -1,9 +1,13 @@
 """
 工具：批量评估新版函数层 TOML 中的推断签名是否合格。
 
+说明:
+    抽样结果主要用于人工抽检与成本控制，不应直接替代现有全量 RQ3 汇总口径。
+
 示例:
     uv run python tools/rq3_eval_inferred_signatures.py out/pcstubgen/psycopg2.toml
     uv run python tools/rq3_eval_inferred_signatures.py out/pcstubgen/psycopg2.toml --manual-stub-root ./stubs
+    uv run python tools/rq3_eval_inferred_signatures.py out/pcstubgen/psycopg2.toml --sample-size 200 --sample-seed 0
 """
 
 from __future__ import annotations
@@ -13,6 +17,7 @@ import asyncio
 import csv
 import json
 import os
+import random
 import tomllib
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -50,6 +55,7 @@ RESPONSE_FORMAT_JSON_OBJECT: ResponseFormatJSONObject = {"type": "json_object"}
 EXTRA_BODY = {"thinking": {"type": "enabled"}}
 DEFAULT_CONCURRENCY = 32
 DEFAULT_MAX_ATTEMPTS = 4
+DEFAULT_SAMPLE_SEED = 0
 EXIT_ERROR = 1
 ARG_RST_PATH = Path(__file__).with_name("arg.rst")
 
@@ -371,6 +377,21 @@ def _load_inferred_signatures(path: Path) -> list[InferredSignatureEntry]:
             )
 
     return result
+
+
+def _sample_inferred_signatures(
+    entries: list[InferredSignatureEntry],
+    *,
+    sample_size: int | None,
+    sample_seed: int,
+) -> list[InferredSignatureEntry]:
+    """按签名条目做无放回抽样，并保持输出顺序稳定。"""
+    if sample_size is None or sample_size >= len(entries):
+        return entries
+
+    generator = random.Random(sample_seed)
+    sampled_indexes = sorted(generator.sample(range(len(entries)), k=sample_size))
+    return [entries[index] for index in sampled_indexes]
 
 
 def _parse_generated_function(index: int, raw_function: object) -> GeneratedFunctionEntry:
@@ -895,21 +916,49 @@ def _override_failed_dimensions(
     return row
 
 
+def _build_output_csv_path(
+    generated_toml: Path,
+    *,
+    sample_size: int | None,
+    timestamp: str,
+) -> Path:
+    """构造输出 CSV 路径。"""
+    sample_suffix = f"_sample{sample_size}" if sample_size is not None else ""
+    return generated_toml.parent / f"{generated_toml.stem}_eval{sample_suffix}_{timestamp}.csv"
+
+
 def run(
     generated_toml: Path,
     *,
     manual_stub_root: Path | None,
     concurrency: int,
+    sample_size: int | None,
+    sample_seed: int,
 ) -> int:
     """执行完整的签名评估批处理流程。"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_csv = generated_toml.parent / f"{generated_toml.stem}_eval_{timestamp}.csv"
+    output_csv = _build_output_csv_path(
+        generated_toml,
+        sample_size=sample_size,
+        timestamp=timestamp,
+    )
     if output_csv.exists():
         raise RuntimeError(f"输出 CSV 已存在: {output_csv}")
 
-    entries = _load_inferred_signatures(generated_toml)
+    total_entries = _load_inferred_signatures(generated_toml)
+    entries = _sample_inferred_signatures(
+        total_entries,
+        sample_size=sample_size,
+        sample_seed=sample_seed,
+    )
     typer.echo(f"读取 TOML: {generated_toml}")
-    typer.echo(f"- 推断签名条数: {len(entries)}")
+    typer.echo(f"- 推断签名总条数: {len(total_entries)}")
+    if sample_size is None:
+        typer.echo("- 抽样: 未启用，使用全量签名")
+    else:
+        typer.echo(
+            f"- 抽样: 已启用, 请求条数={sample_size}, 实际条数={len(entries)}, seed={sample_seed}"
+        )
     pending, immediate_rows = _prepare_evaluations(entries, manual_stub_root)
     typer.echo(f"- 直接产出本地结果的条数: {len(immediate_rows)}")
     typer.echo(f"- 进入 LLM 评估的条数: {len(pending)}")
@@ -963,12 +1012,25 @@ def command(
         min=1,
         help="并发请求数。",
     ),
+    sample_size: int | None = typer.Option(
+        None,
+        "--sample-size",
+        min=1,
+        help="按签名条目抽样评估的样本量；未传则评估全部签名。",
+    ),
+    sample_seed: int = typer.Option(
+        DEFAULT_SAMPLE_SEED,
+        "--sample-seed",
+        help="签名条目抽样使用的随机种子；仅在设置 --sample-size 时生效。",
+    ),
 ) -> None:
     """Typer 命令入口。"""
     exit_code = run(
         generated_toml=generated_toml,
         manual_stub_root=manual_stub_root,
         concurrency=concurrency,
+        sample_size=sample_size,
+        sample_seed=sample_seed,
     )
     if exit_code != 0:
         raise typer.Exit(code=exit_code)
