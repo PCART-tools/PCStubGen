@@ -70,7 +70,7 @@ class Inferencer:
         ]
 
     def run(self) -> list[Signature]:
-        """汇合参数推断与返回值推断结果，直接生成签名。"""
+        """汇合参数推断与返回值推断结果，直接推断签名。"""
         return_type = self._infer_return_type()
         arguments_list = self._infer_arguments_list()
         for args in arguments_list:

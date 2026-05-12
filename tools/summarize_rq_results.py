@@ -179,7 +179,7 @@ def command(
         file_okay=True,
         dir_okay=False,
         readable=True,
-        help="由 tools/rq3_eval_generated_signatures.py 生成的 CSV 评估结果。",
+        help="由 tools/rq3_eval_inferred_signatures.py 生成的 CSV 评估结果。",
     ),
 ) -> None:
     """Typer 命令入口。"""

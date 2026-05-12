@@ -6,7 +6,7 @@ from ..models import Decorator, QualifiedName, Signature
 
 
 class UnsupportedSignatureCompletion(Exception):
-    """表示候选对象不应生成签名补全结果。"""
+    """表示候选对象不应产出签名补全结果。"""
 
 
 class PartialSignatureCompletionError(Exception):
