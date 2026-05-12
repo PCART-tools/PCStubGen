@@ -134,11 +134,11 @@ def _summarize_evaluations(
     }
     for dimension, field_name in dimension_fields.items():
         rule_unqualified = _count_dimension_code(evaluation_rows, field_name, "rule_unqualified")
-        qualified = _count_dimension_code(evaluation_rows, field_name, "qualified")
         unqualified = _count_dimension_code(evaluation_rows, field_name, "unqualified")
+        qualified = _count_dimension_code(evaluation_rows, field_name, "qualified")
         result[f"rq3_{dimension}_rule_unqualified_count"] = rule_unqualified
-        result[f"rq3_{dimension}_qualified_count"] = qualified
         result[f"rq3_{dimension}_unqualified_count"] = unqualified
+        result[f"rq3_{dimension}_qualified_count"] = qualified
     return result
 
 

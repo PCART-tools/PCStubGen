@@ -33,12 +33,15 @@ from openai.types.shared_params.response_format_json_object import ResponseForma
 from rich.progress import (
     BarColumn,
     Progress,
+    ProgressColumn,
     SpinnerColumn,
+    Task,
     TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
 )
+from rich.text import Text
 
 BASE_URL = "https://api.deepseek.com"
 MODEL = "deepseek-v4-pro"
@@ -213,6 +216,19 @@ class EvaluationRow:
         }
 
 
+class AverageTimePerItemColumn(ProgressColumn):
+    """显示当前任务的单条平均耗时。"""
+
+    def render(self, task: Task) -> Text:
+        """渲染 `平均耗时/条` 列。"""
+        elapsed = task.elapsed
+        if elapsed is None or task.completed <= 0:
+            return Text("平均 --.--s/条")
+
+        average_seconds = elapsed / task.completed
+        return Text(f"平均 {_format_average_seconds(average_seconds)}/条")
+
+
 class ManualStubRepository:
     """按模块定位并解析人工维护的 `.pyi` 参考。"""
 
@@ -311,6 +327,12 @@ def _render_stub_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         signature_line += f" -> {ast.unparse(node.returns)}"
     signature_line += ": ..."
     return "\n".join([*decorator_lines, signature_line])
+
+
+def _format_average_seconds(seconds: float) -> str:
+    """将平均耗时格式化为保留两位小数的秒数字符串。"""
+    normalized_seconds = max(0.0, seconds)
+    return f"{normalized_seconds:.2f}s"
 
 
 def _load_inferred_signatures(path: Path) -> list[InferredSignatureEntry]:
@@ -681,6 +703,7 @@ async def _write_pending_rows(
                 TaskProgressColumn(),
                 TextColumn("{task.completed:.0f}/{task.total:.0f}"),
                 TimeElapsedColumn(),
+                AverageTimePerItemColumn(),
                 TimeRemainingColumn(),
                 transient=False,
             ) as progress:
