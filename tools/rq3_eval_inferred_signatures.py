@@ -53,10 +53,8 @@ ARG_RST_PATH = Path(__file__).with_name("arg.rst")
 VALID_LLM_RESULT_CODES = {
     "qualified",
     "unqualified",
-    "uncertain",
 }
 STATUS_OK = "ok"
-STATUS_MISSING_REFERENCE = "missing_reference"
 STATUS_LLM_ERROR = "llm_error"
 
 EVALUATION_CSV_FIELDS = [
@@ -229,7 +227,8 @@ class ManualStubRepository:
         if parsed_module is None:
             return None
 
-        class_path = tuple(entry.class_name.split(".")) if entry.class_name else ()
+        class_name = entry.class_name
+        class_path = tuple(class_name.split(".")) if class_name else ()
         function_map = parsed_module.functions.get(class_path)
         if function_map is None:
             return None
@@ -453,11 +452,7 @@ def _prepare_evaluations(
             )
             continue
 
-        immediate_rows.append(
-            _build_missing_reference_row(
-                entry=entry,
-            )
-        )
+        _raise_missing_reference_error(entry)
 
     return pending, immediate_rows
 
@@ -474,32 +469,15 @@ def _render_signature_evidence(entry: InferredSignatureEntry) -> str | None:
     return json.dumps(evidence_payload, ensure_ascii=False, indent=2)
 
 
-def _build_missing_reference_row(entry: InferredSignatureEntry) -> EvaluationRow:
-    """为缺少裁判参考的签名构造结果。"""
-    row = _override_failed_dimensions(
-        entry,
-        {
-            "parameter_structure_code": "uncertain",
-            "parameter_structure_reason": "缺少可用于裁判的参考材料。",
-            "parameter_type_code": "uncertain",
-            "parameter_type_reason": "缺少可用于裁判的参考材料。",
-            "return_type_code": "uncertain",
-            "return_type_reason": "缺少可用于裁判的参考材料。",
-        },
-    )
-    return _build_status_row(
-        entry=entry,
-        status=STATUS_MISSING_REFERENCE,
-        status_reason="缺少人工 stub 参考，且函数层来源证据为空。",
-        reasoning_content="",
-        reference_kind="",
-        reference="",
-        parameter_structure_code=row["parameter_structure_code"],
-        parameter_structure_reason=row["parameter_structure_reason"],
-        parameter_type_code=row["parameter_type_code"],
-        parameter_type_reason=row["parameter_type_reason"],
-        return_type_code=row["return_type_code"],
-        return_type_reason=row["return_type_reason"],
+def _raise_missing_reference_error(entry: InferredSignatureEntry) -> None:
+    """在缺少裁判参考材料时直接报错退出。"""
+    raise RuntimeError(
+        "缺少可用于评估的参考材料: "
+        f"function_id={entry.function_id}, "
+        f"module={entry.module_name}, "
+        f"class={entry.class_name or '<module>'}, "
+        f"function={entry.function_name}, "
+        f"signature_index={entry.signature_index}"
     )
 
 
@@ -520,11 +498,11 @@ def _build_double_inference_failure_row(entry: InferredSignatureEntry) -> Evalua
         reasoning_content="",
         reference_kind="inference_status",
         reference=entry.function.evidence or "",
-        parameter_structure_code="unqualified",
+        parameter_structure_code="rule_unqualified",
         parameter_structure_reason="参数推断阶段失败，参数结构计为不合格。",
-        parameter_type_code="unqualified",
+        parameter_type_code="rule_unqualified",
         parameter_type_reason="参数推断阶段失败，参数类型计为不合格。",
-        return_type_code="unqualified",
+        return_type_code="rule_unqualified",
         return_type_reason="返回值推断阶段失败，返回类型计为不合格。",
     )
 
@@ -578,6 +556,21 @@ def _build_status_row(
     )
 
 
+def _build_llm_error_dimension_row(entry: InferredSignatureEntry) -> dict[str, str]:
+    """构造 LLM 评估失败时的维度结果，并保留规则失败覆盖。"""
+    return _override_failed_dimensions(
+        entry,
+        {
+            "parameter_structure_code": "unqualified",
+            "parameter_structure_reason": "LLM 评估失败，未产出参数结构判定结果。",
+            "parameter_type_code": "unqualified",
+            "parameter_type_reason": "LLM 评估失败，未产出参数类型判定结果。",
+            "return_type_code": "unqualified",
+            "return_type_reason": "LLM 评估失败，未产出返回类型判定结果。",
+        },
+    )
+
+
 _ARG_RST_DOCUMENT: str | None = None
 
 
@@ -587,6 +580,7 @@ def _load_arg_rst_document() -> str:
 
     if _ARG_RST_DOCUMENT is None:
         _ARG_RST_DOCUMENT = ARG_RST_PATH.read_text(encoding="utf-8")
+    assert _ARG_RST_DOCUMENT is not None
     return _ARG_RST_DOCUMENT
 
 
@@ -614,12 +608,10 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         'JSON 结构固定为 {"parameter_structure_code": "...", "parameter_structure_reason": "...", '
         '"parameter_type_code": "...", "parameter_type_reason": "...", '
         '"return_type_code": "...", "return_type_reason": "..."}。'
-        '三个 *_code 只允许是 "qualified"、"unqualified" 或 "uncertain"。'
+        '三个 *_code 只允许是 "qualified" 或 "unqualified"。'
         "三个 *_reason 都必须是中文说明，分别解释对应维度的结论。"
         "当参考材料足以确定真实语义时，应优先基于参考材料判断。"
         "当参考材料不足以确定真实语义时，可以结合你已知的该模块、类、函数的 API 语义补充判断。"
-        "如果结合参考材料与已有知识后，仍无法较有把握地确定真实语义，就输出 uncertain，不要强行判 qualified 或 unqualified。"
-        "如果某一维度输出 uncertain，对应的 *_reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
         "参考材料可能包含多条重载语义，我们每次只会提供其中的一条推断签名进行评估，请不要因为单条签名无法同时表示多条重载语义而判不合格。"
         "若可判定为 qualified，则三个维度都必须能对应到同一条真实语义。"
         "若参考材料中的 C 扩展函数通过多个互斥分支分别调用 PyArg_ParseTuple、PyArg_ParseTupleAndKeywords，"
@@ -750,6 +742,7 @@ async def _evaluate_one(
         if last_exception is None:
             raise RuntimeError("单条评估未产生结果，且没有捕获到异常。")
 
+        row = _build_llm_error_dimension_row(prepared.entry)
         return _build_status_row(
             entry=prepared.entry,
             status=STATUS_LLM_ERROR,
@@ -757,12 +750,12 @@ async def _evaluate_one(
             reasoning_content="",
             reference_kind=prepared.reference_kind,
             reference=prepared.reference,
-            parameter_structure_code="uncertain",
-            parameter_structure_reason="LLM 评估失败，无法判定参数结构。",
-            parameter_type_code="uncertain",
-            parameter_type_reason="LLM 评估失败，无法判定参数类型。",
-            return_type_code="uncertain",
-            return_type_reason="LLM 评估失败，无法判定返回类型。",
+            parameter_structure_code=row["parameter_structure_code"],
+            parameter_structure_reason=row["parameter_structure_reason"],
+            parameter_type_code=row["parameter_type_code"],
+            parameter_type_reason=row["parameter_type_reason"],
+            return_type_code=row["return_type_code"],
+            return_type_reason=row["return_type_reason"],
         )
 
 
@@ -863,16 +856,16 @@ def _override_failed_dimensions(
     """按函数层推断状态覆盖已知失败的评估维度。"""
     row = dict(parsed_response)
     if entry.function.parameter_inference_status != "success":
-        row["parameter_structure_code"] = "unqualified"
+        row["parameter_structure_code"] = "rule_unqualified"
         row["parameter_structure_reason"] = (
             "参数推断阶段失败，参数结构计为不合格。"
         )
-        row["parameter_type_code"] = "unqualified"
+        row["parameter_type_code"] = "rule_unqualified"
         row["parameter_type_reason"] = (
             "参数推断阶段失败，参数类型计为不合格。"
         )
     if entry.function.return_inference_status != "success":
-        row["return_type_code"] = "unqualified"
+        row["return_type_code"] = "rule_unqualified"
         row["return_type_reason"] = (
             "返回值推断阶段失败，返回类型计为不合格。"
         )

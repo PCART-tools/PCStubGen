@@ -18,6 +18,16 @@ import typer
 
 app = typer.Typer(add_completion=False)
 
+VALID_RQ3_CODES = {
+    "rule_unqualified",
+    "unqualified",
+    "qualified",
+}
+VALID_RQ3_STATUSES = {
+    "ok",
+    "llm_error",
+}
+
 
 def _load_toml_functions(path: Path) -> list[dict[str, Any]]:
     """读取新版函数层 TOML。"""
@@ -111,6 +121,7 @@ def _summarize_evaluations(
     evaluation_rows: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """汇总 RQ3 签名级指标。"""
+    _validate_evaluation_rows(evaluation_rows)
     total_signatures = _count_signatures(functions)
     dimension_fields = {
         "parameter_structure": "parameter_structure_code",
@@ -122,14 +133,46 @@ def _summarize_evaluations(
         "evaluated_rows": len(evaluation_rows),
     }
     for dimension, field_name in dimension_fields.items():
+        rule_unqualified = _count_dimension_code(evaluation_rows, field_name, "rule_unqualified")
         qualified = _count_dimension_code(evaluation_rows, field_name, "qualified")
         unqualified = _count_dimension_code(evaluation_rows, field_name, "unqualified")
-        uncertain = _count_dimension_code(evaluation_rows, field_name, "uncertain")
+        result[f"rq3_{dimension}_rule_unqualified_count"] = rule_unqualified
         result[f"rq3_{dimension}_qualified_count"] = qualified
         result[f"rq3_{dimension}_unqualified_count"] = unqualified
-        result[f"rq3_{dimension}_uncertain_count"] = uncertain
-        result[f"rq3_{dimension}_qualified_rate"] = _percentage(qualified, total_signatures)
     return result
+
+
+def _validate_evaluation_rows(evaluation_rows: list[dict[str, Any]]) -> None:
+    """校验 RQ3 评估结果是否可用于汇总。"""
+    for row in evaluation_rows:
+        status = row.get("status")
+        if status not in VALID_RQ3_STATUSES:
+            raise RuntimeError(
+                "RQ3 评估 CSV 包含非法 status。"
+                f" function_id={row.get('function_id', '')},"
+                f" signature_index={row.get('signature_index', '')},"
+                f" status={status!r}"
+            )
+        if status == "llm_error":
+            raise RuntimeError(
+                "RQ3 评估 CSV 包含 llm_error 记录，无法汇总。"
+                f" function_id={row.get('function_id', '')},"
+                f" signature_index={row.get('signature_index', '')}"
+            )
+        for field_name in (
+            "parameter_structure_code",
+            "parameter_type_code",
+            "return_type_code",
+        ):
+            code = row.get(field_name)
+            if code not in VALID_RQ3_CODES:
+                raise RuntimeError(
+                    "RQ3 评估 CSV 包含非法维度判定码。"
+                    f" function_id={row.get('function_id', '')},"
+                    f" signature_index={row.get('signature_index', '')},"
+                    f" field={field_name},"
+                    f" code={code!r}"
+                )
 
 
 def _count_dimension_code(
