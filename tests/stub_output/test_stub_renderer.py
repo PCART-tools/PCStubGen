@@ -11,13 +11,11 @@ def _signature(
     *,
     args: list[Argument] | None = None,
     return_type: Type | None = None,
-    comment: str | None = None,
 ) -> Signature:
     """构造测试用签名。"""
     return Signature(
         args=list(args or ()),
         return_type=return_type,
-        comment=comment,
     )
 
 
@@ -26,13 +24,11 @@ def _function(
     *,
     signatures: list[Signature] | None = None,
     doc: str | None = None,
-    comment: str | None = None,
 ) -> Function:
     return Function(
         name=name,
         signatures=list(signatures or ()),
         doc=doc,
-        comment=comment,
     )
 
 
@@ -135,70 +131,6 @@ def test_renderer_preserves_original_doc_when_signature_conflicts_with_doc_text(
     assert lines[0] == "def foo(value: int) -> bool:"
     assert "    foo(value: str) -> str" in lines
     assert "    parsed from docstring" in lines
-
-
-def test_renderer_prints_comment_after_function() -> None:
-    func = _function(
-        name="foo",
-        signatures=[_signature(args=[Argument(name="value", type=RawType.int_)])],
-        comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) {\n    return value;\n}",
-    )
-
-    lines = StubRenderer(include_docstrings=False).render_function(func)
-
-    assert lines[:2] == [
-        "def foo(value: int):",
-        "    ...",
-    ]
-    output = "\n".join(lines)
-    assert "src/foo_impl.c:12:3" in output
-    assert "static int foo_impl(int value)" in output
-    assert "return value" in output
-
-
-def test_renderer_prints_signature_comment_for_module_function() -> None:
-    func = _function(
-        name="foo",
-        signatures=[
-            _signature(
-                args=[Argument(name="value", type=RawType.int_)],
-                comment="pybind11\n(value: int) -> int",
-            )
-        ],
-    )
-
-    lines = StubRenderer(include_docstrings=False).render_function(func)
-
-    assert lines == [
-        "def foo(value: int):",
-        "    ...",
-        "#   pybind11",
-        "#   (value: int) -> int",
-    ]
-
-
-def test_renderer_prints_signature_comment_for_method() -> None:
-    method = Function(
-        name="build",
-        signatures=[
-            _signature(
-                args=[Argument(name="self"), Argument(name="value", type=RawType.int_)],
-                comment="pybind11\n(self: pkg.Sample, value: int) -> int",
-            )
-        ],
-    )
-
-    lines = StubRenderer(include_docstrings=False).render_method(method)
-
-    assert lines == [
-        "def build(",
-        "    self,",
-        "    value: int,",
-        "):",
-        "    ...",
-        "#   pybind11",
-        "#   (self: pkg.Sample, value: int) -> int",
-    ]
 
 
 def test_renderer_adds_typing_import_for_overloads() -> None:

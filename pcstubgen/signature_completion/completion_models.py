@@ -9,6 +9,24 @@ class UnsupportedSignatureCompletion(Exception):
     """表示候选对象不应生成签名补全结果。"""
 
 
+class PartialSignatureCompletionError(Exception):
+    """表示已取得签名来源，但从来源推断签名失败。"""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        provider: str,
+        source_location: str | None = None,
+        source_text: str | None = None,
+    ) -> None:
+        """保存失败原因和已取得的来源证据。"""
+        super().__init__(message)
+        self.provider = provider
+        self.source_location = source_location
+        self.source_text = source_text
+
+
 @dataclass(frozen=True)
 class SignatureCompletionContext:
     """单函数签名补全所需的收集上下文。"""
@@ -25,7 +43,13 @@ class SignatureCompletionResult:
     signatures: list[Signature]
     doc: str | None = None
     decorator: Decorator = None
-    comment: str | None = None
+    provider: str | None = None
+    mapping_status: str = "unknown"
+    parameter_inference_status: str = "unknown"
+    return_inference_status: str = "unknown"
+    failure_reason: str | None = None
+    source_location: str | None = None
+    source_text: str | None = None
 
 
 @dataclass

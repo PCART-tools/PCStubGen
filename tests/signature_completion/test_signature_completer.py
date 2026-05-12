@@ -53,7 +53,12 @@ def test_signature_completer_returns_completer_result_and_updates_summary(
                 )
             ],
             doc="foo(value: int) -> bool",
-            comment="mock:pkg.mod.foo\nmocked source",
+            provider="c_extension",
+            mapping_status="success",
+            parameter_inference_status="success",
+            return_inference_status="success",
+            source_location="mock:pkg.mod.foo",
+            source_text="mocked source",
         ),
     )
 
@@ -68,7 +73,12 @@ def test_signature_completer_returns_completer_result_and_updates_summary(
             )
         ],
         doc="foo(value: int) -> bool",
-        comment="mock:pkg.mod.foo\nmocked source",
+        provider="c_extension",
+        mapping_status="success",
+        parameter_inference_status="success",
+        return_inference_status="success",
+        source_location="mock:pkg.mod.foo",
+        source_text="mocked source",
     )
     assert completer.summary.total == 1
     assert completer.summary.c_extension == 1
@@ -100,7 +110,9 @@ def test_signature_completer_falls_back_to_minimal_signature_on_completer_failur
     assert [arg.name for arg in result.signatures[0].args] == ["args", "kwargs"]
     assert result.doc is None
     assert result.decorator is None
-    assert result.comment is None
+    assert result.mapping_status == "failed"
+    assert result.parameter_inference_status == "failed"
+    assert result.return_inference_status == "failed"
     assert completer.summary.c_extension == 0
     assert completer.summary.pybind11 == 0
     assert completer.summary.failed == 1

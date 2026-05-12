@@ -47,17 +47,6 @@ def render_docstring(doc: str) -> list[str]:
     ]
 
 
-def render_comment(*, comment_text: str) -> list[str]:
-    """渲染由 C AST 推断签名来源的源码注释。"""
-    result: list[str] = []
-    for line in comment_text.splitlines():
-        if line:
-            result.append(f"#   {line}")
-        else:
-            result.append("#")
-    return result
-
-
 def render_arguments(args: list[Argument]) -> list[str]:
     """渲染函数参数列表。"""
     rendered_args: list[str] = []
@@ -266,12 +255,6 @@ class StubRenderer:
                     decorator=func.decorator,
                 )
             )
-        if func.comment is not None:
-            result.extend(
-                render_comment(
-                    comment_text=func.comment,
-                )
-            )
         return result
 
     def render_function(self, func: Function) -> list[str]:
@@ -287,13 +270,6 @@ class StubRenderer:
                     func_doc=func.doc,
                     overload=overload,
                     decorator=None,
-                )
-            )
-
-        if func.comment is not None:
-            result.extend(
-                render_comment(
-                    comment_text=func.comment,
                 )
             )
         return result
@@ -321,10 +297,4 @@ class StubRenderer:
             body = ["..."]
 
         result.extend(indent_lines(body))
-        if signature.comment is not None:
-            result.extend(
-                render_comment(
-                    comment_text=signature.comment,
-                )
-            )
         return result

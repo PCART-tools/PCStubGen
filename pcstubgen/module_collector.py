@@ -121,7 +121,13 @@ class ModuleCollector:
             doc=result.doc,
             decorator=result.decorator,
             signatures=result.signatures,
-            comment=result.comment,
+            provider=result.provider,
+            mapping_status=result.mapping_status,
+            parameter_inference_status=result.parameter_inference_status,
+            return_inference_status=result.return_inference_status,
+            failure_reason=result.failure_reason,
+            source_location=result.source_location,
+            source_text=result.source_text,
         )
 
     def _collect_method(
@@ -144,7 +150,13 @@ class ModuleCollector:
             doc=result.doc,
             decorator=result.decorator,
             signatures=result.signatures,
-            comment=result.comment,
+            provider=result.provider,
+            mapping_status=result.mapping_status,
+            parameter_inference_status=result.parameter_inference_status,
+            return_inference_status=result.return_inference_status,
+            failure_reason=result.failure_reason,
+            source_location=result.source_location,
+            source_text=result.source_text,
         )
 
     def _collect_bases(self, class_: type) -> list[QualifiedName]:

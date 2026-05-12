@@ -6,6 +6,7 @@ from loguru import logger
 
 from .c_extension.completer import CExtensionCompleter
 from .completion_models import (
+    PartialSignatureCompletionError,
     SignatureCompletionContext,
     SignatureCompletionResult,
     SignatureCompletionSummary,
@@ -49,8 +50,10 @@ class SignatureCompleter:
                 result = self._c_extension_completer.get(context)
             except UnsupportedSignatureCompletion as ex:
                 reason = f"{ex!r}"
+            except PartialSignatureCompletionError as ex:
+                return self._fallback_from_partial_error(context, ex)
             except Exception as ex:
-                return self._fallback_to_minimal(context, completer, f"{ex!r}")
+                return self._fallback_to_minimal(context, completer, f"{ex!r}", mapping_status="failed")
             else:
                 return self._complete_success(context, completer, result)
 
@@ -60,8 +63,10 @@ class SignatureCompleter:
                 result = self._pybind11_completer.get(context)
             except UnsupportedSignatureCompletion as ex:
                 reason = f"{ex!r}"
+            except PartialSignatureCompletionError as ex:
+                return self._fallback_from_partial_error(context, ex)
             except Exception as ex:
-                return self._fallback_to_minimal(context, completer, f"{ex!r}")
+                return self._fallback_to_minimal(context, completer, f"{ex!r}", mapping_status="failed")
             else:
                 return self._complete_success(context, completer, result)
 
@@ -87,13 +92,44 @@ class SignatureCompleter:
         context: SignatureCompletionContext,
         completer: str,
         reason: str,
+        *,
+        mapping_status: str,
+        source_location: str | None = None,
+        source_text: str | None = None,
     ) -> SignatureCompletionResult:
         """在 completer 真实失败时回退到最小签名。"""
         self.summary.total += 1
         self.summary.failed += 1
         result = self._minimal_completer.get(context)
+        result = SignatureCompletionResult(
+            signatures=result.signatures,
+            doc=result.doc,
+            decorator=result.decorator,
+            provider=completer,
+            mapping_status=mapping_status,
+            parameter_inference_status="failed",
+            return_inference_status="failed",
+            failure_reason=reason,
+            source_location=source_location,
+            source_text=source_text,
+        )
         _log_failure(context, completer, reason)
         return result
+
+    def _fallback_from_partial_error(
+        self,
+        context: SignatureCompletionContext,
+        ex: PartialSignatureCompletionError,
+    ) -> SignatureCompletionResult:
+        """在已取得来源但推断失败时回退到最小签名。"""
+        return self._fallback_to_minimal(
+            context,
+            ex.provider,
+            f"{ex!r}",
+            mapping_status="success",
+            source_location=ex.source_location,
+            source_text=ex.source_text,
+        )
 
 
 def _log_success(context: SignatureCompletionContext, completer: str) -> None:

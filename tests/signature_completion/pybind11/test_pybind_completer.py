@@ -3,7 +3,10 @@ from __future__ import annotations
 import pytest
 
 from pcstubgen.models import QualifiedName
-from pcstubgen.signature_completion.completion_models import SignatureCompletionContext
+from pcstubgen.signature_completion.completion_models import (
+    PartialSignatureCompletionError,
+    SignatureCompletionContext,
+)
 from pcstubgen.signature_completion.pybind11.completer import Pybind11Completer
 
 
@@ -152,9 +155,11 @@ def test_pybind11_completer_get_returns_observable_result(
     assert result.decorator == expected_decorator
     assert result.doc == expected_doc
     assert [arg.name for arg in result.signatures[0].args] == expected_args
-    assert result.signatures[0].comment is not None
-    assert "pybind11" in result.signatures[0].comment
-    assert expected_doc not in (result.comment or "")
+    assert result.signatures[0].raw_signature == (
+        "(self: pkg.Sample, value: int) -> int"
+        if expected_decorator is None
+        else "(value: int) -> int"
+    )
 
 
 def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
@@ -188,7 +193,7 @@ def test_pybind11_completer_get_uses_runtime_name_for_doc_matching() -> None:
     assert result.signatures[0].return_type.render() == "int"
 
 
-def test_pybind11_completer_get_keeps_successful_overloads_when_one_parse_fails(
+def test_pybind11_completer_get_fails_when_one_overload_parse_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     completer = Pybind11Completer()
@@ -215,14 +220,10 @@ def test_pybind11_completer_get_keeps_successful_overloads_when_one_parse_fails(
                 "(self: pkg.Sample, value: str) -> str",
             ],
         )
-        result = completer.get(
-            _make_context(member, func_name="build", owner_class=object)
-        )
-
-    assert [signature.return_type.render() for signature in result.signatures if signature.return_type is not None] == [
-        "int",
-        "str",
-    ]
+        with pytest.raises(PartialSignatureCompletionError, match="overload=2"):
+            completer.get(
+                _make_context(member, func_name="build", owner_class=object)
+            )
 
 
 def test_pybind11_completer_get_does_not_parse_full_docstring(

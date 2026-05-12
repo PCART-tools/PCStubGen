@@ -22,7 +22,12 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
                         return_type=RawType.bool_,
                     )
                 ],
-                comment="src/foo_impl.c:12:3\nstatic int foo_impl(int value) { return value; }",
+                provider="c_extension",
+                mapping_status="success",
+                parameter_inference_status="success",
+                return_inference_status="success",
+                source_location="src/foo_impl.c:12:3",
+                source_text="static int foo_impl(int value) { return value; }",
             )
         ],
     )
@@ -36,12 +41,23 @@ def test_toml_writer_writes_single_module_function_record(tmp_path) -> None:
     output_path = tmp_path / "mod.toml"
     assert output_path.exists()
     assert tomllib.loads(output_path.read_text(encoding="utf-8")) == {
-        "entries": [
+        "functions": [
             {
+                "function_id": "pkg.mod:foo",
                 "module_name": "pkg.mod",
                 "function_name": "foo",
-                "signature": "def foo(value: int) -> bool:",
-                "comment": "src/foo_impl.c:12:3\nstatic int foo_impl(int value) { return value; }",
+                "provider": "c_extension",
+                "mapping_status": "success",
+                "parameter_inference_status": "success",
+                "return_inference_status": "success",
+                "source_location": "src/foo_impl.c:12:3",
+                "source_text": "static int foo_impl(int value) { return value; }",
+                "signatures": [
+                    {
+                        "signature_index": 0,
+                        "signature": "def foo(value: int) -> bool:",
+                    }
+                ],
             }
         ]
     }
@@ -63,7 +79,6 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
                         return_type=RawType.str_,
                     ),
                 ],
-                comment="src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
             )
         ],
     )
@@ -75,24 +90,31 @@ def test_toml_writer_splits_overloads_into_multiple_records(tmp_path) -> None:
     )
 
     assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
-        "entries": [
+        "functions": [
             {
+                "function_id": "pkg.mod:foo",
                 "module_name": "pkg.mod",
                 "function_name": "foo",
-                "signature": "def foo(value: int) -> int:",
-                "comment": "src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
-            },
-            {
-                "module_name": "pkg.mod",
-                "function_name": "foo",
-                "signature": "def foo(value: str) -> str:",
-                "comment": "src/foo_impl.c:21:7\nstatic PyObject* foo_impl(PyObject* self, PyObject* args);",
-            },
+                "provider": "",
+                "mapping_status": "unknown",
+                "parameter_inference_status": "unknown",
+                "return_inference_status": "unknown",
+                "signatures": [
+                    {
+                        "signature_index": 0,
+                        "signature": "def foo(value: int) -> int:",
+                    },
+                    {
+                        "signature_index": 1,
+                        "signature": "def foo(value: str) -> str:",
+                    },
+                ],
+            }
         ]
     }
 
 
-def test_toml_writer_prefers_signature_comment_over_function_comment(tmp_path) -> None:
+def test_toml_writer_exports_signature_raw_signature(tmp_path) -> None:
     module = Module(
         full_name=QualifiedName.from_str("pkg.mod"),
         functions=[
@@ -102,15 +124,18 @@ def test_toml_writer_prefers_signature_comment_over_function_comment(tmp_path) -
                     _signature(
                         args=[Argument(name="value", type=RawType.int_)],
                         return_type=RawType.int_,
-                        comment="pybind11\n(value: int) -> int",
+                        raw_signature="(value: int) -> int",
                     ),
                     _signature(
                         args=[Argument(name="value", type=RawType.str_)],
                         return_type=RawType.str_,
-                        comment="pybind11\n(value: str) -> str",
+                        raw_signature="(value: str) -> str",
                     ),
                 ],
-                comment="legacy function comment",
+                provider="pybind11",
+                mapping_status="success",
+                parameter_inference_status="success",
+                return_inference_status="success",
             )
         ],
     )
@@ -122,19 +147,28 @@ def test_toml_writer_prefers_signature_comment_over_function_comment(tmp_path) -
     )
 
     assert tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8")) == {
-        "entries": [
+        "functions": [
             {
+                "function_id": "pkg.mod:foo",
                 "module_name": "pkg.mod",
                 "function_name": "foo",
-                "signature": "def foo(value: int) -> int:",
-                "comment": "pybind11\n(value: int) -> int",
-            },
-            {
-                "module_name": "pkg.mod",
-                "function_name": "foo",
-                "signature": "def foo(value: str) -> str:",
-                "comment": "pybind11\n(value: str) -> str",
-            },
+                "provider": "pybind11",
+                "mapping_status": "success",
+                "parameter_inference_status": "success",
+                "return_inference_status": "success",
+                "signatures": [
+                    {
+                        "signature_index": 0,
+                        "signature": "def foo(value: int) -> int:",
+                        "raw_signature": "(value: int) -> int",
+                    },
+                    {
+                        "signature_index": 1,
+                        "signature": "def foo(value: str) -> str:",
+                        "raw_signature": "(value: str) -> str",
+                    },
+                ],
+            }
         ]
     }
 
@@ -196,23 +230,41 @@ def test_toml_writer_exports_nested_class_methods_with_full_class_name(tmp_path)
         to=tmp_path,
     )
 
-    entries = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["entries"]
+    functions = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["functions"]
 
-    assert [*entries[0].keys()] == ["module_name", "class_name", "function_name", "signature"]
-    assert [*entries[1].keys()] == ["module_name", "class_name", "function_name", "signature"]
-    assert {"entries": entries} == {
-        "entries": [
+    assert {"functions": functions} == {
+        "functions": [
             {
+                "function_id": "pkg.mod:Outer.build",
                 "module_name": "pkg.mod",
                 "class_name": "Outer",
                 "function_name": "build",
-                "signature": "def build(\n    self,\n    value: int,\n) -> int:",
+                "provider": "",
+                "mapping_status": "unknown",
+                "parameter_inference_status": "unknown",
+                "return_inference_status": "unknown",
+                "signatures": [
+                    {
+                        "signature_index": 0,
+                        "signature": "def build(\n    self,\n    value: int,\n) -> int:",
+                    }
+                ],
             },
             {
+                "function_id": "pkg.mod:Outer.Inner.build_inner",
                 "module_name": "pkg.mod",
                 "class_name": "Outer.Inner",
                 "function_name": "build_inner",
-                "signature": "def build_inner(self) -> int:",
+                "provider": "",
+                "mapping_status": "unknown",
+                "parameter_inference_status": "unknown",
+                "return_inference_status": "unknown",
+                "signatures": [
+                    {
+                        "signature_index": 0,
+                        "signature": "def build_inner(self) -> int:",
+                    }
+                ],
             },
         ]
     }
@@ -250,6 +302,6 @@ def test_toml_writer_sorts_class_methods_only_by_name(tmp_path) -> None:
         to=tmp_path,
     )
 
-    entries = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["entries"]
+    functions = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["functions"]
 
-    assert [entry["function_name"] for entry in entries] == ["alpha", "middle", "zeta"]
+    assert [function["function_name"] for function in functions] == ["alpha", "middle", "zeta"]

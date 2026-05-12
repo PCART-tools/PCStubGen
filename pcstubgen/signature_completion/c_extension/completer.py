@@ -11,6 +11,7 @@ from .inferencer import Inferencer
 from .libclang import ast_utils
 from .libclang.function_cursor_locator import FunctionCursorLocator
 from ..completion_models import (
+    PartialSignatureCompletionError,
     SignatureCompletionContext,
     SignatureCompletionResult,
     UnsupportedSignatureCompletion,
@@ -69,16 +70,30 @@ class CExtensionCompleter:
             """不是我们关心的，属于噪音"""
             raise UnsupportedSignatureCompletion(
                 f"跳过 Pythran wrapall 分派函数: {func_cursor.spelling}"
-            )
+        )
         source_text = ast_utils.get_cursor_source_text(func_cursor)
-        comment = f"c_extension\n{func_cursor.location}\n{source_text}"
-        signatures = Inferencer(func_cursor, flags, context.owner_class).run()
+        source_location = str(func_cursor.location)
+        inferencer = Inferencer(func_cursor, flags, context.owner_class)
+        try:
+            signatures = inferencer.run()
+        except Exception as ex:
+            raise PartialSignatureCompletionError(
+                f"{ex!r}",
+                provider="c_extension",
+                source_location=source_location,
+                source_text=source_text,
+            ) from ex
 
         return SignatureCompletionResult(
             signatures=signatures,
             doc=doc,
             decorator=decorator,
-            comment=comment,
+            provider="c_extension",
+            mapping_status="success",
+            parameter_inference_status=_status_from_bool(inferencer.parameter_inference_success),
+            return_inference_status=_status_from_bool(inferencer.return_inference_success),
+            source_location=source_location,
+            source_text=source_text,
         )
 
     def _analyze_member(
@@ -105,6 +120,11 @@ def _get_doc(obj: object) -> str | None:
     if isinstance(doc, str) and doc and not doc.isspace():
         return doc
     return None
+
+
+def _status_from_bool(success: bool) -> str:
+    """将布尔推断结果转换为实验状态文本。"""
+    return "success" if success else "failed"
 
 
 def _is_cython_pickle_method_descriptor(member: object, owner_class: type) -> bool:

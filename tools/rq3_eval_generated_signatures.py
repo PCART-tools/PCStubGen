@@ -1,9 +1,9 @@
 """
-工具：批量评估已生成 TOML 中的签名是否合格。
+工具：批量评估新版函数层 TOML 中的生成签名是否合格。
 
 示例:
-    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml
-    uv run python tools/eval_generated_signatures.py out/pcstubgen/psycopg2.toml --manual-stub-root ./stubs
+    uv run python tools/rq3_eval_generated_signatures.py out/pcstubgen/psycopg2.toml
+    uv run python tools/rq3_eval_generated_signatures.py out/pcstubgen/psycopg2.toml --manual-stub-root ./stubs
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import TextIO
 
 import json_repair
 import typer
@@ -57,17 +58,19 @@ STATUS_OK = "ok"
 STATUS_MISSING_REFERENCE = "missing_reference"
 STATUS_LLM_ERROR = "llm_error"
 
-CSV_HEADERS = [
+EVALUATION_CSV_FIELDS = [
+    "function_id",
     "module_name",
     "class_name",
     "function_name",
+    "signature_index",
     "generated_signature",
-    "llm_parameter_structure_code",
-    "llm_parameter_structure_reason",
-    "llm_parameter_type_code",
-    "llm_parameter_type_reason",
-    "llm_return_type_code",
-    "llm_return_type_reason",
+    "parameter_structure_code",
+    "parameter_structure_reason",
+    "parameter_type_code",
+    "parameter_type_reason",
+    "return_type_code",
+    "return_type_reason",
     "status",
     "status_reason",
     "reference_kind",
@@ -80,14 +83,48 @@ ClassPath = tuple[str, ...]
 
 
 @dataclass(frozen=True)
-class GeneratedSignatureEntry:
-    """单条生成签名记录。"""
+class GeneratedFunctionEntry:
+    """新版 TOML 中的函数级记录。"""
 
+    function_id: str
     module_name: str
     class_name: str | None
     function_name: str
+    provider: str
+    parameter_inference_status: str
+    return_inference_status: str
+    failure_reason: str | None
+    evidence: str | None
+
+
+@dataclass(frozen=True)
+class GeneratedSignatureEntry:
+    """新版 TOML 中的单条签名级记录。"""
+
+    function: GeneratedFunctionEntry
+    signature_index: int
     generated_signature: str
-    comment: str | None
+    raw_signature: str | None
+
+    @property
+    def function_id(self) -> str:
+        """返回所属函数标识。"""
+        return self.function.function_id
+
+    @property
+    def module_name(self) -> str:
+        """返回所属模块名。"""
+        return self.function.module_name
+
+    @property
+    def class_name(self) -> str | None:
+        """返回所属类名。"""
+        return self.function.class_name
+
+    @property
+    def function_name(self) -> str:
+        """返回函数名。"""
+        return self.function.function_name
 
 
 @dataclass(frozen=True)
@@ -125,36 +162,40 @@ class PreparedEvaluation:
 
 @dataclass(frozen=True)
 class EvaluationRow:
-    """CSV 输出的一行结果。"""
+    """CSV 输出的一行评估结果。"""
 
+    function_id: str
     module_name: str
     class_name: str
     function_name: str
+    signature_index: int
     generated_signature: str
-    llm_parameter_structure_code: str
-    llm_parameter_structure_reason: str
-    llm_parameter_type_code: str
-    llm_parameter_type_reason: str
-    llm_return_type_code: str
-    llm_return_type_reason: str
+    parameter_structure_code: str
+    parameter_structure_reason: str
+    parameter_type_code: str
+    parameter_type_reason: str
+    return_type_code: str
+    return_type_reason: str
     status: str
     status_reason: str
     reference_kind: str
     reference: str
 
-    def to_csv_row(self) -> dict[str, str]:
-        """将结果行转换为 CSV writer 可接受的字典。"""
+    def to_csv_dict(self) -> dict[str, str | int]:
+        """将结果行转换为 CSV 可写入字典。"""
         return {
+            "function_id": self.function_id,
             "module_name": self.module_name,
             "class_name": self.class_name,
             "function_name": self.function_name,
+            "signature_index": self.signature_index,
             "generated_signature": self.generated_signature,
-            "llm_parameter_structure_code": self.llm_parameter_structure_code,
-            "llm_parameter_structure_reason": self.llm_parameter_structure_reason,
-            "llm_parameter_type_code": self.llm_parameter_type_code,
-            "llm_parameter_type_reason": self.llm_parameter_type_reason,
-            "llm_return_type_code": self.llm_return_type_code,
-            "llm_return_type_reason": self.llm_return_type_reason,
+            "parameter_structure_code": self.parameter_structure_code,
+            "parameter_structure_reason": self.parameter_structure_reason,
+            "parameter_type_code": self.parameter_type_code,
+            "parameter_type_reason": self.parameter_type_reason,
+            "return_type_code": self.return_type_code,
+            "return_type_reason": self.return_type_reason,
             "status": self.status,
             "status_reason": self.status_reason,
             "reference_kind": self.reference_kind,
@@ -166,6 +207,7 @@ class ManualStubRepository:
     """按模块定位并解析人工维护的 `.pyi` 参考。"""
 
     def __init__(self, root: Path) -> None:
+        """保存人工 stub 根目录。"""
         self._root = root
         self._cache: dict[str, ParsedStubModule | None] = {}
 
@@ -260,67 +302,107 @@ def _render_stub_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     return "\n".join([*decorator_lines, signature_line])
 
 
-def _load_generated_entries(path: Path) -> list[GeneratedSignatureEntry]:
-    """读取并校验生成 TOML 中的签名记录。"""
+def _load_generated_signatures(path: Path) -> list[GeneratedSignatureEntry]:
+    """读取并校验新版函数层 TOML 中的签名记录。"""
     with path.open("rb") as file:
         payload = tomllib.load(file)
 
-    raw_entries = payload.get("entries")
-    if not isinstance(raw_entries, list):
-        raise RuntimeError(f"TOML 文件 {path} 缺少 entries 列表。")
+    raw_functions = payload.get("functions")
+    if not isinstance(raw_functions, list):
+        raise RuntimeError(f"TOML 文件 {path} 缺少新版 functions 列表。")
 
     result: list[GeneratedSignatureEntry] = []
-    for index, raw_entry in enumerate(raw_entries, start=1):
-        if not isinstance(raw_entry, dict):
-            raise RuntimeError(f"TOML 第 {index} 条记录不是对象。")
+    for function_index, raw_function in enumerate(raw_functions, start=1):
+        function = _parse_generated_function(function_index, raw_function)
+        raw_signature_entries = raw_function.get("signatures")
+        if not isinstance(raw_signature_entries, list):
+            raise RuntimeError(f"TOML 第 {function_index} 个函数缺少 signatures 列表。")
 
-        missing_keys = [
-            key
-            for key in ("module_name", "function_name", "signature")
-            if key not in raw_entry
-        ]
-        if missing_keys:
-            missing = ", ".join(missing_keys)
-            raise RuntimeError(f"TOML 第 {index} 条记录缺少关键字段: {missing}")
-
-        module_name = raw_entry["module_name"]
-        class_name = raw_entry.get("class_name")
-        function_name = raw_entry["function_name"]
-        generated_signature = raw_entry["signature"]
-        comment = raw_entry.get("comment")
-
-        if not isinstance(module_name, str) or not module_name.strip():
-            raise RuntimeError(f"TOML 第 {index} 条记录的 module_name 非法。")
-        if class_name is not None and (not isinstance(class_name, str) or not class_name.strip()):
-            raise RuntimeError(f"TOML 第 {index} 条记录的 class_name 非法。")
-        if not isinstance(function_name, str) or not function_name.strip():
-            raise RuntimeError(f"TOML 第 {index} 条记录的 function_name 非法。")
-        if not isinstance(generated_signature, str) or not generated_signature.strip():
-            raise RuntimeError(f"TOML 第 {index} 条记录的 signature 非法。")
-        if comment is not None and not isinstance(comment, str):
-            raise RuntimeError(f"TOML 第 {index} 条记录的 comment 非法。")
-
-        result.append(
-            GeneratedSignatureEntry(
-                module_name=module_name,
-                class_name=class_name,
-                function_name=function_name,
-                generated_signature=generated_signature,
-                comment=_normalize_optional_text(comment),
+        for signature_index, raw_signature_entry in enumerate(raw_signature_entries):
+            if not isinstance(raw_signature_entry, dict):
+                raise RuntimeError(
+                    f"TOML 第 {function_index} 个函数第 {signature_index} 条签名不是对象。"
+                )
+            signature_text = _require_str(raw_signature_entry, "signature", f"第 {function_index} 个函数签名")
+            raw_signature_text = _optional_str(
+                raw_signature_entry.get("raw_signature"),
+                f"第 {function_index} 个函数第 {signature_index} 条签名 raw_signature",
             )
-        )
+            result.append(
+                GeneratedSignatureEntry(
+                    function=function,
+                    signature_index=signature_index,
+                    generated_signature=signature_text,
+                    raw_signature=raw_signature_text,
+                )
+            )
 
     return result
 
 
-def _normalize_optional_text(value: str | None) -> str | None:
-    """将空白文本归一化为 None。"""
+def _parse_generated_function(index: int, raw_function: object) -> GeneratedFunctionEntry:
+    """解析单条函数层 TOML 记录。"""
+    if not isinstance(raw_function, dict):
+        raise RuntimeError(f"TOML 第 {index} 个函数不是对象。")
+
+    module_name = _require_str(raw_function, "module_name", f"第 {index} 个函数")
+    function_name = _require_str(raw_function, "function_name", f"第 {index} 个函数")
+    class_name = raw_function.get("class_name")
+    if class_name is not None and not isinstance(class_name, str):
+        raise RuntimeError(f"TOML 第 {index} 个函数的 class_name 非法。")
+
+    function_id = _require_str(raw_function, "function_id", f"第 {index} 个函数")
+
+    provider = _require_str(raw_function, "provider", f"第 {index} 个函数")
+    parameter_inference_status = _require_str(raw_function, "parameter_inference_status", f"第 {index} 个函数")
+    return_inference_status = _require_str(raw_function, "return_inference_status", f"第 {index} 个函数")
+    failure_reason = _optional_str(raw_function.get("failure_reason"), f"第 {index} 个函数 failure_reason")
+    evidence = _render_function_evidence(raw_function)
+
+    return GeneratedFunctionEntry(
+        function_id=function_id,
+        module_name=module_name,
+        class_name=class_name,
+        function_name=function_name,
+        provider=provider,
+        parameter_inference_status=parameter_inference_status,
+        return_inference_status=return_inference_status,
+        failure_reason=failure_reason,
+        evidence=evidence,
+    )
+
+
+def _require_str(payload: dict[object, object], key: str, context: str) -> str:
+    """读取必需字符串字段。"""
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise RuntimeError(f"TOML {context} 的 {key} 非法。")
+    return value
+
+
+def _optional_str(value: object, context: str) -> str | None:
+    """读取可选字符串字段。"""
     if value is None:
         return None
+    if not isinstance(value, str):
+        raise RuntimeError(f"TOML {context} 非法。")
     normalized = value.strip()
     if not normalized:
         return None
     return normalized
+
+
+def _render_function_evidence(raw_function: dict[object, object]) -> str | None:
+    """把函数层来源证据渲染为紧凑 JSON 文本。"""
+    evidence_payload: dict[str, object] = {}
+    for key in ("provider", "source_location", "source_text"):
+        value = raw_function.get(key)
+        if isinstance(value, str) and value.strip():
+            evidence_payload[key] = value
+
+    if not evidence_payload:
+        return None
+    return json.dumps(evidence_payload, ensure_ascii=False, indent=2)
 
 
 def _prepare_evaluations(
@@ -333,6 +415,10 @@ def _prepare_evaluations(
     immediate_rows: list[EvaluationRow] = []
 
     for entry in entries:
+        if _has_double_inference_failure(entry):
+            immediate_rows.append(_build_double_inference_failure_row(entry))
+            continue
+
         manual_reference = None if repository is None else repository.get_reference(entry)
         if manual_reference is not None:
             pending.append(
@@ -344,27 +430,89 @@ def _prepare_evaluations(
             )
             continue
 
-        if entry.comment is not None:
+        signature_evidence = _render_signature_evidence(entry)
+        if signature_evidence is not None:
             pending.append(
                 PreparedEvaluation(
                     entry=entry,
-                    reference_kind="comment",
-                    reference=entry.comment,
+                    reference_kind="signature_evidence",
+                    reference=signature_evidence,
                 )
             )
             continue
 
         immediate_rows.append(
-            _build_status_row(
+            _build_missing_reference_row(
                 entry=entry,
-                status=STATUS_MISSING_REFERENCE,
-                status_reason="缺少人工 stub 参考，且 comment 证据为空。",
-                reference_kind="",
-                reference="",
             )
         )
 
     return pending, immediate_rows
+
+
+def _render_signature_evidence(entry: GeneratedSignatureEntry) -> str | None:
+    """合并函数层来源证据和签名层原始签名证据。"""
+    evidence_payload: dict[str, object] = {}
+    if entry.function.evidence is not None:
+        evidence_payload["function_evidence"] = entry.function.evidence
+    if entry.raw_signature is not None:
+        evidence_payload["raw_signature"] = entry.raw_signature
+    if not evidence_payload:
+        return None
+    return json.dumps(evidence_payload, ensure_ascii=False, indent=2)
+
+
+def _build_missing_reference_row(entry: GeneratedSignatureEntry) -> EvaluationRow:
+    """为缺少裁判参考的签名构造结果。"""
+    row = _override_failed_dimensions(
+        entry,
+        {
+            "parameter_structure_code": "uncertain",
+            "parameter_structure_reason": "缺少可用于裁判的参考材料。",
+            "parameter_type_code": "uncertain",
+            "parameter_type_reason": "缺少可用于裁判的参考材料。",
+            "return_type_code": "uncertain",
+            "return_type_reason": "缺少可用于裁判的参考材料。",
+        },
+    )
+    return _build_status_row(
+        entry=entry,
+        status=STATUS_MISSING_REFERENCE,
+        status_reason="缺少人工 stub 参考，且函数层来源证据为空。",
+        reference_kind="",
+        reference="",
+        parameter_structure_code=row["parameter_structure_code"],
+        parameter_structure_reason=row["parameter_structure_reason"],
+        parameter_type_code=row["parameter_type_code"],
+        parameter_type_reason=row["parameter_type_reason"],
+        return_type_code=row["return_type_code"],
+        return_type_reason=row["return_type_reason"],
+    )
+
+
+def _has_double_inference_failure(entry: GeneratedSignatureEntry) -> bool:
+    """判断签名是否因参数和返回值推断均失败而无需 LLM 裁判。"""
+    return (
+        entry.function.parameter_inference_status != "success"
+        and entry.function.return_inference_status != "success"
+    )
+
+
+def _build_double_inference_failure_row(entry: GeneratedSignatureEntry) -> EvaluationRow:
+    """为参数和返回值均推断失败的签名构造本地评估结果。"""
+    return _build_status_row(
+        entry=entry,
+        status=STATUS_OK,
+        status_reason=entry.function.failure_reason or "参数和返回值推断阶段均失败。",
+        reference_kind="inference_status",
+        reference=entry.function.evidence or "",
+        parameter_structure_code="unqualified",
+        parameter_structure_reason="参数推断阶段失败，参数结构计为不合格。",
+        parameter_type_code="unqualified",
+        parameter_type_reason="参数推断阶段失败，参数类型计为不合格。",
+        return_type_code="unqualified",
+        return_type_reason="返回值推断阶段失败，返回类型计为不合格。",
+    )
 
 
 def _render_manual_stub_reference(reference: ManualStubReference) -> str:
@@ -386,19 +534,27 @@ def _build_status_row(
     status_reason: str,
     reference_kind: str,
     reference: str,
+    parameter_structure_code: str,
+    parameter_structure_reason: str,
+    parameter_type_code: str,
+    parameter_type_reason: str,
+    return_type_code: str,
+    return_type_reason: str,
 ) -> EvaluationRow:
     """构造一条带状态信息的结果。"""
     return EvaluationRow(
+        function_id=entry.function_id,
         module_name=entry.module_name,
         class_name=entry.class_name or "",
         function_name=entry.function_name,
+        signature_index=entry.signature_index,
         generated_signature=entry.generated_signature,
-        llm_parameter_structure_code="",
-        llm_parameter_structure_reason="",
-        llm_parameter_type_code="",
-        llm_parameter_type_reason="",
-        llm_return_type_code="",
-        llm_return_type_reason="",
+        parameter_structure_code=parameter_structure_code,
+        parameter_structure_reason=parameter_structure_reason,
+        parameter_type_code=parameter_type_code,
+        parameter_type_reason=parameter_type_reason,
+        return_type_code=return_type_code,
+        return_type_reason=return_type_reason,
         status=status,
         status_reason=status_reason,
         reference_kind=reference_kind,
@@ -416,13 +572,13 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         )
     else:
         reference_instructions = (
-            "参考材料是签名生成的来源，可能是 c_extension 源代码或 pybind11 的 __doc__。"
+            "参考材料是函数层签名推断来源，可能是 c_extension 源代码或 pybind11 的原始 overload 签名链。"
             "你应先使用这些参考材料判断；如果它们不足以确定函数真实语义，再结合你已知的 API 知识补充判断。"
         )
 
     system_prompt = (
-        "你是 Python 签名评估专家。"
-        "请分别判断一条生成签名的参数结构、参数类型与返回类型，是否符合函数真实语义。"
+        "你是 Python Stub 函数签名评估专家。"
+        "请分别判断一条从签名推断来源推断的Python层函数签名的参数结构、参数类型与返回类型，是否符合Python层函数的真实语义。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
         'JSON 结构固定为 {"parameter_structure_code": "...", "parameter_structure_reason": "...", '
         '"parameter_type_code": "...", "parameter_type_reason": "...", '
@@ -434,13 +590,15 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         "如果结合参考材料与已有知识后，仍无法较有把握地确定真实语义，就输出 uncertain，不要强行判 qualified 或 unqualified。"
         "如果某一维度输出 uncertain，对应的 *_reason 中既要说明你为什么无法确定，也要说明你当前更倾向的真实语义是什么。"
         "要评估的生成签名为单条，参考材料可能包含多条重载语义。若可判定为 qualified，则三个维度都必须能对应到同一条真实语义或同一条参考签名。"
-        "按语义一致判断，不要求字面完全一致。不要仅因为给定参考片段本身比较宽泛，就把宽泛签名视为合格。"
+        "按语义一致判断，不要求字面完全一致。"
     )
 
     user_prompt = (
+        f"函数ID: {entry.function_id}\n"
         f"模块: {entry.module_name}\n"
         f"类: {entry.class_name or '<module>'}\n"
         f"函数: {entry.function_name}\n"
+        f"签名序号: {entry.signature_index}\n"
         f"生成签名:\n{entry.generated_signature}\n\n"
         f"参考类型: {prepared.reference_kind}\n"
         f"参考说明: {reference_instructions}\n"
@@ -483,8 +641,8 @@ async def _write_pending_rows(
             asyncio.create_task(_evaluate_one(client, semaphore, prepared))
             for prepared in prepared_entries
         ]
-        with output_path.open("a", newline="", encoding="utf-8") as file:
-            writer = csv.DictWriter(file, fieldnames=CSV_HEADERS)
+        with output_path.open("a", encoding="utf-8", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=EVALUATION_CSV_FIELDS)
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
@@ -498,23 +656,26 @@ async def _write_pending_rows(
                 task_id = progress.add_task("评估签名", total=len(prepared_entries))
                 for task in asyncio.as_completed(tasks):
                     row = await task
-                    writer.writerow(row.to_csv_row())
-                    file.flush()
+                    _write_csv_row(writer, file, row)
                     progress.advance(task_id, 1)
     finally:
         await client.close()
 
 
-def _write_header_and_rows(output_path: Path, rows: Iterable[EvaluationRow]) -> None:
-    """写入 CSV 表头，并先落盘所有无需 LLM 的结果。"""
+def _write_initial_rows(output_path: Path, rows: Iterable[EvaluationRow]) -> None:
+    """写入所有无需 LLM 的初始结果。"""
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with output_path.open("w", newline="", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=CSV_HEADERS)
+    with output_path.open("w", encoding="utf-8", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=EVALUATION_CSV_FIELDS)
         writer.writeheader()
-        file.flush()
         for row in rows:
-            writer.writerow(row.to_csv_row())
-            file.flush()
+            _write_csv_row(writer, file, row)
+
+
+def _write_csv_row(writer: csv.DictWriter[str], file: TextIO, row: EvaluationRow) -> None:
+    """向已打开文件写入一条 CSV 记录。"""
+    writer.writerow(row.to_csv_dict())
+    file.flush()
 
 
 async def _evaluate_one(
@@ -538,9 +699,8 @@ async def _evaluate_one(
                 typer.echo(
                     f"\n评估尝试失败, "
                     f"attempt={attempt}/{DEFAULT_MAX_ATTEMPTS}, "
-                    f"module_name={prepared.entry.module_name}, "
-                    f"class_name={prepared.entry.class_name}, "
-                    f"function_name={prepared.entry.function_name}, "
+                    f"function_id={prepared.entry.function_id}, "
+                    f"signature_index={prepared.entry.signature_index}, "
                     f"ex={ex!r}"
                 )
                 if attempt >= DEFAULT_MAX_ATTEMPTS:
@@ -557,6 +717,12 @@ async def _evaluate_one(
             status_reason=f"{last_exception!r}",
             reference_kind=prepared.reference_kind,
             reference=prepared.reference,
+            parameter_structure_code="uncertain",
+            parameter_structure_reason="LLM 评估失败，无法判定参数结构。",
+            parameter_type_code="uncertain",
+            parameter_type_reason="LLM 评估失败，无法判定参数类型。",
+            return_type_code="uncertain",
+            return_type_reason="LLM 评估失败，无法判定返回类型。",
         )
 
 
@@ -623,22 +789,48 @@ def _build_llm_row(
     parsed_response: dict[str, str],
 ) -> EvaluationRow:
     """将 LLM 结果映射为最终 CSV 行。"""
+    row = _override_failed_dimensions(prepared.entry, parsed_response)
     return EvaluationRow(
+        function_id=prepared.entry.function_id,
         module_name=prepared.entry.module_name,
         class_name=prepared.entry.class_name or "",
         function_name=prepared.entry.function_name,
+        signature_index=prepared.entry.signature_index,
         generated_signature=prepared.entry.generated_signature,
-        llm_parameter_structure_code=parsed_response["parameter_structure_code"],
-        llm_parameter_structure_reason=parsed_response["parameter_structure_reason"],
-        llm_parameter_type_code=parsed_response["parameter_type_code"],
-        llm_parameter_type_reason=parsed_response["parameter_type_reason"],
-        llm_return_type_code=parsed_response["return_type_code"],
-        llm_return_type_reason=parsed_response["return_type_reason"],
+        parameter_structure_code=row["parameter_structure_code"],
+        parameter_structure_reason=row["parameter_structure_reason"],
+        parameter_type_code=row["parameter_type_code"],
+        parameter_type_reason=row["parameter_type_reason"],
+        return_type_code=row["return_type_code"],
+        return_type_reason=row["return_type_reason"],
         status=STATUS_OK,
         status_reason="",
         reference_kind=prepared.reference_kind,
         reference=prepared.reference,
     )
+
+
+def _override_failed_dimensions(
+    entry: GeneratedSignatureEntry,
+    parsed_response: dict[str, str],
+) -> dict[str, str]:
+    """按函数层推断状态覆盖已知失败的评估维度。"""
+    row = dict(parsed_response)
+    if entry.function.parameter_inference_status != "success":
+        row["parameter_structure_code"] = "unqualified"
+        row["parameter_structure_reason"] = (
+            "参数推断阶段失败，参数结构计为不合格。"
+        )
+        row["parameter_type_code"] = "unqualified"
+        row["parameter_type_reason"] = (
+            "参数推断阶段失败，参数类型计为不合格。"
+        )
+    if entry.function.return_inference_status != "success":
+        row["return_type_code"] = "unqualified"
+        row["return_type_reason"] = (
+            "返回值推断阶段失败，返回类型计为不合格。"
+        )
+    return row
 
 
 def run(
@@ -653,7 +845,7 @@ def run(
     if output_csv.exists():
         raise RuntimeError(f"输出 CSV 已存在: {output_csv}")
 
-    entries = _load_generated_entries(generated_toml)
+    entries = _load_generated_signatures(generated_toml)
     typer.echo(f"读取 TOML: {generated_toml}")
     typer.echo(f"- 生成签名条数: {len(entries)}")
     pending, immediate_rows = _prepare_evaluations(entries, manual_stub_root)
@@ -665,7 +857,7 @@ def run(
     typer.echo(f"- 输出 CSV: {output_csv}")
     if pending and not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("环境变量 OPENAI_API_KEY 未设置。")
-    _write_header_and_rows(output_csv, immediate_rows)
+    _write_initial_rows(output_csv, immediate_rows)
 
     if pending:
         typer.echo("开始调用模型评估...")
@@ -684,7 +876,7 @@ def run(
     return 0
 
 
-@app.command(help="批量评估生成 TOML 中的函数签名，并在源文件目录输出 CSV 报告。")
+@app.command(help="批量评估新版函数层 TOML 中的函数签名，并在源文件目录输出 CSV 报告。")
 def command(
     generated_toml: Path = typer.Argument(
         ...,
@@ -692,7 +884,7 @@ def command(
         file_okay=True,
         dir_okay=False,
         readable=True,
-        help="由 `pcstubgen gen --toml` 生成的 TOML 文件，输出 CSV 会自动写到同目录。",
+        help="由 `pcstubgen gen --toml` 生成的新版函数层 TOML 文件。",
     ),
     manual_stub_root: Path | None = typer.Option(
         None,
@@ -710,6 +902,7 @@ def command(
         help="并发请求数。",
     ),
 ) -> None:
+    """Typer 命令入口。"""
     exit_code = run(
         generated_toml=generated_toml,
         manual_stub_root=manual_stub_root,

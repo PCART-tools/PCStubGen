@@ -6,6 +6,7 @@ from pcstubgen import runtime
 from loguru import logger
 
 from ..completion_models import (
+    PartialSignatureCompletionError,
     SignatureCompletionContext,
     SignatureCompletionResult,
 )
@@ -34,17 +35,21 @@ class Pybind11Completer:
         raw_signatures = extract_pybind11_signatures(runtime_handle)
 
         signatures = self._parse_signatures(raw_signatures)
-        if not signatures:
-            raise RuntimeError("pybind11 单签名解析全部失败。")
 
         return SignatureCompletionResult(
             signatures=signatures,
             doc=doc,
             decorator=decorator,
+            provider="pybind11",
+            mapping_status="success",
+            parameter_inference_status="success",
+            return_inference_status="success",
         )
 
     def _parse_signatures(self, raw_signatures: list[str]) -> list[Signature]:
+        """解析 pybind11 overload 链，任一条失败即视为函数级推断失败。"""
         signatures: list[Signature] = []
+        failures: list[str] = []
         for index, raw_signature in enumerate(raw_signatures, start=1):
             try:
                 signature = parse_pybind11_signature(raw_signature)
@@ -55,10 +60,22 @@ class Pybind11Completer:
                     raw_signature,
                     ex,
                 )
+                failures.append(f"overload={index}, reason={ex!r}, raw_signature={raw_signature!r}")
                 continue
 
-            signature.comment = _build_signature_comment(raw_signature)
+            signature.raw_signature = raw_signature
             signatures.append(signature)
+
+        if failures:
+            raise PartialSignatureCompletionError(
+                "pybind11 存在无法解析的 overload: " + "; ".join(failures),
+                provider="pybind11",
+            )
+        if not signatures:
+            raise PartialSignatureCompletionError(
+                "pybind11 未提取到可解析签名。",
+                provider="pybind11",
+            )
 
         return signatures
 
@@ -92,8 +109,3 @@ def _is_internal_pybind11_member(member: object) -> bool:
     except Exception as ex:
         logger.exception(ex)
         return False
-
-
-def _build_signature_comment(raw_signature: str) -> str:
-    """为单条 pybind11 overload 构建调试注释。"""
-    return f"pybind11\n{raw_signature}"

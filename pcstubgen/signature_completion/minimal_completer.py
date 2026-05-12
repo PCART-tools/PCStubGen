@@ -14,7 +14,7 @@ class MinimalCompleter:
                 args=[
                     Argument(name="args", kind=ArgumentKind.VAR_POSITIONAL),
                     Argument(name="kwargs", kind=ArgumentKind.VAR_KEYWORD),
-                ]
+                ],
             )
         ]
         return SignatureCompletionResult(signatures=signatures)

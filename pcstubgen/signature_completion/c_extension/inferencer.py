@@ -61,6 +61,8 @@ class Inferencer:
         self._func_cursor = func_cursor
         self._flags = flags
         self._owner_class = owner_class
+        self.parameter_inference_success = False
+        self.return_inference_success = False
         self._param_cursors = [
             child
             for child in self._func_cursor.get_children()
@@ -86,9 +88,11 @@ class Inferencer:
         """按 flags 决定业务参数骨架，并在允许时读取 `PyArg_*` 细化。"""
 
         if self._flags & METH_NOARGS:
+            self.parameter_inference_success = True
             return [[]]
 
         if self._flags & METH_O:
+            self.parameter_inference_success = True
             return [[self._build_meth_o_argument()]]
 
         if self._flags & METH_FASTCALL:
@@ -97,7 +101,9 @@ class Inferencer:
                 self._infer_npy_parse_arguments,
             )
             if arguments_list:
+                self.parameter_inference_success = True
                 return arguments_list
+            self.parameter_inference_success = False
             return [self._build_minimal_arguments()]
 
         if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS:
@@ -113,7 +119,9 @@ class Inferencer:
             )
             arguments_list.extend(pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor))
             if arguments_list:
+                self.parameter_inference_success = True
                 return arguments_list
+            self.parameter_inference_success = False
             return [self._build_minimal_arguments()]
 
         if self._flags & METH_VARARGS and self._flags & METH_KEYWORDS == 0:
@@ -123,10 +131,13 @@ class Inferencer:
             )
             arguments_list.extend(pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor))
             if arguments_list:
+                self.parameter_inference_success = True
                 return arguments_list
+            self.parameter_inference_success = False
             return [self._build_minimal_arguments()]
 
         logger.error("不应该到达此处, func: {}", ast_utils.to_str(self._func_cursor))
+        self.parameter_inference_success = False
         return [[]]
 
     def _build_minimal_arguments(self) -> list[Argument]:
@@ -211,6 +222,10 @@ class Inferencer:
                 )
 
         return_type = UnionType(tuple(return_type_list)).canonicalize()
+        self.return_inference_success = any(
+            not (isinstance(item, UnionType) and item.is_empty())
+            for item in return_type_list
+        )
         if isinstance(return_type, UnionType) and len(return_type.members) == 0:
             return AnyType()
         return return_type

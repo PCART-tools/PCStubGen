@@ -54,7 +54,7 @@ class Signature:
 
     args: list[Argument] = field(default_factory=list)
     return_type: Type | None = None
-    comment: str | None = None
+    raw_signature: str | None = None
 
 
 @dataclass
@@ -65,7 +65,13 @@ class Function:
     signatures: list[Signature] = field(default_factory=list)
     decorator: Decorator = None
     doc: str | None = None
-    comment: str | None = None
+    provider: str | None = None
+    mapping_status: str = "unknown"
+    parameter_inference_status: str = "unknown"
+    return_inference_status: str = "unknown"
+    failure_reason: str | None = None
+    source_location: str | None = None
+    source_text: str | None = None
 
 
 @dataclass
