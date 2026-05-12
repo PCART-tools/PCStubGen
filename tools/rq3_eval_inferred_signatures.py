@@ -73,6 +73,7 @@ EVALUATION_CSV_FIELDS = [
     "return_type_reason",
     "status",
     "status_reason",
+    "reasoning_content",
     "reference_kind",
     "reference",
 ]
@@ -161,6 +162,14 @@ class PreparedEvaluation:
 
 
 @dataclass(frozen=True)
+class LLMCompletionResult:
+    """一次 LLM 评估请求返回的正文与推理内容。"""
+
+    content: str
+    reasoning_content: str
+
+
+@dataclass(frozen=True)
 class EvaluationRow:
     """CSV 输出的一行评估结果。"""
 
@@ -178,6 +187,7 @@ class EvaluationRow:
     return_type_reason: str
     status: str
     status_reason: str
+    reasoning_content: str
     reference_kind: str
     reference: str
 
@@ -198,6 +208,7 @@ class EvaluationRow:
             "return_type_reason": self.return_type_reason,
             "status": self.status,
             "status_reason": self.status_reason,
+            "reasoning_content": self.reasoning_content,
             "reference_kind": self.reference_kind,
             "reference": self.reference,
         }
@@ -479,6 +490,7 @@ def _build_missing_reference_row(entry: InferredSignatureEntry) -> EvaluationRow
         entry=entry,
         status=STATUS_MISSING_REFERENCE,
         status_reason="缺少人工 stub 参考，且函数层来源证据为空。",
+        reasoning_content="",
         reference_kind="",
         reference="",
         parameter_structure_code=row["parameter_structure_code"],
@@ -504,6 +516,7 @@ def _build_double_inference_failure_row(entry: InferredSignatureEntry) -> Evalua
         entry=entry,
         status=STATUS_OK,
         status_reason=entry.function.failure_reason or "参数和返回值推断阶段均失败。",
+        reasoning_content="",
         reference_kind="inference_status",
         reference=entry.function.evidence or "",
         parameter_structure_code="unqualified",
@@ -532,6 +545,7 @@ def _build_status_row(
     entry: InferredSignatureEntry,
     status: str,
     status_reason: str,
+    reasoning_content: str,
     reference_kind: str,
     reference: str,
     parameter_structure_code: str,
@@ -557,6 +571,7 @@ def _build_status_row(
         return_type_reason=return_type_reason,
         status=status,
         status_reason=status_reason,
+        reasoning_content=reasoning_content,
         reference_kind=reference_kind,
         reference=reference,
     )
@@ -578,7 +593,7 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
 
     system_prompt = (
         "你是 Python Stub 函数签名评估专家。"
-        "请分别判断一条从签名推断来源推断出的 Python 层函数签名的参数结构、参数类型与返回类型，是否符合 Python 层函数的真实语义。"
+        "请分别判断一条从扩展API签名推断来源推断出的 Python 层函数签名的参数结构、参数类型与返回类型，是否符合函数在Python层的真实语义。"
         "输出必须是严格 JSON 对象，不要输出 Markdown、代码块或额外文字。"
         'JSON 结构固定为 {"parameter_structure_code": "...", "parameter_structure_reason": "...", '
         '"parameter_type_code": "...", "parameter_type_reason": "...", '
@@ -592,6 +607,11 @@ def _build_messages(prepared: PreparedEvaluation) -> list[ChatCompletionMessageP
         "要评估的推断签名为单条，参考材料可能包含多条重载语义。"
         "若可判定为 qualified，则三个维度都必须能对应到同一条真实语义或同一条参考签名。"
         "按语义一致判断，不要求字面完全一致。"
+        "理解 PyArg_ParseTuple 或 PyArg_ParseTupleAndKeywords 的格式串时，参考以下 Python 官方文档原文："
+        "(items) (tuple) [matching-items] "
+        "对象必须是 Python 序列，它的长度是 items 中格式单元的数量。"
+        "C 参数必须对应 items 中每一个独立的格式单元。"
+        "序列中的格式单元可能有嵌套。"
     )
 
     user_prompt = (
@@ -693,8 +713,8 @@ async def _evaluate_one(
         for attempt in range(1, DEFAULT_MAX_ATTEMPTS + 1):
             try:
                 response = await _request_completion(client, messages)
-                parsed = _parse_llm_response(response)
-                return _build_llm_row(prepared, parsed)
+                parsed = _parse_llm_response(response.content)
+                return _build_llm_row(prepared, parsed, response.reasoning_content)
             except Exception as ex:
                 last_exception = ex
                 typer.echo(
@@ -716,6 +736,7 @@ async def _evaluate_one(
             entry=prepared.entry,
             status=STATUS_LLM_ERROR,
             status_reason=f"{last_exception!r}",
+            reasoning_content="",
             reference_kind=prepared.reference_kind,
             reference=prepared.reference,
             parameter_structure_code="uncertain",
@@ -730,7 +751,7 @@ async def _evaluate_one(
 async def _request_completion(
     client: AsyncOpenAI,
     messages: list[ChatCompletionMessageParam],
-) -> str:
+) -> LLMCompletionResult:
     """请求一次 DeepSeek 评估结果。"""
     completion = await client.chat.completions.create(
         model=MODEL,
@@ -740,10 +761,14 @@ async def _request_completion(
         stream=False,
         extra_body=EXTRA_BODY,
     )
-    content = completion.choices[0].message.content
+    message = completion.choices[0].message
+    content = message.content
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("模型返回的 content 为空。")
-    return content
+    return LLMCompletionResult(
+        content=content,
+        reasoning_content=message.reasoning_content or "",
+    )
 
 
 def _parse_llm_response(response_text: str) -> dict[str, str]:
@@ -788,6 +813,7 @@ def _parse_llm_response(response_text: str) -> dict[str, str]:
 def _build_llm_row(
     prepared: PreparedEvaluation,
     parsed_response: dict[str, str],
+    reasoning_content: str,
 ) -> EvaluationRow:
     """将 LLM 结果映射为最终 CSV 行。"""
     row = _override_failed_dimensions(prepared.entry, parsed_response)
@@ -806,6 +832,7 @@ def _build_llm_row(
         return_type_reason=row["return_type_reason"],
         status=STATUS_OK,
         status_reason="",
+        reasoning_content=reasoning_content,
         reference_kind=prepared.reference_kind,
         reference=prepared.reference,
     )
