@@ -69,10 +69,13 @@ class Inferencer:
             if child.kind == CursorKind.PARM_DECL
         ]
 
+        # pytorch py arg parser 移除返回None，实际不可达分支
+        self.used_pytorch_py_arg_parser = False
+
     def run(self) -> list[Signature]:
         """汇合参数推断与返回值推断结果，直接推断签名。"""
-        return_type = self._infer_return_type()
         arguments_list = self._infer_arguments_list()
+        return_type = self._infer_return_type()
         for args in arguments_list:
             self._try_add_receiver(args)
 
@@ -117,7 +120,10 @@ class Inferencer:
                     self._infer_pyarg_parse_tuple_and_keywords_arguments,
                 )
             )
-            arguments_list.extend(pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor))
+            pytorch_ans = pytorch_rules.infer_python_arg_parser_arguments(self._func_cursor)
+            if pytorch_ans:
+                self.used_pytorch_py_arg_parser = True
+            arguments_list.extend(pytorch_ans)
             if arguments_list:
                 self.parameter_inference_success = True
                 return arguments_list
@@ -221,13 +227,16 @@ class Inferencer:
                     ex,
                 )
 
+        if self.used_pytorch_py_arg_parser:
+            return_type_list = [x for x in return_type_list if x != RawType.none_]
+
         return_type = UnionType(tuple(return_type_list)).canonicalize()
-        self.return_inference_success = any(
-            not (isinstance(item, UnionType) and item.is_empty())
-            for item in return_type_list
-        )
-        if isinstance(return_type, UnionType) and len(return_type.members) == 0:
+
+        if isinstance(return_type, UnionType) and return_type.is_empty():
+            self.return_inference_success = False
             return AnyType()
+
+        self.return_inference_success = True
         return return_type
 
     def _infer_pyarg_parse_tuple_arguments(self, call_expr: Cursor) -> list[Argument]:
