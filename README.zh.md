@@ -96,3 +96,7 @@ sudo apt-get install libpq-dev
 ```bash
 sudo apt install libomp-dev
 ```
+
+## 许可证
+
+PCStubGen 采用 Apache License 2.0 授权。详情请参见 [LICENSE.txt](./LICENSE.txt)。
