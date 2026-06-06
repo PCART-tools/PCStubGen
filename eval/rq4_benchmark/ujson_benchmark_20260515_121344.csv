@@ -1,0 +1,7 @@
+function_id,elapsed_ns,elapsed_ms,provider,mapping_status,parameter_inference_status,return_inference_status,signature_count,failure_reason
+ujson:decode,105055273,105.055273,c_extension,success,success,failed,1,
+ujson:dump,96392835,96.392835,c_extension,success,success,success,1,
+ujson:encode,52571561,52.571561,c_extension,success,success,success,1,
+ujson:dumps,49550522,49.550522,c_extension,success,success,success,1,
+ujson:loads,8270295,8.270295,c_extension,success,success,failed,1,
+ujson:load,4718955,4.718955,c_extension,success,success,failed,1,

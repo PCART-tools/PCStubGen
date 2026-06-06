@@ -1,0 +1,15 @@
+{
+  "module_name": "ujson",
+  "compilation_database": "/home/kirara/third_package_source/ultrajson-5.12.0/compile_commands.json",
+  "summary": {
+    "functions": 6,
+    "total_elapsed_ms": 316.559441,
+    "avg_elapsed_ms": 52.75990683333334,
+    "min_elapsed_ms": 4.718955,
+    "max_elapsed_ms": 105.055273,
+    "p50_elapsed_ms": 49.550522,
+    "p90_elapsed_ms": 96.392835,
+    "p95_elapsed_ms": 96.392835
+  },
+  "timing_csv": "out/benchmark/ujson_benchmark_20260515_121344.csv"
+}

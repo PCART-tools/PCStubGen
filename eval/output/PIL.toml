@@ -1,0 +1,5102 @@
+[[functions]]
+function_id = "PIL._avif:AvifDecoder"
+module_name = "PIL._avif"
+function_name = "AvifDecoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'src/_avif.c', line 614, column 1>"
+source_text = """
+PyObject *
+AvifDecoderNew(PyObject *self_, PyObject *args) {
+    Py_buffer buffer;
+    AvifDecoderObject *self = NULL;
+    avifDecoder *decoder;
+
+    char *codec_str;
+    avifCodecChoice codec;
+    int max_threads;
+
+    avifResult result;
+
+    if (!PyArg_ParseTuple(args, "y*si", &buffer, &codec_str, &max_threads)) {
+        return NULL;
+    }
+
+    if (strcmp(codec_str, "auto") == 0) {
+        codec = AVIF_CODEC_CHOICE_AUTO;
+    } else {
+        codec = avifCodecChoiceFromName(codec_str);
+    }
+
+    self = PyObject_New(AvifDecoderObject, &AvifDecoder_Type);
+    if (!self) {
+        PyErr_SetString(PyExc_RuntimeError, "could not create decoder object");
+        PyBuffer_Release(&buffer);
+        return NULL;
+    }
+
+    decoder = avifDecoderCreate();
+    if (!decoder) {
+        PyErr_SetString(PyExc_MemoryError, "Can't allocate decoder");
+        PyBuffer_Release(&buffer);
+        PyObject_Del(self);
+        return NULL;
+    }
+    decoder->maxThreads = max_threads;
+    // Turn off libavif's 'clap' (clean aperture) property validation.
+    decoder->strictFlags &= ~AVIF_STRICT_CLAP_VALID;
+    // Allow the PixelInformationProperty ('pixi') to be missing in AV1 image
+    // items. libheif v1.11.0 and older does not add the 'pixi' item property to
+    // AV1 image items.
+    decoder->strictFlags &= ~AVIF_STRICT_PIXI_REQUIRED;
+    decoder->codecChoice = codec;
+
+    result = avifDecoderSetIOMemory(decoder, buffer.buf, buffer.len);
+    if (result != AVIF_RESULT_OK) {
+        PyErr_Format(
+            exc_type_for_avif_result(result),
+            "Setting IO memory failed: %s",
+            avifResultToString(result)
+        );
+        avifDecoderDestroy(decoder);
+        PyBuffer_Release(&buffer);
+        PyObject_Del(self);
+        return NULL;
+    }
+
+    result = avifDecoderParse(decoder);
+    if (result != AVIF_RESULT_OK) {
+        PyErr_Format(
+            exc_type_for_avif_result(result),
+            "Failed to decode image: %s",
+            avifResultToString(result)
+        );
+        avifDecoderDestroy(decoder);
+        PyBuffer_Release(&buffer);
+        PyObject_Del(self);
+        return NULL;
+    }
+
+    self->decoder = decoder;
+    self->buffer = buffer;
+
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def AvifDecoder(
+    buffer: collections.abc.Buffer,
+    codec_str: str,
+    max_threads: int,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "PIL._avif:AvifEncoder"
+module_name = "PIL._avif"
+function_name = "AvifEncoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'src/_avif.c', line 214, column 1>"
+source_text = """
+PyObject *
+AvifEncoderNew(PyObject *self_, PyObject *args) {
+    unsigned int width, height;
+    AvifEncoderObject *self = NULL;
+    avifEncoder *encoder = NULL;
+
+    char *subsampling;
+    int quality;
+    int speed;
+    int exif_orientation;
+    int max_threads;
+    Py_buffer icc_buffer;
+    Py_buffer exif_buffer;
+    Py_buffer xmp_buffer;
+    int alpha_premultiplied;
+    int autotiling;
+    int tile_rows_log2;
+    int tile_cols_log2;
+
+    char *codec;
+    char *range;
+
+    PyObject *advanced;
+    int error = 0;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "(II)siiissiippy*y*iy*O",
+            &width,
+            &height,
+            &subsampling,
+            &quality,
+            &speed,
+            &max_threads,
+            &codec,
+            &range,
+            &tile_rows_log2,
+            &tile_cols_log2,
+            &alpha_premultiplied,
+            &autotiling,
+            &icc_buffer,
+            &exif_buffer,
+            &exif_orientation,
+            &xmp_buffer,
+            &advanced
+        )) {
+        return NULL;
+    }
+
+    // Create a new animation encoder and picture frame
+    avifImage *image = avifImageCreateEmpty();
+    if (image == NULL) {
+        PyErr_SetString(PyExc_ValueError, "Image creation failed");
+        error = 1;
+        goto end;
+    }
+
+    // Set these in advance so any upcoming RGB -> YUV use the proper coefficients
+    if (strcmp(range, "full") == 0) {
+        image->yuvRange = AVIF_RANGE_FULL;
+    } else if (strcmp(range, "limited") == 0) {
+        image->yuvRange = AVIF_RANGE_LIMITED;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "Invalid range");
+        error = 1;
+        goto end;
+    }
+    if (strcmp(subsampling, "4:0:0") == 0) {
+        image->yuvFormat = AVIF_PIXEL_FORMAT_YUV400;
+    } else if (strcmp(subsampling, "4:2:0") == 0) {
+        image->yuvFormat = AVIF_PIXEL_FORMAT_YUV420;
+    } else if (strcmp(subsampling, "4:2:2") == 0) {
+        image->yuvFormat = AVIF_PIXEL_FORMAT_YUV422;
+    } else if (strcmp(subsampling, "4:4:4") == 0) {
+        image->yuvFormat = AVIF_PIXEL_FORMAT_YUV444;
+    } else {
+        PyErr_Format(PyExc_ValueError, "Invalid subsampling: %s", subsampling);
+        error = 1;
+        goto end;
+    }
+
+    // Validate canvas dimensions
+    if (width == 0 || height == 0) {
+        PyErr_SetString(PyExc_ValueError, "invalid canvas dimensions");
+        error = 1;
+        goto end;
+    }
+    image->width = width;
+    image->height = height;
+
+    image->depth = 8;
+    image->alphaPremultiplied = alpha_premultiplied ? AVIF_TRUE : AVIF_FALSE;
+
+    encoder = avifEncoderCreate();
+    if (!encoder) {
+        PyErr_SetString(PyExc_MemoryError, "Can't allocate encoder");
+        error = 1;
+        goto end;
+    }
+
+    int is_aom_encode = strcmp(codec, "aom") == 0 ||
+                        (strcmp(codec, "auto") == 0 &&
+                         _codec_available("aom", AVIF_CODEC_FLAG_CAN_ENCODE));
+    encoder->maxThreads = is_aom_encode && max_threads > 64 ? 64 : max_threads;
+
+    encoder->quality = quality;
+
+    if (strcmp(codec, "auto") == 0) {
+        encoder->codecChoice = AVIF_CODEC_CHOICE_AUTO;
+    } else {
+        encoder->codecChoice = avifCodecChoiceFromName(codec);
+    }
+    if (speed < AVIF_SPEED_SLOWEST) {
+        speed = AVIF_SPEED_SLOWEST;
+    } else if (speed > AVIF_SPEED_FASTEST) {
+        speed = AVIF_SPEED_FASTEST;
+    }
+    encoder->speed = speed;
+    encoder->timescale = (uint64_t)1000;
+
+    encoder->autoTiling = autotiling ? AVIF_TRUE : AVIF_FALSE;
+    if (!autotiling) {
+        encoder->tileRowsLog2 = normalize_tiles_log2(tile_rows_log2);
+        encoder->tileColsLog2 = normalize_tiles_log2(tile_cols_log2);
+    }
+
+    if (advanced != Py_None && _add_codec_specific_options(encoder, advanced)) {
+        error = 1;
+        goto end;
+    }
+
+    self = PyObject_New(AvifEncoderObject, &AvifEncoder_Type);
+    if (!self) {
+        PyErr_SetString(PyExc_RuntimeError, "could not create encoder object");
+        error = 1;
+        goto end;
+    }
+    self->first_frame = 1;
+
+    avifResult result;
+    if (icc_buffer.len) {
+        result = avifImageSetProfileICC(image, icc_buffer.buf, icc_buffer.len);
+        if (result != AVIF_RESULT_OK) {
+            PyErr_Format(
+                exc_type_for_avif_result(result),
+                "Setting ICC profile failed: %s",
+                avifResultToString(result)
+            );
+            error = 1;
+            goto end;
+        }
+        // colorPrimaries and transferCharacteristics are ignored when an ICC
+        // profile is present, so set them to UNSPECIFIED.
+        image->colorPrimaries = AVIF_COLOR_PRIMARIES_UNSPECIFIED;
+        image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_UNSPECIFIED;
+    } else {
+        image->colorPrimaries = AVIF_COLOR_PRIMARIES_BT709;
+        image->transferCharacteristics = AVIF_TRANSFER_CHARACTERISTICS_SRGB;
+    }
+    image->matrixCoefficients = AVIF_MATRIX_COEFFICIENTS_BT601;
+
+    if (exif_buffer.len) {
+        result = avifImageSetMetadataExif(image, exif_buffer.buf, exif_buffer.len);
+        if (result != AVIF_RESULT_OK) {
+            PyErr_Format(
+                exc_type_for_avif_result(result),
+                "Setting EXIF data failed: %s",
+                avifResultToString(result)
+            );
+            error = 1;
+            goto end;
+        }
+    }
+
+    if (xmp_buffer.len) {
+        result = avifImageSetMetadataXMP(image, xmp_buffer.buf, xmp_buffer.len);
+        if (result != AVIF_RESULT_OK) {
+            PyErr_Format(
+                exc_type_for_avif_result(result),
+                "Setting XMP data failed: %s",
+                avifResultToString(result)
+            );
+            error = 1;
+            goto end;
+        }
+    }
+
+    if (exif_orientation > 1) {
+        exif_orientation_to_irot_imir(image, exif_orientation);
+    }
+
+    self->image = image;
+    self->encoder = encoder;
+
+end:
+    PyBuffer_Release(&icc_buffer);
+    PyBuffer_Release(&exif_buffer);
+    PyBuffer_Release(&xmp_buffer);
+
+    if (error) {
+        if (image) {
+            avifImageDestroy(image);
+        }
+        if (encoder) {
+            avifEncoderDestroy(encoder);
+        }
+        if (self) {
+            PyObject_Del(self);
+        }
+        return NULL;
+    }
+
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def AvifEncoder(
+    width_height: tuple[int, int],
+    subsampling: str,
+    quality: int,
+    speed: int,
+    max_threads: int,
+    codec: str,
+    range: str,
+    tile_rows_log2: int,
+    tile_cols_log2: int,
+    alpha_premultiplied: bool,
+    autotiling: bool,
+    icc_buffer: collections.abc.Buffer,
+    exif_buffer: collections.abc.Buffer,
+    exif_orientation: int,
+    xmp_buffer: collections.abc.Buffer,
+    advanced: object,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "PIL._avif:codec_versions"
+module_name = "PIL._avif"
+function_name = "codec_versions"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_avif.c', line 164, column 1>"
+source_text = """
+PyObject *
+_codec_versions(PyObject *self, PyObject *args) {
+    char buffer[256];
+    avifCodecVersions(buffer);
+    return PyUnicode_FromString(buffer);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def codec_versions() -> str:"
+
+[[functions]]
+function_id = "PIL._avif:decoder_codec_available"
+module_name = "PIL._avif"
+function_name = "decoder_codec_available"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_avif.c', line 144, column 1>"
+source_text = """
+PyObject *
+_decoder_codec_available(PyObject *self, PyObject *args) {
+    char *codec_name;
+    if (!PyArg_ParseTuple(args, "s", &codec_name)) {
+        return NULL;
+    }
+    int is_available = _codec_available(codec_name, AVIF_CODEC_FLAG_CAN_DECODE);
+    return PyBool_FromLong(is_available);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def decoder_codec_available(codec_name: str, /) -> bool:"
+
+[[functions]]
+function_id = "PIL._avif:encoder_codec_available"
+module_name = "PIL._avif"
+function_name = "encoder_codec_available"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_avif.c', line 154, column 1>"
+source_text = """
+PyObject *
+_encoder_codec_available(PyObject *self, PyObject *args) {
+    char *codec_name;
+    if (!PyArg_ParseTuple(args, "s", &codec_name)) {
+        return NULL;
+    }
+    int is_available = _codec_available(codec_name, AVIF_CODEC_FLAG_CAN_ENCODE);
+    return PyBool_FromLong(is_available);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def encoder_codec_available(codec_name: str, /) -> bool:"
+
+[[functions]]
+function_id = "PIL._imaging:alpha_composite"
+module_name = "PIL._imaging"
+function_name = "alpha_composite"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 779, column 1>"
+source_text = """
+static PyObject *
+_alpha_composite(ImagingObject *self, PyObject *args) {
+    ImagingObject *imagep1;
+    ImagingObject *imagep2;
+
+    if (!PyArg_ParseTuple(
+            args, "O!O!", &Imaging_Type, &imagep1, &Imaging_Type, &imagep2
+        )) {
+        return NULL;
+    }
+
+    return PyImagingNew(ImagingAlphaComposite(imagep1->image, imagep2->image));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def alpha_composite(
+    imagep1: PIL.Image.core.ImagingCore,
+    imagep2: PIL.Image.core.ImagingCore,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:bcn_decoder"
+module_name = "PIL._imaging"
+function_name = "bcn_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 358, column 1>"
+source_text = """
+PyObject *
+PyImaging_BcnDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name;
+    int n = 0;
+    char *pixel_format = "";
+    if (!PyArg_ParseTuple(args, "si|s", &mode_name, &n, &pixel_format)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    ModeID actual;
+
+    switch (n) {
+        case 1: /* BC1: 565 color, 1-bit alpha */
+        case 2: /* BC2: 565 color, 4-bit alpha */
+        case 3: /* BC3: 565 color, 2-endpoint 8-bit interpolated alpha */
+        case 7: /* BC7: 4-channel 8-bit via everything */
+            actual = IMAGING_MODE_RGBA;
+            break;
+        case 4: /* BC4: 1-channel 8-bit via 1 BC3 alpha block */
+            actual = IMAGING_MODE_L;
+            break;
+        case 5: /* BC5: 2-channel 8-bit via 2 BC3 alpha blocks */
+        case 6: /* BC6: 3-channel 16-bit float */
+            actual = IMAGING_MODE_RGB;
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "block compression type unknown");
+            return NULL;
+    }
+
+    if (mode != actual) {
+        PyErr_SetString(PyExc_ValueError, "bad image mode");
+        return NULL;
+    }
+
+    decoder = PyImaging_DecoderNew(sizeof(char *));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingBcnDecode;
+    decoder->state.state = n;
+    ((BCNSTATE *)decoder->state.context)->pixel_format = pixel_format;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def bcn_decoder(
+    mode_name: str,
+    n: int,
+    pixel_format: str = '',
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:bcn_encoder"
+module_name = "PIL._imaging"
+function_name = "bcn_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 387, column 1>"
+source_text = """
+PyObject *
+PyImaging_BcnEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode;
+    int n;
+    if (!PyArg_ParseTuple(args, "si", &mode, &n)) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingBcnEncode;
+    encoder->state.state = n;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def bcn_encoder(
+    mode: str,
+    n: int,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:bit_decoder"
+module_name = "PIL._imaging"
+function_name = "bit_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 315, column 1>"
+source_text = """
+PyObject *
+PyImaging_BitDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    const char *mode_name;
+    int bits = 8;
+    int pad = 8;
+    int fill = 0;
+    int sign = 0;
+    int ystep = 1;
+    if (!PyArg_ParseTuple(
+            args, "s|iiiii", &mode_name, &bits, &pad, &fill, &sign, &ystep
+        )) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    if (mode != IMAGING_MODE_F) {
+        PyErr_SetString(PyExc_ValueError, "bad image mode");
+        return NULL;
+    }
+
+    decoder = PyImaging_DecoderNew(sizeof(BITSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingBitDecode;
+
+    decoder->state.ystep = ystep;
+
+    ((BITSTATE *)decoder->state.context)->bits = bits;
+    ((BITSTATE *)decoder->state.context)->pad = pad;
+    ((BITSTATE *)decoder->state.context)->fill = fill;
+    ((BITSTATE *)decoder->state.context)->sign = sign;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def bit_decoder(
+    mode_name: str,
+    bits: int = 8,
+    pad: int = 8,
+    fill: int = 0,
+    sign: int = 0,
+    ystep: int = 1,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:blend"
+module_name = "PIL._imaging"
+function_name = "blend"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 793, column 1>"
+source_text = """
+static PyObject *
+_blend(ImagingObject *self, PyObject *args) {
+    ImagingObject *imagep1;
+    ImagingObject *imagep2;
+    double alpha;
+
+    alpha = 0.5;
+    if (!PyArg_ParseTuple(
+            args, "O!O!|d", &Imaging_Type, &imagep1, &Imaging_Type, &imagep2, &alpha
+        )) {
+        return NULL;
+    }
+
+    return PyImagingNew(ImagingBlend(imagep1->image, imagep2->image, (float)alpha));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def blend(
+    imagep1: PIL.Image.core.ImagingCore,
+    imagep2: PIL.Image.core.ImagingCore,
+    alpha: float = 0.5,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:clear_cache"
+module_name = "PIL._imaging"
+function_name = "clear_cache"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 4076, column 1>"
+source_text = """
+static PyObject *
+_clear_cache(PyObject *self, PyObject *args) {
+    int i = 0;
+
+    if (!PyArg_ParseTuple(args, "|i:clear_cache", &i)) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    ImagingMemoryClearCache(&ImagingDefaultArena, i);
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def clear_cache(i: int = 0, /) -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:convert"
+module_name = "PIL._imaging"
+function_name = "convert"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 1014, column 1>"
+source_text = """
+static PyObject *
+_convert2(ImagingObject *self, PyObject *args) {
+    ImagingObject *imagep1;
+    ImagingObject *imagep2;
+    if (!PyArg_ParseTuple(
+            args, "O!O!", &Imaging_Type, &imagep1, &Imaging_Type, &imagep2
+        )) {
+        return NULL;
+    }
+
+    if (!ImagingConvert2(imagep1->image, imagep2->image)) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def convert(
+    imagep1: PIL.Image.core.ImagingCore,
+    imagep2: PIL.Image.core.ImagingCore,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "PIL._imaging:draw"
+module_name = "PIL._imaging"
+function_name = "draw"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 2917, column 1>"
+source_text = """
+static PyObject *
+_draw_new(PyObject *self_, PyObject *args) {
+    ImagingDrawObject *self;
+
+    ImagingObject *imagep;
+    int blend = 0;
+    if (!PyArg_ParseTuple(args, "O!|i", &Imaging_Type, &imagep, &blend)) {
+        return NULL;
+    }
+
+    self = PyObject_New(ImagingDrawObject, &ImagingDraw_Type);
+    if (self == NULL) {
+        return NULL;
+    }
+
+    /* keep a reference to the image object */
+    Py_INCREF(imagep);
+    self->image = imagep;
+
+    self->ink[0] = self->ink[1] = self->ink[2] = self->ink[3] = 0;
+
+    self->blend = blend;
+
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def draw(
+    imagep: PIL.Image.core.ImagingCore,
+    blend: int = 0,
+    /,
+) -> PIL.Image.core.ImagingDraw:"""
+
+[[functions]]
+function_id = "PIL._imaging:effect_mandelbrot"
+module_name = "PIL._imaging"
+function_name = "effect_mandelbrot"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3563, column 1>"
+source_text = """
+static PyObject *
+_effect_mandelbrot(ImagingObject *self, PyObject *args) {
+    int xsize = 512;
+    int ysize = 512;
+    double extent[4];
+    int quality = 100;
+
+    extent[0] = -3;
+    extent[1] = -2.5;
+    extent[2] = 2;
+    extent[3] = 2.5;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "|(ii)(dddd)i",
+            &xsize,
+            &ysize,
+            &extent[0],
+            &extent[1],
+            &extent[2],
+            &extent[3],
+            &quality
+        )) {
+        return NULL;
+    }
+
+    return PyImagingNew(ImagingEffectMandelbrot(xsize, ysize, extent, quality));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def effect_mandelbrot(
+    xsize_ysize: tuple[int, int] = (512, 512),
+    extent: tuple[float, float, float, float] = (-3.0, -2.5, 2.0, 2.5),
+    quality: int = 100,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:effect_noise"
+module_name = "PIL._imaging"
+function_name = "effect_noise"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3592, column 1>"
+source_text = """
+static PyObject *
+_effect_noise(ImagingObject *self, PyObject *args) {
+    int xsize, ysize;
+    float sigma = 128;
+    if (!PyArg_ParseTuple(args, "(ii)|f", &xsize, &ysize, &sigma)) {
+        return NULL;
+    }
+
+    return PyImagingNew(ImagingEffectNoise(xsize, ysize, sigma));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def effect_noise(
+    xsize_ysize: tuple[int, int],
+    sigma: float = 128.0,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:eps_encoder"
+module_name = "PIL._imaging"
+function_name = "eps_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 412, column 1>"
+source_text = """
+PyObject *
+PyImaging_EpsEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingEpsEncode;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def eps_encoder(*args: object) -> PIL.Image.core.ImagingEncoder:"
+
+[[functions]]
+function_id = "PIL._imaging:fill"
+module_name = "PIL._imaging"
+function_name = "fill"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 690, column 1>"
+source_text = """
+static PyObject *
+_fill(PyObject *self, PyObject *args) {
+    char *mode_name;
+    int xsize, ysize;
+    PyObject *color;
+    char buffer[4];
+    Imaging im;
+
+    xsize = ysize = 256;
+    color = NULL;
+
+    if (!PyArg_ParseTuple(args, "s|(ii)O", &mode_name, &xsize, &ysize, &color)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    im = ImagingNewDirty(mode, xsize, ysize);
+    if (!im) {
+        return NULL;
+    }
+
+    buffer[0] = buffer[1] = buffer[2] = buffer[3] = 0;
+    if (color) {
+        if (!getink(color, im, buffer)) {
+            ImagingDelete(im);
+            return NULL;
+        }
+    }
+
+    (void)ImagingFill(im, buffer);
+
+    return PyImagingNew(im);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def fill(
+    mode_name: str,
+    xsize_ysize: tuple[int, int] = (256, 256),
+    color: object = ...,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:fli_decoder"
+module_name = "PIL._imaging"
+function_name = "fli_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 412, column 1>"
+source_text = """
+PyObject *
+PyImaging_FliDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingFliDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def fli_decoder(*args: object) -> PIL.Image.core.ImagingDecoder:"
+
+[[functions]]
+function_id = "PIL._imaging:font"
+module_name = "PIL._imaging"
+function_name = "font"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 2688, column 1>"
+source_text = """
+static PyObject *
+_font_new(PyObject *self_, PyObject *args) {
+    ImagingFontObject *self;
+    int i, y0, y1;
+    static const char *wrong_length = "descriptor table has wrong size";
+
+    ImagingObject *imagep;
+    unsigned char *glyphdata;
+    Py_ssize_t glyphdata_length;
+    if (!PyArg_ParseTuple(
+            args, "O!y#", &Imaging_Type, &imagep, &glyphdata, &glyphdata_length
+        )) {
+        return NULL;
+    }
+
+    if (glyphdata_length != 256 * 20) {
+        PyErr_SetString(PyExc_ValueError, wrong_length);
+        return NULL;
+    }
+
+    self = PyObject_New(ImagingFontObject, &ImagingFont_Type);
+    if (self == NULL) {
+        return NULL;
+    }
+
+    /* glyph bitmap */
+    self->bitmap = imagep->image;
+
+    y0 = y1 = 0;
+
+    /* glyph glyphs */
+    for (i = 0; i < 256; i++) {
+        self->glyphs[i].dx = S16(B16(glyphdata, 0));
+        self->glyphs[i].dy = S16(B16(glyphdata, 2));
+        self->glyphs[i].dx0 = S16(B16(glyphdata, 4));
+        self->glyphs[i].dy0 = S16(B16(glyphdata, 6));
+        self->glyphs[i].dx1 = S16(B16(glyphdata, 8));
+        self->glyphs[i].dy1 = S16(B16(glyphdata, 10));
+        self->glyphs[i].sx0 = S16(B16(glyphdata, 12));
+        self->glyphs[i].sy0 = S16(B16(glyphdata, 14));
+        self->glyphs[i].sx1 = S16(B16(glyphdata, 16));
+        self->glyphs[i].sy1 = S16(B16(glyphdata, 18));
+
+        // Do not allow glyphs to extend beyond bitmap image
+        // Helps prevent DOS by stopping cropped images being larger than the original
+        if (self->glyphs[i].sx0 < 0) {
+            self->glyphs[i].dx0 -= self->glyphs[i].sx0;
+            self->glyphs[i].sx0 = 0;
+        }
+        if (self->glyphs[i].sy0 < 0) {
+            self->glyphs[i].dy0 -= self->glyphs[i].sy0;
+            self->glyphs[i].sy0 = 0;
+        }
+        if (self->glyphs[i].sx1 > self->bitmap->xsize) {
+            self->glyphs[i].dx1 -= self->glyphs[i].sx1 - self->bitmap->xsize;
+            self->glyphs[i].sx1 = self->bitmap->xsize;
+        }
+        if (self->glyphs[i].sy1 > self->bitmap->ysize) {
+            self->glyphs[i].dy1 -= self->glyphs[i].sy1 - self->bitmap->ysize;
+            self->glyphs[i].sy1 = self->bitmap->ysize;
+        }
+
+        if (self->glyphs[i].dy0 < y0) {
+            y0 = self->glyphs[i].dy0;
+        }
+        if (self->glyphs[i].dy1 > y1) {
+            y1 = self->glyphs[i].dy1;
+        }
+        glyphdata += 20;
+    }
+
+    self->baseline = -y0;
+    self->ysize = y1 - y0;
+
+    /* keep a reference to the bitmap object */
+    Py_INCREF(imagep);
+    self->ref = imagep;
+
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def font(
+    imagep: PIL.Image.core.ImagingCore,
+    glyphdata: collections.abc.Buffer,
+    /,
+) -> PIL.Image.core.ImagingFont:"""
+
+[[functions]]
+function_id = "PIL._imaging:get_alignment"
+module_name = "PIL._imaging"
+function_name = "get_alignment"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3949, column 1>"
+source_text = """
+static PyObject *
+_get_alignment(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, ":get_alignment")) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    int alignment = ImagingDefaultArena.alignment;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+    return PyLong_FromLong(alignment);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_alignment() -> int:"
+
+[[functions]]
+function_id = "PIL._imaging:get_block_size"
+module_name = "PIL._imaging"
+function_name = "get_block_size"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3961, column 1>"
+source_text = """
+static PyObject *
+_get_block_size(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, ":get_block_size")) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    int block_size = ImagingDefaultArena.block_size;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+    return PyLong_FromLong(block_size);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_block_size() -> int:"
+
+[[functions]]
+function_id = "PIL._imaging:get_blocks_max"
+module_name = "PIL._imaging"
+function_name = "get_blocks_max"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3973, column 1>"
+source_text = """
+static PyObject *
+_get_blocks_max(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, ":get_blocks_max")) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    int blocks_max = ImagingDefaultArena.blocks_max;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+    return PyLong_FromLong(blocks_max);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_blocks_max() -> int:"
+
+[[functions]]
+function_id = "PIL._imaging:get_stats"
+module_name = "PIL._imaging"
+function_name = "get_stats"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3886, column 1>"
+source_text = """
+static PyObject *
+_get_stats(PyObject *self, PyObject *args) {
+    PyObject *d;
+    PyObject *v;
+
+    if (!PyArg_ParseTuple(args, ":get_stats")) {
+        return NULL;
+    }
+
+    d = PyDict_New();
+    if (!d) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    ImagingMemoryArena arena = &ImagingDefaultArena;
+
+    v = PyLong_FromLong(arena->stats_new_count);
+    PyDict_SetItemString(d, "new_count", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    v = PyLong_FromLong(arena->stats_allocated_blocks);
+    PyDict_SetItemString(d, "allocated_blocks", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    v = PyLong_FromLong(arena->stats_reused_blocks);
+    PyDict_SetItemString(d, "reused_blocks", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    v = PyLong_FromLong(arena->stats_reallocated_blocks);
+    PyDict_SetItemString(d, "reallocated_blocks", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    v = PyLong_FromLong(arena->stats_freed_blocks);
+    PyDict_SetItemString(d, "freed_blocks", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    v = PyLong_FromLong(arena->blocks_cached);
+    PyDict_SetItemString(d, "blocks_cached", v ? v : Py_None);
+    Py_XDECREF(v);
+
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+    return d;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_stats() -> dict:"
+
+[[functions]]
+function_id = "PIL._imaging:get_use_block_allocator"
+module_name = "PIL._imaging"
+function_name = "get_use_block_allocator"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 4071, column 1>"
+source_text = """
+static PyObject *
+_get_use_block_allocator(PyObject *self, PyObject *args) {
+    return PyLong_FromLong(ImagingDefaultArena.use_block_allocator);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_use_block_allocator(*args: object) -> int:"
+
+[[functions]]
+function_id = "PIL._imaging:getcodecstatus"
+module_name = "PIL._imaging"
+function_name = "getcodecstatus"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3618, column 1>"
+source_text = """
+static PyObject *
+_getcodecstatus(PyObject *self, PyObject *args) {
+    int status;
+    char *msg;
+
+    if (!PyArg_ParseTuple(args, "i", &status)) {
+        return NULL;
+    }
+
+    switch (status) {
+        case IMAGING_CODEC_OVERRUN:
+            msg = "buffer overrun";
+            break;
+        case IMAGING_CODEC_BROKEN:
+            msg = "broken data stream";
+            break;
+        case IMAGING_CODEC_UNKNOWN:
+            msg = "unrecognized data stream contents";
+            break;
+        case IMAGING_CODEC_CONFIG:
+            msg = "codec configuration error";
+            break;
+        case IMAGING_CODEC_MEMORY:
+            msg = "out of memory";
+            break;
+        default:
+            Py_RETURN_NONE;
+    }
+
+    return PyUnicode_FromString(msg);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getcodecstatus(status: int, /) -> None | str:"
+
+[[functions]]
+function_id = "PIL._imaging:gif_decoder"
+module_name = "PIL._imaging"
+function_name = "gif_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 430, column 1>"
+source_text = """
+PyObject *
+PyImaging_GifDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    const char *mode_name;
+    int bits = 8;
+    int interlace = 0;
+    int transparency = -1;
+    if (!PyArg_ParseTuple(
+            args, "s|iii", &mode_name, &bits, &interlace, &transparency
+        )) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    if (mode != IMAGING_MODE_L && mode != IMAGING_MODE_P) {
+        PyErr_SetString(PyExc_ValueError, "bad image mode");
+        return NULL;
+    }
+
+    decoder = PyImaging_DecoderNew(sizeof(GIFDECODERSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingGifDecode;
+
+    ((GIFDECODERSTATE *)decoder->state.context)->bits = bits;
+    ((GIFDECODERSTATE *)decoder->state.context)->interlace = interlace;
+    ((GIFDECODERSTATE *)decoder->state.context)->transparency = transparency;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def gif_decoder(
+    mode_name: str,
+    bits: int = 8,
+    interlace: int = 0,
+    transparency: int = -1,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:gif_encoder"
+module_name = "PIL._imaging"
+function_name = "gif_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 430, column 1>"
+source_text = """
+PyObject *
+PyImaging_GifEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t bits = 8;
+    Py_ssize_t interlace = 0;
+    if (!PyArg_ParseTuple(
+            args, "ss|nn", &mode_name, &rawmode_name, &bits, &interlace
+        )) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(sizeof(GIFENCODERSTATE));
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingGifEncode;
+
+    ((GIFENCODERSTATE *)encoder->state.context)->bits = bits;
+    ((GIFENCODERSTATE *)encoder->state.context)->interlace = interlace;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def gif_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    bits: int = 8,
+    interlace: int = 0,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:grabscreen_x11"
+module_name = "PIL._imaging"
+function_name = "grabscreen_x11"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/display.c', line 849, column 1>"
+source_text = """
+PyObject *
+PyImaging_GrabScreenX11(PyObject *self, PyObject *args) {
+    int width, height;
+    char *display_name;
+    xcb_connection_t *connection;
+    int screen_number;
+    xcb_screen_iterator_t iter;
+    xcb_screen_t *screen = NULL;
+    xcb_get_image_reply_t *reply;
+    xcb_generic_error_t *error;
+    PyObject *buffer = NULL;
+
+    if (!PyArg_ParseTuple(args, "|z", &display_name)) {
+        return NULL;
+    }
+
+    /* connect to X and get screen data */
+
+    connection = xcb_connect(display_name, &screen_number);
+    if (xcb_connection_has_error(connection)) {
+        PyErr_Format(
+            PyExc_OSError,
+            "X connection failed: error %i",
+            xcb_connection_has_error(connection)
+        );
+        xcb_disconnect(connection);
+        return NULL;
+    }
+
+    iter = xcb_setup_roots_iterator(xcb_get_setup(connection));
+    for (; iter.rem; --screen_number, xcb_screen_next(&iter)) {
+        if (screen_number == 0) {
+            screen = iter.data;
+            break;
+        }
+    }
+    if (screen == NULL || screen->root == 0) {
+        // this case is usually caught with "X connection failed: error 6" above
+        xcb_disconnect(connection);
+        PyErr_SetString(PyExc_OSError, "X screen not found");
+        return NULL;
+    }
+
+    width = screen->width_in_pixels;
+    height = screen->height_in_pixels;
+
+    /* get image data */
+
+    reply = xcb_get_image_reply(
+        connection,
+        xcb_get_image(
+            connection,
+            XCB_IMAGE_FORMAT_Z_PIXMAP,
+            screen->root,
+            0,
+            0,
+            width,
+            height,
+            0x00ffffff
+        ),
+        &error
+    );
+    if (reply == NULL) {
+        PyErr_Format(
+            PyExc_OSError,
+            "X get_image failed: error %i (%i, %i, %i)",
+            error->error_code,
+            error->major_code,
+            error->minor_code,
+            error->resource_id
+        );
+        free(error);
+        xcb_disconnect(connection);
+        return NULL;
+    }
+
+    /* store data in Python buffer */
+
+    if (reply->depth == 24) {
+        buffer = PyBytes_FromStringAndSize(
+            (char *)xcb_get_image_data(reply), xcb_get_image_data_length(reply)
+        );
+    } else {
+        PyErr_Format(PyExc_OSError, "unsupported bit depth: %i", reply->depth);
+    }
+
+    free(reply);
+    xcb_disconnect(connection);
+
+    if (!buffer) {
+        return NULL;
+    }
+
+    return Py_BuildValue("(ii)N", width, height, buffer);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def grabscreen_x11(display_name: str | None = ..., /) -> tuple[tuple[int, int], bytes]:"
+
+[[functions]]
+function_id = "PIL._imaging:hex_decoder"
+module_name = "PIL._imaging"
+function_name = "hex_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 468, column 1>"
+source_text = """
+PyObject *
+PyImaging_HexDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    if (!PyArg_ParseTuple(args, "ss", &mode_name, &rawmode_name)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingHexDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def hex_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:hex_encoder"
+module_name = "PIL._imaging"
+function_name = "hex_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 412, column 1>"
+source_text = """
+PyObject *
+PyImaging_EpsEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingEpsEncode;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def hex_encoder(*args: object) -> PIL.Image.core.ImagingEncoder:"
+
+[[functions]]
+function_id = "PIL._imaging:jpeg2k_decoder"
+module_name = "PIL._imaging"
+function_name = "jpeg2k_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 911, column 1>"
+source_text = """
+PyObject *
+PyImaging_Jpeg2KDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+    JPEG2KDECODESTATE *context;
+
+    char *mode;
+    char *format;
+    OPJ_CODEC_FORMAT codec_format;
+    int reduce = 0;
+    int layers = 0;
+    int fd = -1;
+    PY_LONG_LONG length = -1;
+
+    if (!PyArg_ParseTuple(
+            args, "ss|iiiL", &mode, &format, &reduce, &layers, &fd, &length
+        )) {
+        return NULL;
+    }
+
+    if (strcmp(format, "j2k") == 0) {
+        codec_format = OPJ_CODEC_J2K;
+    } else if (strcmp(format, "jp2") == 0) {
+        codec_format = OPJ_CODEC_JP2;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "unknown codec format");
+        return NULL;
+    }
+
+    decoder = PyImaging_DecoderNew(sizeof(JPEG2KDECODESTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    decoder->pulls_fd = 1;
+    decoder->decode = ImagingJpeg2KDecode;
+    decoder->cleanup = ImagingJpeg2KDecodeCleanup;
+
+    context = (JPEG2KDECODESTATE *)decoder->state.context;
+
+    context->fd = fd;
+    context->length = (off_t)length;
+    context->format = codec_format;
+    context->reduce = reduce;
+    context->layers = layers;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def jpeg2k_decoder(
+    mode: str,
+    format: str,
+    reduce: int = 0,
+    layers: int = 0,
+    fd: int = -1,
+    length: int = -1,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:jpeg2k_encoder"
+module_name = "PIL._imaging"
+function_name = "jpeg2k_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 1321, column 1>"
+source_text = '''
+PyObject *
+PyImaging_Jpeg2KEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+    JPEG2KENCODESTATE *context;
+
+    char *mode;
+    char *format;
+    OPJ_CODEC_FORMAT codec_format;
+    PyObject *offset = NULL, *tile_offset = NULL, *tile_size = NULL;
+    char *quality_mode = "rates";
+    PyObject *quality_layers = NULL;
+    Py_ssize_t num_resolutions = 0;
+    PyObject *cblk_size = NULL, *precinct_size = NULL;
+    int irreversible = 0;
+    char *progression = "LRCP";
+    OPJ_PROG_ORDER prog_order;
+    char *cinema_mode = "no";
+    OPJ_CINEMA_MODE cine_mode;
+    char mct = 0;
+    int sgnd = 0;
+    Py_ssize_t fd = -1;
+    char *comment;
+    Py_ssize_t comment_size;
+    int plt = 0;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "ss|OOOsOnOOpssbbnz#p",
+            &mode,
+            &format,
+            &offset,
+            &tile_offset,
+            &tile_size,
+            &quality_mode,
+            &quality_layers,
+            &num_resolutions,
+            &cblk_size,
+            &precinct_size,
+            &irreversible,
+            &progression,
+            &cinema_mode,
+            &mct,
+            &sgnd,
+            &fd,
+            &comment,
+            &comment_size,
+            &plt
+        )) {
+        return NULL;
+    }
+
+    if (strcmp(format, "j2k") == 0) {
+        codec_format = OPJ_CODEC_J2K;
+    } else if (strcmp(format, "jp2") == 0) {
+        codec_format = OPJ_CODEC_JP2;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "unknown codec format");
+        return NULL;
+    }
+
+    if (strcmp(progression, "LRCP") == 0) {
+        prog_order = OPJ_LRCP;
+    } else if (strcmp(progression, "RLCP") == 0) {
+        prog_order = OPJ_RLCP;
+    } else if (strcmp(progression, "RPCL") == 0) {
+        prog_order = OPJ_RPCL;
+    } else if (strcmp(progression, "PCRL") == 0) {
+        prog_order = OPJ_PCRL;
+    } else if (strcmp(progression, "CPRL") == 0) {
+        prog_order = OPJ_CPRL;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "unknown progression");
+        return NULL;
+    }
+
+    if (strcmp(cinema_mode, "no") == 0) {
+        cine_mode = OPJ_OFF;
+    } else if (strcmp(cinema_mode, "cinema2k-24") == 0) {
+        cine_mode = OPJ_CINEMA2K_24;
+    } else if (strcmp(cinema_mode, "cinema2k-48") == 0) {
+        cine_mode = OPJ_CINEMA2K_48;
+    } else if (strcmp(cinema_mode, "cinema4k-24") == 0) {
+        cine_mode = OPJ_CINEMA4K_24;
+    } else {
+        PyErr_SetString(PyExc_ValueError, "unknown cinema mode");
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(sizeof(JPEG2KENCODESTATE));
+    if (!encoder) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingJpeg2KEncode;
+    encoder->cleanup = ImagingJpeg2KEncodeCleanup;
+    encoder->pushes_fd = 1;
+
+    context = (JPEG2KENCODESTATE *)encoder->state.context;
+
+    context->fd = fd;
+    context->format = codec_format;
+    context->offset_x = context->offset_y = 0;
+
+    j2k_decode_coord_tuple(offset, &context->offset_x, &context->offset_y);
+    j2k_decode_coord_tuple(
+        tile_offset, &context->tile_offset_x, &context->tile_offset_y
+    );
+    j2k_decode_coord_tuple(tile_size, &context->tile_size_x, &context->tile_size_y);
+
+    /* Error on illegal tile offsets */
+    if (context->tile_size_x && context->tile_size_y) {
+        if (context->tile_offset_x <= context->offset_x - context->tile_size_x ||
+            context->tile_offset_y <= context->offset_y - context->tile_size_y) {
+            PyErr_SetString(
+                PyExc_ValueError,
+                "JPEG 2000 tile offset too small; top left tile must "
+                "intersect image area"
+            );
+            Py_DECREF(encoder);
+            return NULL;
+        }
+
+        if (context->tile_offset_x > context->offset_x ||
+            context->tile_offset_y > context->offset_y) {
+            PyErr_SetString(
+                PyExc_ValueError, "JPEG 2000 tile offset too large to cover image area"
+            );
+            Py_DECREF(encoder);
+            return NULL;
+        }
+    }
+
+    if (comment && comment_size > 0) {
+        /* Size is stored as as an uint16, subtract 4 bytes for the header */
+        if (comment_size >= 65532) {
+            PyErr_SetString(PyExc_ValueError, "JPEG 2000 comment is too long");
+            Py_DECREF(encoder);
+            return NULL;
+        }
+
+        char *p = malloc(comment_size + 1);
+        if (!p) {
+            Py_DECREF(encoder);
+            return ImagingError_MemoryError();
+        }
+        memcpy(p, comment, comment_size);
+        p[comment_size] = '\0';
+        context->comment = p;
+    }
+
+    if (quality_layers && PySequence_Check(quality_layers)) {
+        context->quality_is_in_db = strcmp(quality_mode, "dB") == 0;
+        context->quality_layers = quality_layers;
+        Py_INCREF(quality_layers);
+    }
+
+    context->num_resolutions = num_resolutions;
+
+    j2k_decode_coord_tuple(cblk_size, &context->cblk_width, &context->cblk_height);
+    j2k_decode_coord_tuple(
+        precinct_size, &context->precinct_width, &context->precinct_height
+    );
+
+    context->irreversible = irreversible;
+    context->progression = prog_order;
+    context->cinema_mode = cine_mode;
+    context->mct = mct;
+    context->sgnd = sgnd;
+    context->plt = plt;
+
+    return (PyObject *)encoder;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def jpeg2k_encoder(
+    mode: str,
+    format: str,
+    offset: object = ...,
+    tile_offset: object = ...,
+    tile_size: object = ...,
+    quality_mode: str = 'rates',
+    quality_layers: object = ...,
+    num_resolutions: int = 0,
+    cblk_size: object = ...,
+    precinct_size: object = ...,
+    irreversible: bool = False,
+    progression: str = 'LRCP',
+    cinema_mode: str = 'no',
+    mct: int = 0,
+    sgnd: int = 0,
+    fd: int = -1,
+    comment: str | collections.abc.Buffer | None = ...,
+    plt: bool = False,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:jpeg_decoder"
+module_name = "PIL._imaging"
+function_name = "jpeg_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 852, column 1>"
+source_text = """
+PyObject *
+PyImaging_JpegDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name;
+    char *rawmode_name;  /* what we want from the decoder */
+    char *jpegmode_name; /* what's in the file */
+    int scale = 1;
+    int draft = 0;
+
+    if (!PyArg_ParseTuple(
+            args, "ssz|ii", &mode_name, &rawmode_name, &jpegmode_name, &scale, &draft
+        )) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    RawModeID rawmode = findRawModeID(rawmode_name);
+    const RawModeID jpegmode = findRawModeID(jpegmode_name);
+
+    decoder = PyImaging_DecoderNew(sizeof(JPEGSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    // libjpeg-turbo supports different output formats.
+    // We are choosing Pillow's native format (3 color bytes + 1 padding)
+    // to avoid extra conversion in Unpack.c.
+    if (ImagingJpegUseJCSExtensions() && rawmode == IMAGING_RAWMODE_RGB) {
+        rawmode = IMAGING_RAWMODE_RGBX;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingJpegDecode;
+    decoder->cleanup = ImagingJpegDecodeCleanup;
+
+    JPEGSTATE *jpeg_decoder_state_context = (JPEGSTATE *)decoder->state.context;
+
+    jpeg_decoder_state_context->rawmode = rawmode;
+    jpeg_decoder_state_context->jpegmode = jpegmode;
+
+    jpeg_decoder_state_context->scale = scale;
+    jpeg_decoder_state_context->draft = draft;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def jpeg_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    jpegmode_name: str | None,
+    scale: int = 1,
+    draft: int = 0,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:jpeg_encoder"
+module_name = "PIL._imaging"
+function_name = "jpeg_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 1147, column 1>"
+source_text = """
+PyObject *
+PyImaging_JpegEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t quality = 0;
+    Py_ssize_t progressive = 0;
+    Py_ssize_t smooth = 0;
+    Py_ssize_t optimize = 0;
+    int keep_rgb = 0;
+    Py_ssize_t streamtype = 0; /* 0=interchange, 1=tables only, 2=image only */
+    Py_ssize_t xdpi = 0, ydpi = 0;
+    Py_ssize_t subsampling = -1; /* -1=default, 0=none, 1=medium, 2=high */
+    Py_ssize_t restart_marker_blocks = 0;
+    Py_ssize_t restart_marker_rows = 0;
+    PyObject *qtables = NULL;
+    unsigned int *qarrays = NULL;
+    int qtablesLen = 0;
+    char *comment = NULL;
+    Py_ssize_t comment_size;
+    char *extra = NULL;
+    Py_ssize_t extra_size;
+    char *rawExif = NULL;
+    Py_ssize_t rawExifLen = 0;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "ss|nnnnpn(nn)nnnOz#y#y#",
+            &mode_name,
+            &rawmode_name,
+            &quality,
+            &progressive,
+            &smooth,
+            &optimize,
+            &keep_rgb,
+            &streamtype,
+            &xdpi,
+            &ydpi,
+            &subsampling,
+            &restart_marker_blocks,
+            &restart_marker_rows,
+            &qtables,
+            &comment,
+            &comment_size,
+            &extra,
+            &extra_size,
+            &rawExif,
+            &rawExifLen
+        )) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(sizeof(JPEGENCODERSTATE));
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    RawModeID rawmode = findRawModeID(rawmode_name);
+
+    // libjpeg-turbo supports different output formats.
+    // We are choosing Pillow's native format (3 color bytes + 1 padding)
+    // to avoid extra conversion in Pack.c.
+    if (ImagingJpegUseJCSExtensions() && rawmode == IMAGING_RAWMODE_RGB) {
+        rawmode = IMAGING_RAWMODE_RGBX;
+    }
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    // Freed in JpegEncode, Case 6
+    qarrays = get_qtables_arrays(qtables, &qtablesLen);
+
+    if (comment && comment_size > 0) {
+        /* malloc check ok, length is from python parsearg */
+        char *p = malloc(comment_size);  // Freed in JpegEncode, Case 6
+        if (!p) {
+            return ImagingError_MemoryError();
+        }
+        memcpy(p, comment, comment_size);
+        comment = p;
+    } else {
+        comment = NULL;
+    }
+
+    if (extra && extra_size > 0) {
+        /* malloc check ok, length is from python parsearg */
+        char *p = malloc(extra_size);  // Freed in JpegEncode, Case 6
+        if (!p) {
+            if (comment) {
+                free(comment);
+            }
+            return ImagingError_MemoryError();
+        }
+        memcpy(p, extra, extra_size);
+        extra = p;
+    } else {
+        extra = NULL;
+    }
+
+    if (rawExif && rawExifLen > 0) {
+        /* malloc check ok, length is from python parsearg */
+        char *pp = malloc(rawExifLen);  // Freed in JpegEncode, Case 6
+        if (!pp) {
+            if (comment) {
+                free(comment);
+            }
+            if (extra) {
+                free(extra);
+            }
+            return ImagingError_MemoryError();
+        }
+        memcpy(pp, rawExif, rawExifLen);
+        rawExif = pp;
+    } else {
+        rawExif = NULL;
+    }
+
+    encoder->encode = ImagingJpegEncode;
+
+    JPEGENCODERSTATE *jpeg_encoder_state = (JPEGENCODERSTATE *)encoder->state.context;
+    jpeg_encoder_state->rawmode = rawmode;
+    jpeg_encoder_state->keep_rgb = keep_rgb;
+    jpeg_encoder_state->quality = quality;
+    jpeg_encoder_state->qtables = qarrays;
+    jpeg_encoder_state->qtablesLen = qtablesLen;
+    jpeg_encoder_state->subsampling = subsampling;
+    jpeg_encoder_state->progressive = progressive;
+    jpeg_encoder_state->smooth = smooth;
+    jpeg_encoder_state->optimize = optimize;
+    jpeg_encoder_state->streamtype = streamtype;
+    jpeg_encoder_state->xdpi = xdpi;
+    jpeg_encoder_state->ydpi = ydpi;
+    jpeg_encoder_state->restart_marker_blocks = restart_marker_blocks;
+    jpeg_encoder_state->restart_marker_rows = restart_marker_rows;
+    jpeg_encoder_state->comment = comment;
+    jpeg_encoder_state->comment_size = comment_size;
+    jpeg_encoder_state->extra = extra;
+    jpeg_encoder_state->extra_size = extra_size;
+    jpeg_encoder_state->rawExif = rawExif;
+    jpeg_encoder_state->rawExifLen = rawExifLen;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def jpeg_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    quality: int = 0,
+    progressive: int = 0,
+    smooth: int = 0,
+    optimize: int = 0,
+    keep_rgb: bool = False,
+    streamtype: int = 0,
+    xdpi_ydpi: tuple[int, int] = (0, 0),
+    subsampling: int = -1,
+    restart_marker_blocks: int = 0,
+    restart_marker_rows: int = 0,
+    qtables: object = ...,
+    comment: str | collections.abc.Buffer | None = ...,
+    extra: collections.abc.Buffer = ...,
+    rawExif: collections.abc.Buffer = ...,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:libtiff_decoder"
+module_name = "PIL._imaging"
+function_name = "libtiff_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 504, column 1>"
+source_text = '''
+PyObject *
+PyImaging_LibTiffDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+    char *mode_name;
+    char *rawmode_name;
+    char *compname;
+    int fp;
+    uint32_t ifdoffset;
+
+    if (!PyArg_ParseTuple(
+            args, "sssiI", &mode_name, &rawmode_name, &compname, &fp, &ifdoffset
+        )) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    TRACE(("new tiff decoder %s\n", compname));
+
+    decoder = PyImaging_DecoderNew(sizeof(TIFFSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    if (!ImagingLibTiffInit(&decoder->state, fp, ifdoffset)) {
+        Py_DECREF(decoder);
+        PyErr_SetString(PyExc_RuntimeError, "tiff codec initialization failed");
+        return NULL;
+    }
+
+    decoder->decode = ImagingLibTiffDecode;
+
+    return (PyObject *)decoder;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def libtiff_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    compname: str,
+    fp: int,
+    ifdoffset: int,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:libtiff_encoder"
+module_name = "PIL._imaging"
+function_name = "libtiff_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 679, column 1>"
+source_text = '''
+PyObject *
+PyImaging_LibTiffEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    char *compname;
+    char *filename;
+    Py_ssize_t fp;
+
+    PyObject *tags, *types;
+    PyObject *key, *value;
+    Py_ssize_t pos = 0;
+    int key_int, status, is_core_tag, is_var_length, num_core_tags, i;
+    TIFFDataType type = TIFF_NOTYPE;
+    // This list also exists in TiffTags.py
+    const int core_tags[] = {256, 257, 258,   259,   262,   263,   266,  269, 274, 277,
+                             278, 280, 281,   282,   283,   284,   286,  287, 296, 297,
+                             301, 320, 321,   330,   333,   338,   339,  340, 341, 530,
+                             531, 532, 32995, 32996, 32997, 32998, 65537};
+
+    Py_ssize_t tags_size;
+    PyObject *item;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "sssnsOO",
+            &mode_name,
+            &rawmode_name,
+            &compname,
+            &fp,
+            &filename,
+            &tags,
+            &types
+        )) {
+        return NULL;
+    }
+
+    if (!PyList_Check(tags)) {
+        PyErr_SetString(PyExc_ValueError, "Invalid tags list");
+        return NULL;
+    } else {
+        tags_size = PyList_Size(tags);
+        TRACE(("tags size: %d\n", (int)tags_size));
+        for (pos = 0; pos < tags_size; pos++) {
+            item = PyList_GetItemRef(tags, pos);
+            if (item == NULL) {
+                return NULL;
+            }
+
+            if (!PyTuple_Check(item) || PyTuple_Size(item) != 2) {
+                Py_DECREF(item);
+                PyErr_SetString(PyExc_ValueError, "Invalid tags list");
+                return NULL;
+            }
+            Py_DECREF(item);
+        }
+        pos = 0;
+    }
+    if (!PyDict_Check(types)) {
+        PyErr_SetString(PyExc_ValueError, "Invalid types dictionary");
+        return NULL;
+    }
+
+    TRACE(("new tiff encoder %s fp: %d, filename: %s \n", compname, fp, filename));
+
+    encoder = PyImaging_EncoderNew(sizeof(TIFFSTATE));
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        Py_DECREF(encoder);
+        return NULL;
+    }
+
+    if (!ImagingLibTiffEncodeInit(&encoder->state, filename, fp)) {
+        Py_DECREF(encoder);
+        PyErr_SetString(PyExc_RuntimeError, "tiff codec initialization failed");
+        return NULL;
+    }
+
+    encoder->cleanup = ImagingLibTiffEncodeCleanup;
+
+    num_core_tags = sizeof(core_tags) / sizeof(int);
+    for (pos = 0; pos < tags_size; pos++) {
+        item = PyList_GetItemRef(tags, pos);
+        if (item == NULL) {
+            Py_DECREF(encoder);
+            return NULL;
+        }
+
+        // We already checked that tags is a 2-tuple list.
+        key = PyTuple_GET_ITEM(item, 0);
+        key_int = (int)PyLong_AsLong(key);
+        value = PyTuple_GET_ITEM(item, 1);
+        Py_DECREF(item);
+
+        status = 0;
+        is_core_tag = 0;
+        is_var_length = 0;
+        type = TIFF_NOTYPE;
+
+        for (i = 0; i < num_core_tags; i++) {
+            if (core_tags[i] == key_int) {
+                is_core_tag = 1;
+                break;
+            }
+        }
+
+        if (!is_core_tag) {
+            PyObject *tag_type;
+            if (PyDict_GetItemRef(types, key, &tag_type) < 0) {
+                Py_DECREF(encoder);
+                return NULL;  // Exception has been already set
+            }
+            if (tag_type) {
+                int type_int = PyLong_AsLong(tag_type);
+                if (type_int >= TIFF_BYTE && type_int <= TIFF_LONG8) {
+                    type = (TIFFDataType)type_int;
+                }
+            }
+        }
+
+        if (type == TIFF_NOTYPE) {
+            // Autodetect type. Types should not be changed for backwards
+            // compatibility.
+            if (PyLong_Check(value)) {
+                type = TIFF_LONG;
+            } else if (PyFloat_Check(value)) {
+                type = TIFF_DOUBLE;
+            } else if (PyBytes_Check(value)) {
+                type = TIFF_ASCII;
+            }
+        }
+
+        if (PyTuple_Check(value)) {
+            Py_ssize_t len;
+            len = PyTuple_Size(value);
+
+            is_var_length = 1;
+
+            if (!len) {
+                continue;
+            }
+
+            if (type == TIFF_NOTYPE) {
+                // Autodetect type based on first item. Types should not be
+                // changed for backwards compatibility.
+                if (PyLong_Check(PyTuple_GetItem(value, 0))) {
+                    type = TIFF_LONG;
+                } else if (PyFloat_Check(PyTuple_GetItem(value, 0))) {
+                    type = TIFF_FLOAT;
+                }
+            }
+        }
+
+        if (!is_core_tag) {
+            // Register field for non core tags.
+            if (type == TIFF_BYTE) {
+                is_var_length = 1;
+            }
+            if (ImagingLibTiffMergeFieldInfo(
+                    &encoder->state, type, key_int, is_var_length
+                )) {
+                continue;
+            }
+        }
+
+        if (type == TIFF_BYTE || type == TIFF_UNDEFINED ||
+            key_int == TIFFTAG_INKNAMES) {
+            status = ImagingLibTiffSetField(
+                &encoder->state,
+                (ttag_t)key_int,
+                PyBytes_Size(value),
+                PyBytes_AsString(value)
+            );
+        } else if (is_var_length) {
+            Py_ssize_t len, i;
+            TRACE(("Setting from Tuple: %d \n", key_int));
+            len = PyTuple_Size(value);
+
+            if (key_int == TIFFTAG_COLORMAP) {
+                int stride = 256;
+                if (len != 768) {
+                    Py_DECREF(encoder);
+                    PyErr_SetString(
+                        PyExc_ValueError, "Requiring 768 items for Colormap"
+                    );
+                    return NULL;
+                }
+                UINT16 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(UINT16));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (UINT16)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state,
+                        (ttag_t)key_int,
+                        av,
+                        av + stride,
+                        av + stride * 2
+                    );
+                    free(av);
+                }
+            } else if (key_int == TIFFTAG_YCBCRSUBSAMPLING) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state,
+                    (ttag_t)key_int,
+                    (UINT16)PyLong_AsLong(PyTuple_GetItem(value, 0)),
+                    (UINT16)PyLong_AsLong(PyTuple_GetItem(value, 1))
+                );
+            } else if (type == TIFF_SHORT) {
+                UINT16 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(UINT16));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (UINT16)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_LONG) {
+                UINT32 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(UINT32));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (UINT32)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_SBYTE) {
+                INT8 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(INT8));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (INT8)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_SSHORT) {
+                INT16 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(INT16));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (INT16)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_SLONG) {
+                INT32 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(INT32));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (INT32)PyLong_AsLong(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_FLOAT) {
+                FLOAT32 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(FLOAT32));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (FLOAT32)PyFloat_AsDouble(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_DOUBLE) {
+                FLOAT64 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(FLOAT64));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = PyFloat_AsDouble(PyTuple_GetItem(value, i));
+                    }
+                    status = ImagingLibTiffSetField(
+                        &encoder->state, (ttag_t)key_int, len, av
+                    );
+                    free(av);
+                }
+            } else if (type == TIFF_RATIONAL) {
+                FLOAT32 *av;
+                /* malloc check ok, calloc checks for overflow */
+                av = calloc(len, sizeof(FLOAT32));
+                if (av) {
+                    for (i = 0; i < len; i++) {
+                        av[i] = (FLOAT32)PyFloat_AsDouble(PyTuple_GetItem(value, i));
+                    }
+                    status =
+                        ImagingLibTiffSetField(&encoder->state, (ttag_t)key_int, av);
+                    free(av);
+                }
+            }
+        } else {
+            if (type == TIFF_SHORT) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (UINT16)PyLong_AsLong(value)
+                );
+            } else if (type == TIFF_LONG || type == TIFF_IFD) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (UINT32)PyLong_AsLong(value)
+                );
+            } else if (type == TIFF_SSHORT) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (INT16)PyLong_AsLong(value)
+                );
+            } else if (type == TIFF_SLONG) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (INT32)PyLong_AsLong(value)
+                );
+            } else if (type == TIFF_FLOAT) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (FLOAT32)PyFloat_AsDouble(value)
+                );
+            } else if (type == TIFF_SBYTE) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (INT8)PyLong_AsLong(value)
+                );
+            } else if (type == TIFF_ASCII) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, PyBytes_AsString(value)
+                );
+            } else if (
+                type == TIFF_DOUBLE || type == TIFF_SRATIONAL || type == TIFF_RATIONAL
+            ) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (FLOAT64)PyFloat_AsDouble(value)
+                );
+            } else if (type == TIFF_LONG8) {
+                status = ImagingLibTiffSetField(
+                    &encoder->state, (ttag_t)key_int, (uint64_t)PyLong_AsLongLong(value)
+                );
+            } else {
+                TRACE(
+                    ("Unhandled type for key %d : %s \n",
+                     key_int,
+                     PyBytes_AsString(PyObject_Str(value)))
+                );
+            }
+        }
+        if (!status) {
+            TRACE(("Error setting Field\n"));
+            Py_DECREF(encoder);
+            PyErr_SetString(PyExc_RuntimeError, "Error setting from dictionary");
+            return NULL;
+        }
+    }
+
+    encoder->encode = ImagingLibTiffEncode;
+
+    return (PyObject *)encoder;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def libtiff_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    compname: str,
+    fp: int,
+    filename: str,
+    tags: list[typing.Any],
+    types: dict[typing.Any, typing.Any],
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:linear_gradient"
+module_name = "PIL._imaging"
+function_name = "linear_gradient"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 753, column 1>"
+source_text = """
+static PyObject *
+_linear_gradient(PyObject *self, PyObject *args) {
+    char *mode_name;
+
+    if (!PyArg_ParseTuple(args, "s", &mode_name)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    return PyImagingNew(ImagingFillLinearGradient(mode));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def linear_gradient(mode_name: str, /) -> PIL.Image.core.ImagingCore:"
+
+[[functions]]
+function_id = "PIL._imaging:map_buffer"
+module_name = "PIL._imaging"
+function_name = "map_buffer"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/map.c', line 52, column 1>"
+source_text = """
+PyObject *
+PyImaging_MapBuffer(PyObject *self, PyObject *args) {
+    Py_ssize_t y, size;
+    Imaging im;
+
+    PyObject *target;
+    Py_buffer view;
+    char *mode_name;
+    char *codec;
+    Py_ssize_t offset;
+    int xsize, ysize;
+    int stride;
+    int ystep;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "O(ii)sn(sii)",
+            &target,
+            &xsize,
+            &ysize,
+            &codec,
+            &offset,
+            &mode_name,
+            &stride,
+            &ystep
+        )) {
+        return NULL;
+    }
+
+    if (!PyImaging_CheckBuffer(target)) {
+        PyErr_SetString(PyExc_TypeError, "expected string or buffer");
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    if (stride <= 0) {
+        if (mode == IMAGING_MODE_L || mode == IMAGING_MODE_P) {
+            stride = xsize;
+        } else if (isModeI16(mode)) {
+            stride = xsize * 2;
+        } else {
+            stride = xsize * 4;
+        }
+    }
+
+    if (stride > 0 && ysize > PY_SSIZE_T_MAX / stride) {
+        PyErr_SetString(PyExc_MemoryError, "Integer overflow in ysize");
+        return NULL;
+    }
+
+    size = (Py_ssize_t)ysize * stride;
+
+    if (offset > PY_SSIZE_T_MAX - size) {
+        PyErr_SetString(PyExc_MemoryError, "Integer overflow in offset");
+        return NULL;
+    }
+
+    /* check buffer size */
+    if (PyImaging_GetBuffer(target, &view) < 0) {
+        return NULL;
+    }
+
+    if (view.len < 0) {
+        PyErr_SetString(PyExc_ValueError, "buffer has negative size");
+        PyBuffer_Release(&view);
+        return NULL;
+    }
+    if (offset + size > view.len) {
+        PyErr_SetString(PyExc_ValueError, "buffer is not large enough");
+        PyBuffer_Release(&view);
+        return NULL;
+    }
+
+    im = ImagingNewPrologueSubtype(mode, xsize, ysize, sizeof(ImagingBufferInstance));
+    if (!im) {
+        PyBuffer_Release(&view);
+        return NULL;
+    }
+
+    /* setup file pointers */
+    if (ystep > 0) {
+        for (y = 0; y < ysize; y++) {
+            im->image[y] = (char *)view.buf + offset + y * stride;
+        }
+    } else {
+        for (y = 0; y < ysize; y++) {
+            im->image[ysize - y - 1] = (char *)view.buf + offset + y * stride;
+        }
+    }
+
+    im->read_only = view.readonly;
+    im->destroy = mapping_destroy_buffer;
+
+    Py_INCREF(target);
+    ((ImagingBufferInstance *)im)->target = target;
+    ((ImagingBufferInstance *)im)->view = view;
+
+    return PyImagingNew(im);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def map_buffer(
+    target: object,
+    xsize_ysize: tuple[int, int],
+    codec: str,
+    offset: int,
+    mode_name_stride_ystep: tuple[str, int, int],
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:merge"
+module_name = "PIL._imaging"
+function_name = "merge"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 2429, column 1>"
+source_text = """
+static PyObject *
+_merge(PyObject *self, PyObject *args) {
+    char *mode_name;
+    ImagingObject *band0 = NULL;
+    ImagingObject *band1 = NULL;
+    ImagingObject *band2 = NULL;
+    ImagingObject *band3 = NULL;
+    Imaging bands[4] = {NULL, NULL, NULL, NULL};
+
+    if (!PyArg_ParseTuple(
+            args,
+            "sO!|O!O!O!",
+            &mode_name,
+            &Imaging_Type,
+            &band0,
+            &Imaging_Type,
+            &band1,
+            &Imaging_Type,
+            &band2,
+            &Imaging_Type,
+            &band3
+        )) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    if (band0) {
+        bands[0] = band0->image;
+    }
+    if (band1) {
+        bands[1] = band1->image;
+    }
+    if (band2) {
+        bands[2] = band2->image;
+    }
+    if (band3) {
+        bands[3] = band3->image;
+    }
+
+    Imaging imOut = ImagingMerge(mode, bands);
+    if (!imOut) {
+        return NULL;
+    }
+    ImagingCopyPalette(imOut, bands[0]);
+    return PyImagingNew(imOut);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def merge(
+    mode_name: str,
+    band0: PIL.Image.core.ImagingCore,
+    band1: PIL.Image.core.ImagingCore = ...,
+    band2: PIL.Image.core.ImagingCore = ...,
+    band3: PIL.Image.core.ImagingCore = ...,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:new"
+module_name = "PIL._imaging"
+function_name = "new"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 725, column 1>"
+source_text = """
+static PyObject *
+_new(PyObject *self, PyObject *args) {
+    char *mode_name;
+    int xsize, ysize;
+
+    if (!PyArg_ParseTuple(args, "s(ii)", &mode_name, &xsize, &ysize)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    return PyImagingNew(ImagingNew(mode, xsize, ysize));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def new(
+    mode_name: str,
+    xsize_ysize: tuple[int, int],
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:new_arrow"
+module_name = "PIL._imaging"
+function_name = "new_arrow"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 310, column 1>"
+source_text = """
+static PyObject *
+_new_arrow(PyObject *self, PyObject *args) {
+    char *mode;
+    ModeID mode_id;
+    int xsize, ysize;
+    PyObject *schema_capsule, *array_capsule;
+    PyObject *ret;
+
+    if (!PyArg_ParseTuple(
+            args, "s(ii)OO", &mode, &xsize, &ysize, &schema_capsule, &array_capsule
+        )) {
+        return NULL;
+    }
+
+    mode_id = findModeID(mode);
+
+    // ImagingBorrowArrow is responsible for retaining the array_capsule
+    ret = PyImagingNew(
+        ImagingNewArrow(mode_id, xsize, ysize, schema_capsule, array_capsule)
+    );
+    if (!ret) {
+        return ImagingError_ValueError("Invalid Arrow array mode or size mismatch");
+    }
+    return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def new_arrow(
+    mode: str,
+    xsize_ysize: tuple[int, int],
+    schema_capsule: object,
+    array_capsule: object,
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:new_block"
+module_name = "PIL._imaging"
+function_name = "new_block"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 739, column 1>"
+source_text = """
+static PyObject *
+_new_block(PyObject *self, PyObject *args) {
+    char *mode_name;
+    int xsize, ysize;
+
+    if (!PyArg_ParseTuple(args, "s(ii)", &mode_name, &xsize, &ysize)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    return PyImagingNew(ImagingNewBlock(mode, xsize, ysize));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def new_block(
+    mode_name: str,
+    xsize_ysize: tuple[int, int],
+    /,
+) -> PIL.Image.core.ImagingCore:"""
+
+[[functions]]
+function_id = "PIL._imaging:outline"
+module_name = "PIL._imaging"
+function_name = "outline"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/outline.c', line 72, column 1>"
+source_text = """
+PyObject *
+PyOutline_Create(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, ":outline")) {
+        return NULL;
+    }
+
+    return (PyObject *)_outline_new();
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def outline() -> PIL.Image.core._Outline:"
+
+[[functions]]
+function_id = "PIL._imaging:packbits_decoder"
+module_name = "PIL._imaging"
+function_name = "packbits_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 550, column 1>"
+source_text = """
+PyObject *
+PyImaging_PackbitsDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    if (!PyArg_ParseTuple(args, "ss", &mode_name, &rawmode_name)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingPackbitsDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def packbits_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:path"
+module_name = "PIL._imaging"
+function_name = "path"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/path.c', line 274, column 1>"
+source_text = """
+PyObject *
+PyPath_Create(PyObject *self, PyObject *args) {
+    PyObject *data;
+    Py_ssize_t count;
+    double *xy;
+
+    if (PyArg_ParseTuple(args, "n:Path", &count)) {
+        /* number of vertices */
+        xy = alloc_array(count);
+        if (!xy) {
+            return NULL;
+        }
+
+    } else {
+        /* sequence or other path */
+        PyErr_Clear();
+        if (!PyArg_ParseTuple(args, "O", &data)) {
+            return NULL;
+        }
+
+        count = PyPath_Flatten(data, &xy);
+        if (count < 0) {
+            return NULL;
+        }
+    }
+
+    return (PyObject *)path_new(count, xy, 0);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def path(count: int, /) -> PIL.ImagePath.Path:"
+
+[[functions.signatures]]
+signature_index = 1
+signature = "def path(data: object, /) -> PIL.ImagePath.Path:"
+
+[[functions]]
+function_id = "PIL._imaging:pcd_decoder"
+module_name = "PIL._imaging"
+function_name = "pcd_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 581, column 1>"
+source_text = """
+PyObject *
+PyImaging_PcdDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    /* Unpack from PhotoYCC to RGB */
+    if (get_unpacker(decoder, IMAGING_MODE_RGB, IMAGING_RAWMODE_YCC_P) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingPcdDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def pcd_decoder(*args: object) -> PIL.Image.core.ImagingDecoder:"
+
+[[functions]]
+function_id = "PIL._imaging:pcx_decoder"
+module_name = "PIL._imaging"
+function_name = "pcx_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 604, column 1>"
+source_text = """
+PyObject *
+PyImaging_PcxDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    int stride;
+    if (!PyArg_ParseTuple(args, "ssi", &mode_name, &rawmode_name, &stride)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->state.bytes = stride;
+
+    decoder->decode = ImagingPcxDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def pcx_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    stride: int,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:pcx_encoder"
+module_name = "PIL._imaging"
+function_name = "pcx_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 468, column 1>"
+source_text = """
+PyObject *
+PyImaging_PcxEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t bits = 8;
+
+    if (!PyArg_ParseTuple(args, "ss|n", &mode_name, &rawmode_name, &bits)) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingPcxEncode;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def pcx_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    bits: int = 8,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:radial_gradient"
+module_name = "PIL._imaging"
+function_name = "radial_gradient"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 766, column 1>"
+source_text = """
+static PyObject *
+_radial_gradient(PyObject *self, PyObject *args) {
+    char *mode_name;
+
+    if (!PyArg_ParseTuple(args, "s", &mode_name)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+
+    return PyImagingNew(ImagingFillRadialGradient(mode));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def radial_gradient(mode_name: str, /) -> PIL.Image.core.ImagingCore:"
+
+[[functions]]
+function_id = "PIL._imaging:raw_decoder"
+module_name = "PIL._imaging"
+function_name = "raw_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 637, column 1>"
+source_text = """
+PyObject *
+PyImaging_RawDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    int stride = 0;
+    int ystep = 1;
+    if (!PyArg_ParseTuple(args, "ss|ii", &mode_name, &rawmode_name, &stride, &ystep)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(sizeof(RAWSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingRawDecode;
+
+    decoder->state.ystep = ystep;
+
+    ((RAWSTATE *)decoder->state.context)->stride = stride;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def raw_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    stride: int = 0,
+    ystep: int = 1,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:raw_encoder"
+module_name = "PIL._imaging"
+function_name = "raw_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 501, column 1>"
+source_text = """
+PyObject *
+PyImaging_RawEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t stride = 0;
+    Py_ssize_t ystep = 1;
+
+    if (!PyArg_ParseTuple(args, "ss|nn", &mode_name, &rawmode_name, &stride, &ystep)) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingRawEncode;
+
+    encoder->state.ystep = ystep;
+    encoder->state.count = stride;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def raw_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    stride: int = 0,
+    ystep: int = 1,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:reset_stats"
+module_name = "PIL._imaging"
+function_name = "reset_stats"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3931, column 1>"
+source_text = """
+static PyObject *
+_reset_stats(PyObject *self, PyObject *args) {
+    if (!PyArg_ParseTuple(args, ":reset_stats")) {
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    ImagingMemoryArena arena = &ImagingDefaultArena;
+    arena->stats_new_count = 0;
+    arena->stats_allocated_blocks = 0;
+    arena->stats_reused_blocks = 0;
+    arena->stats_reallocated_blocks = 0;
+    arena->stats_freed_blocks = 0;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def reset_stats() -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:set_alignment"
+module_name = "PIL._imaging"
+function_name = "set_alignment"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 3985, column 1>"
+source_text = """
+static PyObject *
+_set_alignment(PyObject *self, PyObject *args) {
+    int alignment;
+    if (!PyArg_ParseTuple(args, "i:set_alignment", &alignment)) {
+        return NULL;
+    }
+
+    if (alignment < 1 || alignment > 128) {
+        PyErr_SetString(PyExc_ValueError, "alignment should be from 1 to 128");
+        return NULL;
+    }
+    /* Is power of two */
+    if (alignment & (alignment - 1)) {
+        PyErr_SetString(PyExc_ValueError, "alignment should be power of two");
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    ImagingDefaultArena.alignment = alignment;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def set_alignment(alignment: int, /) -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:set_block_size"
+module_name = "PIL._imaging"
+function_name = "set_block_size"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 4009, column 1>"
+source_text = """
+static PyObject *
+_set_block_size(PyObject *self, PyObject *args) {
+    int block_size;
+    if (!PyArg_ParseTuple(args, "i:set_block_size", &block_size)) {
+        return NULL;
+    }
+
+    if (block_size <= 0) {
+        PyErr_SetString(PyExc_ValueError, "block_size should be greater than 0");
+        return NULL;
+    }
+
+    if (block_size & 0xfff) {
+        PyErr_SetString(PyExc_ValueError, "block_size should be multiple of 4096");
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    ImagingDefaultArena.block_size = block_size;
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def set_block_size(block_size: int, /) -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:set_blocks_max"
+module_name = "PIL._imaging"
+function_name = "set_blocks_max"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 4033, column 1>"
+source_text = """
+static PyObject *
+_set_blocks_max(PyObject *self, PyObject *args) {
+    int blocks_max;
+    if (!PyArg_ParseTuple(args, "i:set_blocks_max", &blocks_max)) {
+        return NULL;
+    }
+
+    if (blocks_max < 0) {
+        PyErr_SetString(PyExc_ValueError, "blocks_max should be greater than 0");
+        return NULL;
+    }
+
+    if ((unsigned long)blocks_max >
+        SIZE_MAX / sizeof(ImagingDefaultArena.blocks_pool[0])) {
+        PyErr_SetString(PyExc_ValueError, "blocks_max is too large");
+        return NULL;
+    }
+
+    MUTEX_LOCK(&ImagingDefaultArena.mutex);
+    int status = ImagingMemorySetBlocksMax(&ImagingDefaultArena, blocks_max);
+    MUTEX_UNLOCK(&ImagingDefaultArena.mutex);
+    if (!status) {
+        return ImagingError_MemoryError();
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def set_blocks_max(blocks_max: int, /) -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:set_use_block_allocator"
+module_name = "PIL._imaging"
+function_name = "set_use_block_allocator"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imaging.c', line 4061, column 1>"
+source_text = """
+static PyObject *
+_set_use_block_allocator(PyObject *self, PyObject *args) {
+    int use_block_allocator;
+    if (!PyArg_ParseTuple(args, "i:set_use_block_allocator", &use_block_allocator)) {
+        return NULL;
+    }
+    ImagingMemorySetBlockAllocator(&ImagingDefaultArena, use_block_allocator);
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def set_use_block_allocator(use_block_allocator: int, /) -> None:"
+
+[[functions]]
+function_id = "PIL._imaging:sgi_rle_decoder"
+module_name = "PIL._imaging"
+function_name = "sgi_rle_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 673, column 1>"
+source_text = """
+PyObject *
+PyImaging_SgiRleDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    int ystep = 1;
+    int bpc = 1;
+    if (!PyArg_ParseTuple(args, "ss|ii", &mode_name, &rawmode_name, &ystep, &bpc)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(sizeof(SGISTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->pulls_fd = 1;
+    decoder->decode = ImagingSgiRleDecode;
+    decoder->state.ystep = ystep;
+
+    ((SGISTATE *)decoder->state.context)->bpc = bpc;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def sgi_rle_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    ystep: int = 1,
+    bpc: int = 1,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:sun_rle_decoder"
+module_name = "PIL._imaging"
+function_name = "sun_rle_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 709, column 1>"
+source_text = """
+PyObject *
+PyImaging_SunRleDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    if (!PyArg_ParseTuple(args, "ss", &mode_name, &rawmode_name)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingSunRleDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def sun_rle_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:tga_rle_decoder"
+module_name = "PIL._imaging"
+function_name = "tga_rle_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 739, column 1>"
+source_text = """
+PyObject *
+PyImaging_TgaRleDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    int ystep = 1;
+    int depth = 8;
+    if (!PyArg_ParseTuple(args, "ss|ii", &mode_name, &rawmode_name, &ystep, &depth)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingTgaRleDecode;
+
+    decoder->state.ystep = ystep;
+    decoder->state.count = depth / 8;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def tga_rle_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    ystep: int = 1,
+    depth: int = 8,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:tga_rle_encoder"
+module_name = "PIL._imaging"
+function_name = "tga_rle_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 538, column 1>"
+source_text = """
+PyObject *
+PyImaging_TgaRleEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t ystep = 1;
+
+    if (!PyArg_ParseTuple(args, "ss|n", &mode_name, &rawmode_name, &ystep)) {
+        return NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingTgaRleEncode;
+
+    encoder->state.ystep = ystep;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def tga_rle_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    ystep: int = 1,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:xbm_decoder"
+module_name = "PIL._imaging"
+function_name = "xbm_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 774, column 1>"
+source_text = """
+PyObject *
+PyImaging_XbmDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    decoder = PyImaging_DecoderNew(0);
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, IMAGING_MODE_1, IMAGING_RAWMODE_1_R) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingXbmDecode;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def xbm_decoder(*args: object) -> PIL.Image.core.ImagingDecoder:"
+
+[[functions]]
+function_id = "PIL._imaging:xbm_encoder"
+module_name = "PIL._imaging"
+function_name = "xbm_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 573, column 1>"
+source_text = """
+PyObject *
+PyImaging_XbmEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    encoder = PyImaging_EncoderNew(0);
+    if (encoder == NULL) {
+        return NULL;
+    }
+
+    if (get_packer(encoder, IMAGING_MODE_1, IMAGING_RAWMODE_1_R) < 0) {
+        return NULL;
+    }
+
+    encoder->encode = ImagingXbmEncode;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def xbm_encoder(*args: object) -> PIL.Image.core.ImagingEncoder:"
+
+[[functions]]
+function_id = "PIL._imaging:zip_decoder"
+module_name = "PIL._imaging"
+function_name = "zip_decoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/decode.c', line 800, column 1>"
+source_text = """
+PyObject *
+PyImaging_ZipDecoderNew(PyObject *self, PyObject *args) {
+    ImagingDecoderObject *decoder;
+
+    char *mode_name, *rawmode_name;
+    int interlaced = 0;
+    if (!PyArg_ParseTuple(args, "ss|i", &mode_name, &rawmode_name, &interlaced)) {
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    decoder = PyImaging_DecoderNew(sizeof(ZIPSTATE));
+    if (decoder == NULL) {
+        return NULL;
+    }
+
+    if (get_unpacker(decoder, mode, rawmode) < 0) {
+        return NULL;
+    }
+
+    decoder->decode = ImagingZipDecode;
+    decoder->cleanup = ImagingZipDecodeCleanup;
+
+    ((ZIPSTATE *)decoder->state.context)->interlaced = interlaced;
+
+    return (PyObject *)decoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def zip_decoder(
+    mode_name: str,
+    rawmode_name: str,
+    interlaced: int = 0,
+    /,
+) -> PIL.Image.core.ImagingDecoder:"""
+
+[[functions]]
+function_id = "PIL._imaging:zip_encoder"
+module_name = "PIL._imaging"
+function_name = "zip_encoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/encode.c', line 599, column 1>"
+source_text = """
+PyObject *
+PyImaging_ZipEncoderNew(PyObject *self, PyObject *args) {
+    ImagingEncoderObject *encoder;
+
+    char *mode_name;
+    char *rawmode_name;
+    Py_ssize_t optimize = 0;
+    Py_ssize_t compress_level = -1;
+    Py_ssize_t compress_type = -1;
+    char *dictionary = NULL;
+    Py_ssize_t dictionary_size = 0;
+    if (!PyArg_ParseTuple(
+            args,
+            "ss|nnny#",
+            &mode_name,
+            &rawmode_name,
+            &optimize,
+            &compress_level,
+            &compress_type,
+            &dictionary,
+            &dictionary_size
+        )) {
+        return NULL;
+    }
+
+    /* Copy to avoid referencing Python's memory */
+    if (dictionary && dictionary_size > 0) {
+        /* malloc check ok, size comes from PyArg_ParseTuple */
+        char *p = malloc(dictionary_size);
+        if (!p) {
+            return ImagingError_MemoryError();
+        }
+        memcpy(p, dictionary, dictionary_size);
+        dictionary = p;
+    } else {
+        dictionary = NULL;
+    }
+
+    encoder = PyImaging_EncoderNew(sizeof(ZIPSTATE));
+    if (encoder == NULL) {
+        free(dictionary);
+        return NULL;
+    }
+
+    const ModeID mode = findModeID(mode_name);
+    const RawModeID rawmode = findRawModeID(rawmode_name);
+
+    if (get_packer(encoder, mode, rawmode) < 0) {
+        free(dictionary);
+        return NULL;
+    }
+
+    encoder->encode = ImagingZipEncode;
+    encoder->cleanup = ImagingZipEncodeCleanup;
+
+    if (rawmode == IMAGING_RAWMODE_P || rawmode == IMAGING_RAWMODE_PA) {
+        /* disable filtering */
+        ((ZIPSTATE *)encoder->state.context)->mode = ZIP_PNG_PALETTE;
+    }
+
+    ((ZIPSTATE *)encoder->state.context)->optimize = optimize;
+    ((ZIPSTATE *)encoder->state.context)->compress_level = compress_level;
+    ((ZIPSTATE *)encoder->state.context)->compress_type = compress_type;
+    ((ZIPSTATE *)encoder->state.context)->dictionary = dictionary;
+    ((ZIPSTATE *)encoder->state.context)->dictionary_size = dictionary_size;
+
+    return (PyObject *)encoder;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def zip_encoder(
+    mode_name: str,
+    rawmode_name: str,
+    optimize: int = 0,
+    compress_level: int = -1,
+    compress_type: int = -1,
+    dictionary: collections.abc.Buffer = ...,
+    /,
+) -> PIL.Image.core.ImagingEncoder:"""
+
+[[functions]]
+function_id = "PIL._imagingcms:buildProofTransform"
+module_name = "PIL._imagingcms"
+function_name = "buildProofTransform"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 496, column 1>"
+source_text = """
+static PyObject *
+buildProofTransform(PyObject *self, PyObject *args) {
+    CmsProfileObject *pInputProfile;
+    CmsProfileObject *pOutputProfile;
+    CmsProfileObject *pProofProfile;
+    char *sInMode;
+    char *sOutMode;
+    int iRenderingIntent = 0;
+    int iProofIntent = 0;
+    int cmsFLAGS = 0;
+
+    cmsHTRANSFORM transform = NULL;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "O!O!O!ss|iii:buildProofTransform",
+            &CmsProfile_Type,
+            &pInputProfile,
+            &CmsProfile_Type,
+            &pOutputProfile,
+            &CmsProfile_Type,
+            &pProofProfile,
+            &sInMode,
+            &sOutMode,
+            &iRenderingIntent,
+            &iProofIntent,
+            &cmsFLAGS
+        )) {
+        return NULL;
+    }
+
+    transform = _buildProofTransform(
+        pInputProfile->profile,
+        pOutputProfile->profile,
+        pProofProfile->profile,
+        sInMode,
+        sOutMode,
+        iRenderingIntent,
+        iProofIntent,
+        cmsFLAGS
+    );
+
+    if (!transform) {
+        return NULL;
+    }
+
+    return cms_transform_new(transform);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def buildProofTransform(
+    pInputProfile: PIL.ImageCms.core.CmsProfile,
+    pOutputProfile: PIL.ImageCms.core.CmsProfile,
+    pProofProfile: PIL.ImageCms.core.CmsProfile,
+    sInMode: str,
+    sOutMode: str,
+    iRenderingIntent: int = 0,
+    iProofIntent: int = 0,
+    cmsFLAGS: int = 0,
+    /,
+) -> PIL.ImageCms.core.CmsTransform:"""
+
+[[functions]]
+function_id = "PIL._imagingcms:buildTransform"
+module_name = "PIL._imagingcms"
+function_name = "buildTransform"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 454, column 1>"
+source_text = """
+static PyObject *
+buildTransform(PyObject *self, PyObject *args) {
+    CmsProfileObject *pInputProfile;
+    CmsProfileObject *pOutputProfile;
+    char *sInMode;
+    char *sOutMode;
+    int iRenderingIntent = 0;
+    int cmsFLAGS = 0;
+
+    cmsHTRANSFORM transform = NULL;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "O!O!ss|ii:buildTransform",
+            &CmsProfile_Type,
+            &pInputProfile,
+            &CmsProfile_Type,
+            &pOutputProfile,
+            &sInMode,
+            &sOutMode,
+            &iRenderingIntent,
+            &cmsFLAGS
+        )) {
+        return NULL;
+    }
+
+    transform = _buildTransform(
+        pInputProfile->profile,
+        pOutputProfile->profile,
+        sInMode,
+        sOutMode,
+        iRenderingIntent,
+        cmsFLAGS
+    );
+
+    if (!transform) {
+        return NULL;
+    }
+
+    return cms_transform_new(transform);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def buildTransform(
+    pInputProfile: PIL.ImageCms.core.CmsProfile,
+    pOutputProfile: PIL.ImageCms.core.CmsProfile,
+    sInMode: str,
+    sOutMode: str,
+    iRenderingIntent: int = 0,
+    cmsFLAGS: int = 0,
+    /,
+) -> PIL.ImageCms.core.CmsTransform:"""
+
+[[functions]]
+function_id = "PIL._imagingcms:createProfile"
+module_name = "PIL._imagingcms"
+function_name = "createProfile"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 576, column 1>"
+source_text = """
+static PyObject *
+createProfile(PyObject *self, PyObject *args) {
+    char *sColorSpace;
+    cmsHPROFILE hProfile;
+    cmsFloat64Number dColorTemp = 0.0;
+    cmsCIExyY whitePoint;
+    cmsBool result;
+
+    if (!PyArg_ParseTuple(args, "s|d:createProfile", &sColorSpace, &dColorTemp)) {
+        return NULL;
+    }
+
+    if (strcmp(sColorSpace, "LAB") == 0) {
+        if (dColorTemp > 0.0) {
+            result = cmsWhitePointFromTemp(&whitePoint, dColorTemp);
+            if (!result) {
+                PyErr_SetString(
+                    PyExc_ValueError,
+                    "ERROR: Could not calculate white point from color temperature "
+                    "provided, must be float in degrees Kelvin"
+                );
+                return NULL;
+            }
+            hProfile = cmsCreateLab2Profile(&whitePoint);
+        } else {
+            hProfile = cmsCreateLab2Profile(NULL);
+        }
+    } else if (strcmp(sColorSpace, "XYZ") == 0) {
+        hProfile = cmsCreateXYZProfile();
+    } else if (strcmp(sColorSpace, "sRGB") == 0) {
+        hProfile = cmsCreate_sRGBProfile();
+    } else {
+        hProfile = NULL;
+    }
+
+    if (!hProfile) {
+        PyErr_SetString(PyExc_ValueError, "failed to create requested color space");
+        return NULL;
+    }
+
+    return cms_profile_new(hProfile);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def createProfile(
+    sColorSpace: str,
+    dColorTemp: float = 0.0,
+    /,
+) -> PIL.ImageCms.core.CmsProfile:"""
+
+[[functions]]
+function_id = "PIL._imagingcms:profile_frombytes"
+module_name = "PIL._imagingcms"
+function_name = "profile_frombytes"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 119, column 1>"
+source_text = """
+static PyObject *
+cms_profile_frombytes(PyObject *self, PyObject *args) {
+    cmsHPROFILE hProfile;
+
+    char *pProfile;
+    Py_ssize_t nProfile;
+    if (!PyArg_ParseTuple(args, "y#:profile_frombytes", &pProfile, &nProfile)) {
+        return NULL;
+    }
+
+    hProfile = cmsOpenProfileFromMem(pProfile, nProfile);
+    if (!hProfile) {
+        PyErr_SetString(PyExc_OSError, "cannot open profile from string");
+        return NULL;
+    }
+
+    return cms_profile_new(hProfile);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def profile_frombytes(pProfile: collections.abc.Buffer, /) -> PIL.ImageCms.core.CmsProfile:"
+
+[[functions]]
+function_id = "PIL._imagingcms:profile_open"
+module_name = "PIL._imagingcms"
+function_name = "profile_open"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 101, column 1>"
+source_text = """
+static PyObject *
+cms_profile_open(PyObject *self, PyObject *args) {
+    cmsHPROFILE hProfile;
+
+    char *sProfile;
+    if (!PyArg_ParseTuple(args, "s:profile_open", &sProfile)) {
+        return NULL;
+    }
+
+    hProfile = cmsOpenProfileFromFile(sProfile, "r");
+    if (!hProfile) {
+        PyErr_SetString(PyExc_OSError, "cannot open profile file");
+        return NULL;
+    }
+
+    return cms_profile_new(hProfile);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def profile_open(sProfile: str, /) -> PIL.ImageCms.core.CmsProfile:"
+
+[[functions]]
+function_id = "PIL._imagingcms:profile_tobytes"
+module_name = "PIL._imagingcms"
+function_name = "profile_tobytes"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingcms.c', line 138, column 1>"
+source_text = """
+static PyObject *
+cms_profile_tobytes(PyObject *self, PyObject *args) {
+    char *pProfile = NULL;
+    cmsUInt32Number nProfile;
+    PyObject *CmsProfile;
+
+    cmsHPROFILE *profile;
+
+    PyObject *ret;
+    if (!PyArg_ParseTuple(args, "O!", &CmsProfile_Type, &CmsProfile)) {
+        return NULL;
+    }
+
+    profile = ((CmsProfileObject *)CmsProfile)->profile;
+
+    if (!cmsSaveProfileToMem(profile, pProfile, &nProfile)) {
+        PyErr_SetString(PyExc_OSError, "Could not determine profile size");
+        return NULL;
+    }
+
+    pProfile = (char *)malloc(nProfile);
+    if (!pProfile) {
+        PyErr_SetString(PyExc_OSError, "Out of Memory");
+        return NULL;
+    }
+
+    if (!cmsSaveProfileToMem(profile, pProfile, &nProfile)) {
+        PyErr_SetString(PyExc_OSError, "Could not get profile");
+        free(pProfile);
+        return NULL;
+    }
+
+    ret = PyBytes_FromStringAndSize(pProfile, (Py_ssize_t)nProfile);
+
+    free(pProfile);
+    return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def profile_tobytes(CmsProfile: PIL.ImageCms.core.CmsProfile, /) -> bytes:"
+
+[[functions]]
+function_id = "PIL._imagingft:getfont"
+module_name = "PIL._imagingft"
+function_name = "getfont"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingft.c', line 116, column 1>"
+source_text = """
+static PyObject *
+getfont(PyObject *self_, PyObject *args, PyObject *kw) {
+    /* create a font object from a file name and a size (in pixels) */
+
+    FontObject *self;
+    int error = 0;
+
+    char *filename = NULL;
+    float size;
+    FT_Size_RequestRec req;
+    FT_Long width;
+    Py_ssize_t index = 0;
+    Py_ssize_t layout_engine = 0;
+    unsigned char *encoding;
+    unsigned char *font_bytes;
+    Py_ssize_t font_bytes_size = 0;
+    static char *kwlist[] = {
+        "filename", "size", "index", "encoding", "font_bytes", "layout_engine", NULL
+    };
+
+    if (!library) {
+        PyErr_SetString(PyExc_OSError, "failed to initialize FreeType library");
+        return NULL;
+    }
+
+#if PY_MAJOR_VERSION > 3 || PY_MINOR_VERSION > 11
+    PyConfig config;
+    PyConfig_InitPythonConfig(&config);
+    if (!PyArg_ParseTupleAndKeywords(
+            args,
+            kw,
+            "etf|nsy#n",
+            kwlist,
+            config.filesystem_encoding,
+            &filename,
+            &size,
+            &index,
+            &encoding,
+            &font_bytes,
+            &font_bytes_size,
+            &layout_engine
+        )) {
+        PyConfig_Clear(&config);
+        return NULL;
+    }
+    PyConfig_Clear(&config);
+#else
+    if (!PyArg_ParseTupleAndKeywords(
+            args,
+            kw,
+            "etf|nsy#n",
+            kwlist,
+            Py_FileSystemDefaultEncoding,
+            &filename,
+            &size,
+            &index,
+            &encoding,
+            &font_bytes,
+            &font_bytes_size,
+            &layout_engine
+        )) {
+        return NULL;
+    }
+#endif
+
+    self = PyObject_New(FontObject, &Font_Type);
+    if (!self) {
+        if (filename) {
+            PyMem_Free(filename);
+        }
+        return NULL;
+    }
+
+    self->face = NULL;
+    self->layout_engine = layout_engine;
+
+    if (filename && font_bytes_size <= 0) {
+        self->font_bytes = NULL;
+        MUTEX_LOCK(&ft_library_mutex);
+        error = FT_New_Face(library, filename, index, &self->face);
+        MUTEX_UNLOCK(&ft_library_mutex);
+    } else {
+        /* need to have allocated storage for font_bytes for the life of the object.*/
+        /* Don't free this before FT_Done_Face */
+        self->font_bytes = PyMem_Malloc(font_bytes_size);
+        if (!self->font_bytes) {
+            error = FT_Err_Out_Of_Memory;
+        }
+        if (!error) {
+            memcpy(self->font_bytes, font_bytes, (size_t)font_bytes_size);
+            MUTEX_LOCK(&ft_library_mutex);
+            error = FT_New_Memory_Face(
+                library,
+                (FT_Byte *)self->font_bytes,
+                font_bytes_size,
+                index,
+                &self->face
+            );
+            MUTEX_UNLOCK(&ft_library_mutex);
+        }
+    }
+
+    if (!error) {
+        width = size * 64;
+        req.type = FT_SIZE_REQUEST_TYPE_NOMINAL;
+        req.width = width;
+        req.height = width;
+        req.horiResolution = 0;
+        req.vertResolution = 0;
+        error = FT_Request_Size(self->face, &req);
+    }
+
+    if (!error && encoding && strlen((char *)encoding) == 4) {
+        FT_Encoding encoding_tag =
+            FT_MAKE_TAG(encoding[0], encoding[1], encoding[2], encoding[3]);
+        error = FT_Select_Charmap(self->face, encoding_tag);
+    }
+    if (filename) {
+        PyMem_Free(filename);
+    }
+
+    if (error) {
+        if (self->font_bytes) {
+            PyMem_Free(self->font_bytes);
+            self->font_bytes = NULL;
+        }
+        Py_DECREF(self);
+        return geterror(error);
+    }
+
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def getfont(
+    filename: str | bytes | bytearray,
+    size: float,
+    index: int = 0,
+    encoding: str = ...,
+    font_bytes: collections.abc.Buffer = ...,
+    layout_engine: int = 0,
+) -> PIL._imagingft.Font:"""
+
+[[functions]]
+function_id = "PIL._imagingmath:binop"
+module_name = "PIL._imagingmath"
+function_name = "binop"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingmath.c', line 208, column 1>"
+source_text = """
+static PyObject *
+_binop(PyObject *self, PyObject *args) {
+    Imaging out;
+    Imaging im1;
+    Imaging im2;
+    void (*binop)(Imaging, Imaging, Imaging);
+
+    PyObject *op, *i0, *i1, *i2;
+    if (!PyArg_ParseTuple(args, "OOOO", &op, &i0, &i1, &i2)) {
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(op, MATH_FUNC_BINOP_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", MATH_FUNC_BINOP_MAGIC);
+        return NULL;
+    }
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC) ||
+        !PyCapsule_IsValid(i1, IMAGING_MAGIC) ||
+        !PyCapsule_IsValid(i2, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    binop = (void *)PyCapsule_GetPointer(op, MATH_FUNC_BINOP_MAGIC);
+    if (!binop) {
+        return NULL;
+    }
+    out = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!out) {
+        return NULL;
+    }
+    im1 = (Imaging)PyCapsule_GetPointer(i1, IMAGING_MAGIC);
+    if (!im1) {
+        return NULL;
+    }
+    im2 = (Imaging)PyCapsule_GetPointer(i2, IMAGING_MAGIC);
+    if (!im2) {
+        return NULL;
+    }
+
+    binop(out, im1, im2);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def binop(
+    op: object,
+    i0: object,
+    i1: object,
+    i2: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "PIL._imagingmath:unop"
+module_name = "PIL._imagingmath"
+function_name = "unop"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingmath.c', line 169, column 1>"
+source_text = """
+static PyObject *
+_unop(PyObject *self, PyObject *args) {
+    Imaging out;
+    Imaging im1;
+    void (*unop)(Imaging, Imaging);
+
+    PyObject *op, *i0, *i1;
+    if (!PyArg_ParseTuple(args, "OOO", &op, &i0, &i1)) {
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(op, MATH_FUNC_UNOP_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", MATH_FUNC_UNOP_MAGIC);
+        return NULL;
+    }
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC) ||
+        !PyCapsule_IsValid(i1, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    unop = (void *)PyCapsule_GetPointer(op, MATH_FUNC_UNOP_MAGIC);
+    if (!unop) {
+        return NULL;
+    }
+    out = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!out) {
+        return NULL;
+    }
+    im1 = (Imaging)PyCapsule_GetPointer(i1, IMAGING_MAGIC);
+    if (!im1) {
+        return NULL;
+    }
+
+    unop(out, im1);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def unop(
+    op: object,
+    i0: object,
+    i1: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "PIL._imagingmorph:apply"
+module_name = "PIL._imagingmorph"
+function_name = "apply"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingmorph.c', line 30, column 1>"
+source_text = """
+static PyObject *
+apply(PyObject *self, PyObject *args) {
+    const char *lut;
+    Py_ssize_t lut_len;
+    PyObject *i0, *i1;
+    Imaging imgin, imgout;
+    int width, height;
+    int row_idx, col_idx;
+    UINT8 **inrows, **outrows;
+    int num_changed_pixels = 0;
+
+    if (!PyArg_ParseTuple(args, "s#OO", &lut, &lut_len, &i0, &i1)) {
+        return NULL;
+    }
+
+    if (lut_len < LUT_SIZE) {
+        PyErr_SetString(PyExc_RuntimeError, "The morphology LUT has the wrong size");
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC) ||
+        !PyCapsule_IsValid(i1, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    imgin = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!imgin) {
+        return NULL;
+    }
+    imgout = (Imaging)PyCapsule_GetPointer(i1, IMAGING_MAGIC);
+    if (!imgout) {
+        return NULL;
+    }
+    width = imgin->xsize;
+    height = imgin->ysize;
+
+    if (imgin->type != IMAGING_TYPE_UINT8 || imgin->bands != 1 ||
+        imgout->type != IMAGING_TYPE_UINT8 || imgout->bands != 1) {
+        PyErr_SetString(PyExc_RuntimeError, "Unsupported image type");
+        return NULL;
+    }
+
+    inrows = imgin->image8;
+    outrows = imgout->image8;
+
+    for (row_idx = 0; row_idx < height; row_idx++) {
+        UINT8 *outrow = outrows[row_idx];
+        UINT8 *inrow = inrows[row_idx];
+        UINT8 *prow, *nrow; /* Previous and next row */
+
+        /* zero boundary conditions. TBD support other modes */
+        outrow[0] = outrow[width - 1] = 0;
+        if (row_idx == 0 || row_idx == height - 1) {
+            for (col_idx = 0; col_idx < width; col_idx++) {
+                outrow[col_idx] = 0;
+            }
+            continue;
+        }
+
+        prow = inrows[row_idx - 1];
+        nrow = inrows[row_idx + 1];
+
+        for (col_idx = 1; col_idx < width - 1; col_idx++) {
+            int cim = col_idx - 1;
+            int cip = col_idx + 1;
+            unsigned char b0 = prow[cim] & 1;
+            unsigned char b1 = prow[col_idx] & 1;
+            unsigned char b2 = prow[cip] & 1;
+
+            unsigned char b3 = inrow[cim] & 1;
+            unsigned char b4 = inrow[col_idx] & 1;
+            unsigned char b5 = inrow[cip] & 1;
+
+            unsigned char b6 = nrow[cim] & 1;
+            unsigned char b7 = nrow[col_idx] & 1;
+            unsigned char b8 = nrow[cip] & 1;
+
+            int lut_idx =
+                (b0 | (b1 << 1) | (b2 << 2) | (b3 << 3) | (b4 << 4) | (b5 << 5) |
+                 (b6 << 6) | (b7 << 7) | (b8 << 8));
+            outrow[col_idx] = 255 * (lut[lut_idx] & 1);
+            num_changed_pixels += ((b4 & 1) != (outrow[col_idx] & 1));
+        }
+    }
+    return Py_BuildValue("i", num_changed_pixels);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def apply(
+    lut: str | collections.abc.Buffer,
+    i0: object,
+    i1: object,
+    /,
+) -> int:"""
+
+[[functions]]
+function_id = "PIL._imagingmorph:get_on_pixels"
+module_name = "PIL._imagingmorph"
+function_name = "get_on_pixels"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingmorph.c', line 215, column 1>"
+source_text = """
+static PyObject *
+get_on_pixels(PyObject *self, PyObject *args) {
+    PyObject *i0;
+    Imaging img;
+    UINT8 **rows;
+    int row_idx, col_idx;
+    int width, height;
+
+    if (!PyArg_ParseTuple(args, "O", &i0)) {
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    img = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!img) {
+        return NULL;
+    }
+    rows = img->image8;
+    width = img->xsize;
+    height = img->ysize;
+
+    PyObject *ret = PyList_New(0);
+    if (ret == NULL) {
+        return NULL;
+    }
+
+    for (row_idx = 0; row_idx < height; row_idx++) {
+        UINT8 *row = rows[row_idx];
+        for (col_idx = 0; col_idx < width; col_idx++) {
+            if (row[col_idx]) {
+                PyObject *coordObj = Py_BuildValue("(nn)", col_idx, row_idx);
+                if (!coordObj) {
+                    Py_DECREF(ret);
+                    return NULL;
+                }
+                PyList_Append(ret, coordObj);
+                Py_XDECREF(coordObj);
+            }
+        }
+    }
+    return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_on_pixels(i0: object, /) -> list:"
+
+[[functions]]
+function_id = "PIL._imagingmorph:match"
+module_name = "PIL._imagingmorph"
+function_name = "match"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingmorph.c', line 128, column 1>"
+source_text = """
+static PyObject *
+match(PyObject *self, PyObject *args) {
+    const char *lut;
+    Py_ssize_t lut_len;
+    PyObject *i0;
+    Imaging imgin;
+    int width, height;
+    int row_idx, col_idx;
+    UINT8 **inrows;
+
+    if (!PyArg_ParseTuple(args, "s#O", &lut, &lut_len, &i0)) {
+        return NULL;
+    }
+
+    if (lut_len < LUT_SIZE) {
+        PyErr_SetString(PyExc_RuntimeError, "The morphology LUT has the wrong size");
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    imgin = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!imgin) {
+        return NULL;
+    }
+
+    if (imgin->type != IMAGING_TYPE_UINT8 || imgin->bands != 1) {
+        PyErr_SetString(PyExc_RuntimeError, "Unsupported image type");
+        return NULL;
+    }
+
+    PyObject *ret = PyList_New(0);
+    if (ret == NULL) {
+        return NULL;
+    }
+
+    inrows = imgin->image8;
+    width = imgin->xsize;
+    height = imgin->ysize;
+
+    for (row_idx = 1; row_idx < height - 1; row_idx++) {
+        UINT8 *inrow = inrows[row_idx];
+        UINT8 *prow, *nrow;
+
+        prow = inrows[row_idx - 1];
+        nrow = inrows[row_idx + 1];
+
+        for (col_idx = 1; col_idx < width - 1; col_idx++) {
+            int cim = col_idx - 1;
+            int cip = col_idx + 1;
+            unsigned char b0 = prow[cim] & 1;
+            unsigned char b1 = prow[col_idx] & 1;
+            unsigned char b2 = prow[cip] & 1;
+
+            unsigned char b3 = inrow[cim] & 1;
+            unsigned char b4 = inrow[col_idx] & 1;
+            unsigned char b5 = inrow[cip] & 1;
+
+            unsigned char b6 = nrow[cim] & 1;
+            unsigned char b7 = nrow[col_idx] & 1;
+            unsigned char b8 = nrow[cip] & 1;
+
+            int lut_idx =
+                (b0 | (b1 << 1) | (b2 << 2) | (b3 << 3) | (b4 << 4) | (b5 << 5) |
+                 (b6 << 6) | (b7 << 7) | (b8 << 8));
+            if (lut[lut_idx]) {
+                PyObject *coordObj = Py_BuildValue("(nn)", col_idx, row_idx);
+                if (!coordObj) {
+                    Py_DECREF(ret);
+                    return NULL;
+                }
+                PyList_Append(ret, coordObj);
+                Py_XDECREF(coordObj);
+            }
+        }
+    }
+
+    return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def match(
+    lut: str | collections.abc.Buffer,
+    i0: object,
+    /,
+) -> list:"""
+
+[[functions]]
+function_id = "PIL._imagingtk:tkinit"
+module_name = "PIL._imagingtk"
+function_name = "tkinit"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_imagingtk.c', line 27, column 1>"
+source_text = """
+static PyObject *
+_tkinit(PyObject *self, PyObject *args) {
+    Tcl_Interp *interp;
+
+    PyObject *arg;
+    if (!PyArg_ParseTuple(args, "O", &arg)) {
+        return NULL;
+    }
+
+    interp = (Tcl_Interp *)PyLong_AsVoidPtr(arg);
+
+    /* This will bomb if interp is invalid... */
+    TkImaging_Init(interp);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def tkinit(arg: object, /) -> None:"
+
+[[functions]]
+function_id = "PIL._webp:WebPAnimDecoder"
+module_name = "PIL._webp"
+function_name = "WebPAnimDecoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'src/_webp.c', line 398, column 1>"
+source_text = """
+PyObject *
+_anim_decoder_new(PyObject *self, PyObject *args) {
+    PyBytesObject *webp_string;
+    const uint8_t *webp;
+    Py_ssize_t size;
+    WebPData webp_src;
+    ModeID mode;
+    WebPDecoderConfig config;
+    WebPAnimDecoderObject *decp = NULL;
+    WebPAnimDecoder *dec = NULL;
+
+    if (!PyArg_ParseTuple(args, "S", &webp_string)) {
+        return NULL;
+    }
+    PyBytes_AsStringAndSize((PyObject *)webp_string, (char **)&webp, &size);
+    webp_src.bytes = webp;
+    webp_src.size = size;
+
+    // Sniff the mode, since the decoder API doesn't tell us
+    mode = IMAGING_MODE_RGBA;
+    if (WebPGetFeatures(webp, size, &config.input) == VP8_STATUS_OK) {
+        if (!config.input.has_alpha) {
+            mode = IMAGING_MODE_RGBX;
+        }
+    }
+
+    // Create the decoder (default mode is RGBA, if no options passed)
+    decp = PyObject_New(WebPAnimDecoderObject, &WebPAnimDecoder_Type);
+    if (decp) {
+        decp->mode = mode;
+        if (WebPDataCopy(&webp_src, &(decp->data))) {
+            dec = WebPAnimDecoderNew(&(decp->data), NULL);
+            if (dec) {
+                if (WebPAnimDecoderGetInfo(dec, &(decp->info))) {
+                    decp->dec = dec;
+                    return (PyObject *)decp;
+                }
+            }
+            WebPDataClear(&(decp->data));
+        }
+        PyObject_Del(decp);
+    }
+    PyErr_SetString(PyExc_OSError, "could not create decoder object");
+    return NULL;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def WebPAnimDecoder(webp_string: bytes, /) -> typing.Any:"
+
+[[functions]]
+function_id = "PIL._webp:WebPAnimEncoder"
+module_name = "PIL._webp"
+function_name = "WebPAnimEncoder"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'src/_webp.c', line 153, column 1>"
+source_text = """
+PyObject *
+_anim_encoder_new(PyObject *self, PyObject *args) {
+    int width, height;
+    uint32_t bgcolor;
+    int loop_count;
+    int minimize_size;
+    int kmin, kmax;
+    int allow_mixed;
+    int verbose;
+    WebPAnimEncoderOptions enc_options;
+    WebPAnimEncoderObject *encp = NULL;
+    WebPAnimEncoder *enc = NULL;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "(ii)Iiiiiii",
+            &width,
+            &height,
+            &bgcolor,
+            &loop_count,
+            &minimize_size,
+            &kmin,
+            &kmax,
+            &allow_mixed,
+            &verbose
+        )) {
+        return NULL;
+    }
+
+    // Setup and configure the encoder's options (these are animation-specific)
+    if (!WebPAnimEncoderOptionsInit(&enc_options)) {
+        PyErr_SetString(PyExc_RuntimeError, "failed to initialize encoder options");
+        return NULL;
+    }
+    enc_options.anim_params.bgcolor = bgcolor;
+    enc_options.anim_params.loop_count = loop_count;
+    enc_options.minimize_size = minimize_size;
+    enc_options.kmin = kmin;
+    enc_options.kmax = kmax;
+    enc_options.allow_mixed = allow_mixed;
+    enc_options.verbose = verbose;
+
+    // Validate canvas dimensions
+    if (width <= 0 || height <= 0) {
+        PyErr_SetString(PyExc_ValueError, "invalid canvas dimensions");
+        return NULL;
+    }
+
+    // Create a new animation encoder and picture frame
+    encp = PyObject_New(WebPAnimEncoderObject, &WebPAnimEncoder_Type);
+    if (encp) {
+        if (WebPPictureInit(&(encp->frame))) {
+            enc = WebPAnimEncoderNew(width, height, &enc_options);
+            if (enc) {
+                encp->enc = enc;
+                return (PyObject *)encp;
+            }
+            WebPPictureFree(&(encp->frame));
+        }
+        PyObject_Del(encp);
+    }
+    PyErr_SetString(PyExc_RuntimeError, "could not create encoder object");
+    return NULL;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def WebPAnimEncoder(
+    width_height: tuple[int, int],
+    bgcolor: int,
+    loop_count: int,
+    minimize_size: int,
+    kmin: int,
+    kmax: int,
+    allow_mixed: int,
+    verbose: int,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "PIL._webp:WebPEncode"
+module_name = "PIL._webp"
+function_name = "WebPEncode"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'src/_webp.c', line 569, column 1>"
+source_text = '''
+PyObject *
+WebPEncode_wrapper(PyObject *self, PyObject *args) {
+    int lossless;
+    float quality_factor;
+    float alpha_quality_factor;
+    int method;
+    int exact;
+    Imaging im;
+    PyObject *i0;
+    uint8_t *icc_bytes;
+    uint8_t *exif_bytes;
+    uint8_t *xmp_bytes;
+    uint8_t *output;
+    Py_ssize_t icc_size;
+    Py_ssize_t exif_size;
+    Py_ssize_t xmp_size;
+    size_t ret_size;
+    int ok;
+    ImagingSectionCookie cookie;
+    WebPConfig config;
+    WebPMemoryWriter writer;
+    WebPPicture pic;
+
+    if (!PyArg_ParseTuple(
+            args,
+            "Oiffs#iis#s#",
+            &i0,
+            &lossless,
+            &quality_factor,
+            &alpha_quality_factor,
+            &icc_bytes,
+            &icc_size,
+            &method,
+            &exact,
+            &exif_bytes,
+            &exif_size,
+            &xmp_bytes,
+            &xmp_size
+        )) {
+        return NULL;
+    }
+
+    if (!PyCapsule_IsValid(i0, IMAGING_MAGIC)) {
+        PyErr_Format(PyExc_TypeError, "Expected '%s' Capsule", IMAGING_MAGIC);
+        return NULL;
+    }
+
+    im = (Imaging)PyCapsule_GetPointer(i0, IMAGING_MAGIC);
+    if (!im) {
+        return NULL;
+    }
+
+    // Setup config for this frame
+    if (!WebPConfigInit(&config)) {
+        PyErr_SetString(PyExc_RuntimeError, "failed to initialize config!");
+        return NULL;
+    }
+    config.lossless = lossless;
+    config.quality = quality_factor;
+    config.alpha_quality = alpha_quality_factor;
+    config.method = method;
+    config.exact = exact;
+
+    // Validate the config
+    if (!WebPValidateConfig(&config)) {
+        PyErr_SetString(PyExc_ValueError, "invalid configuration");
+        return NULL;
+    }
+
+    if (!WebPPictureInit(&pic)) {
+        PyErr_SetString(PyExc_ValueError, "could not initialise picture");
+        return NULL;
+    }
+
+    if (import_frame_libwebp(&pic, im)) {
+        return NULL;
+    }
+
+    WebPMemoryWriterInit(&writer);
+    pic.writer = WebPMemoryWrite;
+    pic.custom_ptr = &writer;
+
+    ImagingSectionEnter(&cookie);
+    ok = WebPEncode(&config, &pic);
+    ImagingSectionLeave(&cookie);
+
+    WebPPictureFree(&pic);
+
+    output = writer.mem;
+    ret_size = writer.size;
+
+    if (!ok) {
+        int error_code = (&pic)->error_code;
+        char message[50] = "";
+        if (error_code == VP8_ENC_ERROR_BAD_DIMENSION) {
+            sprintf(
+                message,
+                ": Image size exceeds WebP limit of %d pixels",
+                WEBP_MAX_DIMENSION
+            );
+        }
+        PyErr_Format(PyExc_ValueError, "encoding error %d%s", error_code, message);
+        free(output);
+        return NULL;
+    }
+
+    {
+        /* I want to truncate the *_size items that get passed into WebP
+           data. Pypy2.1.0 had some issues where the Py_ssize_t items had
+           data in the upper byte. (Not sure why, it shouldn't have been there)
+        */
+        int i_icc_size = (int)icc_size;
+        int i_exif_size = (int)exif_size;
+        int i_xmp_size = (int)xmp_size;
+        WebPData output_data = {0};
+        WebPData image = {output, ret_size};
+        WebPData icc_profile = {icc_bytes, i_icc_size};
+        WebPData exif = {exif_bytes, i_exif_size};
+        WebPData xmp = {xmp_bytes, i_xmp_size};
+        WebPMuxError err;
+        int dbg = 0;
+
+        int copy_data = 0;  // value 1 indicates given data WILL be copied to the mux
+                            // and value 0 indicates data will NOT be copied.
+
+        WebPMux *mux = WebPMuxNew();
+        WebPMuxSetImage(mux, &image, copy_data);
+
+        if (dbg) {
+            /* was getting %ld icc_size == 0, icc_size>0 was true */
+            fprintf(stderr, "icc size %d, %d \n", i_icc_size, i_icc_size > 0);
+        }
+
+        if (i_icc_size > 0) {
+            if (dbg) {
+                fprintf(stderr, "Adding ICC Profile\n");
+            }
+            err = WebPMuxSetChunk(mux, "ICCP", &icc_profile, copy_data);
+            if (err != WEBP_MUX_OK) {
+                return HandleMuxError(err, "ICCP");
+            }
+        }
+
+        if (dbg) {
+            fprintf(stderr, "exif size %d \n", i_exif_size);
+        }
+        if (i_exif_size > 0) {
+            if (dbg) {
+                fprintf(stderr, "Adding Exif Data\n");
+            }
+            err = WebPMuxSetChunk(mux, "EXIF", &exif, copy_data);
+            if (err != WEBP_MUX_OK) {
+                return HandleMuxError(err, "EXIF");
+            }
+        }
+
+        if (dbg) {
+            fprintf(stderr, "xmp size %d \n", i_xmp_size);
+        }
+        if (i_xmp_size > 0) {
+            if (dbg) {
+                fprintf(stderr, "Adding XMP Data\n");
+            }
+            err = WebPMuxSetChunk(mux, "XMP ", &xmp, copy_data);
+            if (err != WEBP_MUX_OK) {
+                return HandleMuxError(err, "XMP ");
+            }
+        }
+
+        WebPMuxAssemble(mux, &output_data);
+        WebPMuxDelete(mux);
+        free(output);
+
+        ret_size = output_data.size;
+        if (ret_size > 0) {
+            PyObject *ret =
+                PyBytes_FromStringAndSize((char *)output_data.bytes, ret_size);
+            WebPDataClear(&output_data);
+            return ret;
+        }
+    }
+    Py_RETURN_NONE;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def WebPEncode(
+    i0: object,
+    lossless: int,
+    quality_factor: float,
+    alpha_quality_factor: float,
+    icc_bytes: str | collections.abc.Buffer,
+    method: int,
+    exact: int,
+    exif_bytes: str | collections.abc.Buffer,
+    xmp_bytes: str | collections.abc.Buffer,
+    /,
+) -> None | bytes:"""

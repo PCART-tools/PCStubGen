@@ -1,0 +1,15 @@
+{
+  "module_name": "PIL",
+  "compilation_database": "/home/kirara/third_package_source/Pillow-12.2.0/compile_commands.json",
+  "summary": {
+    "functions": 80,
+    "total_elapsed_ms": 1952.359713,
+    "avg_elapsed_ms": 24.404496412500002,
+    "min_elapsed_ms": 0.601387,
+    "max_elapsed_ms": 220.934893,
+    "p50_elapsed_ms": 2.654337,
+    "p90_elapsed_ms": 102.523973,
+    "p95_elapsed_ms": 114.737973
+  },
+  "timing_csv": "out/benckmark/PIL_benchmark_20260515_115931.csv"
+}

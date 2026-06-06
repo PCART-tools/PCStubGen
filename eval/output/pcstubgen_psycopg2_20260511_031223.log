@@ -1,0 +1,556 @@
+2026-05-11 03:12:23.516 | INFO     | 
+pcstubgen._gen_command:_log_cli_arguments:53
+CLI参数: module_name=psycopg2, output=out/pcstubgen, compilation_database=/home/kirara/third_package_source/psycopg2-2.9.12/compile_commands.json, include_docstrings=False, toml=True
+
+2026-05-11 03:12:23.710 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.Error, func: __reduce__, owner_class: <class 'psycopg2.Error'>
+
+2026-05-11 03:12:23.715 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.Error, func: __setstate__, owner_class: <class 'psycopg2.Error'>
+
+2026-05-11 03:12:23.846 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_Date, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 287, column 12>}")
+
+2026-05-11 03:12:23.848 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: Date, owner_class: None
+
+2026-05-11 03:12:23.850 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_DateFromPy, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunction, cursor: {kind=CursorKind.CALL_EXPR, spelling=_PyObject_CallFunction_SizeT, first_token=PyObject_CallFunction, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 477, column 12>}")
+
+2026-05-11 03:12:23.851 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: DateFromPy, owner_class: None
+
+2026-05-11 03:12:23.853 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_DateFromTicks, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 392, column 12>}")
+
+2026-05-11 03:12:23.854 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: DateFromTicks, owner_class: None
+
+2026-05-11 03:12:23.977 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg.Decimal, func: getquoted, owner_class: <class 'psycopg2._psycopg.Decimal'>
+
+2026-05-11 03:12:23.979 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg.Decimal, func: __conform__, owner_class: <class 'psycopg2._psycopg.Decimal'>
+
+2026-05-11 03:12:23.980 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_IntervalFromPy, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunction, cursor: {kind=CursorKind.CALL_EXPR, spelling=_PyObject_CallFunction_SizeT, first_token=PyObject_CallFunction, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 513, column 12>}")
+
+2026-05-11 03:12:23.981 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: IntervalFromPy, owner_class: None
+
+2026-05-11 03:12:24.109 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: list_getquoted, reason: RuntimeError("无法识别的返回值工厂调用: list_quote, cursor: {kind=CursorKind.CALL_EXPR, spelling=list_quote, first_token=list_quote, location=<SourceLocation file 'psycopg/adapter_list.c', line 175, column 12>}")
+
+2026-05-11 03:12:24.110 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg.List, func: getquoted, owner_class: <class 'psycopg2._psycopg.List'>
+
+2026-05-11 03:12:24.111 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg.List, func: prepare, owner_class: <class 'psycopg2._psycopg.List'>
+
+2026-05-11 03:12:24.113 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg.List, func: __conform__, owner_class: <class 'psycopg2._psycopg.List'>
+
+2026-05-11 03:12:24.116 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_Time, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 320, column 12>}")
+
+2026-05-11 03:12:24.119 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: Time, owner_class: None
+
+2026-05-11 03:12:24.120 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_TimeFromPy, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunction, cursor: {kind=CursorKind.CALL_EXPR, spelling=_PyObject_CallFunction_SizeT, first_token=PyObject_CallFunction, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 489, column 12>}")
+
+2026-05-11 03:12:24.120 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: TimeFromPy, owner_class: None
+
+2026-05-11 03:12:24.122 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_TimeFromTicks, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 420, column 12>}")
+
+2026-05-11 03:12:24.123 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: TimeFromTicks, owner_class: None
+
+2026-05-11 03:12:24.123 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_Timestamp, reason: RuntimeError("无法识别的返回值工厂调用: _psyco_Timestamp, cursor: {kind=CursorKind.CALL_EXPR, spelling=_psyco_Timestamp, first_token=_psyco_Timestamp, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 366, column 12>}")
+
+2026-05-11 03:12:24.125 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: Timestamp, owner_class: None
+
+2026-05-11 03:12:24.126 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_TimestampFromPy, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunction, cursor: {kind=CursorKind.CALL_EXPR, spelling=_PyObject_CallFunction_SizeT, first_token=PyObject_CallFunction, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 501, column 12>}")
+
+2026-05-11 03:12:24.127 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: TimestampFromPy, owner_class: None
+
+2026-05-11 03:12:24.131 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_TimestampFromTicks, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/adapter_datetime.c', line 466, column 12>}")
+
+2026-05-11 03:12:24.133 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: TimestampFromTicks, owner_class: None
+
+2026-05-11 03:12:24.279 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_connect, reason: RuntimeError("无法识别的对象返回标识符: conn, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=conn, first_token=conn, location=<SourceLocation file 'psycopg/psycopgmodule.c', line 117, column 12>}")
+
+2026-05-11 03:12:24.283 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: _connect, owner_class: None
+
+2026-05-11 03:12:24.405 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_microprotocols_adapt, reason: RuntimeError("无法识别的返回值工厂调用: microprotocols_adapt, cursor: {kind=CursorKind.CALL_EXPR, spelling=microprotocols_adapt, first_token=microprotocols_adapt, location=<SourceLocation file 'psycopg/microprotocols.c', line 276, column 12>}")
+
+2026-05-11 03:12:24.406 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser:render_default_value:57
+PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: RuntimeError("不支持的默认值表达式类型: UNARY_OPERATOR, cursor: {kind=CursorKind.UNARY_OPERATOR, spelling=, first_token=&, location=<SourceLocation file 'psycopg/microprotocols.c', line 273, column 34>}")
+
+2026-05-11 03:12:24.407 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: adapt, owner_class: None
+
+2026-05-11 03:12:24.412 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: encrypt_password, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/psycopgmodule.c', line 470, column 12>}")
+
+2026-05-11 03:12:24.428 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: encrypt_password, owner_class: None
+
+2026-05-11 03:12:24.551 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: get_wait_callback, owner_class: None
+
+2026-05-11 03:12:24.553 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: libpq_version, owner_class: None
+
+2026-05-11 03:12:24.685 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: typecast_array_from_python, reason: RuntimeError("无法识别的对象返回标识符: obj, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=obj, first_token=obj, location=<SourceLocation file 'psycopg/typecast.c', line 536, column 24>}")
+
+2026-05-11 03:12:24.687 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: new_array_type, owner_class: None
+
+2026-05-11 03:12:24.689 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: typecast_from_python, reason: RuntimeError("无法识别的返回值工厂调用: typecast_new, cursor: {kind=CursorKind.CALL_EXPR, spelling=typecast_new, first_token=typecast_new, location=<SourceLocation file 'psycopg/typecast.c', line 513, column 12>}")
+
+2026-05-11 03:12:24.693 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: new_type, owner_class: None
+
+2026-05-11 03:12:24.695 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: parse_dsn, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/psycopgmodule.c', line 156, column 12>}")
+
+2026-05-11 03:12:24.698 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: parse_dsn, owner_class: None
+
+2026-05-11 03:12:24.706 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: quote_ident, owner_class: None
+
+2026-05-11 03:12:24.711 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: register_type, owner_class: None
+
+2026-05-11 03:12:24.712 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2._psycopg, func: set_wait_callback, owner_class: None
+
+2026-05-11 03:12:24.834 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.AsIs, func: getquoted, owner_class: <class 'psycopg2.extensions.AsIs'>
+
+2026-05-11 03:12:24.836 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.AsIs, func: __conform__, owner_class: <class 'psycopg2.extensions.AsIs'>
+
+2026-05-11 03:12:24.939 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: binary_getquoted, reason: RuntimeError("不支持的表达式类型: MEMBER_REF_EXPR, cursor: {kind=CursorKind.MEMBER_REF_EXPR, spelling=buffer, first_token=self, location=<SourceLocation file 'psycopg/adapter_binary.c', line 121, column 18>}")
+
+2026-05-11 03:12:24.940 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Binary, func: getquoted, owner_class: <class 'psycopg2.extensions.Binary'>
+
+2026-05-11 03:12:24.941 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Binary, func: prepare, owner_class: <class 'psycopg2.extensions.Binary'>
+
+2026-05-11 03:12:24.943 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Binary, func: __conform__, owner_class: <class 'psycopg2.extensions.Binary'>
+
+2026-05-11 03:12:25.044 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Boolean, func: getquoted, owner_class: <class 'psycopg2.extensions.Boolean'>
+
+2026-05-11 03:12:25.048 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Boolean, func: __conform__, owner_class: <class 'psycopg2.extensions.Boolean'>
+
+2026-05-11 03:12:25.157 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: column_getstate, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunctionObjArgs, cursor: {kind=CursorKind.CALL_EXPR, spelling=PyObject_CallFunctionObjArgs, first_token=PyObject_CallFunctionObjArgs, location=<SourceLocation file 'psycopg/column_type.c', line 298, column 12>}")
+
+2026-05-11 03:12:25.157 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Column, func: __getstate__, owner_class: <class 'psycopg2.extensions.Column'>
+
+2026-05-11 03:12:25.176 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Column, func: __setstate__, owner_class: <class 'psycopg2.extensions.Column'>
+
+2026-05-11 03:12:25.282 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.ConnectionInfo, func: ssl_attribute, owner_class: <class 'psycopg2.extensions.ConnectionInfo'>
+
+2026-05-11 03:12:25.284 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.ConnectionInfo, func: parameter_status, owner_class: <class 'psycopg2.extensions.ConnectionInfo'>
+
+2026-05-11 03:12:25.403 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Float, func: getquoted, owner_class: <class 'psycopg2.extensions.Float'>
+
+2026-05-11 03:12:25.406 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Float, func: __conform__, owner_class: <class 'psycopg2.extensions.Float'>
+
+2026-05-11 03:12:25.522 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.ISQLQuote, func: getquoted, owner_class: <class 'psycopg2.extensions.ISQLQuote'>
+
+2026-05-11 03:12:25.523 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.ISQLQuote, func: getbinary, owner_class: <class 'psycopg2.extensions.ISQLQuote'>
+
+2026-05-11 03:12:25.524 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.ISQLQuote, func: getbuffer, owner_class: <class 'psycopg2.extensions.ISQLQuote'>
+
+2026-05-11 03:12:25.641 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Int, func: getquoted, owner_class: <class 'psycopg2.extensions.Int'>
+
+2026-05-11 03:12:25.644 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Int, func: __conform__, owner_class: <class 'psycopg2.extensions.Int'>
+
+2026-05-11 03:12:25.747 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: qstring_getquoted, reason: RuntimeError("不支持的表达式类型: MEMBER_REF_EXPR, cursor: {kind=CursorKind.MEMBER_REF_EXPR, spelling=buffer, first_token=self, location=<SourceLocation file 'psycopg/adapter_qstring.c', line 105, column 18>}")
+
+2026-05-11 03:12:25.748 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.QuotedString, func: getquoted, owner_class: <class 'psycopg2.extensions.QuotedString'>
+
+2026-05-11 03:12:25.750 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.QuotedString, func: prepare, owner_class: <class 'psycopg2.extensions.QuotedString'>
+
+2026-05-11 03:12:25.753 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.QuotedString, func: __conform__, owner_class: <class 'psycopg2.extensions.QuotedString'>
+
+2026-05-11 03:12:25.864 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: xid_from_string_method, reason: RuntimeError("无法识别的返回值工厂调用: xid_from_string, cursor: {kind=CursorKind.CALL_EXPR, spelling=xid_from_string, first_token=xid_from_string, location=<SourceLocation file 'psycopg/xid_type.c', line 245, column 24>}")
+
+2026-05-11 03:12:25.865 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.Xid, func: from_string, owner_class: <class 'psycopg2.extensions.Xid'>
+
+2026-05-11 03:12:25.984 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_cursor, reason: RuntimeError("无法识别的对象返回标识符: rv, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=rv, first_token=rv, location=<SourceLocation file 'psycopg/connection_type.c', line 134, column 12>}")
+
+2026-05-11 03:12:25.998 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: cursor, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:25.999 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: close, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.001 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: commit, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.002 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: rollback, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.003 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_xid, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_Call, cursor: {kind=CursorKind.CALL_EXPR, spelling=PyObject_Call, first_token=PyObject_Call, location=<SourceLocation file 'psycopg/connection_type.c', line 199, column 12>}")
+
+2026-05-11 03:12:26.004 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: xid, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.010 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: tpc_begin, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.012 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: tpc_prepare, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.014 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_tpc_commit, reason: RuntimeError("无法识别的返回值工厂调用: _psyco_conn_tpc_finish, cursor: {kind=CursorKind.CALL_EXPR, spelling=_psyco_conn_tpc_finish, first_token=_psyco_conn_tpc_finish, location=<SourceLocation file 'psycopg/connection_type.c', line 371, column 12>}")
+
+2026-05-11 03:12:26.015 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: tpc_commit, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.016 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_tpc_rollback, reason: RuntimeError("无法识别的返回值工厂调用: _psyco_conn_tpc_finish, cursor: {kind=CursorKind.CALL_EXPR, spelling=_psyco_conn_tpc_finish, first_token=_psyco_conn_tpc_finish, location=<SourceLocation file 'psycopg/connection_type.c', line 385, column 12>}")
+
+2026-05-11 03:12:26.017 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: tpc_rollback, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.018 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_tpc_recover, reason: RuntimeError("无法识别的返回值工厂调用: conn_tpc_recover, cursor: {kind=CursorKind.CALL_EXPR, spelling=conn_tpc_recover, first_token=conn_tpc_recover, location=<SourceLocation file 'psycopg/connection_type.c', line 400, column 12>}")
+
+2026-05-11 03:12:26.018 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: tpc_recover, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.019 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: __enter__, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.024 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: __exit__, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.039 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: set_session, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.045 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: set_isolation_level, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.048 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: set_client_encoding, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.049 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: get_transaction_status, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.050 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: get_parameter_status, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.052 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_get_dsn_parameters, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/connection_type.c', line 943, column 12>}")
+
+2026-05-11 03:12:26.052 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: get_dsn_parameters, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.053 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: get_backend_pid, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.057 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_conn_lobject, reason: RuntimeError("无法识别的对象返回标识符: obj, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=obj, first_token=obj, location=<SourceLocation file 'psycopg/connection_type.c', line 1009, column 12>}")
+
+2026-05-11 03:12:26.065 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser:_infer_default_value:272
+PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: RuntimeError("不支持的默认值表达式类型: UNARY_OPERATOR, cursor: {kind=CursorKind.UNARY_OPERATOR, spelling=, first_token=&, location=<SourceLocation file 'psycopg/connection_type.c', line 968, column 37>}")
+
+2026-05-11 03:12:26.068 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: lobject, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.069 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: reset, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.071 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: poll, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.073 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: fileno, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.074 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: isexecuting, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.076 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: cancel, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.077 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.connection, func: get_native_connection, owner_class: <class 'psycopg2.extensions.connection'>
+
+2026-05-11 03:12:26.206 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: close, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.215 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: execute, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.225 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: executemany, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.231 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: curs_fetchone, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/cursor_type.c', line 785, column 12>}")
+
+2026-05-11 03:12:26.231 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: fetchone, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.250 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: fetchmany, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.257 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: fetchall, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.297 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: callproc, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.298 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: nextset, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.300 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: setinputsizes, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.301 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser:render_default_value:57
+PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: RuntimeError("声明节点没有可用定值表达式: {kind=CursorKind.VAR_DECL, spelling=column, first_token=long, location=<SourceLocation file 'psycopg/cursor_type.c', line 1192, column 20>}")
+
+2026-05-11 03:12:26.304 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: setoutputsize, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.314 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: scroll, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.315 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: __enter__, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.317 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: __exit__, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.318 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: curs_cast, reason: RuntimeError("无法识别的返回值工厂调用: PyObject_CallFunctionObjArgs, cursor: {kind=CursorKind.CALL_EXPR, spelling=PyObject_CallFunctionObjArgs, first_token=PyObject_CallFunctionObjArgs, location=<SourceLocation file 'psycopg/cursor_type.c', line 641, column 12>}")
+
+2026-05-11 03:12:26.320 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: cast, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.322 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: curs_mogrify, reason: RuntimeError("无法识别的返回值工厂调用: _psyco_curs_mogrify, cursor: {kind=CursorKind.CALL_EXPR, spelling=_psyco_curs_mogrify, first_token=_psyco_curs_mogrify, location=<SourceLocation file 'psycopg/cursor_type.c', line 618, column 12>}")
+
+2026-05-11 03:12:26.325 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: mogrify, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.353 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: copy_from, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.378 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: copy_to, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.393 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.cursor, func: copy_expert, owner_class: <class 'psycopg2.extensions.cursor'>
+
+2026-05-11 03:12:26.503 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: psyco_lobj_read, reason: RuntimeError("无法识别的对象返回标识符: res, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=res, first_token=res, location=<SourceLocation file 'psycopg/lobject_type.c', line 156, column 12>}")
+
+2026-05-11 03:12:26.506 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: read, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.513 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: write, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.518 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: seek, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.520 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: tell, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.521 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: close, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.521 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: unlink, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.522 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: export, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.525 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: psycopg2.extensions.lobject, func: truncate, owner_class: <class 'psycopg2.extensions.lobject'>
+
+2026-05-11 03:12:26.540 | INFO     | 
+pcstubgen.api:gen_stubs:30
+签名补全结果: 函数总数=102, C扩展补全=102, pybind11补全=0, 失败=0
+

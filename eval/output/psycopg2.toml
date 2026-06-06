@@ -1,0 +1,4729 @@
+[[functions]]
+function_id = "psycopg2:Error.__reduce__"
+module_name = "psycopg2"
+function_name = "__reduce__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Error"
+source_location = "<SourceLocation file 'psycopg/error_type.c', line 235, column 1>"
+source_text = """
+static PyObject *
+error_reduce(errorObject *self, PyObject *dummy)
+{
+    PyObject *meth = NULL;
+    PyObject *tuple = NULL;
+    PyObject *dict = NULL;
+    PyObject *rv = NULL;
+
+    if (!(meth = PyObject_GetAttrString(PyExc_StandardError, "__reduce__"))) {
+        goto error;
+    }
+    if (!(tuple = PyObject_CallFunctionObjArgs(meth, self, NULL))) {
+        goto error;
+    }
+
+    /* tuple is (type, args): convert it to (type, args, dict)
+     * with our extra items in the dict.
+     *
+     * If these checks fail, we can still return a valid object. Pickle
+     * will likely fail downstream, but there's nothing else we can do here */
+    if (!PyTuple_Check(tuple)) { goto exit; }
+    if (2 != PyTuple_GET_SIZE(tuple)) { goto exit; }
+
+    if (!(dict = PyDict_New())) { goto error; }
+    if (self->pgerror) {
+        if (0 != PyDict_SetItemString(dict, "pgerror", self->pgerror)) {
+            goto error;
+        }
+    }
+    if (self->pgcode) {
+        if (0 != PyDict_SetItemString(dict, "pgcode", self->pgcode)) {
+            goto error;
+        }
+    }
+
+    {
+        PyObject *newtuple;
+        if (!(newtuple = PyTuple_Pack(3,
+                PyTuple_GET_ITEM(tuple, 0),
+                PyTuple_GET_ITEM(tuple, 1),
+                dict))) {
+            goto error;
+        }
+        Py_DECREF(tuple);
+        tuple = newtuple;
+    }
+
+exit:
+    rv = tuple;
+    tuple = NULL;
+
+error:
+    Py_XDECREF(dict);
+    Py_XDECREF(tuple);
+    Py_XDECREF(meth);
+
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def __reduce__(self) -> tuple:"
+
+[[functions]]
+function_id = "psycopg2:Error.__setstate__"
+module_name = "psycopg2"
+function_name = "__setstate__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Error"
+source_location = "<SourceLocation file 'psycopg/error_type.c', line 294, column 1>"
+source_text = """
+PyObject *
+error_setstate(errorObject *self, PyObject *state)
+{
+    PyObject *rv = NULL;
+
+    /* we don't call the StandartError's setstate as it would try to load the
+     * dict content as attributes */
+
+    if (state == Py_None) {
+        goto exit;
+    }
+    if (!PyDict_Check(state)) {
+        PyErr_SetString(PyExc_TypeError, "state is not a dictionary");
+        goto error;
+    }
+
+    /* load the dict content in the structure */
+    Py_CLEAR(self->pgerror);
+    self->pgerror = PyDict_GetItemString(state, "pgerror");
+    Py_XINCREF(self->pgerror);
+
+    Py_CLEAR(self->pgcode);
+    self->pgcode = PyDict_GetItemString(state, "pgcode");
+    Py_XINCREF(self->pgcode);
+
+    Py_CLEAR(self->cursor);
+    /* We never expect a cursor in the state as it's not picklable.
+     * at most there could be a None here, coming from Psycopg < 2.5 */
+
+exit:
+    rv = Py_None;
+    Py_INCREF(rv);
+
+error:
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __setstate__(
+    self,
+    arg: dict[typing.Any, typing.Any],
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:Date"
+module_name = "psycopg2._psycopg"
+function_name = "Date"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 268, column 1>"
+source_text = """
+PyObject *
+psyco_Date(PyObject *self, PyObject *args)
+{
+    PyObject *res = NULL;
+    int year, month, day;
+
+    PyObject* obj = NULL;
+
+    if (!PyArg_ParseTuple(args, "iii", &year, &month, &day))
+        return NULL;
+
+    obj = PyObject_CallFunction((PyObject*)PyDateTimeAPI->DateType,
+                                "iii", year, month, day);
+
+    if (obj) {
+        res = PyObject_CallFunction((PyObject *)&pydatetimeType,
+                                    "Oi", obj, PSYCO_DATETIME_DATE);
+        Py_DECREF(obj);
+    }
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def Date(
+    year: int,
+    month: int,
+    day: int,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:DateFromPy"
+module_name = "psycopg2._psycopg"
+function_name = "DateFromPy"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 470, column 1>"
+source_text = """
+PyObject *
+psyco_DateFromPy(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "O!", PyDateTimeAPI->DateType, &obj))
+        return NULL;
+
+    return PyObject_CallFunction((PyObject *)&pydatetimeType, "Oi", obj,
+                                 PSYCO_DATETIME_DATE);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def DateFromPy(obj: datetime.date, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:DateFromTicks"
+module_name = "psycopg2._psycopg"
+function_name = "DateFromTicks"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 370, column 1>"
+source_text = """
+PyObject *
+psyco_DateFromTicks(PyObject *self, PyObject *args)
+{
+    PyObject *res = NULL;
+    struct tm tm;
+    time_t t;
+    double ticks;
+
+    if (!PyArg_ParseTuple(args, "d", &ticks))
+        return NULL;
+
+    t = (time_t)floor(ticks);
+    if (localtime_r(&t, &tm)) {
+        args = Py_BuildValue("iii", tm.tm_year+1900, tm.tm_mon+1, tm.tm_mday);
+        if (args) {
+            res = psyco_Date(self, args);
+            Py_DECREF(args);
+        }
+    }
+    else {
+        PyErr_SetString(InterfaceError, "failed localtime call");
+    }
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def DateFromTicks(ticks: float, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:IntervalFromPy"
+module_name = "psycopg2._psycopg"
+function_name = "IntervalFromPy"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 506, column 1>"
+source_text = """
+PyObject *
+psyco_IntervalFromPy(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "O!", PyDateTimeAPI->DeltaType, &obj))
+        return NULL;
+
+    return PyObject_CallFunction((PyObject *)&pydatetimeType, "Oi", obj,
+                                 PSYCO_DATETIME_INTERVAL);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def IntervalFromPy(obj: datetime.timedelta, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:Time"
+module_name = "psycopg2._psycopg"
+function_name = "Time"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 291, column 1>"
+source_text = """
+PyObject *
+psyco_Time(PyObject *self, PyObject *args)
+{
+    PyObject *res = NULL;
+    PyObject *tzinfo = NULL;
+    int hours, minutes=0;
+    double micro, second=0.0;
+
+    PyObject* obj = NULL;
+
+    if (!PyArg_ParseTuple(args, "iid|O", &hours, &minutes, &second,
+                          &tzinfo))
+        return NULL;
+
+    micro = (second - floor(second)) * 1000000.0;
+    second = floor(second);
+
+    if (tzinfo == NULL)
+       obj = PyObject_CallFunction((PyObject*)PyDateTimeAPI->TimeType, "iiii",
+            hours, minutes, (int)second, (int)round(micro));
+    else
+       obj = PyObject_CallFunction((PyObject*)PyDateTimeAPI->TimeType, "iiiiO",
+            hours, minutes, (int)second, (int)round(micro), tzinfo);
+
+    if (obj) {
+        res = PyObject_CallFunction((PyObject *)&pydatetimeType,
+                                    "Oi", obj, PSYCO_DATETIME_TIME);
+        Py_DECREF(obj);
+    }
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def Time(
+    hours: int,
+    minutes: int,
+    second: float,
+    tzinfo: object = ...,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:TimeFromPy"
+module_name = "psycopg2._psycopg"
+function_name = "TimeFromPy"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 482, column 1>"
+source_text = """
+PyObject *
+psyco_TimeFromPy(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "O!", PyDateTimeAPI->TimeType, &obj))
+        return NULL;
+
+    return PyObject_CallFunction((PyObject *)&pydatetimeType, "Oi", obj,
+                                 PSYCO_DATETIME_TIME);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def TimeFromPy(obj: datetime.time, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:TimeFromTicks"
+module_name = "psycopg2._psycopg"
+function_name = "TimeFromTicks"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 396, column 1>"
+source_text = """
+PyObject *
+psyco_TimeFromTicks(PyObject *self, PyObject *args)
+{
+    PyObject *res = NULL;
+    struct tm tm;
+    time_t t;
+    double ticks;
+
+    if (!PyArg_ParseTuple(args,"d", &ticks))
+        return NULL;
+
+    t = (time_t)floor(ticks);
+    ticks -= (double)t;
+    if (localtime_r(&t, &tm)) {
+        args = Py_BuildValue("iid", tm.tm_hour, tm.tm_min,
+                          (double)tm.tm_sec + ticks);
+        if (args) {
+            res = psyco_Time(self, args);
+            Py_DECREF(args);
+        }
+    }
+    else {
+        PyErr_SetString(InterfaceError, "failed localtime call");
+    }
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def TimeFromTicks(ticks: float, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:Timestamp"
+module_name = "psycopg2._psycopg"
+function_name = "Timestamp"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 355, column 1>"
+source_text = """
+PyObject *
+psyco_Timestamp(PyObject *self, PyObject *args)
+{
+    PyObject *tzinfo = NULL;
+    int year, month, day;
+    int hour=0, minute=0; /* default to midnight */
+    double second=0.0;
+
+    if (!PyArg_ParseTuple(args, "iii|iidO", &year, &month, &day,
+                          &hour, &minute, &second, &tzinfo))
+        return NULL;
+
+    return _psyco_Timestamp(year, month, day, hour, minute, second, tzinfo);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def Timestamp(
+    year: int,
+    month: int,
+    day: int,
+    hour: int = 0,
+    minute: int = 0,
+    second: float = 0.0,
+    tzinfo: object = ...,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:TimestampFromPy"
+module_name = "psycopg2._psycopg"
+function_name = "TimestampFromPy"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 494, column 1>"
+source_text = """
+PyObject *
+psyco_TimestampFromPy(PyObject *self, PyObject *args)
+{
+    PyObject *obj;
+
+    if (!PyArg_ParseTuple(args, "O!", PyDateTimeAPI->DateTimeType, &obj))
+        return NULL;
+
+    return PyObject_CallFunction((PyObject *)&pydatetimeType, "Oi", obj,
+                                 PSYCO_DATETIME_TIMESTAMP);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def TimestampFromPy(obj: datetime.datetime, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:TimestampFromTicks"
+module_name = "psycopg2._psycopg"
+function_name = "TimestampFromTicks"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/adapter_datetime.c', line 424, column 1>"
+source_text = """
+PyObject *
+psyco_TimestampFromTicks(PyObject *self, PyObject *args)
+{
+    pydatetimeObject *wrapper = NULL;
+    PyObject *dt_aware = NULL;
+    PyObject *res = NULL;
+    struct tm tm;
+    time_t t;
+    double ticks;
+
+    if (!PyArg_ParseTuple(args, "d", &ticks))
+        return NULL;
+
+    t = (time_t)floor(ticks);
+    ticks -= (double)t;
+    if (!localtime_r(&t, &tm)) {
+        PyErr_SetString(InterfaceError, "failed localtime call");
+        goto exit;
+    }
+
+    /* Convert the tm to a wrapper containing a naive datetime.datetime */
+    if (!(wrapper = (pydatetimeObject *)_psyco_Timestamp(
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+            tm.tm_hour, tm.tm_min, (double)tm.tm_sec + ticks, NULL))) {
+        goto exit;
+    }
+
+    /* Localize the datetime and assign it back to the wrapper */
+    if (!(dt_aware = PyObject_CallMethod(
+            wrapper->wrapped, "astimezone", NULL))) {
+        goto exit;
+    }
+    Py_CLEAR(wrapper->wrapped);
+    wrapper->wrapped = dt_aware;
+    dt_aware = NULL;
+
+    /* the wrapper is ready to be returned */
+    res = (PyObject *)wrapper;
+    wrapper = NULL;
+
+exit:
+    Py_XDECREF(dt_aware);
+    Py_XDECREF(wrapper);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def TimestampFromTicks(ticks: float, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:_connect"
+module_name = "psycopg2._psycopg"
+function_name = "_connect"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 81, column 1>"
+source_text = """
+static PyObject *
+psyco_connect(PyObject *self, PyObject *args, PyObject *keywds)
+{
+    PyObject *conn = NULL;
+    PyObject *factory = NULL;
+    const char *dsn = NULL;
+    int async = 0, async_ = 0;
+
+    static char *kwlist[] = {"dsn", "connection_factory", "async", "async_", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "s|Oii", kwlist,
+            &dsn, &factory, &async, &async_)) {
+        return NULL;
+    }
+
+    if (async_) { async = async_; }
+
+    Dprintf("psyco_connect: dsn = '%s', async = %d", dsn, async);
+
+    /* allocate connection, fill with errors and return it */
+    if (factory == NULL || factory == Py_None) {
+        factory = (PyObject *)&connectionType;
+    }
+
+    /* Here we are breaking the connection.__init__ interface defined
+     * by psycopg2. So, if not requiring an async conn, avoid passing
+     * the async parameter. */
+    /* TODO: would it be possible to avoid an additional parameter
+     * to the conn constructor? A subclass? (but it would require mixins
+     * to further subclass) Another dsn parameter (but is not really
+     * a connection parameter that can be configured) */
+    if (!async) {
+        conn = PyObject_CallFunction(factory, "s", dsn);
+    } else {
+        conn = PyObject_CallFunction(factory, "si", dsn, async);
+    }
+
+    return conn;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def _connect(
+    dsn: str,
+    connection_factory: object = ...,
+    async: int = 0,
+    async_: int = 0,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:adapt"
+module_name = "psycopg2._psycopg"
+function_name = "adapt"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/microprotocols.c', line 270, column 1>"
+source_text = """
+PyObject *
+psyco_microprotocols_adapt(cursorObject *self, PyObject *args)
+{
+    PyObject *obj, *alt = NULL;
+    PyObject *proto = (PyObject*)&isqlquoteType;
+
+    if (!PyArg_ParseTuple(args, "O|OO", &obj, &proto, &alt)) return NULL;
+    return microprotocols_adapt(obj, proto, alt);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def adapt(
+    obj: object,
+    proto: object = ...,
+    alt: object = ...,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:encrypt_password"
+module_name = "psycopg2._psycopg"
+function_name = "encrypt_password"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 380, column 1>"
+source_text = """
+static PyObject *
+encrypt_password(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    char *encrypted = NULL;
+    PyObject *password = NULL, *user = NULL;
+    PyObject *scope = Py_None, *algorithm = Py_None;
+    PyObject *res = NULL;
+    connectionObject *conn = NULL;
+
+    static char *kwlist[] = {"password", "user", "scope", "algorithm", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO|OO", kwlist,
+            &password, &user, &scope, &algorithm)) {
+        return NULL;
+    }
+
+    /* for ensure_bytes */
+    Py_INCREF(user);
+    Py_INCREF(password);
+    Py_INCREF(algorithm);
+
+    if (scope != Py_None) {
+        if (PyObject_TypeCheck(scope, &cursorType)) {
+            conn = ((cursorObject*)scope)->conn;
+        }
+        else if (PyObject_TypeCheck(scope, &connectionType)) {
+            conn = (connectionObject*)scope;
+        }
+        else {
+            PyErr_SetString(PyExc_TypeError,
+                "the scope must be a connection or a cursor");
+            goto exit;
+        }
+    }
+
+    if (!(user = psyco_ensure_bytes(user))) { goto exit; }
+    if (!(password = psyco_ensure_bytes(password))) { goto exit; }
+    if (algorithm != Py_None) {
+        if (!(algorithm = psyco_ensure_bytes(algorithm))) {
+            goto exit;
+        }
+    }
+
+    /* If we have to encrypt md5 we can use the libpq < 10 API */
+    if (algorithm != Py_None &&
+            strcmp(Bytes_AS_STRING(algorithm), "md5") == 0) {
+        encrypted = PQencryptPassword(
+            Bytes_AS_STRING(password), Bytes_AS_STRING(user));
+    }
+
+    /* If the algorithm is not md5 we have to use the API available from
+     * libpq 10. */
+    else {
+#if PG_VERSION_NUM >= 100000
+        if (!conn) {
+            PyErr_SetString(ProgrammingError,
+                "password encryption (other than 'md5' algorithm)"
+                " requires a connection or cursor");
+            goto exit;
+        }
+
+        /* TODO: algo = None will block: forbid on async/green conn? */
+        encrypted = PQencryptPasswordConn(conn->pgconn,
+            Bytes_AS_STRING(password), Bytes_AS_STRING(user),
+            algorithm != Py_None ? Bytes_AS_STRING(algorithm) : NULL);
+#else
+        PyErr_SetString(NotSupportedError,
+            "password encryption (other than 'md5' algorithm)"
+            " requires libpq 10");
+        goto exit;
+#endif
+    }
+
+    if (encrypted) {
+        res = Text_FromUTF8(encrypted);
+    }
+    else {
+        const char *msg = PQerrorMessage(conn->pgconn);
+        PyErr_Format(ProgrammingError,
+            "password encryption failed: %s", msg ? msg : "no reason given");
+        goto exit;
+    }
+
+exit:
+    if (encrypted) {
+        PQfreemem(encrypted);
+    }
+    Py_XDECREF(user);
+    Py_XDECREF(password);
+    Py_XDECREF(algorithm);
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def encrypt_password(
+    password: object,
+    user: object,
+    scope: object = None,
+    algorithm: object = None,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:get_wait_callback"
+module_name = "psycopg2._psycopg"
+function_name = "get_wait_callback"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'psycopg/green.c', line 66, column 1>"
+source_text = """
+PyObject *
+psyco_get_wait_callback(PyObject *self, PyObject *obj)
+{
+    PyObject *ret;
+
+    ret = wait_callback;
+    if (!ret) {
+        ret = Py_None;
+    }
+
+    Py_INCREF(ret);
+    return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_wait_callback() -> None:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:libpq_version"
+module_name = "psycopg2._psycopg"
+function_name = "libpq_version"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 370, column 1>"
+source_text = """
+static PyObject*
+libpq_version(PyObject *self, PyObject *dummy)
+{
+    return PyInt_FromLong(PQlibVersion());
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def libpq_version() -> int:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:new_array_type"
+module_name = "psycopg2._psycopg"
+function_name = "new_array_type"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/typecast.c', line 517, column 1>"
+source_text = """
+PyObject *
+typecast_array_from_python(PyObject *self, PyObject *args, PyObject *keywds)
+{
+    PyObject *values, *name = NULL, *base = NULL;
+    typecastObject *obj = NULL;
+
+    static char *kwlist[] = {"values", "name", "baseobj", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "O!O!O!", kwlist,
+                                     &PyTuple_Type, &values,
+                                     &Text_Type, &name,
+                                     &typecastType, &base)) {
+        return NULL;
+    }
+
+    if ((obj = (typecastObject *)typecast_new(name, values, NULL, base))) {
+        obj->ccast = typecast_GENERIC_ARRAY_cast;
+        obj->pcast = NULL;
+    }
+
+    return (PyObject *)obj;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def new_array_type(
+    values: tuple,
+    name: str,
+    baseobj: psycopg2._psycopg.type,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:new_type"
+module_name = "psycopg2._psycopg"
+function_name = "new_type"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/typecast.c', line 500, column 1>"
+source_text = """
+PyObject *
+typecast_from_python(PyObject *self, PyObject *args, PyObject *keywds)
+{
+    PyObject *v, *name = NULL, *cast = NULL, *base = NULL;
+
+    static char *kwlist[] = {"values", "name", "castobj", "baseobj", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "O!|O!OO", kwlist,
+                                     &PyTuple_Type, &v,
+                                     &Text_Type, &name,
+                                     &cast, &base)) {
+        return NULL;
+    }
+
+    return typecast_new(name, v, cast, base);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def new_type(
+    values: tuple,
+    name: str = ...,
+    castobj: object = ...,
+    baseobj: object = ...,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:parse_dsn"
+module_name = "psycopg2._psycopg"
+function_name = "parse_dsn"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 125, column 1>"
+source_text = """
+static PyObject *
+parse_dsn(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    char *err = NULL;
+    PQconninfoOption *options = NULL;
+    PyObject *res = NULL, *dsn;
+
+    static char *kwlist[] = {"dsn", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", kwlist, &dsn)) {
+        return NULL;
+    }
+
+    Py_INCREF(dsn); /* for ensure_bytes */
+    if (!(dsn = psyco_ensure_bytes(dsn))) { goto exit; }
+
+    options = PQconninfoParse(Bytes_AS_STRING(dsn), &err);
+    if (options == NULL) {
+        if (err != NULL) {
+            PyErr_Format(ProgrammingError, "invalid dsn: %s", err);
+            PQfreemem(err);
+        } else {
+            PyErr_SetString(OperationalError, "PQconninfoParse() failed");
+        }
+        goto exit;
+    }
+
+    res = psyco_dict_from_conninfo_options(options, /* include_password = */ 1);
+
+exit:
+    PQconninfoFree(options);    /* safe on null */
+    Py_XDECREF(dsn);
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def parse_dsn(dsn: object) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:quote_ident"
+module_name = "psycopg2._psycopg"
+function_name = "quote_ident"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 167, column 1>"
+source_text = """
+static PyObject *
+quote_ident(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *ident = NULL, *obj = NULL, *result = NULL;
+    connectionObject *conn;
+    char *quoted = NULL;
+
+    static char *kwlist[] = {"ident", "scope", NULL};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", kwlist, &ident, &obj)) {
+        return NULL;
+    }
+
+    if (PyObject_TypeCheck(obj, &cursorType)) {
+        conn = ((cursorObject*)obj)->conn;
+    }
+    else if (PyObject_TypeCheck(obj, &connectionType)) {
+        conn = (connectionObject*)obj;
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError,
+                        "argument 2 must be a connection or a cursor");
+        return NULL;
+    }
+
+    Py_INCREF(ident); /* for ensure_bytes */
+    if (!(ident = psyco_ensure_bytes(ident))) { goto exit; }
+
+    if (!(quoted = psyco_escape_identifier(conn,
+        Bytes_AS_STRING(ident), Bytes_GET_SIZE(ident)))) { goto exit; }
+
+    result = conn_text_from_chars(conn, quoted);
+
+exit:
+    PQfreemem(quoted);
+    Py_XDECREF(ident);
+
+    return result;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def quote_ident(
+    ident: object,
+    scope: object,
+) -> str:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:register_type"
+module_name = "psycopg2._psycopg"
+function_name = "register_type"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'psycopg/psycopgmodule.c', line 234, column 1>"
+source_text = """
+static PyObject *
+register_type(PyObject *self, PyObject *args)
+{
+    PyObject *type, *obj = NULL;
+
+    if (!PyArg_ParseTuple(args, "O!|O", &typecastType, &type, &obj)) {
+        return NULL;
+    }
+
+    if (obj != NULL && obj != Py_None) {
+        if (PyObject_TypeCheck(obj, &cursorType)) {
+            PyObject **dict = &(((cursorObject*)obj)->string_types);
+            if (*dict == NULL) {
+                if (!(*dict = PyDict_New())) { return NULL; }
+            }
+            if (0 > typecast_add(type, *dict, 0)) { return NULL; }
+        }
+        else if (PyObject_TypeCheck(obj, &connectionType)) {
+            if (0 > typecast_add(type, ((connectionObject*)obj)->string_types, 0)) {
+                return NULL;
+            }
+        }
+        else {
+            PyErr_SetString(PyExc_TypeError,
+                "argument 2 must be a connection, cursor or None");
+            return NULL;
+        }
+    }
+    else {
+        if (0 > typecast_add(type, NULL, 0)) { return NULL; }
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def register_type(
+    type: psycopg2._psycopg.type,
+    obj: object = ...,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:set_wait_callback"
+module_name = "psycopg2._psycopg"
+function_name = "set_wait_callback"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file 'psycopg/green.c', line 45, column 1>"
+source_text = """
+PyObject *
+psyco_set_wait_callback(PyObject *self, PyObject *obj)
+{
+    Py_XDECREF(wait_callback);
+
+    if (obj != Py_None) {
+        wait_callback = obj;
+        Py_INCREF(obj);
+    }
+    else {
+        wait_callback = NULL;
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def set_wait_callback(arg: object, /) -> None:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:Decimal.__conform__"
+module_name = "psycopg2._psycopg"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Decimal"
+source_location = "<SourceLocation file 'psycopg/adapter_pdecimal.c', line 119, column 1>"
+source_text = """
+static PyObject *
+pdecimal_conform(pdecimalObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:Decimal.getquoted"
+module_name = "psycopg2._psycopg"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Decimal"
+source_location = "<SourceLocation file 'psycopg/adapter_pdecimal.c', line 40, column 1>"
+source_text = """
+static PyObject *
+pdecimal_getquoted(pdecimalObject *self, PyObject *args)
+{
+    PyObject *check, *res = NULL;
+    check = PyObject_CallMethod(self->wrapped, "is_finite", NULL);
+    if (check == Py_True) {
+        if (!(res = PyObject_Str(self->wrapped))) {
+            goto end;
+        }
+        goto output;
+    }
+    else if (check) {
+        res = Bytes_FromString("'NaN'::numeric");
+        goto end;
+    }
+
+    /* is_finite() was introduced 2.5.1 < somewhere <= 2.5.4.
+     * We assume we are here because we didn't find the method. */
+    PyErr_Clear();
+
+    if (!(check = PyObject_CallMethod(self->wrapped, "_isnan", NULL))) {
+        goto end;
+    }
+    if (PyObject_IsTrue(check)) {
+        res = Bytes_FromString("'NaN'::numeric");
+        goto end;
+    }
+
+    Py_DECREF(check);
+    if (!(check = PyObject_CallMethod(self->wrapped, "_isinfinity", NULL))) {
+        goto end;
+    }
+    if (PyObject_IsTrue(check)) {
+        res = Bytes_FromString("'NaN'::numeric");
+        goto end;
+    }
+
+    /* wrapped is finite */
+    if (!(res = PyObject_Str(self->wrapped))) {
+        goto end;
+    }
+
+    /* res may be unicode and may suffer for issue #57 */
+output:
+
+    /* unicode to bytes */
+    {
+        PyObject *tmp = PyUnicode_AsUTF8String(res);
+        Py_DECREF(res);
+        if (!(res = tmp)) {
+            goto end;
+        }
+    }
+
+    if ('-' == Bytes_AS_STRING(res)[0]) {
+        /* Prepend a space in front of negative numbers (ticket #57) */
+        PyObject *tmp;
+        if (!(tmp = Bytes_FromString(" "))) {
+            Py_DECREF(res);
+            res = NULL;
+            goto end;
+        }
+        Bytes_ConcatAndDel(&tmp, res);
+        if (!(res = tmp)) {
+            goto end;
+        }
+    }
+
+end:
+    Py_XDECREF(check);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> bytes:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:List.__conform__"
+module_name = "psycopg2._psycopg"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "List"
+source_location = "<SourceLocation file 'psycopg/adapter_list.c', line 194, column 1>"
+source_text = """
+static PyObject *
+list_conform(listObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2._psycopg:List.getquoted"
+module_name = "psycopg2._psycopg"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "List"
+source_location = "<SourceLocation file 'psycopg/adapter_list.c', line 173, column 1>"
+source_text = """
+static PyObject *
+list_getquoted(listObject *self, PyObject *args)
+{
+    return list_quote(self);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2._psycopg:List.prepare"
+module_name = "psycopg2._psycopg"
+function_name = "prepare"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "List"
+source_location = "<SourceLocation file 'psycopg/adapter_list.c', line 179, column 1>"
+source_text = """
+static PyObject *
+list_prepare(listObject *self, PyObject *args)
+{
+    PyObject *conn;
+
+    if (!PyArg_ParseTuple(args, "O!", &connectionType, &conn))
+        return NULL;
+
+    Py_CLEAR(self->connection);
+    Py_INCREF(conn);
+    self->connection = conn;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def prepare(
+    self,
+    conn: psycopg2.extensions.connection,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:AsIs.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "AsIs"
+source_location = "<SourceLocation file 'psycopg/adapter_asis.c', line 66, column 1>"
+source_text = """
+static PyObject *
+asis_conform(asisObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:AsIs.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "AsIs"
+source_location = "<SourceLocation file 'psycopg/adapter_asis.c', line 39, column 1>"
+source_text = """
+static PyObject *
+asis_getquoted(asisObject *self, PyObject *args)
+{
+    PyObject *rv;
+    if (self->wrapped == Py_None) {
+        Py_INCREF(psyco_null);
+        rv = psyco_null;
+    }
+    else {
+        rv = PyObject_Str(self->wrapped);
+        /* unicode to bytes */
+        if (rv) {
+            PyObject *tmp = PyUnicode_AsUTF8String(rv);
+            Py_DECREF(rv);
+            rv = tmp;
+        }
+    }
+
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> bytes:"
+
+[[functions]]
+function_id = "psycopg2.extensions:Binary.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Binary"
+source_location = "<SourceLocation file 'psycopg/adapter_binary.c', line 146, column 1>"
+source_text = """
+static PyObject *
+binary_conform(binaryObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Binary.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "Binary"
+source_location = "<SourceLocation file 'psycopg/adapter_binary.c', line 115, column 1>"
+source_text = """
+static PyObject *
+binary_getquoted(binaryObject *self, PyObject *args)
+{
+    if (self->buffer == NULL) {
+        self->buffer = binary_quote(self);
+    }
+    Py_XINCREF(self->buffer);
+    return self->buffer;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:Binary.prepare"
+module_name = "psycopg2.extensions"
+function_name = "prepare"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Binary"
+source_location = "<SourceLocation file 'psycopg/adapter_binary.c', line 131, column 1>"
+source_text = """
+static PyObject *
+binary_prepare(binaryObject *self, PyObject *args)
+{
+    PyObject *conn;
+
+    if (!PyArg_ParseTuple(args, "O!", &connectionType, &conn))
+        return NULL;
+
+    Py_XDECREF(self->conn);
+    self->conn = conn;
+    Py_INCREF(self->conn);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def prepare(
+    self,
+    conn: psycopg2.extensions.connection,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Boolean.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Boolean"
+source_location = "<SourceLocation file 'psycopg/adapter_pboolean.c', line 56, column 1>"
+source_text = """
+static PyObject *
+pboolean_conform(pbooleanObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Boolean.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Boolean"
+source_location = "<SourceLocation file 'psycopg/adapter_pboolean.c', line 39, column 1>"
+source_text = """
+static PyObject *
+pboolean_getquoted(pbooleanObject *self, PyObject *args)
+{
+    if (PyObject_IsTrue(self->wrapped)) {
+        return Bytes_FromString("true");
+    }
+    else {
+        return Bytes_FromString("false");
+    }
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> bytes:"
+
+[[functions]]
+function_id = "psycopg2.extensions:Column.__getstate__"
+module_name = "psycopg2.extensions"
+function_name = "__getstate__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "Column"
+source_location = "<SourceLocation file 'psycopg/column_type.c', line 296, column 1>"
+source_text = """
+static PyObject *
+column_getstate(columnObject *self, PyObject *dummy)
+{
+    return PyObject_CallFunctionObjArgs(
+        (PyObject *)&PyTuple_Type, (PyObject *)self, NULL);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def __getstate__(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:Column.__setstate__"
+module_name = "psycopg2.extensions"
+function_name = "__setstate__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Column"
+source_location = "<SourceLocation file 'psycopg/column_type.c', line 304, column 1>"
+source_text = """
+PyObject *
+column_setstate(columnObject *self, PyObject *state)
+{
+    Py_ssize_t size;
+    PyObject *rv = NULL;
+
+    if (state == Py_None) {
+        goto exit;
+    }
+    if (!PyTuple_Check(state)) {
+        PyErr_SetString(PyExc_TypeError, "state is not a tuple");
+        goto error;
+    }
+
+    size = PyTuple_GET_SIZE(state);
+
+    if (size > 0) {
+        Py_CLEAR(self->name);
+        self->name = PyTuple_GET_ITEM(state, 0);
+        Py_INCREF(self->name);
+    }
+    if (size > 1) {
+        Py_CLEAR(self->type_code);
+        self->type_code = PyTuple_GET_ITEM(state, 1);
+        Py_INCREF(self->type_code);
+    }
+    if (size > 2) {
+        Py_CLEAR(self->display_size);
+        self->display_size = PyTuple_GET_ITEM(state, 2);
+        Py_INCREF(self->display_size);
+    }
+    if (size > 3) {
+        Py_CLEAR(self->internal_size);
+        self->internal_size = PyTuple_GET_ITEM(state, 3);
+        Py_INCREF(self->internal_size);
+    }
+    if (size > 4) {
+        Py_CLEAR(self->precision);
+        self->precision = PyTuple_GET_ITEM(state, 4);
+        Py_INCREF(self->precision);
+    }
+    if (size > 5) {
+        Py_CLEAR(self->scale);
+        self->scale = PyTuple_GET_ITEM(state, 5);
+        Py_INCREF(self->scale);
+    }
+    if (size > 6) {
+        Py_CLEAR(self->null_ok);
+        self->null_ok = PyTuple_GET_ITEM(state, 6);
+        Py_INCREF(self->null_ok);
+    }
+    if (size > 7) {
+        Py_CLEAR(self->table_oid);
+        self->table_oid = PyTuple_GET_ITEM(state, 7);
+        Py_INCREF(self->table_oid);
+    }
+    if (size > 8) {
+        Py_CLEAR(self->table_column);
+        self->table_column = PyTuple_GET_ITEM(state, 8);
+        Py_INCREF(self->table_column);
+    }
+
+exit:
+    rv = Py_None;
+    Py_INCREF(rv);
+
+error:
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __setstate__(
+    self,
+    arg: tuple[typing.Any, ...],
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:ConnectionInfo.parameter_status"
+module_name = "psycopg2.extensions"
+function_name = "parameter_status"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "ConnectionInfo"
+source_location = "<SourceLocation file 'psycopg/conninfo_type.c', line 265, column 1>"
+source_text = """
+static PyObject *
+parameter_status(connInfoObject *self, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"name", NULL};
+    const char *name;
+    const char *val;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s", kwlist, &name)) {
+        return NULL;
+    }
+
+    val = PQparameterStatus(self->conn->pgconn, name);
+
+    if (!val) {
+        Py_RETURN_NONE;
+    }
+    else {
+        return conn_text_from_chars(self->conn, val);
+    }
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def parameter_status(
+    self,
+    name: str,
+) -> None | str:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:ConnectionInfo.ssl_attribute"
+module_name = "psycopg2.extensions"
+function_name = "ssl_attribute"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "ConnectionInfo"
+source_location = "<SourceLocation file 'psycopg/conninfo_type.c', line 461, column 1>"
+source_text = """
+static PyObject *
+ssl_attribute(connInfoObject *self, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"name", NULL};
+    const char *name;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s", kwlist, &name)) {
+        return NULL;
+    }
+
+#if PG_VERSION_NUM >= 90500
+    {
+        const char *val;
+
+        val = PQsslAttribute(self->conn->pgconn, name);
+
+        if (!val) {
+            Py_RETURN_NONE;
+        }
+        else {
+            return conn_text_from_chars(self->conn, val);
+        }
+    }
+#else
+    PyErr_SetString(NotSupportedError,
+        "'ssl_attribute()' not available in libpq < 9.5");
+    return NULL;
+#endif
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def ssl_attribute(
+    self,
+    name: str,
+) -> None | str:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Float.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Float"
+source_location = "<SourceLocation file 'psycopg/adapter_pfloat.c', line 92, column 1>"
+source_text = """
+static PyObject *
+pfloat_conform(pfloatObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Float.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Float"
+source_location = "<SourceLocation file 'psycopg/adapter_pfloat.c', line 40, column 1>"
+source_text = """
+static PyObject *
+pfloat_getquoted(pfloatObject *self, PyObject *args)
+{
+    PyObject *rv;
+    double n = PyFloat_AsDouble(self->wrapped);
+    if (isnan(n))
+        rv = Bytes_FromString("'NaN'::float");
+    else if (isinf(n)) {
+        if (n > 0)
+            rv = Bytes_FromString("'Infinity'::float");
+        else
+            rv = Bytes_FromString("'-Infinity'::float");
+    }
+    else {
+        if (!(rv = PyObject_Repr(self->wrapped))) {
+            goto exit;
+        }
+
+        /* unicode to bytes */
+        {
+            PyObject *tmp = PyUnicode_AsUTF8String(rv);
+            Py_DECREF(rv);
+            if (!(rv = tmp)) {
+                goto exit;
+            }
+        }
+
+        if ('-' == Bytes_AS_STRING(rv)[0]) {
+            /* Prepend a space in front of negative numbers (ticket #57) */
+            PyObject *tmp;
+            if (!(tmp = Bytes_FromString(" "))) {
+                Py_DECREF(rv);
+                rv = NULL;
+                goto exit;
+            }
+            Bytes_ConcatAndDel(&tmp, rv);
+            if (!(rv = tmp)) {
+                goto exit;
+            }
+        }
+    }
+
+exit:
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> bytes:"
+
+[[functions]]
+function_id = "psycopg2.extensions:ISQLQuote.getbinary"
+module_name = "psycopg2.extensions"
+function_name = "getbinary"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "ISQLQuote"
+source_location = "<SourceLocation file 'psycopg/microprotocols_proto.c', line 55, column 1>"
+source_text = """
+static PyObject *
+isqlquote_getbinary(isqlquoteObject *self, PyObject *args)
+{
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getbinary(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:ISQLQuote.getbuffer"
+module_name = "psycopg2.extensions"
+function_name = "getbuffer"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "ISQLQuote"
+source_location = "<SourceLocation file 'psycopg/microprotocols_proto.c', line 66, column 1>"
+source_text = """
+static PyObject *
+isqlquote_getbuffer(isqlquoteObject *self, PyObject *args)
+{
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getbuffer(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:ISQLQuote.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "ISQLQuote"
+source_location = "<SourceLocation file 'psycopg/microprotocols_proto.c', line 44, column 1>"
+source_text = """
+static PyObject *
+isqlquote_getquoted(isqlquoteObject *self, PyObject *args)
+{
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:Int.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Int"
+source_location = "<SourceLocation file 'psycopg/adapter_pint.c', line 93, column 1>"
+source_text = """
+static PyObject *
+pint_conform(pintObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Int.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "Int"
+source_location = "<SourceLocation file 'psycopg/adapter_pint.c', line 37, column 1>"
+source_text = """
+static PyObject *
+pint_getquoted(pintObject *self, PyObject *args)
+{
+    PyObject *res = NULL;
+
+    /* Convert subclass to int to handle IntEnum and other subclasses
+     * whose str() is not the number. */
+    if (PyLong_CheckExact(self->wrapped)) {
+        res = PyObject_Str(self->wrapped);
+    } else {
+        PyObject *tmp;
+        if (!(tmp = PyObject_CallFunctionObjArgs(
+                (PyObject *)&PyLong_Type, self->wrapped, NULL))) {
+            goto exit;
+        }
+        res = PyObject_Str(tmp);
+        Py_DECREF(tmp);
+    }
+
+    if (!res) {
+        goto exit;
+    }
+
+    /* unicode to bytes */
+    {
+        PyObject *tmp = PyUnicode_AsUTF8String(res);
+        Py_DECREF(res);
+        if (!(res = tmp)) {
+            goto exit;
+        }
+    }
+
+    if ('-' == Bytes_AS_STRING(res)[0]) {
+        /* Prepend a space in front of negative numbers (ticket #57) */
+        PyObject *tmp;
+        if (!(tmp = Bytes_FromString(" "))) {
+            Py_DECREF(res);
+            res = NULL;
+            goto exit;
+        }
+        Bytes_ConcatAndDel(&tmp, res);
+        if (!(res = tmp)) {
+            goto exit;
+        }
+    }
+
+exit:
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> bytes:"
+
+[[functions]]
+function_id = "psycopg2.extensions:QuotedString.__conform__"
+module_name = "psycopg2.extensions"
+function_name = "__conform__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "QuotedString"
+source_location = "<SourceLocation file 'psycopg/adapter_qstring.c', line 130, column 1>"
+source_text = """
+static PyObject *
+qstring_conform(qstringObject *self, PyObject *args)
+{
+    PyObject *res, *proto;
+
+    if (!PyArg_ParseTuple(args, "O", &proto)) return NULL;
+
+    if (proto == (PyObject*)&isqlquoteType)
+        res = (PyObject*)self;
+    else
+        res = Py_None;
+
+    Py_INCREF(res);
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __conform__(
+    self,
+    proto: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:QuotedString.getquoted"
+module_name = "psycopg2.extensions"
+function_name = "getquoted"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "QuotedString"
+source_location = "<SourceLocation file 'psycopg/adapter_qstring.c', line 99, column 1>"
+source_text = """
+static PyObject *
+qstring_getquoted(qstringObject *self, PyObject *args)
+{
+    if (self->buffer == NULL) {
+        self->buffer = qstring_quote(self);
+    }
+    Py_XINCREF(self->buffer);
+    return self->buffer;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def getquoted(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:QuotedString.prepare"
+module_name = "psycopg2.extensions"
+function_name = "prepare"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "QuotedString"
+source_location = "<SourceLocation file 'psycopg/adapter_qstring.c', line 115, column 1>"
+source_text = """
+static PyObject *
+qstring_prepare(qstringObject *self, PyObject *args)
+{
+    PyObject *conn;
+
+    if (!PyArg_ParseTuple(args, "O!", &connectionType, &conn))
+        return NULL;
+
+    Py_CLEAR(self->conn);
+    Py_INCREF(conn);
+    self->conn = (connectionObject *)conn;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def prepare(
+    self,
+    conn: psycopg2.extensions.connection,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:Xid.from_string"
+module_name = "psycopg2.extensions"
+function_name = "from_string"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "Xid"
+decorator = "staticmethod"
+source_location = "<SourceLocation file 'psycopg/xid_type.c', line 239, column 1>"
+source_text = """
+static PyObject *
+xid_from_string_method(PyObject *cls, PyObject *args)
+{
+    PyObject *s = NULL;
+
+    if (!PyArg_ParseTuple(args, "O", &s)) { return NULL; }
+
+    return (PyObject *)xid_from_string(s);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def from_string(s: object, /) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.__enter__"
+module_name = "psycopg2.extensions"
+function_name = "__enter__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 408, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_enter(connectionObject *self, PyObject *dummy)
+{
+    PyObject *rv = NULL;
+
+    EXC_IF_CONN_CLOSED(self);
+
+    if (self->entered) {
+        PyErr_SetString(ProgrammingError,
+            "the connection cannot be re-entered recursively");
+        goto exit;
+    }
+
+    self->entered = 1;
+    Py_INCREF(self);
+    rv = (PyObject *)self;
+
+exit:
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def __enter__(self) -> typing.Self:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.__exit__"
+module_name = "psycopg2.extensions"
+function_name = "__exit__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 433, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_exit(connectionObject *self, PyObject *args)
+{
+    PyObject *type, *name, *tb;
+    PyObject *tmp = NULL;
+    PyObject *rv = NULL;
+
+    if (!PyArg_ParseTuple(args, "OOO", &type, &name, &tb)) {
+        goto exit;
+    }
+
+    /* even if there will be an error, consider ourselves out */
+    self->entered = 0;
+
+    if (type == Py_None) {
+        if (!(tmp = PyObject_CallMethod((PyObject *)self, "commit", NULL))) {
+            goto exit;
+        }
+    } else {
+        if (!(tmp = PyObject_CallMethod((PyObject *)self, "rollback", NULL))) {
+            goto exit;
+        }
+    }
+
+    /* success (of the commit or rollback, there may have been an exception in
+     * the block). Return None to avoid swallowing the exception */
+    rv = Py_None;
+    Py_INCREF(rv);
+
+exit:
+    Py_XDECREF(tmp);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __exit__(
+    self,
+    type: object,
+    name: object,
+    tb: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.cancel"
+module_name = "psycopg2.extensions"
+function_name = "cancel"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1156, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_cancel(connectionObject *self, PyObject *dummy)
+{
+    char errbuf[256];
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_TPC_PREPARED(self, cancel);
+
+    /* do not allow cancellation while the connection is being built */
+    Dprintf("psyco_conn_cancel: cancelling with key %p", self->cancel);
+    if (self->status != CONN_STATUS_READY &&
+        self->status != CONN_STATUS_BEGIN) {
+        PyErr_SetString(OperationalError,
+                        "asynchronous connection attempt underway");
+        return NULL;
+    }
+
+    if (PQcancel(self->cancel, errbuf, sizeof(errbuf)) == 0) {
+        Dprintf("psyco_conn_cancel: cancelling failed: %s", errbuf);
+        PyErr_SetString(OperationalError, errbuf);
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def cancel(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.close"
+module_name = "psycopg2.extensions"
+function_name = "close"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 143, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_close(connectionObject *self, PyObject *dummy)
+{
+    Dprintf("psyco_conn_close: closing connection at %p", self);
+    conn_close(self);
+    Dprintf("psyco_conn_close: connection at %p closed", self);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def close(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.commit"
+module_name = "psycopg2.extensions"
+function_name = "commit"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 158, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_commit(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, commit);
+    EXC_IF_TPC_BEGIN(self, commit);
+
+    if (conn_commit(self) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def commit(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.cursor"
+module_name = "psycopg2.extensions"
+function_name = "cursor"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 60, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_cursor(connectionObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *obj = NULL;
+    PyObject *rv = NULL;
+    PyObject *name = Py_None;
+    PyObject *factory = Py_None;
+    PyObject *withhold = Py_False;
+    PyObject *scrollable = Py_None;
+
+    static char *kwlist[] = {
+        "name", "cursor_factory", "withhold", "scrollable", NULL};
+
+    EXC_IF_CONN_CLOSED(self);
+
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kwargs, "|OOOO", kwlist,
+            &name, &factory, &withhold, &scrollable)) {
+        goto exit;
+    }
+
+    if (factory == Py_None) {
+        if (self->cursor_factory && self->cursor_factory != Py_None) {
+            factory = self->cursor_factory;
+        }
+        else {
+            factory = (PyObject *)&cursorType;
+        }
+    }
+
+    if (self->status != CONN_STATUS_READY &&
+        self->status != CONN_STATUS_BEGIN &&
+        self->status != CONN_STATUS_PREPARED) {
+        PyErr_SetString(OperationalError,
+                        "asynchronous connection attempt underway");
+        goto exit;
+    }
+
+    if (name != Py_None && self->async == 1) {
+        PyErr_SetString(ProgrammingError,
+                        "asynchronous connections "
+                        "cannot produce named cursors");
+        goto exit;
+    }
+
+    Dprintf("psyco_conn_cursor: new %s cursor for connection at %p",
+        (name == Py_None ? "unnamed" : "named"), self);
+
+    if (!(obj = PyObject_CallFunctionObjArgs(factory, self, name, NULL))) {
+        goto exit;
+    }
+
+    if (PyObject_IsInstance(obj, (PyObject *)&cursorType) == 0) {
+        PyErr_SetString(PyExc_TypeError,
+            "cursor factory must be subclass of psycopg2.extensions.cursor");
+        goto exit;
+    }
+
+    if (0 > curs_withhold_set((cursorObject *)obj, withhold)) {
+        goto exit;
+    }
+    if (0 > curs_scrollable_set((cursorObject *)obj, scrollable)) {
+        goto exit;
+    }
+
+    Dprintf("psyco_conn_cursor: new cursor at %p: refcnt = "
+        FORMAT_CODE_PY_SSIZE_T,
+        obj, Py_REFCNT(obj)
+    );
+
+    rv = obj;
+    obj = NULL;
+
+exit:
+    Py_XDECREF(obj);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def cursor(
+    self,
+    name: object = None,
+    cursor_factory: object = None,
+    withhold: object = False,
+    scrollable: object = None,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.fileno"
+module_name = "psycopg2.extensions"
+function_name = "fileno"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1113, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_fileno(connectionObject *self, PyObject *dummy)
+{
+    long int socket;
+
+    EXC_IF_CONN_CLOSED(self);
+
+    socket = (long int)PQsocket(self->pgconn);
+
+    return PyInt_FromLong(socket);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def fileno(self) -> int:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.get_backend_pid"
+module_name = "psycopg2.extensions"
+function_name = "get_backend_pid"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1018, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_get_backend_pid(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+
+    return PyInt_FromLong((long)PQbackendPID(self->pgconn));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_backend_pid(self) -> int:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.get_dsn_parameters"
+module_name = "psycopg2.extensions"
+function_name = "get_dsn_parameters"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 925, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_get_dsn_parameters(connectionObject *self, PyObject *dummy)
+{
+#if PG_VERSION_NUM >= 90300
+    PyObject *res = NULL;
+    PQconninfoOption *options = NULL;
+
+    EXC_IF_CONN_CLOSED(self);
+
+    if (!(options = PQconninfo(self->pgconn))) {
+        PyErr_NoMemory();
+        goto exit;
+    }
+
+    res = psyco_dict_from_conninfo_options(options, /* include_password = */ 0);
+
+exit:
+    PQconninfoFree(options);
+
+    return res;
+#else
+    PyErr_SetString(NotSupportedError, "PQconninfo not available in libpq < 9.3");
+    return NULL;
+#endif
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_dsn_parameters(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.get_native_connection"
+module_name = "psycopg2.extensions"
+function_name = "get_native_connection"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 848, column 1>"
+source_text = """
+static PyObject *
+psyco_get_native_connection(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+
+    return PyCapsule_New(self->pgconn, "psycopg2.connection.native_connection", NULL);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_native_connection(self) -> types.CapsuleType:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.get_parameter_status"
+module_name = "psycopg2.extensions"
+function_name = "get_parameter_status"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 903, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_get_parameter_status(connectionObject *self, PyObject *args)
+{
+    const char *param = NULL;
+    const char *val = NULL;
+
+    EXC_IF_CONN_CLOSED(self);
+
+    if (!PyArg_ParseTuple(args, "s", &param)) return NULL;
+
+    val = PQparameterStatus(self->pgconn, param);
+    if (!val) {
+        Py_RETURN_NONE;
+    }
+    return conn_text_from_chars(self, val);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def get_parameter_status(
+    self,
+    param: str,
+    /,
+) -> None | str:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.get_transaction_status"
+module_name = "psycopg2.extensions"
+function_name = "get_transaction_status"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 886, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_get_transaction_status(connectionObject *self, PyObject *dummy)
+{
+    return PyInt_FromLong((long)PQtransactionStatus(self->pgconn));
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def get_transaction_status(self) -> int:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.isexecuting"
+module_name = "psycopg2.extensions"
+function_name = "isexecuting"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1130, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_isexecuting(connectionObject *self, PyObject *dummy)
+{
+    /* synchronous connections will always return False */
+    if (self->async == 0) {
+        Py_RETURN_FALSE;
+    }
+
+    /* check if the connection is still being built */
+    if (self->status != CONN_STATUS_READY) {
+        Py_RETURN_TRUE;
+    }
+
+    /* check if there is a query being executed */
+    if (self->async_cursor != NULL) {
+        Py_RETURN_TRUE;
+    }
+
+    /* otherwise it's not executing */
+    Py_RETURN_FALSE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def isexecuting(self) -> bool:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.lobject"
+module_name = "psycopg2.extensions"
+function_name = "lobject"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 963, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_lobject(connectionObject *self, PyObject *args, PyObject *keywds)
+{
+    Oid oid = InvalidOid, new_oid = InvalidOid;
+    const char *new_file = NULL;
+    const char *smode = "";
+    PyObject *factory = (PyObject *)&lobjectType;
+    PyObject *obj;
+
+    static char *kwlist[] = {"oid", "mode", "new_oid", "new_file",
+                             "lobject_factory", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, keywds, "|IzIzO", kwlist,
+                                     &oid, &smode, &new_oid, &new_file,
+                                     &factory)) {
+        return NULL;
+    }
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, lobject);
+    EXC_IF_GREEN(lobject);
+    EXC_IF_TPC_PREPARED(self, lobject);
+
+    Dprintf("psyco_conn_lobject: new lobject for connection at %p", self);
+    Dprintf("psyco_conn_lobject:     parameters: oid = %u, mode = %s",
+            oid, smode);
+    Dprintf("psyco_conn_lobject:     parameters: new_oid = %u, new_file = %s",
+            new_oid, new_file);
+
+    if (new_file)
+        obj = PyObject_CallFunction(factory, "OIsIs",
+            self, oid, smode, new_oid, new_file);
+    else
+        obj = PyObject_CallFunction(factory, "OIsI",
+            self, oid, smode, new_oid);
+
+    if (obj == NULL) return NULL;
+    if (PyObject_IsInstance(obj, (PyObject *)&lobjectType) == 0) {
+        PyErr_SetString(PyExc_TypeError,
+            "lobject factory must be subclass of psycopg2.extensions.lobject");
+        Py_DECREF(obj);
+        return NULL;
+    }
+
+    Dprintf("psyco_conn_lobject: new lobject at %p: refcnt = "
+            FORMAT_CODE_PY_SSIZE_T,
+            obj, Py_REFCNT(obj));
+    return obj;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def lobject(
+    self,
+    oid: int = 0,
+    mode: str | None = '',
+    new_oid: int = 0,
+    new_file: str | None = ...,
+    lobject_factory: object = ...,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.poll"
+module_name = "psycopg2.extensions"
+function_name = "poll"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1093, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_poll(connectionObject *self, PyObject *dummy)
+{
+    int res;
+
+    EXC_IF_CONN_CLOSED(self);
+
+    res = conn_poll(self);
+    if (res != PSYCO_POLL_ERROR || !PyErr_Occurred()) {
+        return PyInt_FromLong(res);
+    } else {
+        /* There is an error and an exception is already in place */
+        return NULL;
+    }
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def poll(self) -> int:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.reset"
+module_name = "psycopg2.extensions"
+function_name = "reset"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 1062, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_reset(connectionObject *self, PyObject *dummy)
+{
+    int res;
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, reset);
+
+    if (pq_reset(self) < 0)
+        return NULL;
+
+    res = conn_setup(self);
+    if (res < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def reset(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.rollback"
+module_name = "psycopg2.extensions"
+function_name = "rollback"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 177, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_rollback(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, rollback);
+    EXC_IF_TPC_BEGIN(self, rollback);
+
+    if (conn_rollback(self) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def rollback(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.set_client_encoding"
+module_name = "psycopg2.extensions"
+function_name = "set_client_encoding"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 862, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_set_client_encoding(connectionObject *self, PyObject *args)
+{
+    const char *enc;
+    PyObject *rv = NULL;
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, set_client_encoding);
+    EXC_IF_TPC_PREPARED(self, set_client_encoding);
+
+    if (!PyArg_ParseTuple(args, "s", &enc)) return NULL;
+
+    if (conn_set_client_encoding(self, enc) >= 0) {
+        Py_INCREF(Py_None);
+        rv = Py_None;
+    }
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def set_client_encoding(
+    self,
+    enc: str,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.set_isolation_level"
+module_name = "psycopg2.extensions"
+function_name = "set_isolation_level"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 702, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_set_isolation_level(connectionObject *self, PyObject *args)
+{
+    int level = 1;
+    PyObject *pyval = NULL;
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, "isolation_level");
+    EXC_IF_TPC_PREPARED(self, "isolation_level");
+
+    if (!PyArg_ParseTuple(args, "O", &pyval)) return NULL;
+
+    if (pyval == Py_None) {
+        level = ISOLATION_LEVEL_DEFAULT;
+    }
+
+    /* parse from one of the level constants */
+    else if (PyInt_Check(pyval)) {
+        level = PyInt_AsLong(pyval);
+
+        if (level < 0 || level > 4) {
+            PyErr_SetString(PyExc_ValueError,
+                "isolation level must be between 0 and 4");
+            return NULL;
+        }
+    }
+
+    if (0 > conn_rollback(self)) {
+        return NULL;
+    }
+
+    if (level == 0) {
+        if (0 > conn_set_session(self, 1,
+                SRV_STATE_UNCHANGED, SRV_STATE_UNCHANGED, SRV_STATE_UNCHANGED)) {
+            return NULL;
+        }
+    }
+    else {
+        if (0 > conn_set_session(self, 0,
+                level, SRV_STATE_UNCHANGED, SRV_STATE_UNCHANGED)) {
+            return NULL;
+        }
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def set_isolation_level(
+    self,
+    pyval: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.set_session"
+module_name = "psycopg2.extensions"
+function_name = "set_session"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 576, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_set_session(connectionObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *isolevel = Py_None;
+    PyObject *readonly = Py_None;
+    PyObject *deferrable = Py_None;
+    PyObject *autocommit = Py_None;
+
+    int c_isolevel = SRV_STATE_UNCHANGED;
+    int c_readonly = SRV_STATE_UNCHANGED;
+    int c_deferrable = SRV_STATE_UNCHANGED;
+    int c_autocommit = SRV_STATE_UNCHANGED;
+
+    static char *kwlist[] =
+        {"isolation_level", "readonly", "deferrable", "autocommit", NULL};
+
+    _set_session_checks(self, set_session);
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|OOOO", kwlist,
+            &isolevel, &readonly, &deferrable, &autocommit)) {
+        return NULL;
+    }
+
+    if (Py_None != isolevel) {
+        if (0 > (c_isolevel = _psyco_conn_parse_isolevel(isolevel))) {
+            return NULL;
+        }
+    }
+
+    if (Py_None != readonly) {
+        if (0 > (c_readonly = _psyco_conn_parse_onoff(readonly))) {
+            return NULL;
+        }
+    }
+    if (Py_None != deferrable) {
+        if (0 > (c_deferrable = _psyco_conn_parse_onoff(deferrable))) {
+            return NULL;
+        }
+    }
+
+    if (Py_None != autocommit) {
+        if (-1 == (c_autocommit = PyObject_IsTrue(autocommit))) { return NULL; }
+    }
+
+    if (0 > conn_set_session(
+                self, c_autocommit, c_isolevel, c_readonly, c_deferrable)) {
+        return NULL;
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def set_session(
+    self,
+    isolation_level: object = None,
+    readonly: object = None,
+    deferrable: object = None,
+    autocommit: object = None,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.tpc_begin"
+module_name = "psycopg2.extensions"
+function_name = "tpc_begin"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 207, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_tpc_begin(connectionObject *self, PyObject *args)
+{
+    PyObject *rv = NULL;
+    xidObject *xid = NULL;
+    PyObject *oxid;
+
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, tpc_begin);
+    EXC_IF_TPC_NOT_SUPPORTED(self);
+    EXC_IF_IN_TRANSACTION(self, tpc_begin);
+
+    if (!PyArg_ParseTuple(args, "O", &oxid)) {
+        goto exit;
+    }
+
+    if (NULL == (xid = xid_ensure(oxid))) {
+        goto exit;
+    }
+
+    /* two phase commit and autocommit make no point */
+    if (self->autocommit) {
+        PyErr_SetString(ProgrammingError,
+            "tpc_begin can't be called in autocommit mode");
+        goto exit;
+    }
+
+    if (conn_tpc_begin(self, xid) < 0) {
+        goto exit;
+    }
+
+    Py_INCREF(Py_None);
+    rv = Py_None;
+
+exit:
+    Py_XDECREF(xid);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def tpc_begin(
+    self,
+    oxid: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.tpc_commit"
+module_name = "psycopg2.extensions"
+function_name = "tpc_commit"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 365, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_tpc_commit(connectionObject *self, PyObject *args)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, tpc_commit);
+    EXC_IF_TPC_NOT_SUPPORTED(self);
+
+    return _psyco_conn_tpc_finish(self, args,
+                                  conn_commit, "COMMIT PREPARED");
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def tpc_commit(
+    self,
+    *args: object,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.tpc_prepare"
+module_name = "psycopg2.extensions"
+function_name = "tpc_prepare"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 250, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_tpc_prepare(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, tpc_prepare);
+    EXC_IF_TPC_PREPARED(self, tpc_prepare);
+
+    if (NULL == self->tpc_xid) {
+        PyErr_SetString(ProgrammingError,
+            "prepare must be called inside a two-phase transaction");
+        return NULL;
+    }
+
+    if (0 > conn_tpc_command(self, "PREPARE TRANSACTION", self->tpc_xid)) {
+        return NULL;
+    }
+
+    /* transaction prepared: set the state so that no operation
+     * can be performed until commit. */
+    self->status = CONN_STATUS_PREPARED;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def tpc_prepare(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.tpc_recover"
+module_name = "psycopg2.extensions"
+function_name = "tpc_recover"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 393, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_tpc_recover(connectionObject *self, PyObject *dummy)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, tpc_recover);
+    EXC_IF_TPC_PREPARED(self, tpc_recover);
+    EXC_IF_TPC_NOT_SUPPORTED(self);
+
+    return conn_tpc_recover(self);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def tpc_recover(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.tpc_rollback"
+module_name = "psycopg2.extensions"
+function_name = "tpc_rollback"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 379, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_tpc_rollback(connectionObject *self, PyObject *args)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_CONN_ASYNC(self, tpc_rollback);
+    EXC_IF_TPC_NOT_SUPPORTED(self);
+
+    return _psyco_conn_tpc_finish(self, args,
+                                  conn_rollback, "ROLLBACK PREPARED");
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def tpc_rollback(
+    self,
+    *args: object,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:connection.xid"
+module_name = "psycopg2.extensions"
+function_name = "xid"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "failed"
+class_name = "connection"
+source_location = "<SourceLocation file 'psycopg/connection_type.c', line 194, column 1>"
+source_text = """
+static PyObject *
+psyco_conn_xid(connectionObject *self, PyObject *args, PyObject *kwargs)
+{
+    EXC_IF_CONN_CLOSED(self);
+    EXC_IF_TPC_NOT_SUPPORTED(self);
+
+    return PyObject_Call((PyObject *)&xidType, args, kwargs);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def xid(
+    self,
+    *args: object,
+    **kwargs: object,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.__enter__"
+module_name = "psycopg2.extensions"
+function_name = "__enter__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1271, column 1>"
+source_text = """
+static PyObject *
+curs_enter(cursorObject *self, PyObject *dummy)
+{
+    Py_INCREF(self);
+    return (PyObject *)self;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def __enter__(self) -> typing.Self:"
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.__exit__"
+module_name = "psycopg2.extensions"
+function_name = "__exit__"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "failed"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1281, column 1>"
+source_text = """
+static PyObject *
+curs_exit(cursorObject *self, PyObject *args)
+{
+    PyObject *tmp = NULL;
+    PyObject *rv = NULL;
+
+    /* don't care about the arguments here: don't need to parse them */
+
+    if (!(tmp = PyObject_CallMethod((PyObject *)self, "close", ""))) {
+        goto exit;
+    }
+
+    /* success (of curs.close()).
+     * Return None to avoid swallowing the exception */
+    rv = Py_None;
+    Py_INCREF(rv);
+
+exit:
+    Py_XDECREF(tmp);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def __exit__(
+    self,
+    *args: object,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.callproc"
+module_name = "psycopg2.extensions"
+function_name = "callproc"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1004, column 1>"
+source_text = '''
+static PyObject *
+curs_callproc(cursorObject *self, PyObject *args)
+{
+    const char *procname = NULL;
+    char *sql = NULL;
+    Py_ssize_t procname_len, i, nparameters = 0, sl = 0;
+    PyObject *parameters = Py_None;
+    PyObject *operation = NULL;
+    PyObject *res = NULL;
+
+    int using_dict;
+    PyObject *pname = NULL;
+    PyObject *pnames = NULL;
+    PyObject *pvals = NULL;
+    char *cpname = NULL;
+    char **scpnames = NULL;
+
+    if (!PyArg_ParseTuple(args, "s#|O", &procname, &procname_len,
+                &parameters)) {
+        goto exit;
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_ASYNC_IN_PROGRESS(self, callproc);
+    EXC_IF_TPC_PREPARED(self->conn, callproc);
+
+    if (self->name != NULL) {
+        psyco_set_error(ProgrammingError, self,
+                "can't call .callproc() on named cursors");
+        goto exit;
+    }
+
+    if (parameters != Py_None) {
+        if (-1 == (nparameters = PyObject_Length(parameters))) { goto exit; }
+    }
+
+    using_dict = nparameters > 0 && PyDict_Check(parameters);
+
+    /* a Dict is complicated; the parameter names go into the query */
+    if (using_dict) {
+        if (!(pnames = PyDict_Keys(parameters))) { goto exit; }
+        if (!(pvals = PyDict_Values(parameters))) { goto exit; }
+
+        sl = procname_len + 17 + nparameters * 5 - (nparameters ? 1 : 0);
+
+        if (!(scpnames = PyMem_New(char *, nparameters))) {
+            PyErr_NoMemory();
+            goto exit;
+        }
+
+        memset(scpnames, 0, sizeof(char *) * nparameters);
+
+        /* each parameter has to be processed; it's a few steps. */
+        for (i = 0; i < nparameters; i++) {
+            /* all errors are RuntimeErrors as they should never occur */
+
+            if (!(pname = PyList_GetItem(pnames, i))) { goto exit; }
+            Py_INCREF(pname);   /* was borrowed */
+
+            /* this also makes a check for keys being strings */
+            if (!(pname = psyco_ensure_bytes(pname))) { goto exit; }
+            if (!(cpname = Bytes_AsString(pname))) { goto exit; }
+
+            if (!(scpnames[i] = psyco_escape_identifier(
+                    self->conn, cpname, -1))) {
+                Py_CLEAR(pname);
+                goto exit;
+            }
+
+            Py_CLEAR(pname);
+
+            sl += strlen(scpnames[i]);
+        }
+
+        if (!(sql = (char*)PyMem_Malloc(sl))) {
+            PyErr_NoMemory();
+            goto exit;
+        }
+
+        sprintf(sql, "SELECT * FROM %s(", procname);
+        for (i = 0; i < nparameters; i++) {
+            strcat(sql, scpnames[i]);
+            strcat(sql, ":=%s,");
+        }
+        sql[sl-2] = ')';
+        sql[sl-1] = '\0';
+    }
+
+    /* a list (or None, or empty data structure) is a little bit simpler */
+    else {
+        Py_INCREF(parameters);
+        pvals = parameters;
+
+        sl = procname_len + 17 + nparameters * 3 - (nparameters ? 1 : 0);
+
+        sql = (char*)PyMem_Malloc(sl);
+        if (sql == NULL) {
+            PyErr_NoMemory();
+            goto exit;
+        }
+
+        sprintf(sql, "SELECT * FROM %s(", procname);
+        for (i = 0; i < nparameters; i++) {
+            strcat(sql, "%s,");
+        }
+        sql[sl-2] = ')';
+        sql[sl-1] = '\0';
+    }
+
+    if (!(operation = Bytes_FromString(sql))) {
+        goto exit;
+    }
+
+    if (0 <= _psyco_curs_execute(
+            self, operation, pvals, self->conn->async, 0)) {
+        /* The dict case is outside DBAPI scope anyway, so simply return None */
+        if (using_dict) {
+            res = Py_None;
+        }
+        else {
+            res = pvals;
+        }
+        Py_INCREF(res);
+    }
+
+exit:
+    if (scpnames != NULL) {
+        for (i = 0; i < nparameters; i++) {
+            if (scpnames[i] != NULL) {
+                PQfreemem(scpnames[i]);
+            }
+        }
+    }
+    PyMem_Free(scpnames);
+    Py_XDECREF(pname);
+    Py_XDECREF(pnames);
+    Py_XDECREF(operation);
+    Py_XDECREF(pvals);
+    PyMem_Free((void*)sql);
+    return res;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def callproc(
+    self,
+    procname: str | collections.abc.Buffer,
+    parameters: dict[typing.Any, typing.Any] = None,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.cast"
+module_name = "psycopg2.extensions"
+function_name = "cast"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 631, column 1>"
+source_text = """
+static PyObject *
+curs_cast(cursorObject *self, PyObject *args)
+{
+    PyObject *oid;
+    PyObject *s;
+    PyObject *cast;
+
+    if (!PyArg_ParseTuple(args, "OO", &oid, &s))
+        return NULL;
+
+    cast = curs_get_cast(self, oid);
+    return PyObject_CallFunctionObjArgs(cast, s, (PyObject *)self, NULL);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def cast(
+    self,
+    oid: object,
+    s: object,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.close"
+module_name = "psycopg2.extensions"
+function_name = "close"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 51, column 1>"
+source_text = """
+static PyObject *
+curs_close(cursorObject *self, PyObject *dummy)
+{
+    PyObject *rv = NULL;
+    char *lname = NULL;
+
+    if (self->closed) {
+        rv = Py_None;
+        Py_INCREF(rv);
+        goto exit;
+    }
+
+    if (self->qname != NULL) {
+        char buffer[256];
+        PGTransactionStatusType status;
+
+        EXC_IF_ASYNC_IN_PROGRESS(self, close_named);
+
+        if (self->conn) {
+            status = PQtransactionStatus(self->conn->pgconn);
+        }
+        else {
+            status = PQTRANS_UNKNOWN;
+        }
+
+        if (status == PQTRANS_UNKNOWN || status == PQTRANS_INERROR) {
+            Dprintf("skipping named curs close because tx status %d",
+                (int)status);
+            goto close;
+        }
+
+        /* We should close a server-side cursor only if exists, or we get an
+         * error (#716). If we execute()d the cursor should exist alright, but
+         * if we didn't there is still the expectation that the cursor is
+         * closed (#746).
+         *
+         * So if we didn't execute() check for the cursor existence before
+         * closing it (the view exists since PG 8.2 according to docs).
+         */
+        if (!self->query && self->conn->server_version >= 80200) {
+            if (!(lname = psyco_escape_string(
+                    self->conn, self->name, -1, NULL, NULL))) {
+                goto exit;
+            }
+            PyOS_snprintf(buffer, sizeof(buffer),
+                "SELECT 1 FROM pg_catalog.pg_cursors where name = %s",
+                lname);
+            if (pq_execute(self, buffer, 0, 0, 1) == -1) { goto exit; }
+
+            if (self->rowcount == 0) {
+                Dprintf("skipping named cursor close because not existing");
+                goto close;
+            }
+        }
+
+        EXC_IF_NO_MARK(self);
+        PyOS_snprintf(buffer, sizeof(buffer), "CLOSE %s", self->qname);
+        if (pq_execute(self, buffer, 0, 0, 1) == -1) { goto exit; }
+    }
+
+close:
+    CLEARPGRES(self->pgres);
+
+    self->closed = 1;
+    Dprintf("curs_close: cursor at %p closed", self);
+
+    rv = Py_None;
+    Py_INCREF(rv);
+
+exit:
+    PyMem_Free(lname);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def close(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.copy_expert"
+module_name = "psycopg2.extensions"
+function_name = "copy_expert"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1617, column 1>"
+source_text = """
+static PyObject *
+curs_copy_expert(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t bufsize = DEFAULT_COPYBUFF;
+    PyObject *sql, *file, *res = NULL;
+
+    static char *kwlist[] = {"sql", "file", "size", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+        "OO|n", kwlist, &sql, &file, &bufsize))
+    { return NULL; }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_CURS_ASYNC(self, copy_expert);
+    EXC_IF_GREEN(copy_expert);
+    EXC_IF_TPC_PREPARED(self->conn, copy_expert);
+
+    sql = curs_validate_sql_basic(self, sql);
+
+    /* Any failure from here forward should 'goto exit' rather than
+       'return NULL' directly. */
+
+    if (sql == NULL) { goto exit; }
+
+    /* This validation of file is rather weak, in that it doesn't enforce the
+       association between "COPY FROM" -> "read" and "COPY TO" -> "write".
+       However, the error handling in _pq_copy_[in|out] must be able to handle
+       the case where the attempt to call file.read|write fails, so no harm
+       done. */
+
+    if (   !PyObject_HasAttrString(file, "read")
+        && !PyObject_HasAttrString(file, "write")
+      )
+    {
+        PyErr_SetString(PyExc_TypeError, "file must be a readable file-like"
+            " object for COPY FROM; a writable file-like object for COPY TO."
+          );
+        goto exit;
+    }
+
+    self->copysize = bufsize;
+    Py_INCREF(file);
+    self->copyfile = file;
+
+    Py_CLEAR(self->query);
+    Py_INCREF(sql);
+    self->query = sql;
+
+    /* At this point, the SQL statement must be str, not unicode */
+    if (pq_execute(self, Bytes_AS_STRING(sql), 0, 0, 0) >= 0) {
+        res = Py_None;
+        Py_INCREF(res);
+    }
+
+    Py_CLEAR(self->copyfile);
+
+exit:
+    Py_XDECREF(sql);
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def copy_expert(
+    self,
+    sql: object,
+    file: object,
+    size: int = 8192,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.copy_from"
+module_name = "psycopg2.extensions"
+function_name = "copy_from"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1399, column 1>"
+source_text = '''
+static PyObject *
+curs_copy_from(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {
+            "file", "table", "sep", "null", "size", "columns", NULL};
+
+    const char *sep = "\t";
+    const char *null = "\\N";
+    const char *command =
+        "COPY %s%s FROM stdin WITH DELIMITER AS %s NULL AS %s";
+
+    Py_ssize_t query_size;
+    char *query = NULL;
+    char *columnlist = NULL;
+    char *quoted_delimiter = NULL;
+    char *quoted_null = NULL;
+    char *quoted_table_name = NULL;
+    const char *table_name;
+
+    Py_ssize_t bufsize = DEFAULT_COPYBUFF;
+    PyObject *file, *columns = NULL, *res = NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kwargs, "Os|ssnO", kwlist,
+            &file, &table_name, &sep, &null, &bufsize, &columns)) {
+        return NULL;
+    }
+
+    if (!PyObject_HasAttrString(file, "read")) {
+        PyErr_SetString(PyExc_TypeError,
+            "argument 1 must have a .read() method");
+        return NULL;
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_CURS_ASYNC(self, copy_from);
+    EXC_IF_GREEN(copy_from);
+    EXC_IF_TPC_PREPARED(self->conn, copy_from);
+
+    if (!(columnlist = _psyco_curs_copy_columns(self, columns))) {
+        goto exit;
+    }
+
+    if (!(quoted_delimiter = psyco_escape_string(
+            self->conn, sep, -1, NULL, NULL))) {
+        goto exit;
+    }
+
+    if (!(quoted_null = psyco_escape_string(
+            self->conn, null, -1, NULL, NULL))) {
+        goto exit;
+    }
+
+    if (!(quoted_table_name = psyco_escape_identifier(
+            self->conn, table_name, -1))) {
+        goto exit;
+    }
+
+    query_size = strlen(command) + strlen(quoted_table_name) + strlen(columnlist)
+        + strlen(quoted_delimiter) + strlen(quoted_null) + 1;
+    if (!(query = PyMem_New(char, query_size))) {
+        PyErr_NoMemory();
+        goto exit;
+    }
+
+    PyOS_snprintf(query, query_size, command,
+        quoted_table_name, columnlist, quoted_delimiter, quoted_null);
+
+    Dprintf("curs_copy_from: query = %s", query);
+
+    Py_CLEAR(self->query);
+    if (!(self->query = Bytes_FromString(query))) {
+        goto exit;
+    }
+
+    /* This routine stores a borrowed reference.  Although it is only held
+     * for the duration of curs_copy_from, nested invocations of
+     * Py_BEGIN_ALLOW_THREADS could surrender control to another thread,
+     * which could invoke the garbage collector.  We thus need an
+     * INCREF/DECREF pair if we store this pointer in a GC object, such as
+     * a cursorObject */
+    self->copysize = bufsize;
+    Py_INCREF(file);
+    self->copyfile = file;
+
+    if (pq_execute(self, query, 0, 0, 0) >= 0) {
+        res = Py_None;
+        Py_INCREF(Py_None);
+    }
+
+    Py_CLEAR(self->copyfile);
+
+exit:
+    if (quoted_table_name) {
+        PQfreemem(quoted_table_name);
+    }
+    PyMem_Free(columnlist);
+    PyMem_Free(quoted_delimiter);
+    PyMem_Free(quoted_null);
+    PyMem_Free(query);
+
+    return res;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = '''
+def copy_from(
+    self,
+    file: object,
+    table: str,
+    sep: str = '\\t',
+    null: str = '\\\\N',
+    size: int = 8192,
+    columns: object = ...,
+) -> None:'''
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.copy_to"
+module_name = "psycopg2.extensions"
+function_name = "copy_to"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1508, column 1>"
+source_text = '''
+static PyObject *
+curs_copy_to(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    static char *kwlist[] = {"file", "table", "sep", "null", "columns", NULL};
+
+    const char *sep = "\t";
+    const char *null = "\\N";
+    const char *command =
+        "COPY %s%s TO stdout WITH DELIMITER AS %s NULL AS %s";
+
+    Py_ssize_t query_size;
+    char *query = NULL;
+    char *columnlist = NULL;
+    char *quoted_delimiter = NULL;
+    char *quoted_null = NULL;
+
+    const char *table_name;
+    char *quoted_table_name = NULL;
+    PyObject *file = NULL, *columns = NULL, *res = NULL;
+
+    if (!PyArg_ParseTupleAndKeywords(
+            args, kwargs, "Os|ssO", kwlist,
+            &file, &table_name, &sep, &null, &columns)) {
+        return NULL;
+    }
+
+    if (!PyObject_HasAttrString(file, "write")) {
+        PyErr_SetString(PyExc_TypeError,
+            "argument 1 must have a .write() method");
+        return NULL;
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_CURS_ASYNC(self, copy_to);
+    EXC_IF_GREEN(copy_to);
+    EXC_IF_TPC_PREPARED(self->conn, copy_to);
+
+    if (!(quoted_table_name = psyco_escape_identifier(
+            self->conn, table_name, -1))) {
+        goto exit;
+    }
+
+    if (!(columnlist = _psyco_curs_copy_columns(self, columns))) {
+        goto exit;
+    }
+
+    if (!(quoted_delimiter = psyco_escape_string(
+            self->conn, sep, -1, NULL, NULL))) {
+        goto exit;
+    }
+
+    if (!(quoted_null = psyco_escape_string(
+            self->conn, null, -1, NULL, NULL))) {
+        goto exit;
+    }
+
+    query_size = strlen(command) + strlen(quoted_table_name) + strlen(columnlist)
+        + strlen(quoted_delimiter) + strlen(quoted_null) + 1;
+    if (!(query = PyMem_New(char, query_size))) {
+        PyErr_NoMemory();
+        goto exit;
+    }
+
+    PyOS_snprintf(query, query_size, command,
+        quoted_table_name, columnlist, quoted_delimiter, quoted_null);
+
+    Dprintf("curs_copy_to: query = %s", query);
+
+    Py_CLEAR(self->query);
+    if (!(self->query = Bytes_FromString(query))) {
+        goto exit;
+    }
+
+    self->copysize = 0;
+    Py_INCREF(file);
+    self->copyfile = file;
+
+    if (pq_execute(self, query, 0, 0, 0) >= 0) {
+        res = Py_None;
+        Py_INCREF(Py_None);
+    }
+
+    Py_CLEAR(self->copyfile);
+
+exit:
+    if (quoted_table_name) {
+        PQfreemem(quoted_table_name);
+    }
+    PyMem_Free(columnlist);
+    PyMem_Free(quoted_delimiter);
+    PyMem_Free(quoted_null);
+    PyMem_Free(query);
+
+    return res;
+}'''
+
+[[functions.signatures]]
+signature_index = 0
+signature = '''
+def copy_to(
+    self,
+    file: object,
+    table: str,
+    sep: str = '\\t',
+    null: str = '\\\\N',
+    columns: object = ...,
+) -> None:'''
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.execute"
+module_name = "psycopg2.extensions"
+function_name = "execute"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 462, column 1>"
+source_text = """
+static PyObject *
+curs_execute(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *vars = NULL, *operation = NULL;
+
+    static char *kwlist[] = {"query", "vars", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist,
+                                     &operation, &vars)) {
+        return NULL;
+    }
+
+    if (self->name != NULL) {
+        if (self->query) {
+            psyco_set_error(ProgrammingError, self,
+                "can't call .execute() on named cursors more than once");
+            return NULL;
+        }
+        if (self->conn->autocommit && !self->withhold) {
+            psyco_set_error(ProgrammingError, self,
+                "can't use a named cursor outside of transactions");
+            return NULL;
+        }
+        EXC_IF_NO_MARK(self);
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_ASYNC_IN_PROGRESS(self, execute);
+    EXC_IF_TPC_PREPARED(self->conn, execute);
+
+    if (0 > _psyco_curs_execute(self, operation, vars, self->conn->async, 0)) {
+        return NULL;
+    }
+
+    /* success */
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def execute(
+    self,
+    query: object,
+    vars: object = ...,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.executemany"
+module_name = "psycopg2.extensions"
+function_name = "executemany"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 503, column 1>"
+source_text = """
+static PyObject *
+curs_executemany(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *operation = NULL, *vars = NULL;
+    PyObject *v, *iter = NULL;
+    long rowcount = 0;
+
+    static char *kwlist[] = {"query", "vars_list", NULL};
+
+    /* reset rowcount to -1 to avoid setting it when an exception is raised */
+    self->rowcount = -1;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", kwlist,
+                                     &operation, &vars)) {
+        return NULL;
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    EXC_IF_CURS_ASYNC(self, executemany);
+    EXC_IF_TPC_PREPARED(self->conn, executemany);
+
+    if (self->name != NULL) {
+        psyco_set_error(ProgrammingError, self,
+                "can't call .executemany() on named cursors");
+        return NULL;
+    }
+
+    if (!PyIter_Check(vars)) {
+        vars = iter = PyObject_GetIter(vars);
+        if (iter == NULL) return NULL;
+    }
+
+    while ((v = PyIter_Next(vars)) != NULL) {
+        if (0 > _psyco_curs_execute(self, operation, v, 0, 1)) {
+            Py_DECREF(v);
+            Py_XDECREF(iter);
+            return NULL;
+        }
+        else {
+            if (self->rowcount == -1)
+                rowcount = -1;
+            else if (rowcount >= 0)
+                rowcount += self->rowcount;
+            Py_DECREF(v);
+        }
+    }
+    Py_XDECREF(iter);
+    self->rowcount = rowcount;
+
+    if (!PyErr_Occurred()) {
+        Py_RETURN_NONE;
+    }
+    else {
+        return NULL;
+    }
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def executemany(
+    self,
+    query: object,
+    vars_list: object,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.fetchall"
+module_name = "psycopg2.extensions"
+function_name = "fetchall"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 939, column 1>"
+source_text = """
+static PyObject *
+curs_fetchall(cursorObject *self, PyObject *dummy)
+{
+    int i, size;
+    PyObject *list = NULL;
+    PyObject *row = NULL;
+    PyObject *rv = NULL;
+
+    EXC_IF_CURS_CLOSED(self);
+    if (_psyco_curs_prefetch(self) < 0) return NULL;
+    EXC_IF_NO_TUPLES(self);
+
+    if (self->qname != NULL) {
+        char buffer[128];
+
+        EXC_IF_NO_MARK(self);
+        EXC_IF_ASYNC_IN_PROGRESS(self, fetchall);
+        EXC_IF_TPC_PREPARED(self->conn, fetchall);
+        PyOS_snprintf(buffer, sizeof(buffer), "FETCH FORWARD ALL FROM %s", self->qname);
+        if (pq_execute(self, buffer, 0, 0, self->withhold) == -1) { goto exit; }
+        if (_psyco_curs_prefetch(self) < 0) { goto exit; }
+    }
+
+    size = self->rowcount - self->row;
+
+    if (size <= 0) {
+        rv = PyList_New(0);
+        goto exit;
+    }
+
+    if (!(list = PyList_New(size))) { goto exit; }
+
+    for (i = 0; i < size; i++) {
+        row = _psyco_curs_buildrow(self, self->row);
+        self->row++;
+        if (row == NULL) { goto exit; }
+
+        PyList_SET_ITEM(list, i, row);
+    }
+    row = NULL;
+
+    /* if the query was async aggresively free pgres, to allow
+       successive requests to reallocate it */
+    if (self->row >= self->rowcount
+        && self->conn->async_cursor
+        && psyco_weakref_get_object(self->conn->async_cursor) == (PyObject*)self)
+        CLEARPGRES(self->pgres);
+
+    /* success */
+    rv = list;
+    list = NULL;
+
+exit:
+    Py_XDECREF(list);
+    Py_XDECREF(row);
+
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def fetchall(self) -> list:"
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.fetchmany"
+module_name = "psycopg2.extensions"
+function_name = "fetchmany"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 846, column 1>"
+source_text = """
+static PyObject *
+curs_fetchmany(cursorObject *self, PyObject *args, PyObject *kwords)
+{
+    int i;
+    PyObject *list = NULL;
+    PyObject *row = NULL;
+    PyObject *rv = NULL;
+
+    PyObject *pysize = NULL;
+    long int size = self->arraysize;
+    static char *kwlist[] = {"size", NULL};
+
+    /* allow passing None instead of omitting the *size* argument,
+     * or using the method from subclasses would be a problem */
+    if (!PyArg_ParseTupleAndKeywords(args, kwords, "|O", kwlist, &pysize)) {
+        return NULL;
+    }
+
+    if (pysize && pysize != Py_None) {
+        size = PyInt_AsLong(pysize);
+        if (size == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+    }
+
+    EXC_IF_CURS_CLOSED(self);
+    if (_psyco_curs_prefetch(self) < 0) return NULL;
+    EXC_IF_NO_TUPLES(self);
+
+    if (self->qname != NULL) {
+        char buffer[128];
+
+        EXC_IF_NO_MARK(self);
+        EXC_IF_ASYNC_IN_PROGRESS(self, fetchmany);
+        EXC_IF_TPC_PREPARED(self->conn, fetchone);
+        PyOS_snprintf(buffer, sizeof(buffer), "FETCH FORWARD %d FROM %s",
+            (int)size, self->qname);
+        if (pq_execute(self, buffer, 0, 0, self->withhold) == -1) { goto exit; }
+        if (_psyco_curs_prefetch(self) < 0) { goto exit; }
+    }
+
+    /* make sure size is not > than the available number of rows */
+    if (size > self->rowcount - self->row || size < 0) {
+        size = self->rowcount - self->row;
+    }
+
+    Dprintf("curs_fetchmany: size = %ld", size);
+
+    if (size <= 0) {
+        rv = PyList_New(0);
+        goto exit;
+    }
+
+    if (!(list = PyList_New(size))) { goto exit; }
+
+    for (i = 0; i < size; i++) {
+        row = _psyco_curs_buildrow(self, self->row);
+        self->row++;
+
+        if (row == NULL) { goto exit; }
+
+        PyList_SET_ITEM(list, i, row);
+    }
+    row = NULL;
+
+    /* if the query was async aggresively free pgres, to allow
+       successive requests to reallocate it */
+    if (self->row >= self->rowcount
+        && self->conn->async_cursor
+        && psyco_weakref_get_object(self->conn->async_cursor) == (PyObject*)self)
+        CLEARPGRES(self->pgres);
+
+    /* success */
+    rv = list;
+    list = NULL;
+
+exit:
+    Py_XDECREF(list);
+    Py_XDECREF(row);
+
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def fetchmany(
+    self,
+    size: object = ...,
+) -> list:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.fetchone"
+module_name = "psycopg2.extensions"
+function_name = "fetchone"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 748, column 1>"
+source_text = """
+static PyObject *
+curs_fetchone(cursorObject *self, PyObject *dummy)
+{
+    PyObject *res;
+
+    EXC_IF_CURS_CLOSED(self);
+    if (_psyco_curs_prefetch(self) < 0) return NULL;
+    EXC_IF_NO_TUPLES(self);
+
+    if (self->qname != NULL) {
+        char buffer[128];
+
+        EXC_IF_NO_MARK(self);
+        EXC_IF_ASYNC_IN_PROGRESS(self, fetchone);
+        EXC_IF_TPC_PREPARED(self->conn, fetchone);
+        PyOS_snprintf(buffer, sizeof(buffer), "FETCH FORWARD 1 FROM %s", self->qname);
+        if (pq_execute(self, buffer, 0, 0, self->withhold) == -1) return NULL;
+        if (_psyco_curs_prefetch(self) < 0) return NULL;
+    }
+
+    Dprintf("curs_fetchone: fetching row %ld", self->row);
+    Dprintf("curs_fetchone: rowcount = %ld", self->rowcount);
+
+    if (self->row >= self->rowcount) {
+        /* we exhausted available data: return None */
+        Py_RETURN_NONE;
+    }
+
+    res = _psyco_curs_buildrow(self, self->row);
+    self->row++; /* move the counter to next line */
+
+    /* if the query was async aggresively free pgres, to allow
+       successive requests to reallocate it */
+    if (self->row >= self->rowcount
+        && self->conn->async_cursor
+        && psyco_weakref_get_object(self->conn->async_cursor) == (PyObject*)self)
+        CLEARPGRES(self->pgres);
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def fetchone(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.mogrify"
+module_name = "psycopg2.extensions"
+function_name = "mogrify"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 607, column 1>"
+source_text = """
+static PyObject *
+curs_mogrify(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    PyObject *vars = NULL, *operation = NULL;
+
+    static char *kwlist[] = {"query", "vars", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|O", kwlist,
+                                     &operation, &vars)) {
+        return NULL;
+    }
+
+    return _psyco_curs_mogrify(self, operation, vars);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def mogrify(
+    self,
+    query: object,
+    vars: object = ...,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.nextset"
+module_name = "psycopg2.extensions"
+function_name = "nextset"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1154, column 1>"
+source_text = """
+static PyObject *
+curs_nextset(cursorObject *self, PyObject *dummy)
+{
+    EXC_IF_CURS_CLOSED(self);
+
+    PyErr_SetString(NotSupportedError, "not supported by PostgreSQL");
+    return NULL;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def nextset(self) -> typing.Any:"
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.scroll"
+module_name = "psycopg2.extensions"
+function_name = "scroll"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1209, column 1>"
+source_text = """
+static PyObject *
+curs_scroll(cursorObject *self, PyObject *args, PyObject *kwargs)
+{
+    int value, newpos;
+    const char *mode = "relative";
+
+    static char *kwlist[] = {"value", "mode", NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "i|s",
+                                     kwlist, &value, &mode))
+        return NULL;
+
+    EXC_IF_CURS_CLOSED(self);
+
+    /* if the cursor is not named we have the full result set and we can do
+       our own calculations to scroll; else we just delegate the scrolling
+       to the MOVE SQL statement */
+    if (self->qname == NULL) {
+        if (strcmp(mode, "relative") == 0) {
+            newpos = self->row + value;
+        } else if (strcmp( mode, "absolute") == 0) {
+            newpos = value;
+        } else {
+            psyco_set_error(ProgrammingError, self,
+                "scroll mode must be 'relative' or 'absolute'");
+            return NULL;
+        }
+
+        if (newpos < 0 || newpos >= self->rowcount ) {
+            psyco_set_error(ProgrammingError, self,
+                             "scroll destination out of bounds");
+            return NULL;
+        }
+
+        self->row = newpos;
+    }
+
+    else {
+        char buffer[128];
+
+        EXC_IF_NO_MARK(self);
+        EXC_IF_ASYNC_IN_PROGRESS(self, scroll);
+        EXC_IF_TPC_PREPARED(self->conn, scroll);
+
+        if (strcmp(mode, "absolute") == 0) {
+            PyOS_snprintf(buffer, sizeof(buffer), "MOVE ABSOLUTE %d FROM %s",
+                value, self->qname);
+        }
+        else {
+            PyOS_snprintf(buffer, sizeof(buffer), "MOVE %d FROM %s", value, self->qname);
+        }
+        if (pq_execute(self, buffer, 0, 0, self->withhold) == -1) return NULL;
+        if (_psyco_curs_prefetch(self) < 0) return NULL;
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def scroll(
+    self,
+    value: int,
+    mode: str = 'relative',
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.setinputsizes"
+module_name = "psycopg2.extensions"
+function_name = "setinputsizes"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1170, column 1>"
+source_text = """
+static PyObject *
+curs_setinputsizes(cursorObject *self, PyObject *args)
+{
+    PyObject *sizes;
+
+    if (!PyArg_ParseTuple(args, "O", &sizes))
+        return NULL;
+
+    EXC_IF_CURS_CLOSED(self);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def setinputsizes(
+    self,
+    sizes: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:cursor.setoutputsize"
+module_name = "psycopg2.extensions"
+function_name = "setoutputsize"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "cursor"
+source_location = "<SourceLocation file 'psycopg/cursor_type.c', line 1190, column 1>"
+source_text = """
+static PyObject *
+curs_setoutputsize(cursorObject *self, PyObject *args)
+{
+    long int size, column;
+
+    if (!PyArg_ParseTuple(args, "l|l", &size, &column))
+        return NULL;
+
+    EXC_IF_CURS_CLOSED(self);
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def setoutputsize(
+    self,
+    size: int,
+    column: int = ...,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.close"
+module_name = "psycopg2.extensions"
+function_name = "close"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 47, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_close(lobjectObject *self, PyObject *args)
+{
+    /* file-like objects can be closed multiple times and remember that
+       closing the current transaction is equivalent to close all the
+       opened large objects */
+    if (!lobject_is_closed(self)
+        && !self->conn->autocommit
+        && self->conn->mark == self->mark)
+    {
+        Dprintf("psyco_lobj_close: closing lobject at %p", self);
+        if (lobject_close(self) < 0)
+            return NULL;
+    }
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def close(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.export"
+module_name = "psycopg2.extensions"
+function_name = "export"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 242, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_export(lobjectObject *self, PyObject *args)
+{
+    const char *filename;
+
+    if (!PyArg_ParseTuple(args, "s", &filename))
+        return NULL;
+
+    EXC_IF_LOBJ_LEVEL0(self);
+
+    if (lobject_export(self, filename) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def export(
+    self,
+    filename: str,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.read"
+module_name = "psycopg2.extensions"
+function_name = "read"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 120, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_read(lobjectObject *self, PyObject *args)
+{
+    PyObject *res;
+    Py_ssize_t where, end;
+    Py_ssize_t size = -1;
+    char *buffer;
+
+    if (!PyArg_ParseTuple(args, "|n",  &size)) return NULL;
+
+    EXC_IF_LOBJ_CLOSED(self);
+    EXC_IF_LOBJ_LEVEL0(self);
+    EXC_IF_LOBJ_UNMARKED(self);
+
+    if (size < 0) {
+        if ((where = lobject_tell(self)) < 0) return NULL;
+        if ((end = lobject_seek(self, 0, SEEK_END)) < 0) return NULL;
+        if (lobject_seek(self, where, SEEK_SET) < 0) return NULL;
+        size = end - where;
+    }
+
+    if ((buffer = PyMem_Malloc(size)) == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    if ((size = lobject_read(self, buffer, size)) < 0) {
+        PyMem_Free(buffer);
+        return NULL;
+    }
+
+    if (self->mode & LOBJECT_BINARY) {
+        res = Bytes_FromStringAndSize(buffer, size);
+    } else {
+        res = conn_decode(self->conn, buffer, size);
+    }
+    PyMem_Free(buffer);
+
+    return res;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def read(
+    self,
+    size: int = -1,
+    /,
+) -> typing.Any:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.seek"
+module_name = "psycopg2.extensions"
+function_name = "seek"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 165, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_seek(lobjectObject *self, PyObject *args)
+{
+    Py_ssize_t offset, pos=0;
+    int whence=0;
+
+    if (!PyArg_ParseTuple(args, "n|i", &offset, &whence))
+        return NULL;
+
+    EXC_IF_LOBJ_CLOSED(self);
+    EXC_IF_LOBJ_LEVEL0(self);
+    EXC_IF_LOBJ_UNMARKED(self);
+
+#ifdef HAVE_LO64
+    if ((offset < INT_MIN || offset > INT_MAX)
+            && self->conn->server_version < 90300) {
+        PyErr_Format(NotSupportedError,
+            "offset out of range (%ld): server version %d "
+            "does not support the lobject 64 API",
+            offset, self->conn->server_version);
+        return NULL;
+    }
+#else
+    if (offset < INT_MIN || offset > INT_MAX) {
+        PyErr_Format(InterfaceError,
+            "offset out of range (" FORMAT_CODE_PY_SSIZE_T "): "
+            "this psycopg version was not built with lobject 64 API support",
+            offset);
+        return NULL;
+    }
+#endif
+
+    if ((pos = lobject_seek(self, offset, whence)) < 0)
+        return NULL;
+
+    return PyInt_FromSsize_t(pos);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def seek(
+    self,
+    offset: int,
+    whence: int = 0,
+    /,
+) -> int:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.tell"
+module_name = "psycopg2.extensions"
+function_name = "tell"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 208, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_tell(lobjectObject *self, PyObject *args)
+{
+    Py_ssize_t pos;
+
+    EXC_IF_LOBJ_CLOSED(self);
+    EXC_IF_LOBJ_LEVEL0(self);
+    EXC_IF_LOBJ_UNMARKED(self);
+
+    if ((pos = lobject_tell(self)) < 0)
+        return NULL;
+
+    return PyInt_FromSsize_t(pos);
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def tell(self) -> int:"
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.truncate"
+module_name = "psycopg2.extensions"
+function_name = "truncate"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 268, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_truncate(lobjectObject *self, PyObject *args)
+{
+    Py_ssize_t len = 0;
+
+    if (!PyArg_ParseTuple(args, "|n", &len))
+        return NULL;
+
+    EXC_IF_LOBJ_CLOSED(self);
+    EXC_IF_LOBJ_LEVEL0(self);
+    EXC_IF_LOBJ_UNMARKED(self);
+
+#ifdef HAVE_LO64
+    if (len > INT_MAX && self->conn->server_version < 90300) {
+        PyErr_Format(NotSupportedError,
+            "len out of range (" FORMAT_CODE_PY_SSIZE_T "): "
+            "server version %d does not support the lobject 64 API",
+            len, self->conn->server_version);
+        return NULL;
+    }
+#else
+    if (len > INT_MAX) {
+        PyErr_Format(InterfaceError,
+            "len out of range (" FORMAT_CODE_PY_SSIZE_T "): "
+            "this psycopg version was not built with lobject 64 API support",
+            len);
+        return NULL;
+    }
+#endif
+
+    if (lobject_truncate(self, len) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def truncate(
+    self,
+    len: int = 0,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.unlink"
+module_name = "psycopg2.extensions"
+function_name = "unlink"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 228, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_unlink(lobjectObject *self, PyObject *args)
+{
+    if (lobject_unlink(self) < 0)
+        return NULL;
+
+    Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def unlink(self) -> None:"
+
+[[functions]]
+function_id = "psycopg2.extensions:lobject.write"
+module_name = "psycopg2.extensions"
+function_name = "write"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+class_name = "lobject"
+source_location = "<SourceLocation file 'psycopg/lobject_type.c', line 70, column 1>"
+source_text = """
+static PyObject *
+psyco_lobj_write(lobjectObject *self, PyObject *args)
+{
+    char *buffer;
+    Py_ssize_t len;
+    Py_ssize_t res;
+    PyObject *obj;
+    PyObject *data = NULL;
+    PyObject *rv = NULL;
+
+    if (!PyArg_ParseTuple(args, "O", &obj)) return NULL;
+
+    EXC_IF_LOBJ_CLOSED(self);
+    EXC_IF_LOBJ_LEVEL0(self);
+    EXC_IF_LOBJ_UNMARKED(self);
+
+    if (Bytes_Check(obj)) {
+        Py_INCREF(obj);
+        data = obj;
+    }
+    else if (PyUnicode_Check(obj)) {
+        if (!(data = conn_encode(self->conn, obj))) { goto exit; }
+    }
+    else {
+        PyErr_Format(PyExc_TypeError,
+            "lobject.write requires a string; got %s instead",
+            Py_TYPE(obj)->tp_name);
+        goto exit;
+    }
+
+    if (-1 == Bytes_AsStringAndSize(data, &buffer, &len)) {
+        goto exit;
+    }
+
+    if (0 > (res = lobject_write(self, buffer, (size_t)len))) {
+        goto exit;
+    }
+
+    rv = PyInt_FromSsize_t((Py_ssize_t)res);
+
+exit:
+    Py_XDECREF(data);
+    return rv;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def write(
+    self,
+    obj: str,
+    /,
+) -> int:"""

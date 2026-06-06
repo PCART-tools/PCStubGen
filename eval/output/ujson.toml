@@ -1,0 +1,920 @@
+[[functions]]
+function_id = "ujson:decode"
+module_name = "ujson"
+function_name = "decode"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file './src/ujson/python/JSONtoObj.c', line 165, column 11>"
+source_text = """
+PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *ret;
+  PyObject *sarg;
+  PyObject *arg;
+  JSONObjectDecoder decoder =
+  {
+    Object_newString,
+    Object_objectAddKey,
+    Object_arrayAddItem,
+    Object_newTrue,
+    Object_newFalse,
+    Object_newNull,
+    Object_newNaN,
+    Object_newPosInf,
+    Object_newNegInf,
+    Object_newObject,
+    Object_newArray,
+    Object_newInteger,
+    Object_newLong,
+    Object_newUnsignedLong,
+    Object_newIntegerFromString,
+    Object_newDouble,
+    Object_releaseObject,
+    PyObject_Malloc,
+    PyObject_Free,
+    PyObject_Realloc
+  };
+
+  decoder.prv = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", g_kwlist, &arg))
+  {
+      return NULL;
+  }
+
+  Py_buffer buffer;
+  size_t sarg_length;
+  char * raw;
+  bool is_bytes_like = !PyObject_GetBuffer(arg, &buffer, PyBUF_C_CONTIGUOUS);
+  if (is_bytes_like)
+  {
+    #ifdef PYPY_VERSION
+      // PyPy's buffer protocol implementation is buggy: https://foss.heptapod.net/pypy/pypy/-/issues/3872
+      if (!PyBytes_Check(arg) && !PyByteArray_Check(arg)) {
+        PyBuffer_Release(&buffer);
+        PyErr_Format(PyExc_TypeError, "Arbitrary bytes-like objects are not supported on PyPy, Use either string, bytes, or bytearray");
+        return NULL;
+      }
+    #endif
+    raw = buffer.buf;
+    sarg_length = buffer.len;
+  }
+  else
+  {
+    PyErr_Clear();
+    if (PyUnicode_Check(arg))
+    {
+      sarg = PyUnicode_AsEncodedString(arg, NULL, "surrogatepass");
+      if (sarg == NULL)
+      {
+        //Exception raised above us by codec according to docs
+        return NULL;
+      }
+      sarg_length = PyBytes_Size(sarg);
+      raw = PyBytes_AsString(sarg);
+    }
+    else
+    {
+      #ifdef PYPY_VERSION
+        PyErr_Format(PyExc_TypeError, "Expected string, bytes, or bytearray");
+      #else
+        PyErr_Format(PyExc_TypeError, "Expected string or C-contiguous bytes-like object");
+      #endif
+      return NULL;
+    }
+  }
+
+  decoder.errorStr = NULL;
+  decoder.errorOffset = NULL;
+
+  decoder.s2d = NULL;
+  dconv_s2d_init(&decoder.s2d, DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, "Infinity", "NaN");
+
+  ret = JSON_DecodeObject(&decoder, raw, sarg_length);
+
+  dconv_s2d_free(&decoder.s2d);
+
+  if (!is_bytes_like)
+  {
+    Py_DECREF(sarg);
+  }
+  else
+  {
+    PyBuffer_Release(&buffer);
+  }
+
+  // Check if a Python error occurred during decoding
+  if (PyErr_Occurred())
+  {
+    if (ret)
+    {
+        Py_DECREF( (PyObject *) ret);
+    }
+    return NULL;
+  }
+
+  if (decoder.errorStr)
+  {
+    /*
+    FIXME: It's possible to give a much nicer error message here with actual failing element in input etc*/
+
+    PyErr_Format (JSONDecodeError, "%s", decoder.errorStr);
+
+    if (ret)
+    {
+        Py_DECREF( (PyObject *) ret);
+    }
+
+    return NULL;
+  }
+
+  return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def decode(obj: collections.abc.Buffer | str) -> typing.Any:"
+
+[[functions]]
+function_id = "ujson:dump"
+module_name = "ujson"
+function_name = "dump"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file './src/ujson/python/objToJSON.c', line 880, column 11>"
+source_text = """
+PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *data;
+  PyObject *file;
+  PyObject *string;
+  PyObject *write;
+  PyObject *argtuple;
+  PyObject *write_result;
+
+  PRINTMARK();
+
+  if (!PyArg_ParseTuple (args, "OO", &data, &file))
+  {
+    return NULL;
+  }
+
+  if (!PyObject_HasAttrString (file, "write"))
+  {
+    PyErr_Format (PyExc_TypeError, "expected file");
+    return NULL;
+  }
+
+  write = PyObject_GetAttrString (file, "write");
+
+  if (!PyCallable_Check (write))
+  {
+    Py_XDECREF(write);
+    PyErr_Format (PyExc_TypeError, "expected file");
+    return NULL;
+  }
+
+  argtuple = PyTuple_Pack(1, data);
+
+  string = objToJSON (self, argtuple, kwargs);
+
+  if (string == NULL)
+  {
+    Py_XDECREF(write);
+    Py_XDECREF(argtuple);
+    return NULL;
+  }
+
+  Py_XDECREF(argtuple);
+
+  argtuple = PyTuple_Pack (1, string);
+  if (argtuple == NULL)
+  {
+    Py_XDECREF(write);
+    return NULL;
+  }
+
+  write_result = PyObject_CallObject (write, argtuple);
+  if (write_result == NULL)
+  {
+    Py_XDECREF(write);
+    Py_XDECREF(argtuple);
+    return NULL;
+  }
+
+  Py_DECREF(write_result);
+  Py_XDECREF(write);
+  Py_DECREF(argtuple);
+  Py_XDECREF(string);
+
+  PRINTMARK();
+
+  Py_RETURN_NONE;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def dump(
+    data: object,
+    file: object,
+    /,
+) -> None:"""
+
+[[functions]]
+function_id = "ujson:dumps"
+module_name = "ujson"
+function_name = "dumps"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file './src/ujson/python/objToJSON.c', line 660, column 11>"
+source_text = """
+PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  static char *kwlist[] = { "obj", "ensure_ascii", "encode_html_chars", "escape_forward_slashes", "sort_keys", "indent", "allow_nan", "reject_bytes", "default", "separators", NULL };
+
+  char buffer[65536];
+  char *ret;
+  const char *csNan = NULL, *csInf = NULL;
+  PyObject *newobj;
+  PyObject *oinput = NULL;
+  PyObject *oensureAscii = NULL;
+  PyObject *oencodeHTMLChars = NULL;
+  PyObject *oescapeForwardSlashes = NULL;
+  PyObject *osortKeys = NULL;
+  PyObject *odefaultFn = NULL;
+  PyObject *oseparators = NULL;
+  PyObject *oseparatorsItem = NULL;
+  PyObject *separatorsItemBytes = NULL;
+  PyObject *oseparatorsKey = NULL;
+  PyObject *separatorsKeyBytes = NULL;
+  int allowNan = -1;
+  int orejectBytes = -1;
+  int indent = 0;
+  size_t retLen;
+
+  JSONObjectEncoder encoder =
+  {
+    Object_beginTypeContext,
+    Object_endTypeContext,
+    Object_getStringValue,
+    Object_getLongValue,
+    Object_getUnsignedLongValue,
+    Object_getDoubleValue,
+    Object_iterNext,
+    Object_iterEnd,
+    Object_iterGetValue,
+    Object_iterGetName,
+    Object_releaseObject,
+    PyObject_Malloc,
+    PyObject_Realloc,
+    PyObject_Free,
+    -1, //recursionMax
+    1, //forceAscii
+    0, //encodeHTMLChars
+    1, //escapeForwardSlashes
+    0, //sortKeys
+    0, //indent
+    1, //allowNan
+    1, //rejectBytes
+    0, //itemSeparatorLength
+    NULL, //itemSeparatorChars
+    0, //keySeparatorLength
+    NULL, //keySeparatorChars
+    NULL, //prv
+  };
+
+
+  PRINTMARK();
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOiiiOO", kwlist, &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, &osortKeys, &indent, &allowNan, &orejectBytes, &odefaultFn, &oseparators))
+  {
+    return NULL;
+  }
+
+  if (oensureAscii != NULL && !PyObject_IsTrue(oensureAscii))
+  {
+    encoder.forceASCII = 0;
+  }
+
+  if (oencodeHTMLChars != NULL && PyObject_IsTrue(oencodeHTMLChars))
+  {
+    encoder.encodeHTMLChars = 1;
+  }
+
+  if (oescapeForwardSlashes != NULL && !PyObject_IsTrue(oescapeForwardSlashes))
+  {
+    encoder.escapeForwardSlashes = 0;
+  }
+
+  if (osortKeys != NULL && PyObject_IsTrue(osortKeys))
+  {
+    encoder.sortKeys = 1;
+  }
+
+  if (allowNan != -1)
+  {
+    encoder.allowNan = allowNan;
+  }
+
+  if (odefaultFn != NULL && odefaultFn != Py_None)
+  {
+    // Here use prv to store default function
+    encoder.prv = odefaultFn;
+  }
+
+  if (encoder.allowNan)
+  {
+    csInf = "Infinity";
+    csNan = "NaN";
+  }
+
+  if (orejectBytes != -1)
+  {
+    encoder.rejectBytes = orejectBytes;
+  }
+
+  if (indent < -1)
+  {
+    encoder.indent = -1;
+  }
+  else if (indent > 1000)
+  {
+    PyErr_SetString(PyExc_ValueError, "Maximum allowed indentation is 1000");
+    return NULL;
+  }
+  else {
+    encoder.indent = indent;
+  }
+
+  if (oseparators != NULL && oseparators != Py_None)
+  {
+    if (!PyTuple_Check(oseparators))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected tuple or None as separator");
+      return NULL;
+    }
+    if (PyTuple_GET_SIZE(oseparators) != 2)
+    {
+      PyErr_SetString(PyExc_ValueError, "expected tuple of size 2 as separator");
+      return NULL;
+    }
+    oseparatorsItem = PyTuple_GET_ITEM(oseparators, 0);
+    if (!PyUnicode_Check(oseparatorsItem))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected str as item separator");
+      return NULL;
+    }
+    oseparatorsKey = PyTuple_GET_ITEM(oseparators, 1);
+    if (!PyUnicode_Check(oseparatorsKey))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected str as key separator");
+      return NULL;
+    }
+    encoder.itemSeparatorChars = PyUnicodeToUTF8Raw(oseparatorsItem, &encoder.itemSeparatorLength, &separatorsItemBytes);
+    if (encoder.itemSeparatorChars == NULL)
+    {
+      PyErr_SetString(PyExc_ValueError, "item separator malformed");
+      goto ERROR;
+    }
+    encoder.keySeparatorChars = PyUnicodeToUTF8Raw(oseparatorsKey, &encoder.keySeparatorLength, &separatorsKeyBytes);
+    if (encoder.keySeparatorChars == NULL)
+    {
+      PyErr_SetString(PyExc_ValueError, "key separator malformed");
+      goto ERROR;
+    }
+  }
+  else
+  {
+    // Default to most compact representation
+    encoder.itemSeparatorChars = ",";
+    encoder.itemSeparatorLength = 1;
+    if (encoder.indent)
+    {
+      // Extra space when indentation is in use
+      encoder.keySeparatorChars = ": ";
+      encoder.keySeparatorLength = 2;
+    }
+    else
+    {
+      encoder.keySeparatorChars = ":";
+      encoder.keySeparatorLength = 1;
+    }
+  }
+
+  encoder.d2s = NULL;
+  dconv_d2s_init(&encoder.d2s, DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT | DCONV_D2S_EMIT_POSITIVE_EXPONENT_SIGN,
+                 csInf, csNan, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);
+
+  PRINTMARK();
+  ret = JSON_EncodeObject (oinput, &encoder, buffer, sizeof (buffer), &retLen);
+  PRINTMARK();
+
+  dconv_d2s_free(&encoder.d2s);
+  Py_XDECREF(separatorsItemBytes);
+  Py_XDECREF(separatorsKeyBytes);
+
+  if (encoder.errorMsg)
+  {
+    // If there is an error message and we don't already have a Python exception, set one.
+    if (!PyErr_Occurred())
+      PyErr_Format(PyExc_OverflowError, "%s", encoder.errorMsg);
+    return NULL;
+  }
+
+  if (PyErr_Occurred())
+  {
+    if (ret != buffer)
+    {
+      encoder.free (ret);
+    }
+
+    return NULL;
+  }
+
+  newobj = PyUnicode_DecodeUTF8(ret, retLen, "surrogatepass");
+
+  if (ret != buffer)
+  {
+    encoder.free (ret);
+  }
+
+  PRINTMARK();
+
+  return newobj;
+
+ERROR:
+  Py_XDECREF(separatorsItemBytes);
+  Py_XDECREF(separatorsKeyBytes);
+  return NULL;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def dumps(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:"""
+
+[[functions]]
+function_id = "ujson:encode"
+module_name = "ujson"
+function_name = "encode"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "success"
+source_location = "<SourceLocation file './src/ujson/python/objToJSON.c', line 660, column 11>"
+source_text = """
+PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  static char *kwlist[] = { "obj", "ensure_ascii", "encode_html_chars", "escape_forward_slashes", "sort_keys", "indent", "allow_nan", "reject_bytes", "default", "separators", NULL };
+
+  char buffer[65536];
+  char *ret;
+  const char *csNan = NULL, *csInf = NULL;
+  PyObject *newobj;
+  PyObject *oinput = NULL;
+  PyObject *oensureAscii = NULL;
+  PyObject *oencodeHTMLChars = NULL;
+  PyObject *oescapeForwardSlashes = NULL;
+  PyObject *osortKeys = NULL;
+  PyObject *odefaultFn = NULL;
+  PyObject *oseparators = NULL;
+  PyObject *oseparatorsItem = NULL;
+  PyObject *separatorsItemBytes = NULL;
+  PyObject *oseparatorsKey = NULL;
+  PyObject *separatorsKeyBytes = NULL;
+  int allowNan = -1;
+  int orejectBytes = -1;
+  int indent = 0;
+  size_t retLen;
+
+  JSONObjectEncoder encoder =
+  {
+    Object_beginTypeContext,
+    Object_endTypeContext,
+    Object_getStringValue,
+    Object_getLongValue,
+    Object_getUnsignedLongValue,
+    Object_getDoubleValue,
+    Object_iterNext,
+    Object_iterEnd,
+    Object_iterGetValue,
+    Object_iterGetName,
+    Object_releaseObject,
+    PyObject_Malloc,
+    PyObject_Realloc,
+    PyObject_Free,
+    -1, //recursionMax
+    1, //forceAscii
+    0, //encodeHTMLChars
+    1, //escapeForwardSlashes
+    0, //sortKeys
+    0, //indent
+    1, //allowNan
+    1, //rejectBytes
+    0, //itemSeparatorLength
+    NULL, //itemSeparatorChars
+    0, //keySeparatorLength
+    NULL, //keySeparatorChars
+    NULL, //prv
+  };
+
+
+  PRINTMARK();
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O|OOOOiiiOO", kwlist, &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, &osortKeys, &indent, &allowNan, &orejectBytes, &odefaultFn, &oseparators))
+  {
+    return NULL;
+  }
+
+  if (oensureAscii != NULL && !PyObject_IsTrue(oensureAscii))
+  {
+    encoder.forceASCII = 0;
+  }
+
+  if (oencodeHTMLChars != NULL && PyObject_IsTrue(oencodeHTMLChars))
+  {
+    encoder.encodeHTMLChars = 1;
+  }
+
+  if (oescapeForwardSlashes != NULL && !PyObject_IsTrue(oescapeForwardSlashes))
+  {
+    encoder.escapeForwardSlashes = 0;
+  }
+
+  if (osortKeys != NULL && PyObject_IsTrue(osortKeys))
+  {
+    encoder.sortKeys = 1;
+  }
+
+  if (allowNan != -1)
+  {
+    encoder.allowNan = allowNan;
+  }
+
+  if (odefaultFn != NULL && odefaultFn != Py_None)
+  {
+    // Here use prv to store default function
+    encoder.prv = odefaultFn;
+  }
+
+  if (encoder.allowNan)
+  {
+    csInf = "Infinity";
+    csNan = "NaN";
+  }
+
+  if (orejectBytes != -1)
+  {
+    encoder.rejectBytes = orejectBytes;
+  }
+
+  if (indent < -1)
+  {
+    encoder.indent = -1;
+  }
+  else if (indent > 1000)
+  {
+    PyErr_SetString(PyExc_ValueError, "Maximum allowed indentation is 1000");
+    return NULL;
+  }
+  else {
+    encoder.indent = indent;
+  }
+
+  if (oseparators != NULL && oseparators != Py_None)
+  {
+    if (!PyTuple_Check(oseparators))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected tuple or None as separator");
+      return NULL;
+    }
+    if (PyTuple_GET_SIZE(oseparators) != 2)
+    {
+      PyErr_SetString(PyExc_ValueError, "expected tuple of size 2 as separator");
+      return NULL;
+    }
+    oseparatorsItem = PyTuple_GET_ITEM(oseparators, 0);
+    if (!PyUnicode_Check(oseparatorsItem))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected str as item separator");
+      return NULL;
+    }
+    oseparatorsKey = PyTuple_GET_ITEM(oseparators, 1);
+    if (!PyUnicode_Check(oseparatorsKey))
+    {
+      PyErr_SetString(PyExc_TypeError, "expected str as key separator");
+      return NULL;
+    }
+    encoder.itemSeparatorChars = PyUnicodeToUTF8Raw(oseparatorsItem, &encoder.itemSeparatorLength, &separatorsItemBytes);
+    if (encoder.itemSeparatorChars == NULL)
+    {
+      PyErr_SetString(PyExc_ValueError, "item separator malformed");
+      goto ERROR;
+    }
+    encoder.keySeparatorChars = PyUnicodeToUTF8Raw(oseparatorsKey, &encoder.keySeparatorLength, &separatorsKeyBytes);
+    if (encoder.keySeparatorChars == NULL)
+    {
+      PyErr_SetString(PyExc_ValueError, "key separator malformed");
+      goto ERROR;
+    }
+  }
+  else
+  {
+    // Default to most compact representation
+    encoder.itemSeparatorChars = ",";
+    encoder.itemSeparatorLength = 1;
+    if (encoder.indent)
+    {
+      // Extra space when indentation is in use
+      encoder.keySeparatorChars = ": ";
+      encoder.keySeparatorLength = 2;
+    }
+    else
+    {
+      encoder.keySeparatorChars = ":";
+      encoder.keySeparatorLength = 1;
+    }
+  }
+
+  encoder.d2s = NULL;
+  dconv_d2s_init(&encoder.d2s, DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT | DCONV_D2S_EMIT_POSITIVE_EXPONENT_SIGN,
+                 csInf, csNan, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);
+
+  PRINTMARK();
+  ret = JSON_EncodeObject (oinput, &encoder, buffer, sizeof (buffer), &retLen);
+  PRINTMARK();
+
+  dconv_d2s_free(&encoder.d2s);
+  Py_XDECREF(separatorsItemBytes);
+  Py_XDECREF(separatorsKeyBytes);
+
+  if (encoder.errorMsg)
+  {
+    // If there is an error message and we don't already have a Python exception, set one.
+    if (!PyErr_Occurred())
+      PyErr_Format(PyExc_OverflowError, "%s", encoder.errorMsg);
+    return NULL;
+  }
+
+  if (PyErr_Occurred())
+  {
+    if (ret != buffer)
+    {
+      encoder.free (ret);
+    }
+
+    return NULL;
+  }
+
+  newobj = PyUnicode_DecodeUTF8(ret, retLen, "surrogatepass");
+
+  if (ret != buffer)
+  {
+    encoder.free (ret);
+  }
+
+  PRINTMARK();
+
+  return newobj;
+
+ERROR:
+  Py_XDECREF(separatorsItemBytes);
+  Py_XDECREF(separatorsKeyBytes);
+  return NULL;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = """
+def encode(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:"""
+
+[[functions]]
+function_id = "ujson:load"
+module_name = "ujson"
+function_name = "load"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file './src/ujson/python/JSONtoObj.c', line 290, column 11>"
+source_text = """
+PyObject* JSONFileToObj(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *read;
+  PyObject *string;
+  PyObject *result;
+  PyObject *file = NULL;
+  PyObject *argtuple;
+
+  if (!PyArg_ParseTuple (args, "O", &file))
+  {
+    return NULL;
+  }
+
+  if (!PyObject_HasAttrString (file, "read"))
+  {
+    PyErr_Format (PyExc_TypeError, "expected file");
+    return NULL;
+  }
+
+  read = PyObject_GetAttrString (file, "read");
+
+  if (!PyCallable_Check (read)) {
+    Py_XDECREF(read);
+    PyErr_Format (PyExc_TypeError, "expected file");
+    return NULL;
+  }
+
+  string = PyObject_CallObject (read, NULL);
+  Py_XDECREF(read);
+
+  if (string == NULL)
+  {
+    return NULL;
+  }
+
+  argtuple = PyTuple_Pack(1, string);
+
+  result = JSONToObj (self, argtuple, kwargs);
+
+  Py_XDECREF(argtuple);
+  Py_XDECREF(string);
+
+  if (result == NULL) {
+    return NULL;
+  }
+
+  return result;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def load(file: object, /) -> typing.Any:"
+
+[[functions]]
+function_id = "ujson:loads"
+module_name = "ujson"
+function_name = "loads"
+provider = "c_extension"
+mapping_status = "success"
+parameter_inference_status = "success"
+return_inference_status = "failed"
+source_location = "<SourceLocation file './src/ujson/python/JSONtoObj.c', line 165, column 11>"
+source_text = """
+PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)
+{
+  PyObject *ret;
+  PyObject *sarg;
+  PyObject *arg;
+  JSONObjectDecoder decoder =
+  {
+    Object_newString,
+    Object_objectAddKey,
+    Object_arrayAddItem,
+    Object_newTrue,
+    Object_newFalse,
+    Object_newNull,
+    Object_newNaN,
+    Object_newPosInf,
+    Object_newNegInf,
+    Object_newObject,
+    Object_newArray,
+    Object_newInteger,
+    Object_newLong,
+    Object_newUnsignedLong,
+    Object_newIntegerFromString,
+    Object_newDouble,
+    Object_releaseObject,
+    PyObject_Malloc,
+    PyObject_Free,
+    PyObject_Realloc
+  };
+
+  decoder.prv = NULL;
+
+  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", g_kwlist, &arg))
+  {
+      return NULL;
+  }
+
+  Py_buffer buffer;
+  size_t sarg_length;
+  char * raw;
+  bool is_bytes_like = !PyObject_GetBuffer(arg, &buffer, PyBUF_C_CONTIGUOUS);
+  if (is_bytes_like)
+  {
+    #ifdef PYPY_VERSION
+      // PyPy's buffer protocol implementation is buggy: https://foss.heptapod.net/pypy/pypy/-/issues/3872
+      if (!PyBytes_Check(arg) && !PyByteArray_Check(arg)) {
+        PyBuffer_Release(&buffer);
+        PyErr_Format(PyExc_TypeError, "Arbitrary bytes-like objects are not supported on PyPy, Use either string, bytes, or bytearray");
+        return NULL;
+      }
+    #endif
+    raw = buffer.buf;
+    sarg_length = buffer.len;
+  }
+  else
+  {
+    PyErr_Clear();
+    if (PyUnicode_Check(arg))
+    {
+      sarg = PyUnicode_AsEncodedString(arg, NULL, "surrogatepass");
+      if (sarg == NULL)
+      {
+        //Exception raised above us by codec according to docs
+        return NULL;
+      }
+      sarg_length = PyBytes_Size(sarg);
+      raw = PyBytes_AsString(sarg);
+    }
+    else
+    {
+      #ifdef PYPY_VERSION
+        PyErr_Format(PyExc_TypeError, "Expected string, bytes, or bytearray");
+      #else
+        PyErr_Format(PyExc_TypeError, "Expected string or C-contiguous bytes-like object");
+      #endif
+      return NULL;
+    }
+  }
+
+  decoder.errorStr = NULL;
+  decoder.errorOffset = NULL;
+
+  decoder.s2d = NULL;
+  dconv_s2d_init(&decoder.s2d, DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, "Infinity", "NaN");
+
+  ret = JSON_DecodeObject(&decoder, raw, sarg_length);
+
+  dconv_s2d_free(&decoder.s2d);
+
+  if (!is_bytes_like)
+  {
+    Py_DECREF(sarg);
+  }
+  else
+  {
+    PyBuffer_Release(&buffer);
+  }
+
+  // Check if a Python error occurred during decoding
+  if (PyErr_Occurred())
+  {
+    if (ret)
+    {
+        Py_DECREF( (PyObject *) ret);
+    }
+    return NULL;
+  }
+
+  if (decoder.errorStr)
+  {
+    /*
+    FIXME: It's possible to give a much nicer error message here with actual failing element in input etc*/
+
+    PyErr_Format (JSONDecodeError, "%s", decoder.errorStr);
+
+    if (ret)
+    {
+        Py_DECREF( (PyObject *) ret);
+    }
+
+    return NULL;
+  }
+
+  return ret;
+}"""
+
+[[functions.signatures]]
+signature_index = 0
+signature = "def loads(obj: collections.abc.Buffer | str) -> typing.Any:"

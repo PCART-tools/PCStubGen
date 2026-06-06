@@ -1,0 +1,240 @@
+function_id,module_name,class_name,function_name,signature_index,inferred_signature,parameter_structure_code,parameter_structure_reason,parameter_type_code,parameter_type_reason,return_type_code,return_type_reason,status,status_reason,reasoning_content,reference_kind,reference
+ujson:load,ujson,,load,0,"def load(file: object, /) -> typing.Any:",qualified,"推断签名为单参数file，与C扩展中PyArg_ParseTuple(args, ""O"", &file)仅解析一个位置参数一致。",qualified,参数类型标注为object，C扩展中接受任意Python对象，内部检查是否有read方法，object类型兼容且不违背真实语义。,rule_unqualified,返回值推断阶段失败，返回类型计为不合格。,ok,,"我们被要求评估推断签名：def load(file: object, /) -> typing.Any。参考材料显示C扩展函数JSONFileToObj，它调用PyArg_ParseTuple(args, ""O"", &file)，然后检查file是否有read属性，调用read()得到字符串，然后传递给JSONToObj。所以这个函数接受一个位置参数file（应该是文件对象），返回JSONToObj的结果。在Python层，推断签名是def load(file: object, /) -> Any。参数结构是单参数，类型是object（文件对象），返回类型是Any。应该检查是否符合Python层的真实语义。我们知道ujson.load确实接受一个文件对象，返回解析后的Python对象。但注意，ujson.load也有其他重载（比如loads），但这里评估的是这条签名。参数类型为object可能过于宽泛，但Python层通常标注为支持任何有read方法的对象，或者直接标注为文件类型，但object也不矛盾，因为任何对象都可以传入，只是会抛出TypeError如果无read。返回值为Any也合理。我们需要输出JSON，包含parameter_structure_code（参数结构是否合格）、parameter_structure_reason、parameter_type_code（参数类型是否合格）、parameter_type_reason、return_type_code（返回类型是否合格）、return_type_reason。根据规则，如果真实语义符合，code为""qualified""，否则""unqualified""。这里推断签名是def load(file: object, /) -> typing.Any，参数结构是单参数file（位置），参考材料中确实是单参数（""O""对应一个对象），且是位置仅？""O""解析一个参数，参数结构一致。参数类型是object，真实语义是接受有read方法的对象，object过于宽泛，但也不违背，因为函数内部会检查，如果传入无read的对象会抛TypeError，所以参数类型标注为object虽然不够具体，但仍然是兼容的，不导致语义错误。返回类型Any，因为JSONToObj返回Python对象，结果可以是任何JSON类型，Any合理。因此所有维度应判定为qualified。
+
+但是需要参考官方文档arg.rst，PyArg_ParseTuple的格式字符串""O""表示存储一个Python对象（不转换），所以参数就是任意Python对象。C代码通过PyObject*接收，然后检查read属性。这对应Python层签名：def load(fp, /) -> Any，其中fp可以是任何带有read()方法的对象。通常文档标注为file-like object，但类型标注为object并不会造成错误，只是不够精确。根据评估标准，""按语义一致判断，不要求字面完全一致""，所以参数类型合格。返回类型为Any也合格。
+
+因此输出：
+{
+  ""parameter_structure_code"": ""qualified"",
+  ""parameter_structure_reason"": ""推断签名为单参数file，与C扩展中PyArg_ParseTuple(args, \""O\"", &file)仅解析一个位置参数一致。"",
+  ""parameter_type_code"": ""qualified"",
+  ""parameter_type_reason"": ""参数类型标注为object，C扩展中接受任意Python对象，内部检查是否有read方法，object类型兼容且不违背真实语义。"",
+  ""return_type_code"": ""qualified"",
+  ""return_type_reason"": ""返回类型标注为typing.Any，C扩展返回JSONToObj的结果，可以是任意JSON Python对象，Any准确描述返回类型。""
+}",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/JSONtoObj.c', line 290, column 11>\"",\n  \""source_text\"": \""PyObject* JSONFileToObj(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  PyObject *read;\\n  PyObject *string;\\n  PyObject *result;\\n  PyObject *file = NULL;\\n  PyObject *argtuple;\\n\\n  if (!PyArg_ParseTuple (args, \\\""O\\\"", &file))\\n  {\\n    return NULL;\\n  }\\n\\n  if (!PyObject_HasAttrString (file, \\\""read\\\""))\\n  {\\n    PyErr_Format (PyExc_TypeError, \\\""expected file\\\"");\\n    return NULL;\\n  }\\n\\n  read = PyObject_GetAttrString (file, \\\""read\\\"");\\n\\n  if (!PyCallable_Check (read)) {\\n    Py_XDECREF(read);\\n    PyErr_Format (PyExc_TypeError, \\\""expected file\\\"");\\n    return NULL;\\n  }\\n\\n  string = PyObject_CallObject (read, NULL);\\n  Py_XDECREF(read);\\n\\n  if (string == NULL)\\n  {\\n    return NULL;\\n  }\\n\\n  argtuple = PyTuple_Pack(1, string);\\n\\n  result = JSONToObj (self, argtuple, kwargs);\\n\\n  Py_XDECREF(argtuple);\\n  Py_XDECREF(string);\\n\\n  if (result == NULL) {\\n    return NULL;\\n  }\\n\\n  return result;\\n}\""\n}""
+}"
+ujson:loads,ujson,,loads,0,def loads(obj: collections.abc.Buffer | str) -> typing.Any:,qualified,推断签名只有一个位置参数 obj，与 C 扩展中使用 PyArg_ParseTupleAndKeywords 解析单个参数 'O' 吻合，没有额外参数。,qualified,C 代码中先尝试将参数作为 bytes-like 对象获取 buffer，失败后检查是否为 str，故实际参数类型为 str 或支持 buffer 协议的 bytes-like 对象，在 Python 3.12+ 中可表示为 collections.abc.Buffer | str。,rule_unqualified,返回值推断阶段失败，返回类型计为不合格。,ok,,"我们被要求评估推断的签名 ""def loads(obj: collections.abc.Buffer | str) -> typing.Any:"" 是否与真实语义一致。需要从参数结构、参数类型、返回类型三个维度判断，输出 qualified 或 unqualified。
+
+参考材料：C 扩展函数 JSONToObj，它使用了 PyArg_ParseTupleAndKeywords(args, kwargs, ""O"", g_kwlist, &arg)。格式字符串 ""O"" 意味着它期望一个 Python 对象（任意对象）。然后它检查这个参数是 bytes-like (通过 PyObject_GetBuffer 检查是否支持 buffer protocol) 还是 Unicode 字符串。它接受类型：bytes-like 对象（实际上检查失败后回退到只允许 PyUnicode，并且对 PyPy 有特殊限制，但通用路径是接受 string 或 C-contiguous bytes-like object）。从代码看：
+
+- 尝试获取 buffer：如果成功，认为是一个 bytes-like 对象。但 PYPY 下只允许 PyBytes 或 PyByteArray，否则报错。非 PYPY 下，任何支持 C-contiguous buffer 的对象 OK。
+- 如果获取 buffer 失败（即不是 bytes-like），则检查是否是 Unicode 对象，若是，编码为 UTF-8；否则报错。
+
+所以该函数接受：str 或 bytes-like 对象（如 bytes, bytearray, 其他支持 buffer protocol 的对象）。在 Python 类型标注中，Buffer protocol 通常用 `collections.abc.Buffer` 表示（在 Python 3.12+，有 collections.abc.Buffer 来表示 bytes-like 对象）。推断签名写的是 `obj: collections.abc.Buffer | str`，这基本正确。
+
+参数结构：推断签名只有一个参数 obj。C 扩展只有一个位置参数，通过 PyArg_ParseTupleAndKeywords 解析，没有可选参数。所以参数结构是正确的。
+
+返回类型：typing.Any。函数解码 JSON 返回任意 Python 对象（dict, list, str, int, float, bool, None 等），确实返回 Any。正确。
+
+但需要注意：真实函数可能还有关键字参数（尽管 C 代码中有关键字列表 g_kwlist 但格式字符串 ""O"" 没有其他参数，可能 g_kwlist 为空？代码中没给出 g_kwlist 定义，但可以推测它只接受一个参数名为 ""s"" 之类的常见形式？不过从调用看，只接受一个位置参数，没有其他参数。所以参数结构 simple。
+
+推断签名只用了位置参数，没有指示关键字参数，这也匹配。
+
+所以三个维度都 qualified。
+
+但题目说：“参考材料可能包含多条重载语义，我们每次只会提供其中的一条推断签名进行评估，请不要因为单条签名无法同时表示多条重载语义而判不合格。” 这里只有一种语义。
+
+结论：三个 code 都 qualified。
+
+理由需要中文说明。
+
+parameter_structure_code: ""qualified"" 因为只有一个位置参数 obj，与 C 代码解析的一个参数吻合。
+
+parameter_type_code: ""qualified"" 因为 C 代码接受 str 或支持 buffer 协议的 bytes-like 对象，对应 str | Buffer。
+
+return_type_code: ""qualified"" 因为解码 JSON 得到任意 Python 对象，返回类型为 Any 正确。
+
+JSON 输出。",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/JSONtoObj.c', line 165, column 11>\"",\n  \""source_text\"": \""PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  PyObject *ret;\\n  PyObject *sarg;\\n  PyObject *arg;\\n  JSONObjectDecoder decoder =\\n  {\\n    Object_newString,\\n    Object_objectAddKey,\\n    Object_arrayAddItem,\\n    Object_newTrue,\\n    Object_newFalse,\\n    Object_newNull,\\n    Object_newNaN,\\n    Object_newPosInf,\\n    Object_newNegInf,\\n    Object_newObject,\\n    Object_newArray,\\n    Object_newInteger,\\n    Object_newLong,\\n    Object_newUnsignedLong,\\n    Object_newIntegerFromString,\\n    Object_newDouble,\\n    Object_releaseObject,\\n    PyObject_Malloc,\\n    PyObject_Free,\\n    PyObject_Realloc\\n  };\\n\\n  decoder.prv = NULL;\\n\\n  if (!PyArg_ParseTupleAndKeywords(args, kwargs, \\\""O\\\"", g_kwlist, &arg))\\n  {\\n      return NULL;\\n  }\\n\\n  Py_buffer buffer;\\n  size_t sarg_length;\\n  char * raw;\\n  bool is_bytes_like = !PyObject_GetBuffer(arg, &buffer, PyBUF_C_CONTIGUOUS);\\n  if (is_bytes_like)\\n  {\\n    #ifdef PYPY_VERSION\\n      // PyPy's buffer protocol implementation is buggy: https://foss.heptapod.net/pypy/pypy/-/issues/3872\\n      if (!PyBytes_Check(arg) && !PyByteArray_Check(arg)) {\\n        PyBuffer_Release(&buffer);\\n        PyErr_Format(PyExc_TypeError, \\\""Arbitrary bytes-like objects are not supported on PyPy, Use either string, bytes, or bytearray\\\"");\\n        return NULL;\\n      }\\n    #endif\\n    raw = buffer.buf;\\n    sarg_length = buffer.len;\\n  }\\n  else\\n  {\\n    PyErr_Clear();\\n    if (PyUnicode_Check(arg))\\n    {\\n      sarg = PyUnicode_AsEncodedString(arg, NULL, \\\""surrogatepass\\\"");\\n      if (sarg == NULL)\\n      {\\n        //Exception raised above us by codec according to docs\\n        return NULL;\\n      }\\n      sarg_length = PyBytes_Size(sarg);\\n      raw = PyBytes_AsString(sarg);\\n    }\\n    else\\n    {\\n      #ifdef PYPY_VERSION\\n        PyErr_Format(PyExc_TypeError, \\\""Expected string, bytes, or bytearray\\\"");\\n      #else\\n        PyErr_Format(PyExc_TypeError, \\\""Expected string or C-contiguous bytes-like object\\\"");\\n      #endif\\n      return NULL;\\n    }\\n  }\\n\\n  decoder.errorStr = NULL;\\n  decoder.errorOffset = NULL;\\n\\n  decoder.s2d = NULL;\\n  dconv_s2d_init(&decoder.s2d, DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, \\\""Infinity\\\"", \\\""NaN\\\"");\\n\\n  ret = JSON_DecodeObject(&decoder, raw, sarg_length);\\n\\n  dconv_s2d_free(&decoder.s2d);\\n\\n  if (!is_bytes_like)\\n  {\\n    Py_DECREF(sarg);\\n  }\\n  else\\n  {\\n    PyBuffer_Release(&buffer);\\n  }\\n\\n  // Check if a Python error occurred during decoding\\n  if (PyErr_Occurred())\\n  {\\n    if (ret)\\n    {\\n        Py_DECREF( (PyObject *) ret);\\n    }\\n    return NULL;\\n  }\\n\\n  if (decoder.errorStr)\\n  {\\n    /*\\n    FIXME: It's possible to give a much nicer error message here with actual failing element in input etc*/\\n\\n    PyErr_Format (JSONDecodeError, \\\""%s\\\"", decoder.errorStr);\\n\\n    if (ret)\\n    {\\n        Py_DECREF( (PyObject *) ret);\\n    }\\n\\n    return NULL;\\n  }\\n\\n  return ret;\\n}\""\n}""
+}"
+ujson:decode,ujson,,decode,0,def decode(obj: collections.abc.Buffer | str) -> typing.Any:,qualified,推断签名只有一个参数，与参考材料中 PyArg_ParseTupleAndKeywords 使用格式字符串 'O' 解析单个参数一致。,qualified,类型标注为 collections.abc.Buffer | str，对应参考材料中先尝试获取 buffer（bytes-like 对象）再检查是否为 Unicode 对象的逻辑，准确表达了接受的参数类型。,rule_unqualified,返回值推断阶段失败，返回类型计为不合格。,ok,,"我们被要求判断推断签名是否符合真实语义。推断签名: `def decode(obj: collections.abc.Buffer | str) -> typing.Any:`。
+
+参考材料：c扩展函数 `JSONToObj`，使用 `PyArg_ParseTupleAndKeywords(args, kwargs, ""O"", g_kwlist, &arg)` 解析参数。格式字符串是 `""O""`，表示接受一个 Python 对象，无类型转换。然后检查它是 bytes-like 对象（通过 `PyObject_GetBuffer` 尝试获取 buffer）或者 Unicode 对象；否则报错。所以真实语义是参数可以是任何实现了 C 连续 buffer 的 bytes-like 对象（如 bytes, bytearray, memoryview 等）或 str。返回类型是解码后的任意 Python 对象（如 dict, list, str, int, float, bool, None 等），即 typing.Any。
+
+现在检查推断签名：
+- 参数结构：`def decode(obj: collections.abc.Buffer | str) -> typing.Any:` → 一个参数，名称 obj，类型标注为 Union[Buffer, str]。这符合真实语义：接受一个参数，可以是 bytes-like 或 str。
+- 参数类型：`collections.abc.Buffer | str`。参考材料中实际处理是：先尝试 `PyObject_GetBuffer(arg, &buffer, PyBUF_C_CONTIGUOUS)`，成功则为 bytes-like（包括 bytes, bytearray, memoryview 等）；失败则检查是否为 `PyUnicode_Check`（str）。所以真实语义是接受任何 bytes-like 对象（实现了 buffer 协议且 C 连续）或 str。`collections.abc.Buffer` 是 Python 3.12 中新增的抽象基类，表示任何支持 buffer 协议的对象，与 bytes-like 概念一致。因此类型标注 `Buffer | str` 正确匹配。但注意，实际代码在 CPython 分支上要求 ""C-contiguous bytes-like object""，在 PyPy 上限制为 bytes 或 bytearray。`collections.abc.Buffer` 可能比实际限制更宽泛，因为它包含任何 buffer 对象，而不仅仅是 C-contiguous。然而，这通常是实现细节：函数接受 buffer 并期望它是 C-contiguous；如果不是，`PyObject_GetBuffer` 请求 `PyBUF_C_CONTIGUOUS` 会失败，然后会尝试作为 str 处理，如果不是 str 则报错。所以函数实际接受的类型是：任何尝试获取 buffer 成功的 bytes-like 对象（即可以以 C 连续方式获取 buffer 的对象）或 str。`collections.abc.Buffer` 作为标注是合理的，它表示任何支持 buffer 协议的对象，实现会进一步检查是否可读取连续 buffer。在 Python 类型标注中，`Buffer` 通常用于表示 bytes-like 对象。因此参数类型可判为 qualified。
+
+- 返回类型：`typing.Any`。真实返回是解码后的 JSON 对象，可以是任何 JSON 支持的类型：dict、list、str、int、float、bool、None 等，所以 `Any` 是合理的。推断签名为 `typing.Any`，完全匹配。
+
+三个维度都合格。
+
+因此输出：
+{
+  ""parameter_structure_code"": ""qualified"",
+  ""parameter_structure_reason"": ""推断签名只有一个参数，与参考材料中 PyArg_ParseTupleAndKeywords 使用格式字符串 'O' 解析单个参数一致。"",
+  ""parameter_type_code"": ""qualified"",
+  ""parameter_type_reason"": ""类型标注为 collections.abc.Buffer | str，对应参考材料中先尝试获取 buffer（bytes-like 对象）再检查是否为 Unicode 对象的逻辑，准确表达了接受的参数类型。"",
+  ""return_type_code"": ""qualified"",
+  ""return_type_reason"": ""返回类型为 typing.Any，与 JSON 解码返回任意 Python 对象的语义相符。""
+}",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/JSONtoObj.c', line 165, column 11>\"",\n  \""source_text\"": \""PyObject* JSONToObj(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  PyObject *ret;\\n  PyObject *sarg;\\n  PyObject *arg;\\n  JSONObjectDecoder decoder =\\n  {\\n    Object_newString,\\n    Object_objectAddKey,\\n    Object_arrayAddItem,\\n    Object_newTrue,\\n    Object_newFalse,\\n    Object_newNull,\\n    Object_newNaN,\\n    Object_newPosInf,\\n    Object_newNegInf,\\n    Object_newObject,\\n    Object_newArray,\\n    Object_newInteger,\\n    Object_newLong,\\n    Object_newUnsignedLong,\\n    Object_newIntegerFromString,\\n    Object_newDouble,\\n    Object_releaseObject,\\n    PyObject_Malloc,\\n    PyObject_Free,\\n    PyObject_Realloc\\n  };\\n\\n  decoder.prv = NULL;\\n\\n  if (!PyArg_ParseTupleAndKeywords(args, kwargs, \\\""O\\\"", g_kwlist, &arg))\\n  {\\n      return NULL;\\n  }\\n\\n  Py_buffer buffer;\\n  size_t sarg_length;\\n  char * raw;\\n  bool is_bytes_like = !PyObject_GetBuffer(arg, &buffer, PyBUF_C_CONTIGUOUS);\\n  if (is_bytes_like)\\n  {\\n    #ifdef PYPY_VERSION\\n      // PyPy's buffer protocol implementation is buggy: https://foss.heptapod.net/pypy/pypy/-/issues/3872\\n      if (!PyBytes_Check(arg) && !PyByteArray_Check(arg)) {\\n        PyBuffer_Release(&buffer);\\n        PyErr_Format(PyExc_TypeError, \\\""Arbitrary bytes-like objects are not supported on PyPy, Use either string, bytes, or bytearray\\\"");\\n        return NULL;\\n      }\\n    #endif\\n    raw = buffer.buf;\\n    sarg_length = buffer.len;\\n  }\\n  else\\n  {\\n    PyErr_Clear();\\n    if (PyUnicode_Check(arg))\\n    {\\n      sarg = PyUnicode_AsEncodedString(arg, NULL, \\\""surrogatepass\\\"");\\n      if (sarg == NULL)\\n      {\\n        //Exception raised above us by codec according to docs\\n        return NULL;\\n      }\\n      sarg_length = PyBytes_Size(sarg);\\n      raw = PyBytes_AsString(sarg);\\n    }\\n    else\\n    {\\n      #ifdef PYPY_VERSION\\n        PyErr_Format(PyExc_TypeError, \\\""Expected string, bytes, or bytearray\\\"");\\n      #else\\n        PyErr_Format(PyExc_TypeError, \\\""Expected string or C-contiguous bytes-like object\\\"");\\n      #endif\\n      return NULL;\\n    }\\n  }\\n\\n  decoder.errorStr = NULL;\\n  decoder.errorOffset = NULL;\\n\\n  decoder.s2d = NULL;\\n  dconv_s2d_init(&decoder.s2d, DCONV_S2D_ALLOW_TRAILING_JUNK, 0.0, 0.0, \\\""Infinity\\\"", \\\""NaN\\\"");\\n\\n  ret = JSON_DecodeObject(&decoder, raw, sarg_length);\\n\\n  dconv_s2d_free(&decoder.s2d);\\n\\n  if (!is_bytes_like)\\n  {\\n    Py_DECREF(sarg);\\n  }\\n  else\\n  {\\n    PyBuffer_Release(&buffer);\\n  }\\n\\n  // Check if a Python error occurred during decoding\\n  if (PyErr_Occurred())\\n  {\\n    if (ret)\\n    {\\n        Py_DECREF( (PyObject *) ret);\\n    }\\n    return NULL;\\n  }\\n\\n  if (decoder.errorStr)\\n  {\\n    /*\\n    FIXME: It's possible to give a much nicer error message here with actual failing element in input etc*/\\n\\n    PyErr_Format (JSONDecodeError, \\\""%s\\\"", decoder.errorStr);\\n\\n    if (ret)\\n    {\\n        Py_DECREF( (PyObject *) ret);\\n    }\\n\\n    return NULL;\\n  }\\n\\n  return ret;\\n}\""\n}""
+}"
+ujson:encode,ujson,,encode,0,"def encode(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:",qualified,"推断签名中的参数顺序、名称、可选性与实际C解析格式' O|OOOOiiiOO'完全匹配：第一个参数obj必选，其后9个参数均为可选，且默认值（indent=0, allow_nan=-1, reject_bytes=-1）与代码中的初始化一致，整体结构与函数真实签名一致。",qualified,"推断签名中obj为object，可选参数ensure_ascii等为object，对应于格式'O'接受任意Python对象并进行真值判断；indent、allow_nan、reject_bytes为int，对应格式'i'；separators声明为tuple[Any,...]，实际运行时要求长度为2的元组且元素为str，类型声明虽宽松但仍覆盖正确用法，且其余类型均符合底层C解析，故整体参数类型语义合格。",qualified,推断签名返回str，与代码中通过PyUnicode_DecodeUTF8将UTF-8编码结果转换为Python Unicode对象后返回一致，符合ujson.encode返回JSON字符串的真实语义。,ok,,"我们被要求判断推断签名的三个维度：参数结构、参数类型、返回类型。参考材料是c_extension源代码，函数是ujson.encode。推断签名：
+
+def encode(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:
+
+我们需要评估参数结构（顺序、数量、可选性等）、参数类型、返回类型。
+
+从参考材料看：
+PyArg_ParseTupleAndKeywords(args, kwargs, ""O|OOOOiiiOO"", kwlist, 
+    &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, 
+    &osortKeys, &indent, &allowNan, &orejectBytes, &odefaultFn, &oseparators)
+
+格式字符串：""O|OOOOiiiOO""
+
+解析：
+- ""O"" 对应 obj (oinput)
+- ""|"" 表示后面的参数是可选的
+- 接下来 ""OOOOiiiOO"" 都是可选参数。
+- 按照顺序：
+  - O: oensureAscii
+  - O: oencodeHTMLChars
+  - O: oescapeForwardSlashes
+  - O: osortKeys
+  - i: indent (int)
+  - i: allowNan (int)
+  - i: orejectBytes (int)
+  - O: odefaultFn
+  - O: oseparators
+
+所以参数数量、顺序和可选性与推断签名一致。注意推断签名中indent默认值为0，allow_nan默认值为-1，reject_bytes默认值为-1；代码中init时这些变量有默认值（indent=0, allowNan=-1, orejectBytes=-1），但作为可选参数，如果未提供，则保持原值（即这些默认值）。在PyArg_ParseTuple中，如果可选参数未提供，C变量不会被修改，因此需初始化默认值。代码中indent初始化为0，allowNan初始化为-1，orejectBytes初始化为-1。所以默认值合理。
+
+关于参数类型：推断签名中除obj外，其他参数类型为object或int。ensure_ascii, encode_html_chars, escape_forward_slashes, sort_keys, default, separators 都是object（O格式），但代码中检查它们不是None且真值等，表明它们接受任何Python对象，然后进行真值判断或类型验证。所以声明为object可以。indent, allow_nan, reject_bytes 为int。符合格式i。
+
+返回类型：推断为str。代码中返回newobj = PyUnicode_DecodeUTF8(ret, retLen, ""surrogatepass""); 这创建了一个Python str对象。所以返回类型应该是str。但注意函数的final返回类型是PyObject*，因为是str。在Python层，ujson.encode确实返回JSON字符串，类型为str。所以返回类型正确。
+
+需判断三个维度：parameter_structure_code, parameter_type_code, return_type_code。每个是""qualified""或""unqualified""。
+
+参数结构：参数名称、顺序、默认值、可选性都与真实语义一致。参数结构合格：qualified。
+
+参数类型：推断签名中ensure_ascii等为object，实际上代码接受任何对象并判断真值，所以声明为object可以，但可能更精确是Union[bool, ...]但因为是any，object也正确。separators应为tuple，但推断签名是tuple[typing.Any, ...]，实际中它期望tuple of two strs，代码也做了检查。推断签名中separators: tuple[typing.Any, ...] 是不具体，但可以接受任意tuple。实际语义要求tuple of (str, str)，但推断仍然合格，因为tuple[Any, ...] 允许任何tuple，包括满足条件的。但严格来说，如果传入非法tuple，会引发错误，但类型注释未限制内容，是宽松的。然而，参考材料中，它检查了tuple且size=2, 两个元素是str。所以更精确的类型是Tuple[str, str]。推断签名说tuple[typing.Any, ...] 可能不够精确，但仍在语义上可接受，因为最终会检查。参数类型评价为qualified？可能需考虑是否完全匹配。既然未要求字面一致，只要语义一致即可。推断签名中separators的类型过于宽泛，但仍覆盖了正确的调用情况。我认为参数类型仍是qualified，因为函数可接受任何tuple（实际运行时校验），且注释未限制类型不太影响语义。另外，其他参数都是object或int，正确。
+
+返回类型：str，正确。返回类型合格。
+
+总结：三个维度都应该给qualified。但需要理由中文说明。
+
+注意：参考材料是c_extension代码，真实语义是encode函数将Python对象转换为JSON字符串。推断签名正确表示了参数列表。因此全部qualified。
+
+输出严格JSON。",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/objToJSON.c', line 660, column 11>\"",\n  \""source_text\"": \""PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  static char *kwlist[] = { \\\""obj\\\"", \\\""ensure_ascii\\\"", \\\""encode_html_chars\\\"", \\\""escape_forward_slashes\\\"", \\\""sort_keys\\\"", \\\""indent\\\"", \\\""allow_nan\\\"", \\\""reject_bytes\\\"", \\\""default\\\"", \\\""separators\\\"", NULL };\\n\\n  char buffer[65536];\\n  char *ret;\\n  const char *csNan = NULL, *csInf = NULL;\\n  PyObject *newobj;\\n  PyObject *oinput = NULL;\\n  PyObject *oensureAscii = NULL;\\n  PyObject *oencodeHTMLChars = NULL;\\n  PyObject *oescapeForwardSlashes = NULL;\\n  PyObject *osortKeys = NULL;\\n  PyObject *odefaultFn = NULL;\\n  PyObject *oseparators = NULL;\\n  PyObject *oseparatorsItem = NULL;\\n  PyObject *separatorsItemBytes = NULL;\\n  PyObject *oseparatorsKey = NULL;\\n  PyObject *separatorsKeyBytes = NULL;\\n  int allowNan = -1;\\n  int orejectBytes = -1;\\n  int indent = 0;\\n  size_t retLen;\\n\\n  JSONObjectEncoder encoder =\\n  {\\n    Object_beginTypeContext,\\n    Object_endTypeContext,\\n    Object_getStringValue,\\n    Object_getLongValue,\\n    Object_getUnsignedLongValue,\\n    Object_getDoubleValue,\\n    Object_iterNext,\\n    Object_iterEnd,\\n    Object_iterGetValue,\\n    Object_iterGetName,\\n    Object_releaseObject,\\n    PyObject_Malloc,\\n    PyObject_Realloc,\\n    PyObject_Free,\\n    -1, //recursionMax\\n    1, //forceAscii\\n    0, //encodeHTMLChars\\n    1, //escapeForwardSlashes\\n    0, //sortKeys\\n    0, //indent\\n    1, //allowNan\\n    1, //rejectBytes\\n    0, //itemSeparatorLength\\n    NULL, //itemSeparatorChars\\n    0, //keySeparatorLength\\n    NULL, //keySeparatorChars\\n    NULL, //prv\\n  };\\n\\n\\n  PRINTMARK();\\n\\n  if (!PyArg_ParseTupleAndKeywords(args, kwargs, \\\""O|OOOOiiiOO\\\"", kwlist, &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, &osortKeys, &indent, &allowNan, &orejectBytes, &odefaultFn, &oseparators))\\n  {\\n    return NULL;\\n  }\\n\\n  if (oensureAscii != NULL && !PyObject_IsTrue(oensureAscii))\\n  {\\n    encoder.forceASCII = 0;\\n  }\\n\\n  if (oencodeHTMLChars != NULL && PyObject_IsTrue(oencodeHTMLChars))\\n  {\\n    encoder.encodeHTMLChars = 1;\\n  }\\n\\n  if (oescapeForwardSlashes != NULL && !PyObject_IsTrue(oescapeForwardSlashes))\\n  {\\n    encoder.escapeForwardSlashes = 0;\\n  }\\n\\n  if (osortKeys != NULL && PyObject_IsTrue(osortKeys))\\n  {\\n    encoder.sortKeys = 1;\\n  }\\n\\n  if (allowNan != -1)\\n  {\\n    encoder.allowNan = allowNan;\\n  }\\n\\n  if (odefaultFn != NULL && odefaultFn != Py_None)\\n  {\\n    // Here use prv to store default function\\n    encoder.prv = odefaultFn;\\n  }\\n\\n  if (encoder.allowNan)\\n  {\\n    csInf = \\\""Infinity\\\"";\\n    csNan = \\\""NaN\\\"";\\n  }\\n\\n  if (orejectBytes != -1)\\n  {\\n    encoder.rejectBytes = orejectBytes;\\n  }\\n\\n  if (indent < -1)\\n  {\\n    encoder.indent = -1;\\n  }\\n  else if (indent > 1000)\\n  {\\n    PyErr_SetString(PyExc_ValueError, \\\""Maximum allowed indentation is 1000\\\"");\\n    return NULL;\\n  }\\n  else {\\n    encoder.indent = indent;\\n  }\\n\\n  if (oseparators != NULL && oseparators != Py_None)\\n  {\\n    if (!PyTuple_Check(oseparators))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected tuple or None as separator\\\"");\\n      return NULL;\\n    }\\n    if (PyTuple_GET_SIZE(oseparators) != 2)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""expected tuple of size 2 as separator\\\"");\\n      return NULL;\\n    }\\n    oseparatorsItem = PyTuple_GET_ITEM(oseparators, 0);\\n    if (!PyUnicode_Check(oseparatorsItem))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected str as item separator\\\"");\\n      return NULL;\\n    }\\n    oseparatorsKey = PyTuple_GET_ITEM(oseparators, 1);\\n    if (!PyUnicode_Check(oseparatorsKey))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected str as key separator\\\"");\\n      return NULL;\\n    }\\n    encoder.itemSeparatorChars = PyUnicodeToUTF8Raw(oseparatorsItem, &encoder.itemSeparatorLength, &separatorsItemBytes);\\n    if (encoder.itemSeparatorChars == NULL)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""item separator malformed\\\"");\\n      goto ERROR;\\n    }\\n    encoder.keySeparatorChars = PyUnicodeToUTF8Raw(oseparatorsKey, &encoder.keySeparatorLength, &separatorsKeyBytes);\\n    if (encoder.keySeparatorChars == NULL)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""key separator malformed\\\"");\\n      goto ERROR;\\n    }\\n  }\\n  else\\n  {\\n    // Default to most compact representation\\n    encoder.itemSeparatorChars = \\\"",\\\"";\\n    encoder.itemSeparatorLength = 1;\\n    if (encoder.indent)\\n    {\\n      // Extra space when indentation is in use\\n      encoder.keySeparatorChars = \\\"": \\\"";\\n      encoder.keySeparatorLength = 2;\\n    }\\n    else\\n    {\\n      encoder.keySeparatorChars = \\\"":\\\"";\\n      encoder.keySeparatorLength = 1;\\n    }\\n  }\\n\\n  encoder.d2s = NULL;\\n  dconv_d2s_init(&encoder.d2s, DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT | DCONV_D2S_EMIT_POSITIVE_EXPONENT_SIGN,\\n                 csInf, csNan, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);\\n\\n  PRINTMARK();\\n  ret = JSON_EncodeObject (oinput, &encoder, buffer, sizeof (buffer), &retLen);\\n  PRINTMARK();\\n\\n  dconv_d2s_free(&encoder.d2s);\\n  Py_XDECREF(separatorsItemBytes);\\n  Py_XDECREF(separatorsKeyBytes);\\n\\n  if (encoder.errorMsg)\\n  {\\n    // If there is an error message and we don't already have a Python exception, set one.\\n    if (!PyErr_Occurred())\\n      PyErr_Format(PyExc_OverflowError, \\\""%s\\\"", encoder.errorMsg);\\n    return NULL;\\n  }\\n\\n  if (PyErr_Occurred())\\n  {\\n    if (ret != buffer)\\n    {\\n      encoder.free (ret);\\n    }\\n\\n    return NULL;\\n  }\\n\\n  newobj = PyUnicode_DecodeUTF8(ret, retLen, \\\""surrogatepass\\\"");\\n\\n  if (ret != buffer)\\n  {\\n    encoder.free (ret);\\n  }\\n\\n  PRINTMARK();\\n\\n  return newobj;\\n\\nERROR:\\n  Py_XDECREF(separatorsItemBytes);\\n  Py_XDECREF(separatorsKeyBytes);\\n  return NULL;\\n}\""\n}""
+}"
+ujson:dump,ujson,,dump,0,"def dump(
+    data: object,
+    file: object,
+    /,
+) -> None:",qualified,"C扩展使用PyArg_ParseTuple(args, ""OO"", ...)解析两个必选的位置参数data和file，没有使用关键字参数解析，符合仅位置参数的语义。",qualified,C扩展将data和file存储为PyObject*，没有进行类型转换或检查，因此参数类型为object符合真实语义。,qualified,函数最终执行Py_RETURN_NONE，返回None，符合真实语义。,ok,,"我们被要求评估推断的签名是否符合函数在Python层的真实语义。参考材料是C扩展源码，函数objToJSONFile。让我们分析。
+
+函数签名：推断签名是 `def dump(data: object, file: object, /) -> None:`。参数结构是两个位置参数，没有默认值，返回None。
+
+参考材料：C函数objToJSONFile使用PyArg_ParseTuple(args, ""OO"", &data, &file)。这意味着它期望两个Python对象作为参数。没有可选参数，没有关键字参数（这个函数没有使用kwargs parsing，尽管它接受kwargs但并没有用它们解析？实际上函数签名是`PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)`，它接受args和kwargs，但内部只是用PyArg_ParseTuple解析了args，然后调用objToJSON(self, argtuple, kwargs)传递了kwargs给objToJSON。所以dump函数确实可以接受额外的关键字参数，它们会被传递给内部的JSON序列化函数。但在dump函数本身的参数解析中，只使用""OO""格式，意味着它只从位置参数中解析两个参数，分别是data和file。没有解析任何kwargs。然而，因为在Python层，`def dump(data, file, /)`这样的签名会禁止关键字参数传递data和file，但C扩展本身可能接受关键字参数？实际上，由于函数使用了METH_VARARGS|METH_KEYWORDS，Python会传递args和kwargs，但ParseTuple只解析位置参数。这意味着如果Python调用者使用关键字参数，例如dump(file=f, data=d)，因为函数定义中没有指定关键字名称，通常Python会接受关键字参数如果函数没有使用位置限定符(/)，但这里C扩展未指定参数名，所以默认情况下，Python会将**kwargs传递给函数，但被忽略了？在CPython的METH_KEYWORDS方法中，如果函数定义没有指定接受kwargs，那么使用关键字参数调用会引发TypeError吗？实际上，如果方法使用METH_KEYWORDS标志，它会接受第三个参数kwargs，但函数体可以选择忽略它。如果调用者传递了关键字参数，而函数没有处理它们，通常不会出错，因为kwargs只是被忽略。但在Python层面，当我们用def定义函数时，如果你添加/标记为仅位置，就不允许关键字参数。推断签名加了/，表示仅位置。这反映了C扩展中未对这两个参数使用关键字解析，但推断签名应该反映实际的可调用方式。由于C扩展没有将data和file作为关键字参数处理，它们被视为仅位置参数。在ujson.dump中，确实文档中说明dump(obj, file, ...)只接受位置参数？我需要回忆实际API。ujson.dump通常是这样：ujson.dump(obj, fp, ...)还有其它参数如indent等。参考材料中，这个函数只是objToJSONFile，实际上是dump的实现。在ujson的实际API中，dump签名可能是`dump(obj, fp, *, indent=None, ...)`等。但这里只给了objToJSONFile，它解析两个参数data和file，然后调用内部的objToJSON，传递kwargs给objToJSON。所以dump可以接受额外的关键字参数，它们会被传递给内部的JSON编码器。因此，真实的dump签名可能包括像`ensure_ascii`, `indent`等关键字参数。推断签名只给出两个位置参数，没有其它参数，返回None。这是否符合一条真实语义？可能有一条语义是dump(data, file)不接受其它参数，但通常dump支持额外参数。然而，我们评估的是这个推断签名本身：只接受两个位置参数，返回None。这可能是原始的dump函数的一个简化视图：它只保证data和file是必需的，并且返回None。但是，推断签名没有体现kwargs，这意味着它忽略kwargs。从Python可调用性来说，如果函数允许额外的关键字参数，但你没有在签名中声明，那仍然可以调用。推断签名可能不完整，但参数结构和类型判断：参数结构是两个仅位置参数，没有默认值。这是正确的，因为""OO""解析两个必须的参数。返回类型None，函数确实返回None（Py_RETURN_NONE）。参数类型：data: object, file: object。这在C中是PyObject*，没有类型检查，所以是object类型，合理。因此，参数结构和返回类型都是qualified。参数类型：两个参数都是object，也符合C扩展语义，没有更具体的类型限制，所以类型是qualified。我们需要输出JSON。参数结构、参数类型、返回类型三个维度都应该是qualified。但要确认：参数结构是否正确地反映了仅位置参数？在C扩展中，因为没有使用PyArg_ParseTupleAndKeywords解析这些参数，它们确实是仅位置的。函数定义使用METH_VARARGS|METH_KEYWORDS，所以调用者可以传递关键字参数，但函数忽略它们，并且不会将data和file绑定到关键字。实际上，在Python中，如果函数是用c_extension实现的，并且使用了METH_KEYWORDS标志，但没有从kwargs中提取参数，那么如果调用者以关键字方式传递参数，会发生什么？典型的c扩展函数如果期望位置参数，但调用者使用关键字，通常会导致TypeError，因为C函数没有声明参数名。但ujson的dump可能确实是这样：只能按位置传递obj和file。检查ujson文档：ultrajson的dump函数 `ujson.dump(obj, fp, ...)`，其中obj和fp是仅位置参数吗？事实上的ujson实现中，dump(obj, fp, ...)确实只接受位置参数，不允许关键字传递obj和fp。我印象中ujson的dump函数参数是仅位置的。所以推断签名加上/是正确的。所以三个维度都是qualified。因此，输出JSON。",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/objToJSON.c', line 880, column 11>\"",\n  \""source_text\"": \""PyObject* objToJSONFile(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  PyObject *data;\\n  PyObject *file;\\n  PyObject *string;\\n  PyObject *write;\\n  PyObject *argtuple;\\n  PyObject *write_result;\\n\\n  PRINTMARK();\\n\\n  if (!PyArg_ParseTuple (args, \\\""OO\\\"", &data, &file))\\n  {\\n    return NULL;\\n  }\\n\\n  if (!PyObject_HasAttrString (file, \\\""write\\\""))\\n  {\\n    PyErr_Format (PyExc_TypeError, \\\""expected file\\\"");\\n    return NULL;\\n  }\\n\\n  write = PyObject_GetAttrString (file, \\\""write\\\"");\\n\\n  if (!PyCallable_Check (write))\\n  {\\n    Py_XDECREF(write);\\n    PyErr_Format (PyExc_TypeError, \\\""expected file\\\"");\\n    return NULL;\\n  }\\n\\n  argtuple = PyTuple_Pack(1, data);\\n\\n  string = objToJSON (self, argtuple, kwargs);\\n\\n  if (string == NULL)\\n  {\\n    Py_XDECREF(write);\\n    Py_XDECREF(argtuple);\\n    return NULL;\\n  }\\n\\n  Py_XDECREF(argtuple);\\n\\n  argtuple = PyTuple_Pack (1, string);\\n  if (argtuple == NULL)\\n  {\\n    Py_XDECREF(write);\\n    return NULL;\\n  }\\n\\n  write_result = PyObject_CallObject (write, argtuple);\\n  if (write_result == NULL)\\n  {\\n    Py_XDECREF(write);\\n    Py_XDECREF(argtuple);\\n    return NULL;\\n  }\\n\\n  Py_DECREF(write_result);\\n  Py_XDECREF(write);\\n  Py_DECREF(argtuple);\\n  Py_XDECREF(string);\\n\\n  PRINTMARK();\\n\\n  Py_RETURN_NONE;\\n}\""\n}""
+}"
+ujson:dumps,ujson,,dumps,0,"def dumps(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:",qualified,参数 obj 为必需，其他参数均为可选，且顺序与关键字列表一致，符合 PyArg_ParseTupleAndKeywords 格式字符串 'O|OOOOiiiOO' 的定义。,unqualified,"separators 参数的真实语义要求是一个包含两个字符串的元组 (item_separator, key_separator)，但推断签名标注为 tuple[typing.Any, ...]，允许任意长度和任意类型的元组，不符合运行时检查的约束（要求长度为2，元素为str）。",qualified,函数最终通过 PyUnicode_DecodeUTF8 返回 Python str 对象，与签名中的 -> str 一致。,ok,,"我们被要求评估推断签名：
+
+def dumps(
+    obj: object,
+    ensure_ascii: object = ...,
+    encode_html_chars: object = ...,
+    escape_forward_slashes: object = ...,
+    sort_keys: object = ...,
+    indent: int = 0,
+    allow_nan: int = -1,
+    reject_bytes: int = -1,
+    default: object = ...,
+    separators: tuple[typing.Any, ...] = ...,
+) -> str:
+
+参考材料是 C 扩展源代码 objToJSON 函数。我们从源代码中分析：
+
+- 使用了 PyArg_ParseTupleAndKeywords(args, kwargs, ""O|OOOOiiiOO"", kwlist, ...)
+- kwlist: {""obj"", ""ensure_ascii"", ""encode_html_chars"", ""escape_forward_slashes"", ""sort_keys"", ""indent"", ""allow_nan"", ""reject_bytes"", ""default"", ""separators"", NULL}
+- 格式字符串 ""O|OOOOiiiOO""，前面有一个必需的 O (obj)，后面有多个 O 和 i 参数，用 | 分隔。注意格式字符串是 ""O|OOOOiiiOO""：
+  解析：O 表示一个必需参数 obj，| 之后是可选的参数。顺序对应：第一个 O 是 obj，然后后面有 4 个 O（ensure_ascii, encode_html_chars, escape_forward_slashes, sort_keys），然后三个 i（indent, allow_nan, reject_bytes），然后两个 O（default, separators）。检查数量：必需 O:1个，可选：4个O, 3个i, 2个O = 9个可选，总共10个参数。与kwlist数量一致（10个名字 + NULL）。
+
+因此，参数类型推断：
+- obj: object (对应 O)
+- ensure_ascii: object (O)
+- encode_html_chars: object (O)
+- escape_forward_slashes: object (O)
+- sort_keys: object (O)
+- indent: int (i, 表示 int)
+- allow_nan: int (i)
+- reject_bytes: int (i)
+- default: object (O)
+- separators: object (O) 但推断签名中写的是 tuple[typing.Any, ...]，因为后续代码中检查了 separators 必须是 tuple of size 2，但格式字符串是 O，没有在格式字符串中指定类型，所以 Python 层接受任何对象。但真实语义中，文档通常说明 separators 应该是一个 (item_separator, key_separator) 的元组，类型应该是 tuple[str, str] 或者 (str, str)。但推断签名只根据格式字符串 ""O"" 给出 object，但这里推断签名写的是 tuple[typing.Any, ...] = ...，这更精确地反映了运行时检查。从参数结构来看，这是单独的一个参数，类型推断可能有偏差，但我们评估的是基于给定的推断签名。我们需要判断参数结构、参数类型、返回类型是否符合真实语义。
+
+参数结构：顺序和可选性：obj 是必需的，其他都带默认值。推断签名中所有后续参数都有默认值（=...），这是正确的。default 和 separators 也有默认值，因为代码中：if (oseparators != NULL && oseparators != Py_None) 说明如果没有提供（默认）则为 NULL。从格式字符串 ""O|OOOOiiiOO"" 看，所有可选参数默认值由 C 变量初始值决定。在代码中，这些 C 变量被初始化为 NULL 或 -1 等。对于 O 类型的可选参数，如果未提供，PyArg_ParseTupleAndKeywords 不改变它们的值，它们保持为 NULL（初始化为 NULL）。然后代码中检查 if (oensureAscii != NULL && ...) 等。如果参数未提供，C 变量为 NULL，则使用 encoder 中的默认值。所以 Python 层这些参数是可选的，默认值可能是 True/False 等，但推断签名中用了 = ... 表示省略，这是 stub 的常见写法。参数结构看起来是合理的。
+
+参数类型：
+- obj: object，正确，因为格式 O 接受任何 Python 对象。
+- ensure_ascii: object = ...，但实际应该是 bool 或可转换为真值的对象？代码中逻辑：if (oensureAscii != NULL && !PyObject_IsTrue(oensureAscii)) 则 encoder.forceASCII = 0。所以如果提供了参数且其为假值，则禁用 ASCII 强制；否则（未提供或真值）则保持 forceASCII=1（默认）。因此 ensure_ascii 接受任何 Python 对象，用其真值判断。所以类型为 object 是合理的，但典型用法是 bool。从 C 格式 O 看，它接受任何对象，所以 object 是兼容的。类似地，encode_html_chars、escape_forward_slashes、sort_keys、default、separators 都是 O 格式，因此类型 object 是准确的。但推断签名中，separators 被标注为 tuple[typing.Any, ...] 可能更具体，但 C 格式只要求是 PyObject，所以 object 是基本类型，而推断签名试图给出更精确的类型，这可能不符合格式字符串的原始推断（O 应该是 object），但评估标准是“是否符合函数在Python层的真实语义”。我们根据参考材料，结合已知 API 语义：ujson.dumps 的 separators 参数通常是一个包含两个字符串的元组。所以类型应当是 tuple[str, str] 或 tuple[str, ...]。但推断签名写的是 tuple[typing.Any, ...]，与真实语义接近（应该是字符串）。Any 过于宽泛。真实语义中，separators 要求是一个 (item_separator, key_separator) 的元组，两者都是字符串。因此 tuple[Any, ...] 虽然不精确，但仍符合“可以是任何类型的元组”吗？实际上运行时检查了必须是元组，且元组元素必须是 str（代码中使用了 PyUnicode_Check）。所以真实 Python 类型是 tuple[str, str] 或 tuple[str, str] 的特定长度 2 的元组。推断签名用 tuple[typing.Any, ...] 是过度近似，可能不符合真实语义，因为它允许任意长度、任意类型的元组。但注意，参数类型标注应该是 Python 类型提示，如果标注为 tuple[Any, ...]，意味着任意长度、任意类型的元组，这在运行时会被拒绝（要求长度为2且元素为str）。所以这不是真实语义。我们应该认为参数类型不合格？我们有三项评估：parameter_structure_code, parameter_type_code, return_type_code。我们需要分别判断。
+
+先看返回类型：-> str。函数最后返回 PyUnicode_DecodeUTF8 的结果，即返回 str。代码：newobj = PyUnicode_DecodeUTF8(ret, retLen, ""surrogatepass""); return newobj; 所以返回类型是 str，正确。
+
+参数类型：整体来看，推断签名对 ensure_ascii, encode_html_chars, escape_forward_slashes, sort_keys 标注为 object，但实际它们应该是可接受任何对象并用真值，所以 object 不准确但可以接受？Python 类型提示中，对于接受任意真值测试的参数，可以标注为 Any 或 object，但通常用 bool 或 bool | None 或 Any。真实语义中，这些参数是 bool 类型，通常在文档中为 bool 或 None（默认None表示未提供）。在 ujson 的文档中，dumps 的 ensure_ascii 默认为 True，所以类型应为 bool 或省略。但是格式字符串 O 允许传入任何对象，但如果是 int 或 list 会被用作 bool 吗？是的，PyObject_IsTrue 对任何对象都有效。所以理论上可以是任何对象，但标准用法是 bool。从 stub 生成的角度，很多库的 stub 会将 O 标注为 Any 或 object。所以参数类型 object 可能可以接受，因为它覆盖了所有可能。但 separators 标注为 tuple[typing.Any, ...] 是不准确的，因为真实要求是 tuple[str, str]，且字符串必须有效。不符合真实语义。所以 parameter_type_code 可能为 unqualified。
+
+参数结构：顺序和默认值正确。obj 必需，其他都有默认值。从格式字符串，可选参数是10个，全部有默认值。但仔细看：格式 ""O|OOOOiiiOO"" 意味着 obj 必需，后续都是可选。所以参数结构没问题。所以 parameter_structure_code qualified。
+
+返回类型：str，正确。
+
+现在需要给出理由。我们需要根据参考材料（源代码）判断。对于参数类型，由于好几个参数是 O 格式，可以接受任何对象，所以标注为 object 是合理的。但 separators 明确要求是 tuple of two str，如果标注为 tuple[typing.Any, ...] 可能造成误导，但参数类型推断不应该超出格式字符串？源代码中检查了 separators 类型，因此在 Python 层确实要求是特定类型。所以推断签名中的类型 ""tuple[typing.Any, ...]"" 不够精确，但比 object 更具体；然而它没有反映长度和元素类型约束，所以不符合真实语义。也许从“语义一致”的角度，签名应该反映真实约束，但当前评估是判断推断签名是否符合真实语义。真实语义是 separators 为 tuple[str, str] 或 None，默认 None。推断签名为 tuple[typing.Any, ...] = ... 意味着可以是任何元组，包括空元组、单元素等，这会被拒绝。所以参数类型不合格。
+
+对于其他参数，标注为 object，虽然可以接受，但实际最好标注为 Any 或 bool，但 object 也不算错，因为任何对象都 is object。但类型检查时，object 太宽泛，可能不理想。但评估标准是“符合函数在Python层的真实语义”，如果真实语义是接受任何对象（比如你可以传一个整数，它会被当作真值），那么 object 是准确的。对于 ensure_ascii，如果传入 0 或 """" 会导致 forceASCII=0，所以确实接受任何对象。所以 object 是合理的。但文档通常建议传 bool，但语言层面没有限制。所以这些标注 object 是合格的。但是 separators 标注为 tuple[typing.Any, ...] 不合格。所以 parameter_type_code 应该 unqualified。
+
+但评估是整体参数类型，我们需要判断整个参数类型列表是否都符合真实语义。只要有一个参数类型明显不符合，就 unqualified。
+
+理由：separators 参数应为 tuple[str, str] 或 None，而不应为任意元组。
+
+现在确认返回类型：str，符合，qualified。
+
+参数结构：包含必需 obj 和可选参数，顺序正确，qualified。
+
+因此答案：
+
+{
+  ""parameter_structure_code"": ""qualified"",
+  ""parameter_structure_reason"": ""参数 obj 为必需，其他参数均为可选，且顺序与关键字列表一致，符合 PyArg_ParseTupleAndKeywords 格式字符串 'O|OOOOiiiOO' 的定义。"",
+  ""parameter_type_code"": ""unqualified"",
+  ""parameter_type_reason"": ""separators 参数的真实语义要求是一个包含两个字符串的元组 (item_separator, key_separator)，但推断签名标注为 tuple[typing.Any, ...]，允许任意长度和任意类型的元组，不符合运行时检查的约束（要求长度为2，元素为str）。"",
+  ""return_type_code"": ""qualified"",
+  ""return_type_reason"": ""函数最终通过 PyUnicode_DecodeUTF8 返回 Python str 对象，与签名中的 -> str 一致。""
+}
+
+注意：不要输出额外文字，只输出 JSON。",signature_evidence,"{
+  ""function_evidence"": ""{\n  \""provider\"": \""c_extension\"",\n  \""source_location\"": \""<SourceLocation file './src/ujson/python/objToJSON.c', line 660, column 11>\"",\n  \""source_text\"": \""PyObject* objToJSON(PyObject* self, PyObject *args, PyObject *kwargs)\\n{\\n  static char *kwlist[] = { \\\""obj\\\"", \\\""ensure_ascii\\\"", \\\""encode_html_chars\\\"", \\\""escape_forward_slashes\\\"", \\\""sort_keys\\\"", \\\""indent\\\"", \\\""allow_nan\\\"", \\\""reject_bytes\\\"", \\\""default\\\"", \\\""separators\\\"", NULL };\\n\\n  char buffer[65536];\\n  char *ret;\\n  const char *csNan = NULL, *csInf = NULL;\\n  PyObject *newobj;\\n  PyObject *oinput = NULL;\\n  PyObject *oensureAscii = NULL;\\n  PyObject *oencodeHTMLChars = NULL;\\n  PyObject *oescapeForwardSlashes = NULL;\\n  PyObject *osortKeys = NULL;\\n  PyObject *odefaultFn = NULL;\\n  PyObject *oseparators = NULL;\\n  PyObject *oseparatorsItem = NULL;\\n  PyObject *separatorsItemBytes = NULL;\\n  PyObject *oseparatorsKey = NULL;\\n  PyObject *separatorsKeyBytes = NULL;\\n  int allowNan = -1;\\n  int orejectBytes = -1;\\n  int indent = 0;\\n  size_t retLen;\\n\\n  JSONObjectEncoder encoder =\\n  {\\n    Object_beginTypeContext,\\n    Object_endTypeContext,\\n    Object_getStringValue,\\n    Object_getLongValue,\\n    Object_getUnsignedLongValue,\\n    Object_getDoubleValue,\\n    Object_iterNext,\\n    Object_iterEnd,\\n    Object_iterGetValue,\\n    Object_iterGetName,\\n    Object_releaseObject,\\n    PyObject_Malloc,\\n    PyObject_Realloc,\\n    PyObject_Free,\\n    -1, //recursionMax\\n    1, //forceAscii\\n    0, //encodeHTMLChars\\n    1, //escapeForwardSlashes\\n    0, //sortKeys\\n    0, //indent\\n    1, //allowNan\\n    1, //rejectBytes\\n    0, //itemSeparatorLength\\n    NULL, //itemSeparatorChars\\n    0, //keySeparatorLength\\n    NULL, //keySeparatorChars\\n    NULL, //prv\\n  };\\n\\n\\n  PRINTMARK();\\n\\n  if (!PyArg_ParseTupleAndKeywords(args, kwargs, \\\""O|OOOOiiiOO\\\"", kwlist, &oinput, &oensureAscii, &oencodeHTMLChars, &oescapeForwardSlashes, &osortKeys, &indent, &allowNan, &orejectBytes, &odefaultFn, &oseparators))\\n  {\\n    return NULL;\\n  }\\n\\n  if (oensureAscii != NULL && !PyObject_IsTrue(oensureAscii))\\n  {\\n    encoder.forceASCII = 0;\\n  }\\n\\n  if (oencodeHTMLChars != NULL && PyObject_IsTrue(oencodeHTMLChars))\\n  {\\n    encoder.encodeHTMLChars = 1;\\n  }\\n\\n  if (oescapeForwardSlashes != NULL && !PyObject_IsTrue(oescapeForwardSlashes))\\n  {\\n    encoder.escapeForwardSlashes = 0;\\n  }\\n\\n  if (osortKeys != NULL && PyObject_IsTrue(osortKeys))\\n  {\\n    encoder.sortKeys = 1;\\n  }\\n\\n  if (allowNan != -1)\\n  {\\n    encoder.allowNan = allowNan;\\n  }\\n\\n  if (odefaultFn != NULL && odefaultFn != Py_None)\\n  {\\n    // Here use prv to store default function\\n    encoder.prv = odefaultFn;\\n  }\\n\\n  if (encoder.allowNan)\\n  {\\n    csInf = \\\""Infinity\\\"";\\n    csNan = \\\""NaN\\\"";\\n  }\\n\\n  if (orejectBytes != -1)\\n  {\\n    encoder.rejectBytes = orejectBytes;\\n  }\\n\\n  if (indent < -1)\\n  {\\n    encoder.indent = -1;\\n  }\\n  else if (indent > 1000)\\n  {\\n    PyErr_SetString(PyExc_ValueError, \\\""Maximum allowed indentation is 1000\\\"");\\n    return NULL;\\n  }\\n  else {\\n    encoder.indent = indent;\\n  }\\n\\n  if (oseparators != NULL && oseparators != Py_None)\\n  {\\n    if (!PyTuple_Check(oseparators))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected tuple or None as separator\\\"");\\n      return NULL;\\n    }\\n    if (PyTuple_GET_SIZE(oseparators) != 2)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""expected tuple of size 2 as separator\\\"");\\n      return NULL;\\n    }\\n    oseparatorsItem = PyTuple_GET_ITEM(oseparators, 0);\\n    if (!PyUnicode_Check(oseparatorsItem))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected str as item separator\\\"");\\n      return NULL;\\n    }\\n    oseparatorsKey = PyTuple_GET_ITEM(oseparators, 1);\\n    if (!PyUnicode_Check(oseparatorsKey))\\n    {\\n      PyErr_SetString(PyExc_TypeError, \\\""expected str as key separator\\\"");\\n      return NULL;\\n    }\\n    encoder.itemSeparatorChars = PyUnicodeToUTF8Raw(oseparatorsItem, &encoder.itemSeparatorLength, &separatorsItemBytes);\\n    if (encoder.itemSeparatorChars == NULL)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""item separator malformed\\\"");\\n      goto ERROR;\\n    }\\n    encoder.keySeparatorChars = PyUnicodeToUTF8Raw(oseparatorsKey, &encoder.keySeparatorLength, &separatorsKeyBytes);\\n    if (encoder.keySeparatorChars == NULL)\\n    {\\n      PyErr_SetString(PyExc_ValueError, \\\""key separator malformed\\\"");\\n      goto ERROR;\\n    }\\n  }\\n  else\\n  {\\n    // Default to most compact representation\\n    encoder.itemSeparatorChars = \\\"",\\\"";\\n    encoder.itemSeparatorLength = 1;\\n    if (encoder.indent)\\n    {\\n      // Extra space when indentation is in use\\n      encoder.keySeparatorChars = \\\"": \\\"";\\n      encoder.keySeparatorLength = 2;\\n    }\\n    else\\n    {\\n      encoder.keySeparatorChars = \\\"":\\\"";\\n      encoder.keySeparatorLength = 1;\\n    }\\n  }\\n\\n  encoder.d2s = NULL;\\n  dconv_d2s_init(&encoder.d2s, DCONV_D2S_EMIT_TRAILING_DECIMAL_POINT | DCONV_D2S_EMIT_TRAILING_ZERO_AFTER_POINT | DCONV_D2S_EMIT_POSITIVE_EXPONENT_SIGN,\\n                 csInf, csNan, 'e', DCONV_DECIMAL_IN_SHORTEST_LOW, DCONV_DECIMAL_IN_SHORTEST_HIGH, 0, 0);\\n\\n  PRINTMARK();\\n  ret = JSON_EncodeObject (oinput, &encoder, buffer, sizeof (buffer), &retLen);\\n  PRINTMARK();\\n\\n  dconv_d2s_free(&encoder.d2s);\\n  Py_XDECREF(separatorsItemBytes);\\n  Py_XDECREF(separatorsKeyBytes);\\n\\n  if (encoder.errorMsg)\\n  {\\n    // If there is an error message and we don't already have a Python exception, set one.\\n    if (!PyErr_Occurred())\\n      PyErr_Format(PyExc_OverflowError, \\\""%s\\\"", encoder.errorMsg);\\n    return NULL;\\n  }\\n\\n  if (PyErr_Occurred())\\n  {\\n    if (ret != buffer)\\n    {\\n      encoder.free (ret);\\n    }\\n\\n    return NULL;\\n  }\\n\\n  newobj = PyUnicode_DecodeUTF8(ret, retLen, \\\""surrogatepass\\\"");\\n\\n  if (ret != buffer)\\n  {\\n    encoder.free (ret);\\n  }\\n\\n  PRINTMARK();\\n\\n  return newobj;\\n\\nERROR:\\n  Py_XDECREF(separatorsItemBytes);\\n  Py_XDECREF(separatorsKeyBytes);\\n  return NULL;\\n}\""\n}""
+}"

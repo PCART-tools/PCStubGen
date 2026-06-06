@@ -1,0 +1,15 @@
+{
+  "module_name": "scipy",
+  "compilation_database": "/home/kirara/third_package_source/scipy-v1.17.1/build/compile_commands.json",
+  "summary": {
+    "functions": 602,
+    "total_elapsed_ms": 23089.699571,
+    "avg_elapsed_ms": 38.354982676079736,
+    "min_elapsed_ms": 0.097322,
+    "max_elapsed_ms": 4533.258866,
+    "p50_elapsed_ms": 0.245338,
+    "p90_elapsed_ms": 18.024893,
+    "p95_elapsed_ms": 118.049702
+  },
+  "timing_csv": "out/benckmark/scipy_benchmark_20260515_121054.csv"
+}

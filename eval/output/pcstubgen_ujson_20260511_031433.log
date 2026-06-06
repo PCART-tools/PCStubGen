@@ -1,0 +1,44 @@
+2026-05-11 03:14:33.113 | INFO     | 
+pcstubgen._gen_command:_log_cli_arguments:53
+CLI参数: module_name=ujson, output=out/pcstubgen, compilation_database=/home/kirara/third_package_source/ultrajson-5.12.0/compile_commands.json, include_docstrings=False, toml=True
+
+2026-05-11 03:14:33.282 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: JSONToObj, reason: RuntimeError("无法识别的对象返回标识符: ret, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=ret, first_token=ret, location=<SourceLocation file './src/ujson/python/JSONtoObj.c', line 287, column 10>}")
+
+2026-05-11 03:14:33.289 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: decode, owner_class: None
+
+2026-05-11 03:14:33.419 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: dump, owner_class: None
+
+2026-05-11 03:14:33.492 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: dumps, owner_class: None
+
+2026-05-11 03:14:33.559 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: encode, owner_class: None
+
+2026-05-11 03:14:33.562 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: JSONFileToObj, reason: RuntimeError("无法识别的对象返回标识符: result, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=result, first_token=result, location=<SourceLocation file './src/ujson/python/JSONtoObj.c', line 336, column 10>}")
+
+2026-05-11 03:14:33.566 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: load, owner_class: None
+
+2026-05-11 03:14:33.569 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: JSONToObj, reason: RuntimeError("无法识别的对象返回标识符: ret, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=ret, first_token=ret, location=<SourceLocation file './src/ujson/python/JSONtoObj.c', line 287, column 10>}")
+
+2026-05-11 03:14:33.576 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: ujson, func: loads, owner_class: None
+
+2026-05-11 03:14:33.576 | INFO     | 
+pcstubgen.api:gen_stubs:30
+签名补全结果: 函数总数=6, C扩展补全=6, pybind11补全=0, 失败=0
+

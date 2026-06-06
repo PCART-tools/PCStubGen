@@ -1,0 +1,372 @@
+2026-05-13 03:17:27.734 | INFO     | 
+pcstubgen._gen_command:_log_cli_arguments:53
+CLI参数: module_name=PIL, output=out/pcstubgen, compilation_database=/home/kirara/third_package_source/Pillow-12.2.0/compile_commands.json, include_docstrings=False, toml=True
+
+2026-05-13 03:17:27.968 | ERROR    | 
+pcstubgen.module_collector:_collect_module:71
+模块导入失败, 安装可能获得更完整的存根. module: PIL.FpxImagePlugin, error: ModuleNotFoundError("No module named 'olefile'")
+
+2026-05-13 03:17:28.448 | ERROR    | 
+pcstubgen.module_collector:_collect_module:71
+模块导入失败, 安装可能获得更完整的存根. module: PIL.MicImagePlugin, error: ModuleNotFoundError("No module named 'olefile'")
+
+2026-05-13 03:17:28.724 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: AvifDecoderNew, reason: RuntimeError("无法识别的对象返回标识符: self, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=self, first_token=self, location=<SourceLocation file 'src/_avif.c', line 687, column 24>}")
+
+2026-05-13 03:17:28.727 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._avif, func: AvifDecoder, owner_class: None
+
+2026-05-13 03:17:28.732 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: AvifEncoderNew, reason: RuntimeError("无法识别的对象返回标识符: self, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=self, first_token=self, location=<SourceLocation file 'src/_avif.c', line 425, column 24>}")
+
+2026-05-13 03:17:28.740 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._avif, func: AvifEncoder, owner_class: None
+
+2026-05-13 03:17:28.741 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._avif, func: codec_versions, owner_class: None
+
+2026-05-13 03:17:28.742 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._avif, func: decoder_codec_available, owner_class: None
+
+2026-05-13 03:17:28.743 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._avif, func: encoder_codec_available, owner_class: None
+
+2026-05-13 03:17:28.878 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: alpha_composite, owner_class: None
+
+2026-05-13 03:17:28.986 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: bcn_decoder, owner_class: None
+
+2026-05-13 03:17:29.112 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: bcn_encoder, owner_class: None
+
+2026-05-13 03:17:29.115 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: bit_decoder, owner_class: None
+
+2026-05-13 03:17:29.117 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: blend, owner_class: None
+
+2026-05-13 03:17:29.119 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: clear_cache, owner_class: None
+
+2026-05-13 03:17:29.120 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: convert, owner_class: None
+
+2026-05-13 03:17:29.122 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: draw, owner_class: None
+
+2026-05-13 03:17:29.125 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: effect_mandelbrot, owner_class: None
+
+2026-05-13 03:17:29.126 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: effect_noise, owner_class: None
+
+2026-05-13 03:17:29.127 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: eps_encoder, owner_class: None
+
+2026-05-13 03:17:29.130 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: fill, owner_class: None
+
+2026-05-13 03:17:29.131 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: fli_decoder, owner_class: None
+
+2026-05-13 03:17:29.147 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: font, owner_class: None
+
+2026-05-13 03:17:29.148 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: get_alignment, owner_class: None
+
+2026-05-13 03:17:29.149 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: get_block_size, owner_class: None
+
+2026-05-13 03:17:29.150 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: get_blocks_max, owner_class: None
+
+2026-05-13 03:17:29.153 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: get_stats, owner_class: None
+
+2026-05-13 03:17:29.154 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: get_use_block_allocator, owner_class: None
+
+2026-05-13 03:17:29.155 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: getcodecstatus, owner_class: None
+
+2026-05-13 03:17:29.158 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: gif_decoder, owner_class: None
+
+2026-05-13 03:17:29.161 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: gif_encoder, owner_class: None
+
+2026-05-13 03:17:29.271 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser:render_default_value:57
+PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: RuntimeError("声明节点没有可用定值表达式: {kind=CursorKind.VAR_DECL, spelling=display_name, first_token=char, location=<SourceLocation file 'src/display.c', line 851, column 11>}")
+
+2026-05-13 03:17:29.273 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: grabscreen_x11, owner_class: None
+
+2026-05-13 03:17:29.275 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: hex_decoder, owner_class: None
+
+2026-05-13 03:17:29.276 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: hex_encoder, owner_class: None
+
+2026-05-13 03:17:29.280 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: jpeg2k_decoder, owner_class: None
+
+2026-05-13 03:17:29.310 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_parser:render_default_value:57
+PyArg_ParseTuple 默认值推断失败，回退为 '...', reason: RuntimeError("声明节点没有可用定值表达式: {kind=CursorKind.VAR_DECL, spelling=comment, first_token=char, location=<SourceLocation file 'src/encode.c', line 1341, column 11>}")
+
+2026-05-13 03:17:29.316 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: jpeg2k_encoder, owner_class: None
+
+2026-05-13 03:17:29.320 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: jpeg_decoder, owner_class: None
+
+2026-05-13 03:17:29.338 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: jpeg_encoder, owner_class: None
+
+2026-05-13 03:17:29.341 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: libtiff_decoder, owner_class: None
+
+2026-05-13 03:17:29.387 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: libtiff_encoder, owner_class: None
+
+2026-05-13 03:17:29.389 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: linear_gradient, owner_class: None
+
+2026-05-13 03:17:29.489 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: map_buffer, owner_class: None
+
+2026-05-13 03:17:29.492 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: merge, owner_class: None
+
+2026-05-13 03:17:29.494 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: new, owner_class: None
+
+2026-05-13 03:17:29.496 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: new_arrow, owner_class: None
+
+2026-05-13 03:17:29.497 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: new_block, owner_class: None
+
+2026-05-13 03:17:29.595 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: outline, owner_class: None
+
+2026-05-13 03:17:29.596 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: packbits_decoder, owner_class: None
+
+2026-05-13 03:17:29.706 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_arguments_for_call_name:189
+多个参数列表, func_name: PyPath_Create
+
+2026-05-13 03:17:29.707 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: path, owner_class: None
+
+2026-05-13 03:17:29.708 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: pcd_decoder, owner_class: None
+
+2026-05-13 03:17:29.710 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: pcx_decoder, owner_class: None
+
+2026-05-13 03:17:29.712 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: pcx_encoder, owner_class: None
+
+2026-05-13 03:17:29.713 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: radial_gradient, owner_class: None
+
+2026-05-13 03:17:29.716 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: raw_decoder, owner_class: None
+
+2026-05-13 03:17:29.718 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: raw_encoder, owner_class: None
+
+2026-05-13 03:17:29.720 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: reset_stats, owner_class: None
+
+2026-05-13 03:17:29.721 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: set_alignment, owner_class: None
+
+2026-05-13 03:17:29.722 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: set_block_size, owner_class: None
+
+2026-05-13 03:17:29.724 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: set_blocks_max, owner_class: None
+
+2026-05-13 03:17:29.724 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: set_use_block_allocator, owner_class: None
+
+2026-05-13 03:17:29.727 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: sgi_rle_decoder, owner_class: None
+
+2026-05-13 03:17:29.729 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: sun_rle_decoder, owner_class: None
+
+2026-05-13 03:17:29.732 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: tga_rle_decoder, owner_class: None
+
+2026-05-13 03:17:29.734 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: tga_rle_encoder, owner_class: None
+
+2026-05-13 03:17:29.736 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: xbm_decoder, owner_class: None
+
+2026-05-13 03:17:29.738 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: xbm_encoder, owner_class: None
+
+2026-05-13 03:17:29.741 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: zip_decoder, owner_class: None
+
+2026-05-13 03:17:29.746 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imaging, func: zip_encoder, owner_class: None
+
+2026-05-13 03:17:29.857 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: buildProofTransform, owner_class: None
+
+2026-05-13 03:17:29.859 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: buildTransform, owner_class: None
+
+2026-05-13 03:17:29.862 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: createProfile, owner_class: None
+
+2026-05-13 03:17:29.863 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: profile_frombytes, owner_class: None
+
+2026-05-13 03:17:29.864 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: profile_open, owner_class: None
+
+2026-05-13 03:17:29.867 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingcms, func: profile_tobytes, owner_class: None
+
+2026-05-13 03:17:29.996 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser:_infer_default_value:272
+PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: RuntimeError("声明节点没有可用定值表达式: {kind=CursorKind.VAR_DECL, spelling=encoding, first_token=unsigned, location=<SourceLocation file 'src/_imagingft.c', line 128, column 20>}")
+
+2026-05-13 03:17:29.997 | WARNING  | 
+pcstubgen.signature_completion.c_extension.signatures.py_arg_parse.tuple_and_keywords_parser:_infer_default_value:272
+PyArg_ParseTupleAndKeywords 默认值推断失败，回退为 '...', reason: RuntimeError("声明节点没有可用定值表达式: {kind=CursorKind.VAR_DECL, spelling=font_bytes, first_token=unsigned, location=<SourceLocation file 'src/_imagingft.c', line 129, column 20>}")
+
+2026-05-13 03:17:30.001 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingft, func: getfont, owner_class: None
+
+2026-05-13 03:17:30.107 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingmath, func: binop, owner_class: None
+
+2026-05-13 03:17:30.112 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingmath, func: unop, owner_class: None
+
+2026-05-13 03:17:30.208 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingmorph, func: apply, owner_class: None
+
+2026-05-13 03:17:30.213 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingmorph, func: get_on_pixels, owner_class: None
+
+2026-05-13 03:17:30.222 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingmorph, func: match, owner_class: None
+
+2026-05-13 03:17:30.318 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._imagingtk, func: tkinit, owner_class: None
+
+2026-05-13 03:17:30.408 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: _anim_decoder_new, reason: RuntimeError("无法识别的对象返回标识符: decp, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=decp, first_token=decp, location=<SourceLocation file 'src/_webp.c', line 432, column 40>}")
+
+2026-05-13 03:17:30.410 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._webp, func: WebPAnimDecoder, owner_class: None
+
+2026-05-13 03:17:30.412 | WARNING  | 
+pcstubgen.signature_completion.c_extension.inferencer:_infer_return_type:218
+跳过无法推断的 return 表达式, func_name: _anim_encoder_new, reason: RuntimeError("无法识别的对象返回标识符: encp, cursor: {kind=CursorKind.DECL_REF_EXPR, spelling=encp, first_token=encp, location=<SourceLocation file 'src/_webp.c', line 207, column 36>}")
+
+2026-05-13 03:17:30.414 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._webp, func: WebPAnimEncoder, owner_class: None
+
+2026-05-13 03:17:30.426 | INFO     | 
+pcstubgen.signature_completion.signature_completer:_log_success:136
+补全成功, completer: c_extension, module: PIL._webp, func: WebPEncode, owner_class: None
+
+2026-05-13 03:17:30.428 | INFO     | 
+pcstubgen.api:gen_stubs:30
+签名补全结果: 函数总数=80, C扩展补全=80, pybind11补全=0, 失败=0
+
