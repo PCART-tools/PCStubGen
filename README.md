@@ -54,3 +54,7 @@ PCStubGen has been developed and tested on **Ubuntu 24.04.2 LTS** with **Python 
 
 It should work on Linux and macOS.
 Windows support is currently limited because PCStubGen only supports DWARF symbols, and building target projects on Windows is more challenging.
+
+## License
+
+PCStubGen is licensed under the Apache License 2.0. See [LICENSE.txt](./LICENSE.txt) for details.

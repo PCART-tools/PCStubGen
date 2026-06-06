@@ -54,3 +54,7 @@ PCStubGen 在 **Ubuntu 24.04.2 LTS**、**Python 3.12** 和 **LLVM 18** 环境下
 
 理论上可在 Linux 和 macOS 上运行。
 当前对 Windows 的支持较为有限，因为 PCStubGen 目前只支持 DWARF 符号，且在 Windows 上构建目标项目更具挑战。
+
+## 许可证
+
+PCStubGen 采用 Apache License 2.0 授权。详情请参见 [LICENSE.txt](./LICENSE.txt)。
