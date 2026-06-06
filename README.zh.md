@@ -1,102 +1,56 @@
-# PCStubGen - 为 C 扩展 API 生成 Python Stub
+# PCStubGen：为 C 扩展 API 生成 Python 存根
 
-[English](README.md)
+[![English](https://img.shields.io/badge/lang-English-blue.svg)](README.md)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE.txt)
 
-- 基于 libclang 源码 AST 分析支持基于 Python/C API 的扩展API
-- 基于签名字符串解析支持基于 pybind11 的扩展 API
+## PCStubGen 可以做什么
+
+- 通过 libclang 分析 C/C++ 源码 AST，为基于 Python/C API 的扩展 API 生成存根
+- 通过解析签名字符串，为基于 pybind11 的扩展 API 生成存根
 
 ## 安装
 
+推荐使用 [uv](https://docs.astral.sh/uv/) 进行快速、可复现的环境配置。
+
 ```bash
+# 克隆仓库
+git clone https://github.com/PCART-tools/PCStubGen.git
+cd PCStubGen
+
+# 安装系统级依赖
 sudo apt install llvm bear
+
+# 同步 Python 环境
+uv sync --no-build-isolation
 ```
 
 ## 使用
 
-1. 构建目标项目，得到 `compile_commands.json` 和带调试符号的 wheel 包。
+1. 构建目标项目
 
-   - 使用自带构建命令：
+   一些目标项目的[系统级依赖和注意事项](SYSTEM_LEVEL_DEPS_REF_AND_NOTES.md)。
 
    ```bash
    uv run pcstubgen build <目标项目目录>
    ```
 
-   - 或者，使用自定义构建命令：
+   构建成功后，命令会输出 wheel 和 `compile_commands.json` 的路径。
+
+2. 将 wheel 安装到当前环境
 
    ```bash
-   cd <目标项目目录>
-   uv run pcstubgen wrap -- <构建命令>
+   uv pip install <wheel 路径>
    ```
 
-2. 安装 wheel 包到环境。
-
-3. 生成 stub：
+3. 生成存根
 
    ```bash
-   uv run pcstubgen gen <项目 Python 内名> --compilation-database ./build/compile_commands.json
+   uv run pcstubgen gen <目标项目的 Python 库名> --compilation-database <compile_commands.json 路径>
    ```
-
-## 开发
-
-```bash
-sudo apt install llvm bear
-git clone https://github.com/PCART-tools/PCStubGen
-cd PCStubGen
-uv sync --no-build-isolation
-```
 
 ## 兼容性
 
 PCStubGen 在 **Ubuntu 24.04.2 LTS**、**Python 3.12** 和 **LLVM 18** 环境下开发并测试。
 
-理论上可运行于 Linux 和 macOS。当前对 Windows 的支持较为有限，因为 PCStubGen 目前只支持 DWARF 符号，且在 Windows 上构建目标项目更具挑战。
-
-## 样例项目
-
-### [SciPy](https://github.com/scipy/scipy)
-
-安装构建依赖：
-
-```bash
-sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
-```
-
-### [Pillow](https://github.com/python-pillow/Pillow)
-
-安装构建依赖：
-
-```bash
-sudo apt install libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev \
-    libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev python3-tk \
-    libharfbuzz-dev libfribidi-dev libxcb1-dev
-```
-
-### [NumPy](https://github.com/numpy/numpy)
-
-安装构建依赖：
-
-```bash
-sudo apt install gfortran libopenblas-dev liblapack-dev pkg-config
-```
-
-### [psycopg2](https://github.com/psycopg/psycopg2)
-
-安装构建依赖：
-
-```bash
-sudo apt-get install libpq-dev
-```
-
-### [UltraJSON](https://github.com/ultrajson/ultrajson)
-
-### [PyTorch](https://github.com/pytorch/pytorch)
-
-安装构建依赖：
-
-```bash
-sudo apt install libomp-dev
-```
-
-## 许可证
-
-PCStubGen 采用 Apache License 2.0 授权。详情请参见 [LICENSE.txt](./LICENSE.txt)。
+理论上可在 Linux 和 macOS 上运行。
+当前对 Windows 的支持较为有限，因为 PCStubGen 目前只支持 DWARF 符号，且在 Windows 上构建目标项目更具挑战。
