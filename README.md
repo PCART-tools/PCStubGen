@@ -1,6 +1,6 @@
 # PCStubGen: Generate Python Stubs for C Extension APIs
 
-[![中文](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-blue.svg)](README.zh.md)
+[![中文](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-green.svg)](README.zh.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE.txt)
 
 ## What PCStubGen Can Do

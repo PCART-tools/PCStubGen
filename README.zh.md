@@ -1,6 +1,6 @@
 # PCStubGen：为 C 扩展 API 生成 Python 存根
 
-[![English](https://img.shields.io/badge/lang-English-blue.svg)](README.md)
+[![English](https://img.shields.io/badge/lang-English-green.svg)](README.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE.txt)
 
 ## PCStubGen 可以做什么
