@@ -5,8 +5,8 @@
 
 ## PCStubGen 可以做什么
 
-- 通过分析 C/C++ 源码 AST，为基于 Python/C API 的扩展 API 生成存根
-- 通过解析签名字符串，为基于 pybind11 的扩展 API 生成存根
+- 通过分析 C/C++ 源码 AST，为基于 **Python/C API** 的扩展 API 生成存根
+- 通过解析签名字符串，为基于 **pybind11** 的扩展 API 生成存根
 
 ## 安装
 
@@ -45,7 +45,7 @@ uv sync --no-build-isolation
 3. 生成存根
 
    ```bash
-   uv run pcstubgen gen <目标项目的 Python 库名> --compilation-database <compile_commands.json 路径>
+   uv run pcstubgen gen <目标 Python 库名> --compilation-database <compile_commands.json 路径>
    ```
 
 ## 兼容性

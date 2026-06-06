@@ -5,8 +5,8 @@
 
 ## What PCStubGen Can Do
 
-- Generate stubs for extensions based on the Python/C API by analyzing C/C++ source ASTs
-- Generate stubs for extensions based on pybind11 by parsing signature strings
+- Generate stubs for extensions based on the **Python/C API** by analyzing C/C++ source ASTs
+- Generate stubs for extensions based on **pybind11** by parsing signature strings
 
 ## Installation
 
@@ -45,7 +45,7 @@ uv sync --no-build-isolation
 3. Generate stubs
 
    ```bash
-   uv run pcstubgen gen <target-project-python-package-name> --compilation-database <compile-commands-path>
+   uv run pcstubgen gen <target-python-package-name> --compilation-database <compile_commands.json-path>
    ```
 
 ## Compatibility
