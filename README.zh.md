@@ -5,7 +5,7 @@
 
 ## PCStubGen 可以做什么
 
-- 通过 libclang 分析 C/C++ 源码 AST，为基于 Python/C API 的扩展 API 生成存根
+- 通过分析 C/C++ 源码 AST，为基于 Python/C API 的扩展 API 生成存根
 - 通过解析签名字符串，为基于 pybind11 的扩展 API 生成存根
 
 ## 安装
