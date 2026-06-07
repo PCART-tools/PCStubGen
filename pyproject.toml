@@ -1,18 +1,44 @@
 [build-system]
 requires = [
     "meson-python>=0.19.0",
-    "ninja>=1.13.0"
+    "ninja>=1.13.0",
 ]
 build-backend = "mesonpy"
 
 [project]
 name = "pcstubgen"
-version = "0.1.0"
-description = "Generate Python stubs for modules."
+dynamic = ["version"]
+description = "Generate Python stubs for C extension APIs."
 readme = "README.md"
+authors = [
+    { name = "PCART-tools" },
+    { name = "HoMiyabi" },
+]
 license = "Apache-2.0"
 license-files = ["LICENSE.txt"]
 requires-python = ">=3.12"
+keywords = [
+    "c-extension",
+    "libclang",
+    "pybind11",
+    "stub",
+    "stubgen",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "build>=1.4.4",
     "libclang>=18.1.1",
@@ -21,19 +47,44 @@ dependencies = [
     "typer>=0.25.1",
 ]
 
+[project.urls]
+Homepage = "https://github.com/PCART-tools/PCStubGen"
+Repository = "https://github.com/PCART-tools/PCStubGen"
+Issues = "https://github.com/PCART-tools/PCStubGen/issues"
+
 [project.scripts]
 pcstubgen = "pcstubgen.__main__:app"
 
 [dependency-groups]
-dev = [
-    "json-repair>=0.59.5",
+build = [
     "meson-python>=0.19.0",
-    "mypy>=1.20.2",
     "ninja>=1.13.0",
-    "openai>=2.33.0",
-    "pyperf>=2.9.0",
-    "pybind11-stubgen>=2.5.5",
+]
+test = [
     "pytest>=9.0.3",
-    "requests>=2.33.1",
+]
+eval = [
+    "json-repair>=0.59.5",
     "matplotlib>=3.10.9",
+    "openai>=2.33.0",
+    "rich>=13.8.0",
+]
+tools = [
+    "requests>=2.33.1",
+]
+dev = [
+    { include-group = "build" },
+    { include-group = "test" },
+    { include-group = "eval" },
+    { include-group = "tools" },
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["reference", ".git", ".idea", ".mypy_cache", ".pytest_cache", "out"]
+addopts = ["--strict-markers"]
+markers = [
+    "integration: 覆盖跨模块协作或薄集成行为的测试。",
+    "libclang: 依赖 libclang 实际解析能力的测试。",
+    "slow: 相对较慢或需要真实外部能力的测试。",
 ]
