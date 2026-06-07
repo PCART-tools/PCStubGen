@@ -55,8 +55,8 @@ def test_gen_command_writes_toml_instead_of_stub_when_toml_flag_is_enabled(
     assert result.exit_code == 0
     assert (tmp_path / "mod.toml").exists()
     assert not (tmp_path / "mod.pyi").exists()
-    entries = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["entries"]
-    assert [entry["function_name"] for entry in entries] == ["foo"]
+    functions = tomllib.loads((tmp_path / "mod.toml").read_text(encoding="utf-8"))["functions"]
+    assert [function["function_name"] for function in functions] == ["foo"]
 
 
 def test_gen_command_keeps_stub_output_when_toml_flag_is_disabled(
