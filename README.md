@@ -1,14 +1,20 @@
-# PCStubGen: Generate Python Stubs for C Extension APIs
+# PCStubGen
 
 [![中文](https://img.shields.io/badge/lang-%E4%B8%AD%E6%96%87-green.svg)](README.zh.md)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE.txt)
 
-## What PCStubGen Can Do
+**Stub generation for Python C extension APIs to support cross-version interface comparison.**
 
-- Generate stubs for extensions based on the **Python/C API** by analyzing C/C++ source ASTs
-- Generate stubs for extensions based on **pybind11** by parsing signature strings
+## What is PCStubGen?
 
-## Installation
+PCStubGen is a tool for generating Python stubs for C extension APIs to support cross-version interface comparison.
+
+PCStubGen currently supports:
+
+- extensions based on the **Python/C API**, by analyzing C/C++ source ASTs;
+- extensions based on **pybind11**, by parsing signature strings.
+
+## Quick Start
 
 We recommend using [uv](https://docs.astral.sh/uv/) for fast, reproducible environment setup.
 
@@ -26,34 +32,33 @@ uv sync --no-build-isolation
 
 ## Usage
 
-1. Build the target project
+### Step 1: Build the Target Project
 
-   See the [system-level dependencies and notes](SYSTEM_LEVEL_DEPS_REF_AND_NOTES.md) for some target projects.
+See the [system-level dependencies and notes](SYSTEM_LEVEL_DEPS_REF_AND_NOTES.md) for setup requirements of some target projects.
 
-   ```bash
-   uv run pcstubgen build <target-project-directory>
-   ```
+```bash
+uv run pcstubgen build <target-project-directory>
+```
 
-   After a successful build, the command outputs the paths to the wheel and `compile_commands.json`.
+After a successful build, the command outputs the paths to the wheel and `compile_commands.json`.
 
-2. Install the wheel into the current environment
+### Step 2: Install the Wheel
 
-   ```bash
-   uv pip install <wheel-path>
-   ```
+```bash
+uv pip install <wheel-path>
+```
 
-3. Generate stubs
+### Step 3: Generate Stubs
 
-   ```bash
-   uv run pcstubgen gen <target-python-package-name> --compilation-database <compile_commands.json-path>
-   ```
+```bash
+uv run pcstubgen gen <target-python-package-name> --compilation-database <compile_commands.json-path>
+```
 
 ## Compatibility
 
 PCStubGen has been developed and tested on **Ubuntu 24.04.2 LTS** with **Python 3.12** and **LLVM 18**.
 
-It should work on Linux and macOS.
-Windows support is currently limited because PCStubGen only supports DWARF symbols, and building target projects on Windows is more challenging.
+It should work on Linux and macOS. Windows support is currently limited because PCStubGen only supports DWARF symbols, and building target projects on Windows is more challenging.
 
 ## License
 
